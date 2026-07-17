@@ -54,6 +54,28 @@ Use your machine's LAN IP (not `localhost`) when testing on a physical device.
 - Icons/splash generated via `npm run build`
 - Stripe checkout and external links are allowlisted in Capacitor config
 
-## Related repo
+## GitHub
 
-Web app: [v0-coursecollabv3](https://github.com/DanielDoe/v0-coursecollabv3) (local: `~/Downloads/v0-coursecollabv3`)
+Local git is initialized on `main`. Create the remote repo (PAT needs **repo** / repository creation permission), then:
+
+```bash
+gh repo create course-collab-mobile --public --source=. --remote=origin --push
+```
+
+Or create [github.com/new](https://github.com/new) named `course-collab-mobile`, then:
+
+```bash
+git remote add origin git@github.com:DanielDoe/course-collab-mobile.git
+git push -u origin main
+```
+
+## iOS note
+
+Full **Xcode** (not Command Line Tools only) is required. After installing Xcode:
+
+```bash
+sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+cd ios/App && pod install
+npm run cap:open:ios
+```
+
