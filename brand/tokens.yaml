@@ -1,0 +1,14 @@
+# CourseCollab brand tokens (from v0-coursecollabv3/app/globals.css)
+# Used for native splash, status bar, and offline fallback UI.
+
+primary: "#582c83"
+primary-light: "#7a4eba"
+primary-foreground: "#ffffff"
+gold: "#eaaa00"
+background-light: "#ffffff"
+background-dark: "#0f172a"
+sidebar-light: "#f2e8fc"
+
+production-url: "https://coursecollab.vercel.app"
+student-login: "/student/login"
+student-dashboard: "/student/dashboard-v2"
