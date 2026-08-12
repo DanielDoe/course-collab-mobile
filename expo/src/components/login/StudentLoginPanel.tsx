@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react"
 import {
   ActivityIndicator,
-  Image,
   Platform,
   Pressable,
   StyleSheet,
@@ -10,8 +9,7 @@ import {
   View,
 } from "react-native"
 import { hexToRgba } from "../../constants/app-themes"
-import { Ionicons } from "@expo/vector-icons"
-import { useRouter } from "expo-router"
+import { Ionicons } from "@/components/icons/AppIcon"
 import {
   ApiError,
   api,
@@ -20,19 +18,21 @@ import {
   type UniversityStudentLoginResponse,
 } from "../../lib/api"
 import { primeMembershipTierCache } from "../../lib/membership-tier-cache"
-import { universityLogoUri } from "../../lib/university-logo-uri"
 import {
   clearRememberedStudentCredentials,
   clearRememberedUniversity,
   persistRememberedStudentAuth,
   persistRememberedUniversity,
   readRememberedStudentAuth,
+  readRememberedUniversity,
 } from "../../lib/remembered-student-auth"
+import { persistMfaDeviceTrustFromLogin, studentMfaLoginKey, studentMfaAliasKeys } from "../../lib/mfa-device-trust"
 import { useSession } from "../../context/SessionProvider"
 import { MfaLoginStep } from "../auth/MfaLoginStep"
 import { ErrorBanner, LoginFieldGroup } from "./LoginCard"
 import { LoginButton, LoginField, LoginPasswordToggle } from "./LoginButton"
 import { LoginBrandHeader } from "./LoginBrandHeader"
+import { UniversityAuthLogoImage } from "./UniversityAuthLogoImage"
 import { LoginBackLink, LoginPortalStack } from "./login-chrome"
 import { useLoginTheme } from "./login-theme"
 import { parseMfaCompletePayload, parseMfaLoginResponse, type MfaLoginState } from "../../lib/mfa-types"
@@ -51,7 +51,6 @@ function isCourseSelectionResponse(
 }
 
 export function StudentLoginPanel({ onBack }: Props) {
-  const router = useRouter()
   const { signIn } = useSession()
   const { LOGIN, loginType } = useLoginTheme()
 
@@ -99,6 +98,15 @@ export function StudentLoginPanel({ onBack }: Props) {
           if (remembered.identifier) setIdentifier(remembered.identifier)
           setRememberMe(Boolean(remembered.rememberMe && remembered.identifier))
           setStep("credentials")
+        } else {
+          const storedUniversity = await readRememberedUniversity()
+          if (storedUniversity) {
+            const fresh =
+              list.find((u) => u.id === storedUniversity.id) ?? storedUniversity
+            setSelectedUniversity(fresh)
+            await persistRememberedUniversity(fresh)
+            setStep("credentials")
+          }
         }
       } catch (err) {
         if (!mounted) return
@@ -112,14 +120,29 @@ export function StudentLoginPanel({ onBack }: Props) {
     }
   }, [])
 
-  /** Theme accent for chrome/CTAs; school color only for university selection identity. */
-  const themeAccent = LOGIN.purple
-  const schoolAccent = selectedUniversity?.primary_color ?? themeAccent
+  /** Color Hunt link accent; school color only for university row identity. */
+  const linkAccent = LOGIN.purple
+  const schoolAccent = selectedUniversity?.primary_color ?? linkAccent
 
   async function finishLogin(data: Extract<UniversityStudentLoginResponse, { student: unknown }>) {
     const student = data.student
     const enrollment = data.enrollment
     const university = data.university ?? selectedUniversity
+
+    const loginIdentifier = pendingCredentials?.identifier ?? identifier
+    const universityId = university?.id ?? selectedUniversity?.id
+    if (universityId && loginIdentifier.trim()) {
+      const loginKey = studentMfaLoginKey(universityId, loginIdentifier)
+      await persistMfaDeviceTrustFromLogin({
+        userType: "student",
+        loginKey,
+        payload: data as Record<string, unknown>,
+        aliasKeys: studentMfaAliasKeys(universityId, loginIdentifier, {
+          student_id: student.student_id,
+          email: student.email,
+        }),
+      })
+    }
 
     await primeMembershipTierCache(String(student.id), data.effectiveMembershipTier)
 
@@ -139,6 +162,8 @@ export function StudentLoginPanel({ onBack }: Props) {
     await signIn({
       portal: "student",
       id: student.student_id,
+      authIdentifier: loginIdentifier.trim() || String(student.student_id ?? ""),
+      email: student.email,
       name: student.full_name,
       section: student.section ?? enrollment?.section ?? "",
       databaseId: String(student.id),
@@ -150,7 +175,7 @@ export function StudentLoginPanel({ onBack }: Props) {
       universityShortName: university?.short_name,
     })
 
-    router.replace("/signing-in")
+    // Parent login screen redirects to signing-in when session is set.
   }
 
   async function submitLogin(courseId?: number) {
@@ -302,18 +327,18 @@ export function StudentLoginPanel({ onBack }: Props) {
 
         {loadingUniversities ? (
           <View style={styles.loadingBox}>
-            <ActivityIndicator color={themeAccent} />
+            <ActivityIndicator color={linkAccent} />
           </View>
         ) : (
           <View style={styles.uniList}>
             {universities.map((uni) => {
               const active = selectedUniversity?.id === uni.id
-              const logoUri = universityLogoUri(uni.logo)
               return (
                 <Pressable
                   key={uni.id}
                   onPress={() => {
                     setSelectedUniversity(uni)
+                    void persistRememberedUniversity(uni)
                     setError("")
                   }}
                   style={({ pressed }) => [
@@ -329,15 +354,7 @@ export function StudentLoginPanel({ onBack }: Props) {
                   accessibilityRole="button"
                   accessibilityState={{ selected: active }}
                 >
-                  <View style={styles.uniLogoWrap}>
-                    {logoUri ? (
-                      <Image source={{ uri: logoUri }} style={styles.uniLogo} resizeMode="contain" />
-                    ) : (
-                      <View style={[styles.uniLogoFallback, { backgroundColor: uni.primary_color }]}>
-                        <Text style={styles.uniLogoFallbackText}>{uni.short_name.slice(0, 2)}</Text>
-                      </View>
-                    )}
-                  </View>
+                  <UniversityAuthLogoImage university={uni} variant="list" />
                   <View style={styles.uniText}>
                     <Text style={[loginType.stepLabel, { color: LOGIN.label }]} numberOfLines={1}>
                       {uni.name}
@@ -365,7 +382,6 @@ export function StudentLoginPanel({ onBack }: Props) {
           icon="arrow-forward"
           onPress={handleContinueUniversity}
           disabled={!selectedUniversity || loadingUniversities}
-          backgroundColor={themeAccent}
         />
 
         {onBack ? <LoginBackLink label="Other sign-in options" onPress={onBack} /> : null}
@@ -417,13 +433,13 @@ export function StudentLoginPanel({ onBack }: Props) {
                 <Text style={[loginType.stepLabel, { color: LOGIN.label }]}>{course.courseTitle}</Text>
                 <Text style={[loginType.info, { color: LOGIN.secondaryLabel }]}>{course.courseCode}</Text>
               </View>
-              <Ionicons name="chevron-forward" size={18} color={themeAccent} />
+              <Ionicons name="chevron-forward" size={18} color={linkAccent} />
             </Pressable>
           ))}
         </View>
 
         {error ? <ErrorBanner message={error} /> : null}
-        {submitting ? <ActivityIndicator color={themeAccent} /> : null}
+        {submitting ? <ActivityIndicator color={linkAccent} /> : null}
 
         <LoginBackLink
           label="Back to login"
@@ -483,12 +499,12 @@ export function StudentLoginPanel({ onBack }: Props) {
               }}
               trackColor={{
                 false: LOGIN.separator,
-                true: hexToRgba(themeAccent, 0.55),
+                true: hexToRgba(LOGIN.cta, 0.55),
               }}
               thumbColor={
                 Platform.OS === "android"
                   ? rememberMe
-                    ? themeAccent
+                    ? LOGIN.cta
                     : LOGIN.fill
                   : undefined
               }
@@ -501,7 +517,6 @@ export function StudentLoginPanel({ onBack }: Props) {
             label="Login"
             onPress={() => void handleLogin()}
             loading={submitting}
-            backgroundColor={themeAccent}
           />
         </>
       ) : (
@@ -535,7 +550,6 @@ export function StudentLoginPanel({ onBack }: Props) {
             label="Activate & Sign In"
             onPress={() => void handleActivate()}
             loading={submitting}
-            backgroundColor={themeAccent}
           />
         </>
       )}
@@ -556,7 +570,7 @@ export function StudentLoginPanel({ onBack }: Props) {
           ]}
           accessibilityRole="button"
         >
-          <Text style={[loginType.link, { color: themeAccent, textAlign: "center" }]}>
+          <Text style={[loginType.link, { color: linkAccent, textAlign: "center" }]}>
             {mode === "login" ? "First time? Activate your account" : "Already activated? Sign in"}
           </Text>
         </Pressable>
@@ -569,7 +583,7 @@ export function StudentLoginPanel({ onBack }: Props) {
           <Text style={[loginType.body, { color: LOGIN.label, flex: 1 }]}>
             Not your school? Change university
           </Text>
-          <Ionicons name="chevron-forward" size={18} color={themeAccent} />
+          <Ionicons name="chevron-forward" size={18} color={linkAccent} />
         </Pressable>
 
         {onBack ? (
@@ -584,7 +598,7 @@ export function StudentLoginPanel({ onBack }: Props) {
             accessibilityRole="button"
           >
             <Text style={[loginType.body, { color: LOGIN.label, flex: 1 }]}>Other sign-in options</Text>
-            <Ionicons name="chevron-forward" size={18} color={themeAccent} />
+            <Ionicons name="chevron-forward" size={18} color={linkAccent} />
           </Pressable>
         ) : null}
       </View>
@@ -607,21 +621,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: StyleSheet.hairlineWidth * 2,
   },
-  uniLogoWrap: {
-    width: 44,
-    height: 44,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  uniLogo: { width: 40, height: 40 },
-  uniLogoFallback: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  uniLogoFallbackText: { color: "#fff", fontSize: 13, fontWeight: "700" },
   uniText: { flex: 1, gap: 2, minWidth: 0 },
   pressed: { opacity: 0.85 },
   actionsGroup: { gap: 0, alignSelf: "stretch" },

@@ -1,0 +1,28 @@
+appId: com.coursecollab.app
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "New conversation|cora|Dashboard"
+    timeout: 30000
+- openLink: coursecollab:///module/ai-tutor
+- extendedWaitUntil:
+    visible: "New conversation"
+    timeout: 30000
+- tapOn:
+    text: "New conversation"
+- extendedWaitUntil:
+    visible: "Understand"
+    timeout: 20000
+- tapOn:
+    text: "Add files, course questions, and learning tools"
+- tapOn:
+    text: "Explain a concept"
+- extendedWaitUntil:
+    visible: "Which concept"
+    timeout: 10000
+- inputText: "pointers"
+- tapOn:
+    text: "Add to chat"
+- extendedWaitUntil:
+    visible: "pointers"
+    timeout: 45000

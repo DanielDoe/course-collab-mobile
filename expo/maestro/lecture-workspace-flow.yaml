@@ -1,0 +1,25 @@
+appId: com.coursecollab.app
+---
+- openLink: coursecollab://dev-student-login
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 120000
+- openLink: coursecollab:///module/lectures
+- extendedWaitUntil:
+    visible: "Lecture 3"
+    timeout: 60000
+- tapOn:
+    text: "Lecture 3"
+- extendedWaitUntil:
+    visible: "Tools"
+    timeout: 90000
+- tapOn:
+    text: "Tools"
+- extendedWaitUntil:
+    visible: "Slide tools"
+    timeout: 30000
+- tapOn:
+    text: "Workspace"
+- extendedWaitUntil:
+    visible: "Problem 3.1|Nodal Analysis|Question 1"
+    timeout: 45000

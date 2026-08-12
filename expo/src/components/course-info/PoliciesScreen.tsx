@@ -1,0 +1,160 @@
+import { useCallback, useEffect, useState } from "react"
+import { StyleSheet, Text, View } from "react-native"
+import { ModuleScreen } from "../modules/ModuleScreen"
+import { useSession } from "../../context/SessionProvider"
+import { ApiError } from "../../lib/student-api"
+import type { StudentSession } from "../../lib/session"
+import { courseInfoApi, type CoursePolicies } from "../../lib/course-info-api"
+import { COURSE_INFO_POLICIES } from "../../lib/course-info-color-theme"
+import { InfoSectionCard, useCourseInfoTheme } from "./course-info-shared"
+import { SolidListThumbTile } from "../theme/SolidListThumbTile"
+import { useThemedNative } from "../../context/AppearanceProvider"
+import { useNativeType } from "../../lib/themed-module-theme"
+
+function useStudentSession(): StudentSession | null {
+  const { session } = useSession()
+  return session?.portal === "student" ? session : null
+}
+
+export function PoliciesScreen() {
+  const session = useStudentSession()
+  const theme = useCourseInfoTheme()
+  const native = useThemedNative()
+  const type = useNativeType()
+  const [policies, setPolicies] = useState<CoursePolicies | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+  const [error, setError] = useState("")
+
+  const load = useCallback(async () => {
+    if (!session) return
+    setError("")
+    try {
+      const data = await courseInfoApi.getPolicies(session)
+      setPolicies(data)
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to load policies.")
+    }
+  }, [session])
+
+  useEffect(() => {
+    setLoading(true)
+    load().finally(() => setLoading(false))
+  }, [load])
+
+  const sourceLabel = policies?.source_label ?? "Instructor controlled only"
+  const isInstructorOnly = sourceLabel === "Instructor controlled only"
+  const displayLabel = isInstructorOnly ? "Instructor Controlled Assessment Policies" : sourceLabel
+
+  return (
+    <ModuleScreen
+      loading={loading}
+      error={error}
+      refreshing={refreshing}
+      onRefresh={() => {
+        setRefreshing(true)
+        load().finally(() => setRefreshing(false))
+      }}
+    >
+      <InfoSectionCard
+        title="Assessment Governance"
+        icon="shield-checkmark-outline"
+        iconThumb={COURSE_INFO_POLICIES.governance}
+        theme={theme}
+      >
+        <View style={[styles.highlight, { backgroundColor: native.fill, borderColor: native.separator }]}>
+          <Text style={[type.caption, styles.highlightLabel, { color: theme.primary }]}>This course uses</Text>
+          <Text style={[type.bodyEmphasis, styles.highlightValue]}>{displayLabel}</Text>
+        </View>
+        <Text style={[type.secondary, styles.body]}>
+          {isInstructorOnly
+            ? "Assessment attempts, retakes, deadlines, and grading policies are managed by the instructor and not by CourseCollab membership status."
+            : "Assessment attempts, retakes, deadlines, and grading policies are managed by the instructor unless your instructor has enabled membership-based assessment benefits for this course."}
+        </Text>
+      </InfoSectionCard>
+
+      <View
+        style={[
+          styles.notice,
+          { backgroundColor: native.secondaryGrouped, borderColor: native.separator },
+        ]}
+      >
+        <SolidListThumbTile
+          thumb={COURSE_INFO_POLICIES.notice}
+          icon="information-circle-outline"
+          size="compact"
+        />
+        <View style={styles.noticeBody}>
+          <Text style={[type.bodyEmphasis, styles.noticeTitle]}>Course Policy Notice</Text>
+          <Text style={[type.secondary, styles.body]}>
+            Assessment privileges — attempts, deadlines, retakes, extensions, grading, and accommodations — are set by
+            your instructor, not by your membership tier.
+          </Text>
+          <Text style={[type.secondary, styles.body, styles.noticeSpaced]}>
+            No student receives extra assessment opportunities through CourseCollab membership unless your instructor has
+            enabled that for the entire course.
+          </Text>
+        </View>
+      </View>
+
+      <View
+        style={[
+          styles.membershipNote,
+          { backgroundColor: native.fill, borderColor: native.separator },
+        ]}
+      >
+        <SolidListThumbTile
+          thumb={COURSE_INFO_POLICIES.membership}
+          icon="book-outline"
+          size="compact"
+          style={styles.membershipIcon}
+        />
+        <Text style={[type.caption, styles.membershipText]}>
+          View membership plans for learning tools and platform perks — course assessment rules stay on this page.
+        </Text>
+      </View>
+    </ModuleScreen>
+  )
+}
+
+const styles = StyleSheet.create({
+  highlight: {
+    borderRadius: 12,
+    padding: 12,
+    gap: 4,
+    borderWidth: 1,
+  },
+  highlightLabel: {
+    fontWeight: "600",
+    letterSpacing: 0.3,
+  },
+  highlightValue: {},
+  body: { lineHeight: 21 },
+  notice: {
+    flexDirection: "row",
+    gap: 12,
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  noticeIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  membershipIcon: { marginTop: 1 },
+  noticeBody: { flex: 1, gap: 6 },
+  noticeTitle: {},
+  noticeSpaced: { marginTop: 4 },
+  membershipNote: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  membershipText: { flex: 1, lineHeight: 18 },
+})

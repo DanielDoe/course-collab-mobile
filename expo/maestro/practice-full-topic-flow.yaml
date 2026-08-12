@@ -1,0 +1,15 @@
+appId: com.coursecollab.app
+---
+- openLink: coursecollab://dev-student-login
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 30000
+- openLink: "coursecollab:///practice/topic?topic=Chapter%201%3A%20Circuit%20Fundamentals%20Playground"
+- extendedWaitUntil:
+    visible: "Start Practice"
+    timeout: 15000
+- tapOn: "Start Practice"
+- extendedWaitUntil:
+    visible: "Submit answer"
+    timeout: 20000
+- takeScreenshot: practice-quiz-navigator

@@ -1,27 +1,49 @@
-import { useState } from "react"
-import { useRouter } from "expo-router"
+import { useEffect, useState } from "react"
+import { Platform, StyleSheet, Switch, Text, View } from "react-native"
+import { hexToRgba } from "../../constants/app-themes"
 import { ApiError, api } from "../../lib/api"
 import { parseMfaCompletePayload, parseMfaLoginResponse, type MfaLoginState } from "../../lib/mfa-types"
+import { persistMfaDeviceTrustFromLogin, instructorMfaLoginKey, instructorMfaAliasKeys } from "../../lib/mfa-device-trust"
+import {
+  clearRememberedFacultyCredentials,
+  persistRememberedFacultyCredentials,
+  readRememberedFacultyCredentials,
+} from "../../lib/remembered-faculty-auth"
 import { useSession } from "../../context/SessionProvider"
 import { MfaLoginStep } from "../auth/MfaLoginStep"
 import { ErrorBanner, LoginFieldGroup } from "./LoginCard"
 import { LoginButton, LoginField, LoginPasswordToggle } from "./LoginButton"
 import { LoginBackLink, LoginPortalHeader, LoginPortalStack } from "./login-chrome"
+import { useLoginTheme } from "./login-theme"
 
 type Props = {
   onBack?: () => void
 }
 
 export function StaffLoginPanel({ onBack }: Props) {
-  const router = useRouter()
   const { signIn } = useSession()
+  const { LOGIN, loginType } = useLoginTheme()
 
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
+  const [rememberMe, setRememberMe] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState("")
   const [mfaState, setMfaState] = useState<MfaLoginState | null>(null)
+
+  useEffect(() => {
+    let mounted = true
+    void (async () => {
+      const remembered = await readRememberedFacultyCredentials()
+      if (!mounted || !remembered) return
+      if (remembered.username) setUsername(remembered.username)
+      setRememberMe(Boolean(remembered.rememberMe && remembered.username))
+    })()
+    return () => {
+      mounted = false
+    }
+  }, [])
 
   async function finishStaffLogin(data: Record<string, unknown>) {
     const normalized = parseMfaCompletePayload(data) ?? data
@@ -30,6 +52,21 @@ export function StaffLoginPanel({ onBack }: Props) {
       | undefined
     if (!instructor) throw new ApiError("Login failed", 500)
 
+    const authId = username.trim()
+    if (authId) {
+      await persistMfaDeviceTrustFromLogin({
+        userType: "instructor",
+        loginKey: instructorMfaLoginKey(authId),
+        payload: normalized,
+        aliasKeys: instructorMfaAliasKeys(authId, instructor),
+      })
+    }
+
+    await persistRememberedFacultyCredentials({
+      username: authId || instructor.username,
+      rememberMe,
+    })
+
     await signIn({
       portal: "faculty",
       id: Number(instructor.id),
@@ -37,9 +74,8 @@ export function StaffLoginPanel({ onBack }: Props) {
       name: instructor.name ?? instructor.username,
       email: instructor.email,
       role: instructor.role,
+      authIdentifier: authId || instructor.username,
     })
-
-    router.replace("/signing-in")
   }
 
   async function handleSubmit() {
@@ -108,9 +144,36 @@ export function StaffLoginPanel({ onBack }: Props) {
         />
       </LoginFieldGroup>
 
+      <View style={styles.rememberRow}>
+        <Switch
+          value={rememberMe}
+          onValueChange={(next) => {
+            setRememberMe(next)
+            if (!next) void clearRememberedFacultyCredentials()
+          }}
+          trackColor={{
+            false: LOGIN.separator,
+            true: hexToRgba(LOGIN.cta, 0.55),
+          }}
+          thumbColor={
+            Platform.OS === "android" ? (rememberMe ? LOGIN.cta : LOGIN.fill) : undefined
+          }
+          ios_backgroundColor={LOGIN.separator}
+        />
+        <Text style={[loginType.body, { color: LOGIN.secondaryLabel }]}>Remember me</Text>
+      </View>
+
       <LoginButton label="Continue to dashboard" onPress={() => void handleSubmit()} loading={submitting} />
 
       {onBack ? <LoginBackLink label="Other sign-in options" onPress={onBack} /> : null}
     </LoginPortalStack>
   )
 }
+
+const styles = StyleSheet.create({
+  rememberRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+})

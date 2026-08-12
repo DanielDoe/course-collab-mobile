@@ -1,0 +1,198 @@
+import { Pressable, StyleSheet, Text, View } from "react-native"
+import { Ionicons } from "@/components/icons/AppIcon"
+import { NATIVE } from "../../constants/faculty-native-theme"
+import { hexToRgba } from "../../constants/app-themes"
+import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
+import { useNativeType } from "../../lib/themed-module-theme"
+import { SolidListThumbTile } from "../theme/SolidListThumbTile"
+import type { FlashcardDeck } from "../../lib/flashcards-api"
+import type { FlashcardDeckCardKind } from "../../lib/flashcard-deck-kind"
+import {
+  clampMasteryPct,
+  flashcardDeckMetaLine,
+  flashcardDeckStatusColor,
+  flashcardDeckStatusLabel,
+  flashcardDeckTopicLabel,
+  resolveFlashcardDeckKind,
+} from "../../lib/flashcard-deck-kind"
+import { flashcardDeckSolidThumb } from "../../lib/flashcard-deck-thumb"
+
+type Props = {
+  deck: FlashcardDeck
+  masteryPct?: number
+  studyLocked?: boolean
+  accessMeta?: string | null
+  onPress: () => void
+  onEdit?: () => void
+}
+
+function thumbIcon(kind: FlashcardDeckCardKind): keyof typeof Ionicons.glyphMap {
+  if (kind === "empty") return "create-outline"
+  if (kind === "completed") return "checkmark-circle-outline"
+  if (kind === "in_progress") return "time-outline"
+  return "play-outline"
+}
+
+function statusIcon(kind: FlashcardDeckCardKind): keyof typeof Ionicons.glyphMap {
+  if (kind === "completed") return "checkmark-circle"
+  return "ellipse"
+}
+
+export function FlashcardDeckListCard({
+  deck,
+  masteryPct,
+  studyLocked = false,
+  accessMeta = null,
+  onPress,
+  onEdit,
+}: Props) {
+  const native = useThemedNative()
+  const tokens = useAppThemeTokens()
+  const type = useNativeType()
+  const kind = resolveFlashcardDeckKind(deck, masteryPct)
+  const progress = clampMasteryPct(masteryPct)
+  const solidThumb = flashcardDeckSolidThumb(deck.id, kind, { locked: studyLocked })
+  const statusColor = studyLocked ? tokens.warning : flashcardDeckStatusColor(kind, solidThumb.label)
+  const statusLabel = studyLocked ? "Upgrade to unlock" : flashcardDeckStatusLabel(kind)
+  const metaLine = accessMeta ?? flashcardDeckMetaLine(deck, masteryPct)
+  const showProgress = !studyLocked && kind === "in_progress"
+  const thumbIconName = studyLocked ? "lock-closed-outline" : thumbIcon(kind)
+
+  return (
+    <Pressable
+      style={({ pressed }) => [
+        styles.card,
+        tokens.cardShadow,
+        {
+          backgroundColor: native.secondaryGrouped,
+          borderColor: tokens.border,
+          opacity: pressed ? NATIVE.pressedOpacity : 1,
+        },
+      ]}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${deck.title || "Untitled deck"}, ${statusLabel}`}
+    >
+      <SolidListThumbTile thumb={solidThumb} icon={thumbIconName} />
+
+      <View style={styles.copy}>
+        <Text style={[type.bodyEmphasis, styles.title, { color: native.label }]} numberOfLines={2}>
+          {deck.title || "Untitled deck"}
+        </Text>
+        <Text style={[type.caption, styles.topic, { color: native.secondaryLabel }]} numberOfLines={1}>
+          {flashcardDeckTopicLabel(deck)}
+        </Text>
+
+        <View style={styles.statusRow}>
+          <View style={styles.statusMain}>
+            <Ionicons
+              name={studyLocked ? "lock-closed" : statusIcon(kind)}
+              size={studyLocked || kind === "completed" ? 14 : 8}
+              color={statusColor}
+              style={studyLocked || kind === "completed" ? undefined : styles.statusDot}
+            />
+            <Text style={[type.footnote, styles.statusText, { color: statusColor }]}>
+              {statusLabel}
+            </Text>
+            <Text style={[type.footnote, { color: native.tertiaryLabel }]}>
+              • {metaLine}
+            </Text>
+          </View>
+
+          {showProgress ? (
+            <View style={[styles.progressTrack, { backgroundColor: hexToRgba(solidThumb.label, tokens.isDark ? 0.22 : 0.16) }]}>
+              <View
+                style={[
+                  styles.progressFill,
+                  {
+                    width: `${Math.max(progress, 4)}%`,
+                    backgroundColor: solidThumb.label,
+                  },
+                ]}
+              />
+            </View>
+          ) : null}
+        </View>
+      </View>
+
+      {deck.canEdit && onEdit ? (
+        <Pressable
+          onPress={onEdit}
+          hitSlop={8}
+          accessibilityLabel="Edit deck"
+          style={styles.editBtn}
+        >
+          <Ionicons name="create-outline" size={18} color={tokens.accent} />
+        </Pressable>
+      ) : (
+        <Ionicons name="chevron-forward" size={16} color={native.tertiaryLabel} style={styles.chevron} />
+      )}
+    </Pressable>
+  )
+}
+
+const styles = StyleSheet.create({
+  card: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    minHeight: 88,
+  },
+  copy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+    paddingVertical: 1,
+  },
+  title: {
+    lineHeight: 20,
+  },
+  topic: {
+    lineHeight: 16,
+    marginBottom: 4,
+  },
+  statusRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    minHeight: 16,
+  },
+  statusMain: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    flexShrink: 1,
+    minWidth: 0,
+    flexWrap: "wrap",
+  },
+  statusDot: {
+    marginHorizontal: 2,
+  },
+  statusText: {
+    fontWeight: "600",
+  },
+  progressTrack: {
+    width: 52,
+    height: 4,
+    borderRadius: 999,
+    overflow: "hidden",
+    flexShrink: 0,
+  },
+  progressFill: {
+    height: "100%",
+    borderRadius: 999,
+  },
+  chevron: {
+    flexShrink: 0,
+    marginTop: 2,
+  },
+  editBtn: {
+    flexShrink: 0,
+    padding: 4,
+    marginTop: 2,
+  },
+})

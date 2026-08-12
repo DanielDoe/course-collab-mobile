@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import {
   ActivityIndicator,
   Image,
+  KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
@@ -10,7 +11,8 @@ import {
   TextInput,
   View,
 } from "react-native"
-import { Ionicons } from "@expo/vector-icons"
+import * as Clipboard from "expo-clipboard"
+import { Ionicons } from "@/components/icons/AppIcon"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { BRAND } from "../../constants"
 import { hexToRgba } from "../../constants/app-themes"
@@ -23,6 +25,7 @@ import { LoginInlineError } from "../login/LoginCard"
 import { LoginButton, LoginField } from "../login/LoginButton"
 import { LoginBrandHeader } from "../login/LoginBrandHeader"
 import { useLoginTheme } from "../login/login-theme"
+import { useReliableTextInputFocus } from "../../hooks/useReliableTextInputFocus"
 
 type Props = {
   state: MfaLoginState
@@ -55,26 +58,54 @@ function OtpCodeField({
 }) {
   const { LOGIN } = useLoginTheme()
   const inputRef = useRef<TextInput>(null)
+  const [focused, setFocused] = useState(false)
   const digits = Array.from({ length: 6 }, (_, index) => value[index] ?? "")
 
+  const { focusInput, onFocus, onBlur } = useReliableTextInputFocus(inputRef, !disabled)
+
+  const handleFocus = useCallback(() => {
+    onFocus()
+    setFocused(true)
+  }, [onFocus])
+
+  const handleBlur = useCallback(() => {
+    onBlur()
+    setFocused(false)
+  }, [onBlur])
+
+  const pasteFromClipboard = useCallback(async () => {
+    if (disabled) return
+    try {
+      const text = await Clipboard.getStringAsync()
+      const next = normalizeCode(text)
+      if (!next) return
+      onChange(next)
+      focusInput()
+    } catch {
+      /* ignore clipboard errors */
+    }
+  }, [disabled, focusInput, onChange])
+
+  useEffect(() => {
+    if (disabled) return
+    const timer = setTimeout(() => focusInput(), 180)
+    return () => clearTimeout(timer)
+  }, [disabled, focusInput])
+
   return (
-    <Pressable
-      onPress={() => !disabled && inputRef.current?.focus()}
-      accessibilityRole="none"
-      style={styles.otpPressable}
-    >
-      <View style={styles.otpRow}>
+    <View style={styles.otpWrap}>
+      <View style={styles.otpRow} pointerEvents="none">
         {digits.map((digit, index) => {
-          const focused = !disabled && value.length === index
+          const activeCell = focused && value.length === index
           return (
             <View
               key={index}
               style={[
                 styles.otpCell,
                 {
-                  backgroundColor: focused ? MFA_ACCENT_SOFT : LOGIN.grouped,
-                  borderColor: focused ? MFA_ACCENT : LOGIN.separator,
-                  borderWidth: focused ? 1.5 : StyleSheet.hairlineWidth,
+                  backgroundColor: activeCell ? MFA_ACCENT_SOFT : LOGIN.grouped,
+                  borderColor: activeCell ? MFA_ACCENT : LOGIN.separator,
+                  borderWidth: activeCell ? 1.5 : StyleSheet.hairlineWidth,
                 },
               ]}
             >
@@ -91,14 +122,27 @@ function OtpCodeField({
         textContentType="oneTimeCode"
         autoComplete="one-time-code"
         maxLength={6}
-        autoFocus
         editable={!disabled}
         caretHidden
         selectionColor={MFA_ACCENT}
         importantForAutofill="yes"
-        style={styles.hiddenOtpInput}
+        contextMenuHidden={false}
+        onFocus={handleFocus}
+        onBlur={handleBlur}
+        style={styles.otpInputOverlay}
+        accessibilityLabel="Enter 6-digit authentication code"
+        accessibilityHint="Type or paste the code from your authenticator app"
       />
-    </Pressable>
+      <Pressable
+        onPress={() => void pasteFromClipboard()}
+        disabled={disabled}
+        style={({ pressed }) => [styles.pasteAction, pressed && styles.pressed]}
+        accessibilityRole="button"
+        accessibilityLabel="Paste authentication code"
+      >
+        <Text style={[styles.pasteActionText, { color: BRAND.purpleLight }]}>Paste code</Text>
+      </Pressable>
+    </View>
   )
 }
 
@@ -147,14 +191,18 @@ function MfaLayout({
 
   if (showChrome) {
     return (
-      <View style={[styles.screen, { backgroundColor: LOGIN.canvas }]}>
+      <KeyboardAvoidingView
+        style={[styles.screen, { backgroundColor: LOGIN.canvas }]}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={Platform.OS === "ios" ? insets.top : 0}
+      >
         <ScrollView
           style={styles.screenScroll}
           contentContainerStyle={[
-            styles.screenBodyCentered,
+            styles.screenBody,
             {
-              paddingTop: insets.top + 24,
-              paddingBottom: insets.bottom + 24,
+              paddingTop: insets.top + 28,
+              paddingBottom: insets.bottom + 28,
               paddingHorizontal: 24,
             },
           ]}
@@ -163,7 +211,7 @@ function MfaLayout({
         >
           {inner}
         </ScrollView>
-      </View>
+      </KeyboardAvoidingView>
     )
   }
 
@@ -471,7 +519,7 @@ export function MfaLoginStep({
               ? "Verifying…"
               : code.length === 6
                 ? "Verifying automatically…"
-                : "Codes refresh every 30 seconds."}
+                : "Enter the code or tap Paste code after copying from your authenticator."}
           </Text>
         </View>
       ) : (
@@ -537,13 +585,13 @@ export function MfaLoginStep({
 const styles = StyleSheet.create({
   screen: { flex: 1, alignSelf: "stretch", width: "100%" },
   screenScroll: { flex: 1 },
-  screenBodyCentered: {
+  screenBody: {
     flexGrow: 1,
-    justifyContent: "center",
     alignItems: "stretch",
   },
   embeddedWrap: {
     alignSelf: "stretch",
+    paddingVertical: 8,
   },
   layoutInner: {
     gap: 20,
@@ -577,11 +625,36 @@ const styles = StyleSheet.create({
   },
   footerAction: { paddingVertical: 4, paddingHorizontal: 8 },
   footerLink: { textAlign: "center" },
-  otpPressable: { position: "relative", width: "100%", maxWidth: 340 },
+  otpWrap: {
+    position: "relative",
+    width: "100%",
+    maxWidth: 340,
+    alignItems: "center",
+    gap: 10,
+  },
   otpRow: {
     flexDirection: "row",
     justifyContent: "center",
     gap: 10,
+  },
+  otpInputOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 52,
+    opacity: 0.02,
+    color: "transparent",
+    fontSize: 16,
+    zIndex: 2,
+  },
+  pasteAction: {
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+  },
+  pasteActionText: {
+    fontSize: 15,
+    fontWeight: "600",
   },
   otpCell: {
     width: 46,
@@ -594,11 +667,6 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: "600",
     fontVariant: ["tabular-nums"],
-  },
-  hiddenOtpInput: {
-    ...StyleSheet.absoluteFillObject,
-    opacity: 0.02,
-    color: "transparent",
   },
   enrollBlock: { gap: 12, alignSelf: "stretch" },
   sectionLabel: { textTransform: "none", textAlign: "center" },

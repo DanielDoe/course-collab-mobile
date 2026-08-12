@@ -1,4 +1,7 @@
 node_modules/
+.expo/
+.cursor/
+expo/test-demo-*.png
 .DS_Store
 *.log
 .env

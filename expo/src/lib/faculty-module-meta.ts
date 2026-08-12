@@ -1,0 +1,198 @@
+import type { Ionicons } from "@expo/vector-icons"
+
+export type FacultyModuleMeta = {
+  id: string
+  title: string
+  summary: string
+  icon: keyof typeof Ionicons.glyphMap
+  features: string[]
+}
+
+export const FACULTY_MODULE_META: Record<string, FacultyModuleMeta> = {
+  syllabus: {
+    id: "syllabus",
+    title: "Syllabus",
+    summary: "Edit course syllabus, policies, and schedule for students.",
+    icon: "document-text-outline",
+    features: ["Rich syllabus editor", "Policy sections", "Weekly schedule"]},
+  lectures: {
+    id: "lectures",
+    title: "Manage Lectures",
+    summary: "Organize weekly lectures, materials, and in-class resources.",
+    icon: "easel-outline",
+    features: ["Lecture weeks", "Slides & attachments", "Sample practice links"]},
+  "course-notes": {
+    id: "course-notes",
+    title: "Course Notes",
+    summary: "Publish typed course notes for students by topic and section.",
+    icon: "document-text-outline",
+    features: ["All notes", "Topic availability", "Soft delete & restore"]},
+  flashcards: {
+    id: "flashcards",
+    title: "Flashcards",
+    summary: "Manage course flashcard decks, topics, and question-bank generation.",
+    icon: "layers-outline",
+    features: ["Deck editor", "Topic toggles", "Generate from bank"]},
+  practice: {
+    id: "practice",
+    title: "Manage Practice",
+    summary: "Configure adaptive practice topics and difficulty for students.",
+    icon: "bulb-outline",
+    features: ["Topic banks", "Difficulty tiers", "Practice analytics"]},
+  groups: {
+    id: "groups",
+    title: "Manage Groups",
+    summary: "Create and manage student collaboration groups.",
+    icon: "people-circle-outline",
+    features: ["Group rosters", "Auto-assign", "Section filters"]},
+  projects: {
+    id: "projects",
+    title: "Manage Projects",
+    summary: "Team projects, deliverables, and collaboration workflows.",
+    icon: "folder-open-outline",
+    features: ["Project briefs", "Team assignments", "Submission tracking"]},
+  "summer-camp": {
+    id: "summer-camp",
+    title: "Summer Camp",
+    summary: "Summer camp modules, certificates, and training content.",
+    icon: "sunny-outline",
+    features: ["Camp modules", "Certificates", "Discussion boards"]},
+  "question-bank": {
+    id: "question-bank",
+    title: "Question Bank",
+    summary: "Browse, edit, and import questions for assessments.",
+    icon: "library-outline",
+    features: ["Topic organization", "Import/export", "Preview & edit"]},
+  "deleted-quizzes": {
+    id: "deleted-quizzes",
+    title: "Deleted Assessments",
+    summary: "Restore quizzes and exams moved to trash within 24 hours.",
+    icon: "trash-outline",
+    features: ["Soft-deleted items", "Restore", "Permanent purge"]},
+  "student-progress": {
+    id: "student-progress",
+    title: "Student Progress",
+    summary: "Advanced analytics on student mastery and engagement.",
+    icon: "analytics-outline",
+    features: ["Mastery trends", "At-risk alerts", "Topic breakdown"]},
+  reports: {
+    id: "reports",
+    title: "Manage Reports",
+    summary: "Generate and export course performance reports.",
+    icon: "document-attach-outline",
+    features: ["PDF exports", "Section comparisons", "Grade summaries"]},
+  "progress-reviews": {
+    id: "progress-reviews",
+    title: "Progress Reviews",
+    summary: "Structured progress check-ins and review workflows.",
+    icon: "sparkles-outline",
+    features: ["Review cycles", "Instructor notes", "Student feedback"]},
+  discussions: {
+    id: "discussions",
+    title: "Course Discussions",
+    summary: "Moderate course forums and student discussion threads.",
+    icon: "chatbubbles-outline",
+    features: ["Board categories", "Moderation tools", "Links to announcements"]},
+  "student-support": {
+    id: "student-support",
+    title: "Student Support",
+    summary: "Help queues, password resets, and instructor guides.",
+    icon: "help-circle-outline",
+    features: ["Support queues", "Password resets", "Instructor guides"]},
+  "course-settings": {
+    id: "course-settings",
+    title: "Course Settings",
+    summary: "Core course configuration and visibility options.",
+    icon: "options-outline",
+    features: ["Course metadata", "Visibility", "Enrollment rules"]},
+  "assessment-governance": {
+    id: "assessment-governance",
+    title: "Assessment Governance",
+    summary: "Policies for publishing, retakes, and academic integrity.",
+    icon: "shield-checkmark-outline",
+    features: ["Publish rules", "Retake policy", "Integrity settings"]},
+  "assessment-defaults": {
+    id: "assessment-defaults",
+    title: "Assessment Defaults",
+    summary: "Default timers, anti-cheat, and AI grading for new assessments.",
+    icon: "clipboard-outline",
+    features: ["Default timers", "Anti-cheat presets", "AI strictness"]},
+  "my-courses": {
+    id: "my-courses",
+    title: "My Courses",
+    summary: "All courses you teach across terms and institutions.",
+    icon: "school-outline",
+    features: ["Course list", "Term switching", "Role overview"]},
+  "grading-policies": {
+    id: "grading-policies",
+    title: "Grading Policies",
+    summary: "Letter grade scales, curves, and gradebook rules.",
+    icon: "scale-outline",
+    features: ["Grade scales", "Curving", "Rounding rules"]},
+  "attendance-policies": {
+    id: "attendance-policies",
+    title: "Attendance Policies",
+    summary: "Rules for attendance tracking and excused absences.",
+    icon: "calendar-outline",
+    features: ["Thresholds", "Excused codes", "Grade impact"]},
+  "course-evaluations": {
+    id: "course-evaluations",
+    title: "Course Evaluations",
+    summary: "Review Canvas evaluation proofs and award engagement credits.",
+    icon: "clipboard-outline",
+    features: ["Pending queue", "Approve & return", "50 EC on approval", "Survey analytics"],
+  },
+  "classroom-points-rules": {
+    id: "classroom-points-rules",
+    title: "Classroom Points Rules",
+    summary: "Configure categories, caps, and approval rules for points.",
+    icon: "trophy-outline",
+    features: ["Category caps", "Auto-approve", "Booster rules"]},
+  "playground-rules": {
+    id: "playground-rules",
+    title: "Playground Rules",
+    summary: "Live session defaults, topics, and scoring for playground.",
+    icon: "flash-outline",
+    features: ["Session defaults", "Topic pools", "Leaderboard rules"]},
+  "ai-assistant-settings": {
+    id: "ai-assistant-settings",
+    title: "AI Assistant Settings",
+    summary: "Configure AI tutor, grading models, and assistant behavior.",
+    icon: "sparkles-outline",
+    features: ["Model selection", "Tutor access", "Safety filters"]},
+  "team-project-policies": {
+    id: "team-project-policies",
+    title: "Team & Project Policies",
+    summary: "Rules for group work, peer review, and project submissions.",
+    icon: "people-outline",
+    features: ["Team size limits", "Peer review", "Late policies"]},
+  "submission-issues": {
+    id: "submission-issues",
+    title: "Submission Issues",
+    summary: "Administration view of cross-assessment submission problems.",
+    icon: "alert-circle-outline",
+    features: ["Issue triage", "Bulk resolve", "Audit trail"]},
+  "teaching-assistants": {
+    id: "teaching-assistants",
+    title: "Teaching Assistants",
+    summary: "Manage TA access, permissions, and section assignments.",
+    icon: "person-add-outline",
+    features: ["TA roster", "Permissions", "Section scope"]},
+  cora: {
+    id: "cora",
+    title: "Cora Copilot",
+    summary: "AI teaching copilot — create, improve, analyze, and automate course work.",
+    icon: "sparkles-outline",
+    features: ["Create content", "Analyze results", "Course insights", "Assistant chat"]},
+}
+
+export function getFacultyModuleMeta(moduleId: string): FacultyModuleMeta {
+  return (
+    FACULTY_MODULE_META[moduleId] ?? {
+      id: moduleId,
+      title: moduleId.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+      summary: "This module is being built for the mobile faculty app.",
+      icon: "construct-outline",
+      features: ["Course-scoped tools", "Native editing", "Offline-friendly views"]}
+  )
+}

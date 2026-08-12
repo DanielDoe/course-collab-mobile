@@ -1,0 +1,38 @@
+appId: com.coursecollab.app
+---
+- openLink: coursecollab://dev-student-login
+- extendedWaitUntil:
+    notVisible: "Preparing your dashboard"
+    timeout: 45000
+- runFlow:
+    when:
+      visible: "Done"
+    commands:
+      - tapOn: "Done"
+- openLink: coursecollab:///module/messages
+- extendedWaitUntil:
+    visible: "Messages"
+    timeout: 15000
+- tapOn: "New message"
+- extendedWaitUntil:
+    visible: "Search recipients"
+    timeout: 8000
+- tapOn:
+    id: "compose-search-recipients"
+- inputText: "Behlool"
+- extendedWaitUntil:
+    visible: "Behlool Moiz, Teaching Assistant"
+    timeout: 12000
+- tapOn: "Behlool Moiz, Teaching Assistant"
+- tapOn:
+    id: "compose-message-body"
+- inputText: "Hi Behlool! Testing the CourseCollab mobile messenger from Daniel Doe. Please confirm you received this demo message."
+- tapOn:
+    id: "compose-message-subject"
+- inputText: "Mobile app demo — Lab help"
+- tapOn:
+    id: "compose-send-message"
+- extendedWaitUntil:
+    notVisible: "New message"
+    timeout: 25000
+- assertVisible: "Behlool Moiz"

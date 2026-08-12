@@ -3,9 +3,11 @@ import { StyleSheet, Text, View } from "react-native"
 import { useRouter } from "expo-router"
 import { ApiError, api, type UniversityRecord, type UniversityStudentLoginResponse } from "../src/lib/api"
 import { primeMembershipTierCache } from "../src/lib/membership-tier-cache"
+import { persistMfaDeviceTrustFromLogin, studentMfaLoginKey, studentMfaAliasKeys } from "../src/lib/mfa-device-trust"
 import { parseMfaCompletePayload, parseMfaLoginResponse, type MfaLoginState } from "../src/lib/mfa-types"
 import { useSession } from "../src/context/SessionProvider"
 import { BrandLoadingMark } from "../src/components/login/BrandLoadingMark"
+import { replaceAuthRoute } from "../src/lib/navigation-reset"
 
 type MfaLoginStepProps = {
   state: MfaLoginState
@@ -104,6 +106,12 @@ export default function DevStudentLoginScreen() {
     if (!normalized || !("student" in normalized) || !normalized.student) {
       throw new ApiError("Login failed after MFA verification.", 500)
     }
+    await persistMfaDeviceTrustFromLogin({
+      userType: "student",
+      loginKey: studentMfaLoginKey(2, "665322590"),
+      payload: { ...payload, ...normalized },
+      aliasKeys: studentMfaAliasKeys(2, "665322590", normalized.student as { student_id?: string; email?: string }),
+    })
     await completeDevLogin(
       normalized as Extract<UniversityStudentLoginResponse, { student: unknown }>,
       { signIn, router, mounted: true, universityId: 2, cancelled: cancelledRef },
@@ -124,7 +132,7 @@ export default function DevStudentLoginScreen() {
         onBack={() => {
           cancelledRef.current = true
           setMfaState(null)
-          router.replace("/login")
+          replaceAuthRoute(router, "/login")
         }}
       />
     ) : (
@@ -157,10 +165,26 @@ async function completeDevLogin(
   const enrollment = data.enrollment
   const university = data.university
 
+  const loginIdentifier = "665322590"
+  const universityId = university?.id ?? ctx.universityId
+  if (universityId && loginIdentifier.trim()) {
+    await persistMfaDeviceTrustFromLogin({
+      userType: "student",
+      loginKey: studentMfaLoginKey(universityId, loginIdentifier),
+      payload: data as Record<string, unknown>,
+      aliasKeys: studentMfaAliasKeys(universityId, loginIdentifier, {
+        student_id: student.student_id,
+        email: student.email,
+      }),
+    })
+  }
+
   await primeMembershipTierCache(String(student.id), data.effectiveMembershipTier)
   await ctx.signIn({
     portal: "student",
     id: student.student_id,
+    authIdentifier: loginIdentifier,
+    email: student.email,
     name: student.full_name,
     section: student.section ?? enrollment?.section ?? "",
     databaseId: String(student.id),
@@ -172,7 +196,7 @@ async function completeDevLogin(
     universityShortName: university?.short_name,
   })
 
-  if (ctx.mounted && !ctx.cancelled?.current) ctx.router.replace("/signing-in")
+  if (ctx.mounted && !ctx.cancelled?.current) replaceAuthRoute(ctx.router, "/signing-in")
 }
 
 const styles = StyleSheet.create({

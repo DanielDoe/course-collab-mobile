@@ -1,0 +1,10 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Behlool Moiz"
+- extendedWaitUntil:
+    visible: "Teaching Assistant"
+    timeout: 10000
+- tapOn: "Behlool Moiz"
+- extendedWaitUntil:
+    visible: "Teaching Assistant"
+    timeout: 8000

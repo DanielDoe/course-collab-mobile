@@ -26,17 +26,17 @@ const config: CapacitorConfig = {
     // iPadOS: use mobile viewport (same as phone mobile web)
     preferredContentMode: "mobile",
     scrollEnabled: true,
-    backgroundColor: "#582c83",
+    backgroundColor: "#ffffff",
   },
   android: {
-    backgroundColor: "#582c83",
+    backgroundColor: "#ffffff",
     allowMixedContent: false,
   },
   plugins: {
     SplashScreen: {
       launchShowDuration: 1500,
       launchAutoHide: true,
-      backgroundColor: "#582c83",
+      backgroundColor: "#ffffff",
       androidSplashResourceName: "splash",
       androidScaleType: "CENTER_CROP",
       showSpinner: false,
@@ -44,8 +44,8 @@ const config: CapacitorConfig = {
       splashImmersive: true,
     },
     StatusBar: {
-      style: "LIGHT",
-      backgroundColor: "#582c83",
+      style: "DARK",
+      backgroundColor: "#ffffff",
     },
     Keyboard: {
       resize: "body",

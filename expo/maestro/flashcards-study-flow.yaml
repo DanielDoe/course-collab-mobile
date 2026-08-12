@@ -1,0 +1,19 @@
+appId: com.coursecollab.app
+---
+- openLink: coursecollab://dev-student-login
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 30000
+- openLink: coursecollab:///flashcards/1
+- extendedWaitUntil:
+    visible: "Show answer"
+    timeout: 20000
+- tapOn:
+    text: "Show answer"
+- extendedWaitUntil:
+    visible: "Known"
+    timeout: 5000
+- tapOn: "Known"
+- extendedWaitUntil:
+    visible: "Learn 2 / 8"
+    timeout: 8000

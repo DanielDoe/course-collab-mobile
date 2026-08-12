@@ -1,0 +1,52 @@
+{
+  "features": ["refractivity", "specular-location"],
+  "fill-specializations": [
+    {
+      "value": {
+        "linear-gradient": [
+          "extended-srgb:0.42745,0.36863,0.96471,1.00000",
+          "extended-srgb:0.54902,0.47843,0.98824,1.00000"
+        ]
+      }
+    },
+    {
+      "appearance": "dark",
+      "value": {
+        "linear-gradient": [
+          "extended-srgb:0.16471,0.13725,0.31373,1.00000",
+          "extended-srgb:0.22745,0.18824,0.45098,1.00000"
+        ]
+      }
+    },
+    {
+      "appearance": "tinted",
+      "value": {
+        "solid": "extended-srgb:0.42745,0.36863,0.96471,1.00000"
+      }
+    }
+  ],
+  "groups": [
+    {
+      "name": "CourseCollab Mark",
+      "layers": [
+        {
+          "name": "Logo",
+          "image-name": "logo-mark.png",
+          "glass": true
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.4
+      },
+      "specular": true,
+      "translucency": {
+        "enabled": true,
+        "value": 0.12
+      }
+    }
+  ],
+  "supported-platforms": {
+    "squares": ["iOS"]
+  }
+}

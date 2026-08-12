@@ -1,0 +1,40 @@
+appId: com.coursecollab.app
+---
+- openLink: coursecollab://dev-student-login
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 60000
+- tapOn:
+    text: "Notes"
+    optional: true
+- tapOn:
+    id: ".*notes.*"
+    optional: true
+- runFlow:
+    when:
+      notVisible: "My Notes"
+    commands:
+      - swipe:
+          start: 50%, 80%
+          end: 50%, 30%
+      - tapOn:
+          text: "Notes"
+          optional: true
+- assertVisible: "My Notes"
+- tapOn:
+    point: "92%,92%"
+- extendedWaitUntil:
+    visible: "Edit note"
+    timeout: 15000
+- tapOn: "Title"
+- inputText: "Mobile test note"
+- tapOn: "Start typing"
+- inputText: "Hello from native notes"
+- tapOn: "Handwritten"
+- swipe:
+    start: 30%, 45%
+    end: 70%, 55%
+- tapOn: "Typed"
+- tapOn: "Save"
+- back
+- assertVisible: "Mobile test note"

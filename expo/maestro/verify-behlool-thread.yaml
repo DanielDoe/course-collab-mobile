@@ -1,0 +1,16 @@
+appId: com.coursecollab.app
+---
+- openLink: coursecollab://dev-student-login
+- extendedWaitUntil:
+    notVisible: "Preparing your dashboard"
+    timeout: 45000
+- openLink: coursecollab:///module/messages
+- extendedWaitUntil:
+    visible: "Behlool Moiz"
+    timeout: 15000
+- tapOn: "Behlool Moiz"
+- extendedWaitUntil:
+    visible: "Hi Behlool"
+    timeout: 15000
+- assertVisible: "Teaching Assistant"
+- assertVisible: "Mobile app demo"

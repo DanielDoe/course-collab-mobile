@@ -1,68 +1,43 @@
-from PIL import Image, ImageDraw
+#!/usr/bin/env python3
+"""Generate Capacitor icon + splash from themed CourseCollab mark."""
+
+from __future__ import annotations
+
 import os
+import subprocess
 import sys
+from pathlib import Path
 
-PRIMARY = (88, 44, 131)
-WHITE = (255, 255, 255)
-root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-assets_dir = os.path.join(root, "assets")
-os.makedirs(assets_dir, exist_ok=True)
+ROOT = Path(__file__).resolve().parents[1]
+WEB_SCRIPT = ROOT.parent / "v0-coursecollabv3" / "scripts" / "generate-brand-mark.py"
 
 
-def draw_icon(size: int) -> Image.Image:
-    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    d = ImageDraw.Draw(img)
-    margin = int(size * 0.08)
-    radius = int(size * 0.22)
-    d.rounded_rectangle(
-        [margin, margin, size - margin, size - margin],
-        radius=radius,
-        fill=PRIMARY,
-    )
-    cx, cy = size // 2, size // 2
-    cap_w = int(size * 0.42)
-    cap_h = int(size * 0.12)
-    d.polygon(
-        [
-            (cx - cap_w // 2, cy - cap_h),
-            (cx, cy - cap_h - int(size * 0.08)),
-            (cx + cap_w // 2, cy - cap_h),
-            (cx + cap_w // 3, cy),
-            (cx - cap_w // 3, cy),
-        ],
-        fill=WHITE,
-    )
-    d.rectangle(
-        [cx - cap_w // 3, cy, cx + cap_w // 3, cy + int(size * 0.06)],
-        fill=WHITE,
-    )
-    tassel_x = cx + cap_w // 3
-    d.line(
-        [(tassel_x, cy - cap_h), (tassel_x + int(size * 0.06), cy + int(size * 0.04))],
-        fill=WHITE,
-        width=max(2, size // 80),
-    )
-    d.ellipse(
-        [
-            tassel_x + int(size * 0.03),
-            cy + int(size * 0.03),
-            tassel_x + int(size * 0.09),
-            cy + int(size * 0.09),
-        ],
-        fill=WHITE,
-    )
-    return img
+def main() -> None:
+    if WEB_SCRIPT.exists():
+        subprocess.run([sys.executable, str(WEB_SCRIPT)], check=True)
+    else:
+        print(f"Warning: {WEB_SCRIPT} not found; using existing assets/icon.png")
+
+    icon = ROOT / "assets" / "icon.png"
+    if not icon.exists():
+        raise SystemExit("assets/icon.png missing after brand generation")
+
+    if (ROOT / "node_modules" / "@capacitor" / "assets").exists():
+        subprocess.run(
+            [
+                "npx",
+                "capacitor-assets",
+                "generate",
+                "--iconBackgroundColor",
+                "#582c83",
+                "--splashBackgroundColor",
+                "#582c83",
+            ],
+            cwd=ROOT,
+            check=True,
+        )
+        print("Capacitor native icons + splash updated")
 
 
-def draw_splash(w: int, h: int) -> Image.Image:
-    img = Image.new("RGB", (w, h), PRIMARY)
-    icon = draw_icon(min(w, h) // 4)
-    ix = (w - icon.width) // 2
-    iy = (h - icon.height) // 2 - int(h * 0.06)
-    img.paste(icon, (ix, iy), icon)
-    return img
-
-
-draw_icon(1024).save(os.path.join(assets_dir, "icon.png"))
-draw_splash(2732, 2732).save(os.path.join(assets_dir, "splash.png"))
-print("Generated icon + splash")
+if __name__ == "__main__":
+    main()

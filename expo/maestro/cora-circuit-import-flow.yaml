@@ -1,0 +1,29 @@
+appId: com.coursecollab.app
+---
+- openLink: coursecollab://dev-student-login
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 120000
+- openLink: coursecollab:///module/ai-tutor
+- tapOn:
+    text: "New conversation"
+- tapOn:
+    text: "Add files, course questions, and learning tools"
+- tapOn:
+    id: "cora-composer-action-import-course"
+- tapOn:
+    text: "Quizzes"
+- tapOn:
+    index: 0
+- tapOn:
+    text: "Question 11"
+    optional: true
+- tapOn:
+    text: "Question 12"
+    optional: true
+- inputText: "Walk me through this circuit step by step"
+- tapOn:
+    id: "cora-composer-send"
+- extendedWaitUntil:
+    visible: ".*circuit.*|.*nodal.*|.*mesh.*|.*voltage.*|.*current.*"
+    timeout: 120000

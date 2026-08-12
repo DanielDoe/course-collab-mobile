@@ -1,0 +1,9 @@
+appId: com.coursecollab.app
+---
+- tapOn:
+    id: compose-send-message
+- extendedWaitUntil:
+    notVisible: "New message"
+    timeout: 20000
+- assertVisible: "Behlool Moiz"
+- assertVisible: "Hi Behlool"

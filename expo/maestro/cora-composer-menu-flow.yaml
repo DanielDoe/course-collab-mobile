@@ -1,0 +1,46 @@
+appId: com.coursecollab.app
+---
+- openLink: coursecollab://dev-student-login
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 120000
+- openLink: coursecollab:///module/ai-tutor
+- extendedWaitUntil:
+    visible: "New conversation"
+    timeout: 60000
+- tapOn:
+    text: "New conversation"
+- extendedWaitUntil:
+    visible: "Understand"
+    timeout: 30000
+- tapOn:
+    text: "Add files, course questions, and learning tools"
+- extendedWaitUntil:
+    visible: "Import from course"
+    timeout: 15000
+- tapOn:
+    text: "Import from course"
+- extendedWaitUntil:
+    visible: "Practice Hub"
+    timeout: 30000
+- tapOn:
+    text: "Practice Hub"
+- extendedWaitUntil:
+    visible: "Arrays"
+    timeout: 30000
+- tapOn:
+    text: "Arrays"
+- extendedWaitUntil:
+    visible: "Question 1"
+    timeout: 30000
+- tapOn:
+    text: "Question 1"
+- extendedWaitUntil:
+    visible: "Course question"
+    timeout: 45000
+- inputText: "Why does this print 3?"
+- tapOn:
+    text: "Send message"
+- extendedWaitUntil:
+    visible: "Why does this print 3?"
+    timeout: 30000

@@ -1,0 +1,25 @@
+appId: com.coursecollab.app
+---
+- extendedWaitUntil:
+    visible: "1/50 exchanges"
+    timeout: 15000
+- tapOn:
+    text: "Ask a follow-up…"
+- inputText: "I'm opening my calendar assistant. Help me understand my schedule using my CourseCollab calendar, assessments, reminders, and alerts.
+
+Answer questions like:
+- What's coming up this week?
+- Any missed deadlines I should address?
+- When is my next exam or homework due?
+- What study sessions are on my calendar?
+
+When I ask about events, cite specific titles and dates from my data. If something isn't in my profile, say so and suggest where to check in CourseCollab."
+- tapOn:
+    id: "cora-composer-send"
+- extendedWaitUntil:
+    notVisible: "Cora is thinking"
+    timeout: 120000
+- extendedWaitUntil:
+    visible: "This week|coming up|None on record|deadline|assessment|due|Missed|Calendar|next exam|homework due|Priority plan"
+    timeout: 30000
+- takeScreenshot: calendar-assistant-response

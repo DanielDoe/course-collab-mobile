@@ -1,0 +1,20 @@
+appId: com.coursecollab.app
+---
+- openLink: "coursecollab:///collaboration/playground/join?mode=classroom"
+- extendedWaitUntil:
+    visible: "Start playing!"
+    timeout: 20000
+- takeScreenshot: playground-join-screen
+- tapOn: "ABCDE"
+- inputText: "KSHX5"
+- takeScreenshot: playground-passcode-entered
+- tapOn: "Start playing!"
+- extendedWaitUntil:
+    visible: "Waiting for instructor"
+    timeout: 25000
+    optional: true
+- extendedWaitUntil:
+    visible: "Submit answer"
+    timeout: 25000
+    optional: true
+- takeScreenshot: playground-after-join

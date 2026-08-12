@@ -1,0 +1,87 @@
+{
+  "expo": {
+    "name": "CourseCollab",
+    "slug": "course-collab-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/logo-mark.png",
+    "scheme": "coursecollab",
+    "userInterfaceStyle": "automatic",
+    "backgroundColor": "#F8FAFC",
+    "splash": {
+      "backgroundColor": "#F8FAFC"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.coursecollab.app",
+      "icon": "./assets/CourseCollab.icon",
+      "backgroundColor": "#F2F2F7",
+      "infoPlist": {
+        "UIUserInterfaceStyle": "Automatic",
+        "NSCalendarsUsageDescription": "CourseCollab adds your class schedule to Apple Calendar and sends class reminders.",
+        "NSCalendarsFullAccessUsageDescription": "CourseCollab adds your class schedule to Apple Calendar and sends class reminders.",
+        "NSRemindersUsageDescription": "CourseCollab can remind you before class starts.",
+        "NSRemindersFullAccessUsageDescription": "CourseCollab can remind you before class starts.",
+        "NSUserNotificationsUsageDescription": "CourseCollab sends class reminders, quiz deadlines, announcements, and course messages.",
+        "NSSpeechRecognitionUsageDescription": "CourseCollab uses speech recognition for live captions in AI Notetaker and voice dictation in Cora.",
+        "NSMicrophoneUsageDescription": "CourseCollab needs microphone access for lecture recording in AI Notetaker and voice dictation in Cora.",
+        "UIBackgroundModes": ["remote-notification"]
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.coursecollab.app",
+      "permissions": [
+        "POST_NOTIFICATIONS",
+        "READ_CALENDAR",
+        "WRITE_CALENDAR",
+        "RECORD_AUDIO"
+      ]
+    },
+    "extra": {
+      "appUrl": "https://coursecollab.vercel.app",
+      "localApiUrl": "http://127.0.0.1:3000"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#F8FAFC"
+        }
+      ],
+      "expo-asset",
+      "expo-font",
+      "expo-secure-store",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/logo-mark.png",
+          "color": "#6D5EF6",
+          "mode": "production",
+          "enableBackgroundRemoteNotifications": true
+        }
+      ],
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "CourseCollab adds your recurring class schedule to Apple Calendar.",
+          "remindersPermission": "CourseCollab can remind you before each class."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "CourseCollab needs photo access for assignment uploads.",
+          "cameraPermission": "CourseCollab needs camera access for assignment photos."
+        }
+      ],
+      "expo-speech-recognition",
+      "expo-audio",
+      "expo-system-ui"
+    ]
+  }
+}

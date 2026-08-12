@@ -1,0 +1,100 @@
+import { getApiBaseUrl } from "../constants"
+import { ApiError } from "./api"
+
+export type ApiErrorKind = "network" | "server" | "client" | "unknown"
+
+export type ApiErrorPresentation = {
+  kind: ApiErrorKind
+  title: string
+  message: string
+  status?: number
+  detail?: string
+  retryable: boolean
+}
+
+type PresentOptions = {
+  /** Short label for the feature, e.g. "Messages" or "Login". */
+  feature?: string
+  fallbackMessage?: string
+}
+
+function buildApiErrorDetail(err: ApiError): string | undefined {
+  const parts = [err.message]
+  if (err.details != null) {
+    try {
+      parts.push(typeof err.details === "string" ? err.details : JSON.stringify(err.details, null, 2))
+    } catch {
+      parts.push(String(err.details))
+    }
+  }
+  if (__DEV__) parts.push(`API: ${getApiBaseUrl()}`)
+  return parts.filter(Boolean).join("\n\n")
+}
+
+export function presentApiError(err: unknown, options: PresentOptions = {}): ApiErrorPresentation {
+  const feature = options.feature ?? "This page"
+  const fallback = options.fallbackMessage ?? "Something went wrong. Please try again."
+
+  if (err instanceof ApiError) {
+    if (err.status === 0 || err.status === 408) {
+      return {
+        kind: "network",
+        title: "Can't reach CourseCollab",
+        message: `${feature} couldn't connect. Check Wi‑Fi or cellular data, then try again.`,
+        status: err.status || undefined,
+        detail: buildApiErrorDetail(err),
+        retryable: true,
+      }
+    }
+
+    if (err.status >= 500) {
+      return {
+        kind: "server",
+        title: `${feature} unavailable`,
+        message:
+          "CourseCollab's servers returned an error. Your connection is fine — this needs to be fixed on our backend.",
+        status: err.status,
+        detail: buildApiErrorDetail(err),
+        retryable: true,
+      }
+    }
+
+    if (err.status === 401 || err.status === 403) {
+      return {
+        kind: "client",
+        title: "Access denied",
+        message: err.message || "You don't have permission to view this content.",
+        status: err.status,
+        detail: buildApiErrorDetail(err),
+        retryable: false,
+      }
+    }
+
+    return {
+      kind: "client",
+      title: `${feature} couldn't load`,
+      message: err.message || fallback,
+      status: err.status,
+      detail: buildApiErrorDetail(err),
+      retryable: true,
+    }
+  }
+
+  if (err instanceof Error && err.message) {
+    return {
+      kind: "unknown",
+      title: `${feature} couldn't load`,
+      message: err.message,
+      detail: __DEV__ ? `API: ${getApiBaseUrl()}` : undefined,
+      retryable: true,
+    }
+  }
+
+  return {
+    kind: "unknown",
+    title: `${feature} couldn't load`,
+    message: fallback,
+    detail: __DEV__ ? `API: ${getApiBaseUrl()}` : undefined,
+    retryable: true,
+  }
+}
