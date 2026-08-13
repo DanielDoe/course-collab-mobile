@@ -200,6 +200,9 @@ export type CoraQuestionImportContainer = {
   label: string
   subtitle: string
   count: number
+  locked?: boolean
+  lockReason?: string | null
+  accessStatus?: "unattempted" | "in_progress" | "completed"
 }
 
 export type CoraQuestionImportItem = {

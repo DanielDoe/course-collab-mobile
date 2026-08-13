@@ -4,6 +4,12 @@ import type {
   MfaStatusResponse,
   MfaUserType,
 } from "./mfa-types"
+import {
+  instructorMfaLoginKey,
+  mfaTrustRequestHeaders,
+  persistMfaDeviceTrustFromLogin,
+  studentMfaLoginKey,
+} from "./mfa-device-trust"
 
 type VerifyPayload = {
   challengeToken: string
@@ -22,12 +28,20 @@ async function mfaStatusRequest<T>(
   userType: MfaUserType,
   userId: number | string,
   init?: RequestInit,
+  loginKey?: string | null,
 ): Promise<T> {
   const params = new URLSearchParams({
     userType,
     userId: String(userId),
   })
-  return api.rawRequest<T>(`/api/auth/mfa/status?${params}`, init)
+  const trustHeaders = loginKey ? await mfaTrustRequestHeaders(loginKey) : {}
+  return api.rawRequest<T>(`/api/auth/mfa/status?${params}`, {
+    ...init,
+    headers: {
+      ...trustHeaders,
+      ...(init?.headers as Record<string, string> | undefined),
+    },
+  })
 }
 
 export const mfaApi = {
@@ -50,20 +64,51 @@ export const mfaApi = {
           : {}),
     }),
 
-  getStatus: (userType: MfaUserType, userId: number | string) =>
-    mfaStatusRequest<MfaStatusResponse>(userType, userId),
+  getStatus: (userType: MfaUserType, userId: number | string, loginKey?: string | null) =>
+    mfaStatusRequest<MfaStatusResponse>(userType, userId, undefined, loginKey),
 
   updateTrustDuration: async (
     userType: MfaUserType,
     userId: number | string,
     trustDurationDays: number,
+    loginKey?: string | null,
   ) => {
-    const data = await mfaStatusRequest<{ trustDurationDays: number }>(userType, userId, {
-      method: "PATCH",
-      body: JSON.stringify({ trustDurationDays }),
-    })
+    const data = await mfaStatusRequest<{
+      trustDurationDays: number
+      mfaDeviceTrustToken?: string
+      mfaDeviceTrustExpiresAt?: string
+    }>(
+      userType,
+      userId,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ trustDurationDays }),
+      },
+      loginKey,
+    )
+    if (loginKey && data.mfaDeviceTrustToken && data.mfaDeviceTrustExpiresAt) {
+      await persistMfaDeviceTrustFromLogin({
+        userType,
+        loginKey,
+        payload: data as Record<string, unknown>,
+      })
+    }
     return data.trustDurationDays
   },
+}
+
+export function mfaStatusLoginKey(params: {
+  userType: MfaUserType
+  universityId?: number | null
+  authIdentifier?: string | null
+  username?: string | null
+}): string | null {
+  if (params.userType === "student") {
+    if (params.universityId == null || !params.authIdentifier?.trim()) return null
+    return studentMfaLoginKey(params.universityId, params.authIdentifier)
+  }
+  const id = (params.authIdentifier ?? params.username)?.trim()
+  return id ? instructorMfaLoginKey(id) : null
 }
 
 export function mfaErrorMessage(err: unknown, fallback: string): string {

@@ -95,6 +95,13 @@ export function CoraImportCourseSheet({ visible, session, onClose, onImportProbl
 
   const openContainer = async (container: CoraQuestionImportContainer) => {
     if (!sourceKey) return
+    if (container.locked) {
+      setError(
+        container.lockReason ||
+          "Attempt this assessment first. Cora can help with its questions only after you submit.",
+      )
+      return
+    }
     setLoading(true)
     setError(null)
     setContainerLabel(container.label)
@@ -166,10 +173,18 @@ export function CoraImportCourseSheet({ visible, session, onClose, onImportProbl
             <View style={styles.loading}>
               <ActivityIndicator color={SN.accent} />
             </View>
-          ) : error ? (
-            <Text style={[type.caption, styles.error, { color: "#dc2626" }]}>{error}</Text>
           ) : (
-            <FlatList<ImportListRow>
+            <>
+              {step === "containers" &&
+              ["quizzes", "homework", "mid_semester", "final_exam"].includes(sourceKey ?? "") ? (
+                <Text style={[type.caption, styles.lockHint, { color: "#b45309" }]}>
+                  Pending assessments are locked until you attempt and submit them.
+                </Text>
+              ) : null}
+              {error ? (
+                <Text style={[type.caption, styles.error, { color: "#dc2626" }]}>{error}</Text>
+              ) : null}
+              <FlatList<ImportListRow>
               testID="cora-import-sheet-list"
               data={
                 (step === "sources"
@@ -228,28 +243,54 @@ export function CoraImportCourseSheet({ visible, session, onClose, onImportProbl
 
                 if (step === "containers") {
                   const container = row as CoraQuestionImportContainer
+                  const isLocked = Boolean(container.locked)
                   return (
                     <Pressable
                       testID={`cora-import-container-${container.id}`}
                       accessible
                       importantForAccessibility="yes"
                       accessibilityRole="button"
-                      accessibilityLabel={container.label}
+                      accessibilityLabel={
+                        isLocked ? `${container.label}, locked` : container.label
+                      }
+                      accessibilityState={{ disabled: isLocked }}
                       onPress={() => void openContainer(container)}
                       style={({ pressed }) => [
                         styles.row,
-                        { borderColor: native.separator, opacity: pressed ? NATIVE.pressedOpacity : 1 },
+                        {
+                          borderColor: isLocked ? "#f59e0b" : native.separator,
+                          backgroundColor: isLocked ? "rgba(245,158,11,0.08)" : undefined,
+                          opacity: pressed && !isLocked ? NATIVE.pressedOpacity : 1,
+                        },
                       ]}
                     >
+                      {isLocked ? (
+                        <Ionicons name="lock-closed" size={16} color="#b45309" />
+                      ) : null}
                       <View style={styles.rowCopy}>
-                        <Text style={[type.bodyEmphasis, styles.rowTitle]} importantForAccessibility="no">
+                        <Text
+                          style={[
+                            type.bodyEmphasis,
+                            styles.rowTitle,
+                            isLocked ? { color: "#92400e" } : null,
+                          ]}
+                          importantForAccessibility="no"
+                        >
                           {container.label}
                         </Text>
-                        <Text style={[type.caption, { color: SN.secondaryLabel }]} importantForAccessibility="no">
+                        <Text
+                          style={[
+                            type.caption,
+                            { color: isLocked ? "#b45309" : SN.secondaryLabel },
+                          ]}
+                          importantForAccessibility="no"
+                        >
                           {container.subtitle}
                         </Text>
                       </View>
-                      <Ionicons name="chevron-forward" size={18} color={native.tertiaryLabel} />
+                      {isLocked ? null : (
+                        <Ionicons name="chevron-forward" size={18} color={native.tertiaryLabel} />
+                      )}
                     </Pressable>
                   )
                 }
@@ -290,6 +331,7 @@ export function CoraImportCourseSheet({ visible, session, onClose, onImportProbl
                 )
               }}
             />
+            </>
           )}
         </Pressable>
       </Pressable>
@@ -339,8 +381,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   error: {
-    paddingVertical: 24,
+    paddingVertical: 12,
     textAlign: "center",
+  },
+  lockHint: {
+    paddingHorizontal: 4,
+    paddingBottom: 10,
+    lineHeight: 18,
   },
   list: {
     paddingBottom: 8,

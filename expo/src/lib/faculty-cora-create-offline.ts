@@ -11,6 +11,7 @@ import {
   matchesPrompt,
   moduleAction,
 } from "./faculty-cora-offline-shared"
+import { buildLocalAnnouncementProposal } from "./cora/local-proposals"
 
 export function parseQuestionCount(message: string): number {
   const match = message.match(/\b(\d{1,2})\b/)
@@ -68,7 +69,16 @@ function isQuestionBankPrompt(message: string): boolean {
 }
 
 function isAnnouncementPrompt(message: string): boolean {
-  return matchesAny(message, ["announcement", "weekly update", "draft a weekly"])
+  return matchesAny(message, [
+    "announcement",
+    "weekly update",
+    "draft a weekly",
+    "tell my students",
+    "running late",
+    "minutes late",
+    "post to the class",
+    "publish an announcement",
+  ])
 }
 
 function isFlashcardPrompt(message: string): boolean {
@@ -99,30 +109,70 @@ function generateQuestionBankReply(message: string): FacultyCoraChatResponse {
   }
 }
 
-function generateAnnouncementReply(message: string): FacultyCoraChatResponse {
+function generateAnnouncementReply(
+  message: string,
+  scope?: InstructorScope,
+): FacultyCoraChatResponse {
+  const lateMatch = /\b(late|running late|few minutes|five minutes|5 minutes)\b/i.test(message)
   const homeworkLabel = parseHomeworkLabel(message)
-  const draft = buildAnnouncementDraft(homeworkLabel)
+  const courseLabel =
+    (scope as InstructorScope & { courseCode?: string; courseTitle?: string })?.courseCode ||
+    (scope as InstructorScope & { courseCode?: string; courseTitle?: string })?.courseTitle ||
+    (scope?.courseId ? `Course ${scope.courseId}` : "your course")
+
+  const draft = lateMatch
+    ? {
+        title: "Running About 5 Minutes Late",
+        content: [
+          "Hi everyone,",
+          "",
+          "I am running approximately five minutes late today. Please remain in the classroom and I will be there shortly.",
+          "",
+          "Thank you for your patience.",
+        ].join("\n"),
+      }
+    : buildAnnouncementDraft(homeworkLabel, undefined)
+
+  const proposals =
+    scope?.courseId != null && scope.courseId > 0
+      ? [
+          buildLocalAnnouncementProposal({
+            instructorId: scope.instructorId,
+            courseId: scope.courseId,
+            courseLabel,
+            title: draft.title,
+            content: draft.content,
+          }),
+        ]
+      : []
 
   return {
     reply: [
-      `Here's a starter announcement draft for **${homeworkLabel}**:`,
+      "Yes — I can publish that for you. Here's the announcement I prepared.",
       "",
       `**${draft.title}**`,
       "",
       draft.content,
       "",
-      "Open the composer to edit and publish when you're ready.",
+      `**Audience:** ${courseLabel}`,
+      "**Publish:** Immediately after you confirm",
+      "",
+      proposals.length
+        ? "Confirm in the card below to publish to your course."
+        : "Select a course first, then I can publish this announcement.",
     ].join("\n"),
     offline: true,
     suggestedModuleId: "announcements",
-    actions: [
-      moduleAction("announcements", "Open announcement draft", {
-        pendingKind: "announcement_draft",
-        title: draft.title,
-        content: draft.content,
-      }),
-      moduleAction("homework", "Manage Homework"),
-    ],
+    proposals,
+    actions: proposals.length
+      ? []
+      : [
+          moduleAction("announcements", "Open announcement draft", {
+            pendingKind: "announcement_draft",
+            title: draft.title,
+            content: draft.content,
+          }),
+        ],
   }
 }
 
@@ -202,12 +252,15 @@ function genericCreateReply(): FacultyCoraChatResponse {
   }
 }
 
-export function buildFacultyCoraCreateOfflineReply(message: string): FacultyCoraChatResponse {
+export function buildFacultyCoraCreateOfflineReply(
+  message: string,
+  scope?: InstructorScope,
+): FacultyCoraChatResponse {
   if (
     matchesPrompt(message, ["draft a weekly announcement for homework 3"]) ||
     isAnnouncementPrompt(message)
   ) {
-    return generateAnnouncementReply(message)
+    return generateAnnouncementReply(message, scope)
   }
 
   if (
@@ -302,7 +355,7 @@ export async function buildFacultyCoraCreateOfflineChatReply(
     }
   }
 
-  return buildFacultyCoraCreateOfflineReply(payload.message)
+  return buildFacultyCoraCreateOfflineReply(payload.message, _scope)
 }
 
 export function isCoraGenerateQuestionsOfflineError(err: unknown): boolean {

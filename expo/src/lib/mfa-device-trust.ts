@@ -6,6 +6,8 @@ import type { MfaUserType } from "./mfa-types"
 const STORE_KEY = "mfaDeviceTrustRecords"
 /** Fallback when the API sets `cc_mfa_trust` via Set-Cookie but omits JSON expiry fields. */
 const DEFAULT_TRUST_MS = 7 * 24 * 60 * 60 * 1000
+/** Sent alongside Cookie — React Native fetch often does not forward custom Cookie headers reliably. */
+export const MFA_TRUST_HEADER = "X-CC-MFA-Trust"
 
 export type MfaDeviceTrustRecord = {
   userType: MfaUserType
@@ -199,14 +201,19 @@ export async function clearMfaDeviceTrust(loginKey?: string): Promise<void> {
 async function buildMergedMfaTrustCookie(token: string): Promise<Record<string, string>> {
   const jarCookie = await studentHttpCookieHeader()
   const trustPart = `cc_mfa_trust=${token}`
-  if (!jarCookie) return { Cookie: trustPart }
+  if (!jarCookie) {
+    return { Cookie: trustPart, [MFA_TRUST_HEADER]: token }
+  }
   const jarWithoutTrust = jarCookie
     .split(";")
     .map((part) => part.trim())
     .filter((part) => part && !/^cc_mfa_trust=/i.test(part))
     .join("; ")
   const merged = [trustPart, jarWithoutTrust].filter(Boolean).join("; ")
-  return merged ? { Cookie: merged } : { Cookie: trustPart }
+  return {
+    Cookie: merged || trustPart,
+    [MFA_TRUST_HEADER]: token,
+  }
 }
 
 async function ensureTrustFromJar(
@@ -290,18 +297,27 @@ export async function mfaLoginCookieHeadersForInstructor(
 
 /** Cookie header for login — merges SecureStore trust with the HTTP cookie jar. */
 export async function mfaLoginCookieHeaders(loginKey: string): Promise<Record<string, string>> {
-  const trustPart = (await mfaTrustRequestHeaders(loginKey)).Cookie
+  const trustHeaders = await mfaTrustRequestHeaders(loginKey)
+  const trustCookie = trustHeaders.Cookie
+  const trustToken = trustHeaders[MFA_TRUST_HEADER]
   const jarCookie = await studentHttpCookieHeader()
-  if (!trustPart && !jarCookie) return {}
-  if (!jarCookie) return trustPart ? { Cookie: trustPart } : {}
-  if (!trustPart) return { Cookie: jarCookie }
+  if (!trustCookie && !jarCookie) return {}
+  if (!jarCookie) {
+    return trustCookie
+      ? { Cookie: trustCookie, ...(trustToken ? { [MFA_TRUST_HEADER]: trustToken } : {}) }
+      : {}
+  }
+  if (!trustCookie) return { Cookie: jarCookie }
   const jarWithoutTrust = jarCookie
     .split(";")
     .map((part) => part.trim())
     .filter((part) => part && !/^cc_mfa_trust=/i.test(part))
     .join("; ")
-  const merged = [trustPart, jarWithoutTrust].filter(Boolean).join("; ")
-  return merged ? { Cookie: merged } : {}
+  const merged = [trustCookie, jarWithoutTrust].filter(Boolean).join("; ")
+  return {
+    ...(merged ? { Cookie: merged } : {}),
+    ...(trustToken ? { [MFA_TRUST_HEADER]: trustToken } : {}),
+  }
 }
 
 export async function persistMfaDeviceTrustFromLogin(params: {
@@ -310,6 +326,12 @@ export async function persistMfaDeviceTrustFromLogin(params: {
   payload: Record<string, unknown>
   aliasKeys?: string[]
 }): Promise<void> {
+  // Never re-save a jar/SecureStore token from an MFA challenge response — that freezes a
+  // rejected/expired token with a fake local expiry and forces MFA on every login.
+  if (params.payload.mfaRequired && params.payload.challengeToken) {
+    return
+  }
+
   const direct = readTrustFields(params.payload)
   const nestedPayload =
     (params.payload.login_payload ?? params.payload.loginPayload) as Record<string, unknown> | undefined
@@ -346,4 +368,12 @@ export async function persistMfaDeviceTrustFromLogin(params: {
   if (params.aliasKeys?.length) {
     await aliasMfaDeviceTrustRecords(record, params.aliasKeys)
   }
+}
+
+/** Drop local trust for these login keys after the server rejects it (returns mfaRequired). */
+export async function clearMfaDeviceTrustKeys(loginKeys: string[]): Promise<void> {
+  if (loginKeys.length === 0) return
+  const drop = new Set(loginKeys)
+  const records = (await readAll()).filter((entry) => !drop.has(entry.loginKey))
+  await writeAll(records)
 }

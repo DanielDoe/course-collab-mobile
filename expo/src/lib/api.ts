@@ -7,9 +7,11 @@ import {
   mfaLoginCookieHeadersForInstructor,
   mfaLoginCookieHeadersForStudent,
   persistMfaDeviceTrustFromLogin,
+  clearMfaDeviceTrustKeys,
   studentMfaLoginKey,
   studentMfaAliasKeys,
 } from "./mfa-device-trust"
+import { isMfaGatedResponse } from "./mfa-types"
 import { mergeCookieHeaders, persistHttpCookiesFromResponse, studentHttpCookieHeader } from "./student-http-cookies"
 
 export class ApiError extends Error {
@@ -286,6 +288,7 @@ export const api = {
   universityStudentLogin: async (payload: UniversityStudentLoginRequest) => {
     const authId = payload.identifier.trim()
     const loginKey = studentMfaLoginKey(payload.universityId, authId)
+    const aliasKeys = studentMfaAliasKeys(payload.universityId, authId)
     const trustHeaders = await mfaLoginCookieHeadersForStudent(payload.universityId, authId)
     const data = await request<UniversityStudentLoginResponse>("/api/auth/student/login", {
       method: "POST",
@@ -298,6 +301,14 @@ export const api = {
         ...(payload.courseId != null ? { courseId: payload.courseId } : {}),
       }),
     })
+    const record = data as Record<string, unknown>
+    if (isMfaGatedResponse(record)) {
+      // Server rejected device trust — clear local tokens so the next verify can mint a fresh one.
+      if (Object.keys(trustHeaders).length > 0) {
+        await clearMfaDeviceTrustKeys([loginKey, ...aliasKeys])
+      }
+      return data
+    }
     const student =
       "student" in data && data.student
         ? data.student
@@ -305,7 +316,7 @@ export const api = {
     await persistMfaDeviceTrustFromLogin({
       userType: "student",
       loginKey,
-      payload: data as Record<string, unknown>,
+      payload: record,
       aliasKeys: studentMfaAliasKeys(payload.universityId, authId, student),
     })
     return data
@@ -347,17 +358,25 @@ export const api = {
   instructorLogin: async (username: string, password: string) => {
     const authId = username.trim()
     const loginKey = instructorMfaLoginKey(authId)
+    const aliasKeys = instructorMfaAliasKeys(authId)
     const trustHeaders = await mfaLoginCookieHeadersForInstructor(authId)
     const data = await request<InstructorLoginResponse>("/api/instructor/login", {
       method: "POST",
       headers: trustHeaders,
       body: JSON.stringify({ username: authId, password }),
     })
+    const record = data as Record<string, unknown>
+    if (isMfaGatedResponse(record)) {
+      if (Object.keys(trustHeaders).length > 0) {
+        await clearMfaDeviceTrustKeys([loginKey, ...aliasKeys])
+      }
+      return data
+    }
     const instructor = (data as InstructorLoginResponse).faculty ?? (data as InstructorLoginResponse).instructor
     await persistMfaDeviceTrustFromLogin({
       userType: "instructor",
       loginKey,
-      payload: data as Record<string, unknown>,
+      payload: record,
       aliasKeys: instructorMfaAliasKeys(authId, instructor),
     })
     return data

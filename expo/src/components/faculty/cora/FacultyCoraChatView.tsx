@@ -43,7 +43,10 @@ type Props = {
   onClose?: () => void
 }
 
-type AssistantMessage = ChatMessage & { actions?: FacultyCoraChatAction[] }
+type AssistantMessage = ChatMessage & {
+  actions?: FacultyCoraChatAction[]
+  proposals?: import("../../../lib/cora/types").CoraActionProposal[]
+}
 
 function nextChatMessageId(): string {
   return `fc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
@@ -241,8 +244,10 @@ export function FacultyCoraChatView({
           role: "assistant",
           content: res.reply,
           actions: res.offline ? [] : (res.actions ?? []),
+          proposals: res.proposals ?? [],
         },
       ])
+      // Note: CoraActionCard rendering lives in FacultyCoraImmersiveChat (primary faculty surface).
     } catch (err) {
       if (prepared) recordCoraError(prepared, text)
       const fallback =

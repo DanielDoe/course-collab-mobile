@@ -62,7 +62,7 @@ export function facultyActionToRbac(kind: FacultyCoraActionKind): CoraToolId {
     schedule_automation: "faculty_automation",
     import_from_course: "generate_questions",
   }
-  return map[kind]
+  return map[kind] ?? "chat"
 }
 
 export function coraComposerToolToRbac(toolKey: string): CoraToolId {

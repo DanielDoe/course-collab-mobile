@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { NativeSelect } from "../NativeSelect"
 import { useAppThemeTokens } from "../../context/AppearanceProvider"
+import { useSession } from "../../context/SessionProvider"
 import { NATIVE, nativeType } from "../../constants/faculty-native-theme"
-import { mfaApi, mfaErrorMessage } from "../../lib/mfa-api"
+import { mfaApi, mfaErrorMessage, mfaStatusLoginKey } from "../../lib/mfa-api"
 import { MFA_TRUST_OPTIONS, type MfaUserType } from "../../lib/mfa-types"
 
 type Props = {
@@ -15,6 +16,25 @@ type Props = {
 
 export function MfaSecurityCard({ userType, userId, variant = "sheet" }: Props) {
   const tokens = useAppThemeTokens()
+  const { session } = useSession()
+  const loginKey = useMemo(() => {
+    if (userType === "student" && session?.portal === "student") {
+      return mfaStatusLoginKey({
+        userType: "student",
+        universityId: session.universityId,
+        authIdentifier: session.authIdentifier ?? session.email ?? session.id,
+      })
+    }
+    if (userType === "instructor" && session?.portal === "faculty") {
+      return mfaStatusLoginKey({
+        userType: "instructor",
+        authIdentifier: session.authIdentifier ?? session.email ?? session.username,
+        username: session.username,
+      })
+    }
+    return null
+  }, [session, userType])
+
   const [loading, setLoading] = useState(true)
   const [enabled, setEnabled] = useState(false)
   const [unusedRecoveryCodes, setUnusedRecoveryCodes] = useState(0)
@@ -30,7 +50,7 @@ export function MfaSecurityCard({ userType, userId, variant = "sheet" }: Props) 
     let cancelled = false
     void (async () => {
       try {
-        const data = await mfaApi.getStatus(userType, userId)
+        const data = await mfaApi.getStatus(userType, userId, loginKey)
         if (!cancelled) {
           setEnabled(Boolean(data.enabled))
           setUnusedRecoveryCodes(Number(data.unusedRecoveryCodes ?? 0))
@@ -47,7 +67,7 @@ export function MfaSecurityCard({ userType, userId, variant = "sheet" }: Props) 
     return () => {
       cancelled = true
     }
-  }, [userType, userId])
+  }, [userType, userId, loginKey])
 
   const saveTrustDuration = async () => {
     if (!trustDirty || savingTrust) return
@@ -55,7 +75,12 @@ export function MfaSecurityCard({ userType, userId, variant = "sheet" }: Props) 
     setSavingTrust(true)
     setError("")
     try {
-      const updated = await mfaApi.updateTrustDuration(userType, userId, Number(trustDurationDays))
+      const updated = await mfaApi.updateTrustDuration(
+        userType,
+        userId,
+        Number(trustDurationDays),
+        loginKey,
+      )
       const days = String(updated)
       setTrustDurationDays(days)
       setSavedTrustDurationDays(days)
@@ -113,8 +138,8 @@ export function MfaSecurityCard({ userType, userId, variant = "sheet" }: Props) 
           <View style={[styles.trustSection, { borderTopColor: tokens.border }]}>
             <Text style={[nativeType.bodyEmphasis, { color: tokens.text }]}>Remember this device</Text>
             <Text style={[nativeType.footnote, styles.trustHint, { color: tokens.textSecondary }]}>
-              After you verify with your authenticator, this phone is remembered until the period below
-              expires. Sign out clears device trust and will require a code on the next sign-in.
+              After you verify once, this phone is trusted for the period below. Saving a longer duration
+              renews trust on this device immediately so the next sign-in only needs your password.
             </Text>
             <View style={styles.trustRow}>
               <View style={styles.trustSelect}>

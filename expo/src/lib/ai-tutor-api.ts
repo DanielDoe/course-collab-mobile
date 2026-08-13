@@ -118,6 +118,7 @@ type AiTutorMessageResponse = {
   error?: string
   rbacBlocked?: boolean
   blockReason?: string
+  proposals?: import("./cora/types").CoraActionProposal[]
 }
 
 function normalizeHistoryRole(role: string): "user" | "assistant" {
@@ -198,7 +199,7 @@ export const aiTutorApi = {
     conversationHistory: { role: string; content: string }[],
     handlers: {
       onChunk: (text: string) => void
-      onDone: () => void
+      onDone: (meta?: { proposals?: import("./cora/types").CoraActionProposal[] }) => void
       onError: (message: string) => void
       onAborted?: () => void
     },
@@ -313,7 +314,7 @@ export const aiTutorApi = {
           dataSources: prepared.claims.contextSources,
         })
       }
-      handlers.onDone()
+      handlers.onDone(data.proposals?.length ? { proposals: data.proposals } : undefined)
     } catch (err) {
       if (isAbortError(err) || signal?.aborted) {
         handlers.onAborted?.()

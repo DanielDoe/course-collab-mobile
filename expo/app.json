@@ -43,7 +43,8 @@
     },
     "extra": {
       "appUrl": "https://coursecollab.vercel.app",
-      "localApiUrl": "http://127.0.0.1:3000"
+      "localApiUrl": "http://127.0.0.1:3000",
+      "lanApiUrl": "http://10.32.182.122:3000"
     },
     "plugins": [
       "expo-router",

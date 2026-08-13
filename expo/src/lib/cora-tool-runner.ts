@@ -32,6 +32,7 @@ export type CoraToolRunResult =
   | { mode: "drafts"; drafts: DraftQuestionBankItem[]; message: string }
   | { mode: "attach-text"; text: string; label: string }
   | { mode: "navigate"; path: string; message?: string }
+  | { mode: "proposal"; proposal: import("./cora/types").CoraActionProposal; message: string }
   | { mode: "noop" }
 
 export type FacultyToolRunnerDeps = {
@@ -273,9 +274,47 @@ export async function runStudentMessageTool(
         },
       }
     }
-    case "create-flashcards":
-      onSend("Create flashcards from this answer. Use question on the front and concise answers on the back.")
-      return { mode: "prompt", prompt: "create-flashcards" }
+    case "create-flashcards": {
+      const topic =
+        message.content
+          .split("\n")
+          .map((l) => l.trim())
+          .find((l) => l.length > 8)
+          ?.slice(0, 80) || "Study review"
+      const title = `Flashcards · ${topic.slice(0, 48)}`
+      const proposal: import("./cora/types").CoraActionProposal = {
+        actionId: `local_${Date.now().toString(36)}`,
+        userId: Number(deps.session.databaseId) || 0,
+        role: "student",
+        institutionId: null,
+        courseId: deps.session.courseId ?? null,
+        tool: "personalFlashcards.createDeck",
+        arguments: {
+          topic,
+          title,
+          cards: [],
+          __local: true,
+        },
+        createdAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+        preview: {
+          title: "Create personal flashcard deck",
+          summary: `${title} from this answer`,
+          fields: [
+            { label: "Topic", value: topic },
+            { label: "Scope", value: "Personal (only you)" },
+          ],
+          confirmLabel: "Create flashcards",
+          entityType: "flashcard_deck",
+        },
+        hash: "local",
+      }
+      return {
+        mode: "proposal",
+        proposal,
+        message: `Ready to create a personal flashcard deck on **${topic}**. Confirm to save it to My Flashcards.`,
+      }
+    }
     default:
       return { mode: "noop" }
   }

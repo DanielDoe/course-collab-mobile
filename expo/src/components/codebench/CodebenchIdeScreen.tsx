@@ -560,11 +560,12 @@ export function CodebenchIdeScreen() {
           </Pressable>
         </View>
 
-        {/* Action row → opens sheets */}
+        {/* Action row → opens sheets (flexGrow:0 so horizontal ScrollView does not expand vertically) */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+          style={styles.actionScroll}
           contentContainerStyle={styles.actionRow}
         >
           <Pressable
@@ -1242,6 +1243,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   xpText: { fontSize: 13, fontWeight: "800" },
+  actionScroll: {
+    flexGrow: 0,
+    flexShrink: 0,
+  },
   actionRow: {
     flexDirection: "row",
     alignItems: "center",

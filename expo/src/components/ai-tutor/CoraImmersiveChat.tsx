@@ -435,9 +435,69 @@ export function CoraImmersiveChat({
       case "explain-simpler":
         onSend("Explain that answer in simpler terms with a shorter example.")
         return
-      case "create-flashcards":
-        onSend("Create flashcards from this answer. Use question on the front and concise answers on the back.")
+      case "create-flashcards": {
+        const topic =
+          message.content
+            .split("\n")
+            .map((l) => l.trim())
+            .find((l) => l.length > 8)
+            ?.slice(0, 80) || "Study review"
+        AppAlert.alert(
+          "Create flashcards?",
+          `Cora will create a personal deck on “${topic.slice(0, 60)}” and save it to My Flashcards.`,
+          [
+            { text: "Cancel", style: "cancel" },
+            {
+              text: "Create",
+              onPress: () => {
+                void (async () => {
+                  try {
+                    const { executeLocalCoraProposal } = await import("../../lib/cora/local-proposals")
+                    const result = await executeLocalCoraProposal(
+                      {
+                        actionId: `local_${Date.now().toString(36)}`,
+                        userId: Number(session.databaseId) || 0,
+                        role: "student",
+                        institutionId: null,
+                        courseId: session.courseId ?? null,
+                        tool: "personalFlashcards.createDeck",
+                        arguments: { topic, title: `Flashcards · ${topic.slice(0, 48)}`, cards: [], __local: true },
+                        createdAt: new Date().toISOString(),
+                        expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+                        preview: {
+                          title: "Create personal flashcard deck",
+                          summary: topic,
+                          fields: [{ label: "Topic", value: topic }],
+                          confirmLabel: "Create flashcards",
+                          entityType: "flashcard_deck",
+                        },
+                        hash: "local",
+                      },
+                      { role: "student", session },
+                    )
+                    if (!result.success) {
+                      AppAlert.alert("Could not create", result.message)
+                      return
+                    }
+                    AppAlert.alert("Flashcards created", result.message, [
+                      ...(result.entity?.route
+                        ? [{ text: "Open deck", onPress: () => router.push(result.entity!.route as never) }]
+                        : []),
+                      { text: "OK", style: "cancel" as const },
+                    ])
+                  } catch (err) {
+                    AppAlert.alert(
+                      "Could not create",
+                      err instanceof Error ? err.message : "Try again in a moment.",
+                    )
+                  }
+                })()
+              },
+            },
+          ],
+        )
         return
+      }
       case "branch-chat":
         onBranchChat(message)
         return

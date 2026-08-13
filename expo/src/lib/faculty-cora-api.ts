@@ -47,6 +47,7 @@ export type FacultyCoraChatResponse = {
   restricted?: boolean
   suggestedModuleId?: string
   actions?: FacultyCoraChatAction[]
+  proposals?: import("./cora/types").CoraActionProposal[]
   contextSyncedAt?: string
   offline?: boolean
   rbacBlocked?: boolean
@@ -117,6 +118,29 @@ async function instructorCoraRequest<T>(
 }
 
 export const facultyCoraApi = {
+  async getCapabilities(
+    scope: InstructorScope,
+    opts?: { modules?: string[]; membershipTier?: string },
+  ): Promise<{
+    principle: string
+    principal: Record<string, unknown>
+    modules: Record<string, unknown>
+    capabilityIds: string[]
+    lockedModules: { moduleId: string; label: string; minTier: string }[]
+    packet: string
+    moduleCount: number
+  }> {
+    const qs = new URLSearchParams()
+    if (opts?.modules?.length) qs.set("modules", opts.modules.join(","))
+    if (opts?.membershipTier) qs.set("membershipTier", opts.membershipTier)
+    const q = qs.toString()
+    return instructorCoraRequest(
+      `/api/instructor/cora/capabilities${q ? `?${q}` : ""}`,
+      scope,
+      { method: "GET" },
+    )
+  },
+
   async listInsights(scope: InstructorScope): Promise<{ insights: FacultyCoraInsight[]; offline?: boolean }> {
     try {
       const res = await instructorCoraRequest<{ insights: FacultyCoraInsight[] }>(

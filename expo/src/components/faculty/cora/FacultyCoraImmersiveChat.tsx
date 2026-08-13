@@ -33,7 +33,15 @@ import {
   facultyCoraChatSolidCanvas,
   facultyCoraChatStarterCardStyle,
 } from "../../../lib/faculty-cora-theme"
-import { getThemedCoraChatBubblePalette } from "../../ai-tutor/cora-chat-bubble-theme"
+import { CoraActionCard } from "../../cora/CoraActionCard"
+import {
+  confirmFacultyCoraAction,
+} from "../../../lib/cora/confirm-action"
+import {
+  executeLocalCoraProposal,
+  isLocalCoraProposal,
+} from "../../../lib/cora/local-proposals"
+import type { CoraActionProposal } from "../../../lib/cora/types"
 import {
   activateFacultyCoraThread,
   archiveFacultyCoraThread,
@@ -104,7 +112,12 @@ import { CoraChatMenuButton } from "../../cora/CoraChatMenuButton"
 import { CoraChatCloseButton } from "../../cora/CoraChatCloseButton"
 import { CoraEdgeBackSwipe } from "../../cora/CoraEdgeBackSwipe"
 
-type AssistantMessage = ChatMessage & { actions?: FacultyCoraChatAction[] }
+type AssistantMessage = ChatMessage & {
+  actions?: FacultyCoraChatAction[]
+  proposals?: import("../../../lib/cora/types").CoraActionProposal[]
+  proposalStatusById?: Record<string, "idle" | "confirming" | "done" | "error">
+  proposalResultById?: Record<string, import("../../../lib/cora/types").CoraConfirmActionResult>
+}
 
 type Props = {
   scope: InstructorScope
@@ -698,7 +711,27 @@ export function FacultyCoraImmersiveChat({
 
   const bubblePalette = useMemo(() => {
     if (!chatFocused) return undefined
-    return getThemedCoraChatBubblePalette(tokens)
+    // Prose on canvas — reserve accent surfaces for action cards, not entire replies
+    const assistant = {
+      background: "transparent",
+      border: "transparent",
+      text: tokens.native.label,
+    }
+    const user = {
+      background: tokens.isDark ? "#3A3A3C" : tokens.native.groupedBackground,
+      border: "transparent",
+      text: tokens.native.label,
+    }
+    return {
+      user,
+      assistant,
+      userBorderWidth: 0,
+      assistantBorderWidth: 0,
+      userRadius: 22,
+      assistantRadius: 0,
+      assistantShadow: false,
+      assistantMarkdownOnAccent: false,
+    }
   }, [chatFocused, tokens])
 
   const headerHeight = insets.top + 56
@@ -816,6 +849,7 @@ export function FacultyCoraImmersiveChat({
             role: "assistant",
             content: res.reply,
             actions: res.actions ?? [],
+            proposals: res.proposals ?? [],
           },
         ])
       } catch (err) {
@@ -940,6 +974,85 @@ export function FacultyCoraImmersiveChat({
     },
     [toolRunnerDeps],
   )
+
+  const confirmProposal = useCallback(
+    async (messageId: string, proposal: CoraActionProposal) => {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === messageId
+            ? {
+                ...m,
+                proposalStatusById: {
+                  ...(m.proposalStatusById ?? {}),
+                  [proposal.actionId]: "confirming",
+                },
+              }
+            : m,
+        ),
+      )
+      try {
+        const result = isLocalCoraProposal(proposal)
+          ? await executeLocalCoraProposal(proposal, { role: "faculty", scope })
+          : await confirmFacultyCoraAction(scope, proposal)
+
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === messageId
+              ? {
+                  ...m,
+                  proposalStatusById: {
+                    ...(m.proposalStatusById ?? {}),
+                    [proposal.actionId]: result.success ? "done" : "error",
+                  },
+                  proposalResultById: {
+                    ...(m.proposalResultById ?? {}),
+                    [proposal.actionId]: result,
+                  },
+                }
+              : m,
+          ),
+        )
+
+        if (result.success) {
+          void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+        } else {
+          AppAlert.alert("Could not complete", result.message || result.error || "Action failed.")
+        }
+      } catch (err) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === messageId
+              ? {
+                  ...m,
+                  proposalStatusById: {
+                    ...(m.proposalStatusById ?? {}),
+                    [proposal.actionId]: "error",
+                  },
+                }
+              : m,
+          ),
+        )
+        AppAlert.alert(
+          "Could not complete",
+          err instanceof Error ? err.message : "Action failed.",
+        )
+      }
+    },
+    [scope],
+  )
+
+  const cancelProposal = useCallback((messageId: string, proposalId: string) => {
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === messageId
+          ? {
+              ...m,
+              proposals: (m.proposals ?? []).filter((p) => p.actionId !== proposalId),
+            }
+          : m,
+      ),
+    )
+  }, [])
 
   const openImportCourse = useCallback((hint?: FacultyCoraImportHint | null) => {
     if (hint) setImportHint(hint)
@@ -1320,6 +1433,23 @@ export function FacultyCoraImmersiveChat({
               suppressWhileMenuOpen={userMenuMessage?.id === item.id}
               onNavigateUserMessageVersion={() => {}}
             />
+            {item.role === "assistant" && item.proposals?.length
+              ? item.proposals.map((proposal: CoraActionProposal) => (
+                  <CoraActionCard
+                    key={proposal.actionId}
+                    proposal={proposal}
+                    status={item.proposalStatusById?.[proposal.actionId] ?? "idle"}
+                    result={item.proposalResultById?.[proposal.actionId] ?? null}
+                    resultMessage={item.proposalResultById?.[proposal.actionId]?.message}
+                    onConfirm={() => void confirmProposal(item.id, proposal)}
+                    onCancel={() => cancelProposal(item.id, proposal.actionId)}
+                    onOpen={(route) => {
+                      onClose()
+                      router.push(route as never)
+                    }}
+                  />
+                ))
+              : null}
             {item.role === "assistant" && item.actions?.length ? (
               <FacultyActionChips
                 actions={item.actions}
