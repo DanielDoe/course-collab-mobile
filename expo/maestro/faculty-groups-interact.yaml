@@ -1,0 +1,17 @@
+appId: com.coursecollab.app
+---
+- tapOn: "All"
+- takeScreenshot: groups-all
+- tapOn: "Active"
+- takeScreenshot: groups-active
+- tapOn: "Denied"
+- takeScreenshot: groups-denied
+- tapOn: "Trash"
+- takeScreenshot: groups-trash
+- tapOn: "Queue"
+- tapOn: "Open filters"
+- takeScreenshot: groups-filters
+- tapOn: "Done"
+- tapOn: "Create group or project"
+- takeScreenshot: groups-create-menu
+- tapOn: "Create group"

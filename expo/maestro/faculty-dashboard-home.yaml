@@ -1,0 +1,10 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Dashboard"
+- tapOn:
+    text: "Close menu"
+    optional: true
+- extendedWaitUntil:
+    visible: "Instructor|Submissions|Quick Actions"
+    timeout: 25000
+- takeScreenshot: dash-home

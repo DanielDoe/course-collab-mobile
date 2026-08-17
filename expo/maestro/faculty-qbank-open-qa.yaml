@@ -1,0 +1,6 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Question Bank"
+- waitForAnimationToEnd
+- tapOn: "QA16QB blank test"
+- waitForAnimationToEnd

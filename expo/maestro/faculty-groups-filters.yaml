@@ -1,0 +1,10 @@
+appId: com.coursecollab.app
+---
+- tapOn:
+    text: "Clear search"
+    optional: true
+- tapOn: "Open filters"
+- extendedWaitUntil:
+    visible: "Filter by section|All sections|Done"
+    timeout: 10000
+- takeScreenshot: groups-filters

@@ -468,4 +468,75 @@ export const instructorAdminApi = {
       instructorId,
       { method: "POST", body: JSON.stringify(payload) },
     ).then((response) => response.course),
+
+  submitSupportTicket: async (
+    instructorId: number,
+    payload: {
+      category: string
+      subject: string
+      message: string
+      courseId?: number
+      priority?: string
+      moduleId?: string
+      moduleName?: string
+    },
+  ) => {
+    const body = {
+      category: payload.category,
+      subject: payload.subject,
+      description: payload.message,
+      courseId: payload.courseId,
+      priority: payload.priority ?? "medium",
+      moduleId: payload.moduleId,
+      moduleName: payload.moduleName,
+    }
+    try {
+      return await instructorRequestWithoutCourse<{ success: boolean; message?: string }>(
+        "/api/instructor/support-tickets",
+        instructorId,
+        { method: "POST", body: JSON.stringify(body) },
+      )
+    } catch (err) {
+      if (!(err instanceof ApiError) || err.status !== 404) throw err
+      const courseLine = payload.courseId ? `\nCourse id: ${payload.courseId}` : ""
+      return instructorRequestWithoutCourse<{ success: boolean; message?: string }>(
+        "/api/student/support-tickets",
+        instructorId,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            subject: payload.subject,
+            description: `${payload.message}\n\n— Submitted from faculty mobile (instructor ${instructorId})${courseLine}`,
+            category: payload.category,
+            priority: payload.priority ?? "medium",
+            moduleId: payload.moduleId,
+            moduleName: payload.moduleName,
+            instructorId,
+            audience: "instructor",
+          }),
+        },
+      ).then((response) => ({
+        success: true,
+        message:
+          typeof response === "object" &&
+          response !== null &&
+          "ticket" in response
+            ? "Submitted — we'll review your message and respond soon."
+            : "Submitted — we'll review your message and respond soon.",
+      }))
+    }
+  },
+
+  listSupportTickets: async (instructorId: number, category?: string) => {
+    const query = category ? `?category=${encodeURIComponent(category)}` : ""
+    try {
+      return await instructorRequestWithoutCourse<{ tickets: import("./support-tickets").SupportTicket[] }>(
+        `/api/instructor/support-tickets${query}`,
+        instructorId,
+      )
+    } catch (err) {
+      if (!(err instanceof ApiError) || (err.status !== 404 && err.status !== 405)) throw err
+      return { tickets: [] as import("./support-tickets").SupportTicket[] }
+    }
+  },
 }

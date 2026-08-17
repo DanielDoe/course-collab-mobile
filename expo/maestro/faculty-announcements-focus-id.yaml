@@ -1,0 +1,5 @@
+appId: com.coursecollab.app
+---
+- tapOn:
+    id: "announcement-title"
+- waitForAnimationToEnd

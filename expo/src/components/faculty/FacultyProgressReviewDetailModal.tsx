@@ -171,12 +171,7 @@ export function FacultyProgressReviewDetailModal({ visible, scope, reviewRow, on
   const load = useCallback(async () => {
     if (!scope || !reviewRow) return
     setError("")
-    const next = await instructorApi.getStudentProgressReview(
-      scope,
-      reviewRow.studentId,
-      reviewRow.reviewPeriod,
-      reviewRow.asOfDate,
-    )
+    const next = await instructorApi.getProgressReviewById(scope, reviewRow.id)
     setReview(next)
   }, [scope, reviewRow])
 

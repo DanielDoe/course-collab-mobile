@@ -7,6 +7,22 @@ import type { PreparedCoraRequest } from "../cora-rbac/prepare-request"
 import { recordActivityFromConfirmResult } from "./activity-store"
 import type { CoraActionProposal, CoraConfirmActionResult } from "./types"
 
+function confirmFailureMessage(result: CoraConfirmActionResult): string {
+  if (result.error === "in_progress") {
+    return result.message || "This action is already being confirmed. Try again in a moment."
+  }
+  if (result.error === "replay") {
+    return result.message || "This action was already completed."
+  }
+  return result.message
+}
+
+function normalizeConfirmResult(parsed: unknown): CoraConfirmActionResult {
+  const result = parsed as CoraConfirmActionResult
+  if (result.success) return result
+  return { ...result, message: confirmFailureMessage(result) }
+}
+
 async function parseJson(response: Response): Promise<unknown> {
   const text = await response.text()
   if (!text) return null
@@ -46,7 +62,7 @@ export async function confirmFacultyCoraAction(
     const message = apiErrorMessage(parsed, response.status)
     throw new ApiError(message, response.status, parsed)
   }
-  const result = parsed as CoraConfirmActionResult
+  const result = normalizeConfirmResult(parsed)
   await recordActivityFromConfirmResult(result, "faculty", scope.courseId)
   return result
 }
@@ -71,7 +87,36 @@ export async function confirmStudentCoraAction(
     const message = apiErrorMessage(parsed, response.status)
     throw new ApiError(message, response.status, parsed)
   }
-  const result = parsed as CoraConfirmActionResult
+  const result = normalizeConfirmResult(parsed)
   await recordActivityFromConfirmResult(result, "student", session.courseId)
+  return result
+}
+
+/** Confirm an admin Cora proposal. */
+export async function confirmAdminCoraAction(
+  adminId: string | number,
+  proposal: CoraActionProposal,
+  options?: { institutionId?: number | null },
+): Promise<CoraConfirmActionResult> {
+  const url = `${API_BASE_URL}/api/admin/cora/actions/confirm`
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      "x-admin-id": String(adminId),
+    },
+    body: JSON.stringify({
+      proposal,
+      ...(options?.institutionId != null ? { institutionId: options.institutionId } : {}),
+    }),
+  })
+  const parsed = await parseJson(response)
+  if (!response.ok) {
+    const message = apiErrorMessage(parsed, response.status)
+    throw new ApiError(message, response.status, parsed)
+  }
+  const result = normalizeConfirmResult(parsed)
+  await recordActivityFromConfirmResult(result, "admin", null)
   return result
 }

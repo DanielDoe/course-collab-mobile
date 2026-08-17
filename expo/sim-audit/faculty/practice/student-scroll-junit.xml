@@ -1,0 +1,6 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<testsuites>
+  <testsuite name="Test Suite" device="iPhone 17 Pro - iOS 26.0 - 4158A022-1067-455E-BF03-10CA5D80D946" tests="1" failures="0" time="12.0">
+    <testcase id="faculty-practice-student-scroll" name="faculty-practice-student-scroll" classname="faculty-practice-student-scroll" file="expo/maestro/faculty-practice-student-scroll.yaml" time="12.0" status="SUCCESS"/>
+  </testsuite>
+</testsuites>

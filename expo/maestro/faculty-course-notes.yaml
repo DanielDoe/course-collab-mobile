@@ -1,0 +1,15 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Course Notes"
+    direction: DOWN
+    timeout: 12000
+- tapOn: "Course Notes"
+- tapOn:
+    text: "Close menu"
+    optional: true
+- extendedWaitUntil:
+    visible: "Search course notes…|No course notes|Create note"
+    timeout: 30000
+- takeScreenshot: course-notes-page

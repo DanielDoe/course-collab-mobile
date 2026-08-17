@@ -7,43 +7,58 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { ApiError } from "../../lib/api"
+import { AppAlert } from "../../lib/app-alert"
 import {
+  formatFacultyRelativeTime,
   instructorApi,
   type SummerCampProgram,
+  type SummerCampRequest,
   type SummerCampTraining,
   type SummerCampTrainingDetail,
 } from "../../lib/instructor-api"
 import { useFacultyScope } from "../../hooks/useFacultyScope"
 import { useModuleTheme } from "../../lib/themed-module-shell"
+import { useThemedNative } from "../../context/AppearanceProvider"
+import { NATIVE } from "../../constants/faculty-native-theme"
 import {
   FACULTY_SUMMER_CAMP_COLOR,
   facultySummerCampDraftWash,
+  facultySummerCampRequestThumb,
   facultySummerCampStatus,
   facultySummerCampTrackThumb,
   statusLabel,
 } from "../../lib/faculty-summer-camp-theme"
 import { FacultyStatusPill } from "./faculty-shared"
 import { SolidListThumbTile } from "../theme/SolidListThumbTile"
+import { GlassBottomSheetModal } from "../theme/GlassBottomSheetModal"
+import { GlassSheetBackground } from "../theme/GlassSurface"
+import { GlassSheetHandle } from "../theme/GlassActionSheetMenu"
 import {
   FacultySheetContainer,
   FacultySheetChrome,
+  FacultySheetConfirm,
   FacultySheetField,
   FacultySheetGroupedList,
   FacultySheetHero,
   FacultySheetMetricRow,
+  FacultySheetNotice,
   FacultySheetSection,
   FacultySheetTextInput,
+  FacultySheetWorkflow,
   useCollabSheetStyles,
   FacultySheetStatChip,
   FacultySheetStatRow,
 
 } from "./faculty-collab-sheet-ui"
 import { SHEET_METRIC, SHEET_SECTION } from "./faculty-sheet-semantics"
+import { FacultySummerCampDatePicker } from "./FacultySummerCampDatePicker"
+import { campDatePayload, normalizeCampIsoDate } from "../../lib/faculty-summer-camp-utils"
 
 function PublishWorkflow({
   title,
@@ -78,6 +93,8 @@ function PublishWorkflow({
         style={[localStyles.publishBtn, { backgroundColor: FACULTY_SUMMER_CAMP_COLOR.action }]}
         disabled={loading}
         onPress={onAction}
+        accessibilityRole="button"
+        accessibilityLabel={actionLabel}
       >
         {loading ? (
           <ActivityIndicator color={FACULTY_SUMMER_CAMP_COLOR.actionInk} />
@@ -125,6 +142,8 @@ function SummerTrackRow({
         pressed && { opacity: 0.88 },
       ]}
       onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${title}, ${statusMeta.label}`}
     >
       <SolidListThumbTile thumb={facultySummerCampTrackThumb(trainingId)} icon="school" size="compact" />
       <View style={localStyles.trackCopy}>
@@ -180,6 +199,8 @@ export function FacultySummerCampProgramActionSheet({
 
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
+  const [startDate, setStartDate] = useState("")
+  const [endDate, setEndDate] = useState("")
   const [dirty, setDirty] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
@@ -188,6 +209,8 @@ export function FacultySummerCampProgramActionSheet({
     if (!visible || !camp) return
     setTitle(camp.title)
     setDescription(camp.description ?? "")
+    setStartDate(normalizeCampIsoDate(camp.start_date))
+    setEndDate(normalizeCampIsoDate(camp.end_date))
     setDirty(false)
     setError("")
   }, [visible, camp])
@@ -200,6 +223,13 @@ export function FacultySummerCampProgramActionSheet({
       setError("Title is required.")
       return
     }
+    let dates: { start_date?: string; end_date?: string }
+    try {
+      dates = campDatePayload(startDate, endDate)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Check the program dates.")
+      return
+    }
     setSaving(true)
     setError("")
     try {
@@ -207,6 +237,7 @@ export function FacultySummerCampProgramActionSheet({
         camp_id: camp.id,
         title: title.trim(),
         description: description.trim() || undefined,
+        ...dates,
       })
       setDirty(false)
       onUpdated()
@@ -230,6 +261,36 @@ export function FacultySummerCampProgramActionSheet({
     }
   }
 
+  function confirmDelete() {
+    if (!scope || !camp) return
+    AppAlert.alert(
+      "Delete program?",
+      "This permanently removes the draft program and its tracks. Campers cannot be enrolled.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            void (async () => {
+              setSaving(true)
+              setError("")
+              try {
+                await instructorApi.deleteSummerCamp(scope, camp.id)
+                onClose()
+                onUpdated()
+              } catch (err) {
+                setError(err instanceof ApiError ? err.message : "Could not delete program.")
+              } finally {
+                setSaving(false)
+              }
+            })()
+          },
+        },
+      ],
+    )
+  }
+
   const isPublished = camp.status === "published" || camp.status === "active"
 
   return (
@@ -241,7 +302,13 @@ export function FacultySummerCampProgramActionSheet({
           onClose={onClose}
           rightSlot={
             dirty ? (
-              <Pressable onPress={() => void saveEdits()} disabled={saving} hitSlop={8}>
+              <Pressable
+                onPress={() => void saveEdits()}
+                disabled={saving}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Save"
+              >
                 {saving ? (
                   <ActivityIndicator size="small" color={FACULTY_SUMMER_CAMP_COLOR.action} />
                 ) : (
@@ -292,6 +359,7 @@ export function FacultySummerCampProgramActionSheet({
               <FacultySheetTextInput
                 value={title}
                 placeholder="Summer Camp 2026"
+                accessibilityLabel="Title"
                 onChangeText={(v) => {
                   setTitle(v)
                   setDirty(true)
@@ -303,10 +371,31 @@ export function FacultySummerCampProgramActionSheet({
                 multiline
                 value={description}
                 placeholder="Describe this summer program…"
+                accessibilityLabel="Description"
                 onChangeText={(v) => {
                   setDescription(v)
                   setDirty(true)
                 }}
+              />
+            </FacultySheetField>
+            <FacultySheetField label="Start date">
+              <FacultySummerCampDatePicker
+                value={startDate}
+                onChange={(next) => {
+                  setStartDate(next)
+                  setDirty(true)
+                }}
+                accessibilityLabel="Start date"
+              />
+            </FacultySheetField>
+            <FacultySheetField label="End date">
+              <FacultySummerCampDatePicker
+                value={endDate}
+                onChange={(next) => {
+                  setEndDate(next)
+                  setDirty(true)
+                }}
+                accessibilityLabel="End date"
               />
             </FacultySheetField>
           </FacultySheetSection>
@@ -332,6 +421,8 @@ export function FacultySummerCampProgramActionSheet({
                   { backgroundColor: `${FACULTY_SUMMER_CAMP_COLOR.link}18`, borderColor: `${FACULTY_SUMMER_CAMP_COLOR.link}44` },
                 ]}
                 onPress={() => onAddTraining(camp)}
+                accessibilityRole="button"
+                accessibilityLabel="Add track"
               >
                 <Ionicons name="add" size={16} color={FACULTY_SUMMER_CAMP_COLOR.link} />
                 <Text style={[type.caption, { color: FACULTY_SUMMER_CAMP_COLOR.link, fontWeight: "700" }]}>
@@ -360,6 +451,19 @@ export function FacultySummerCampProgramActionSheet({
               </View>
             )}
           </FacultySheetSection>
+
+          {!isPublished ? (
+            <Pressable
+              style={[localStyles.deleteBtn, { borderColor: `${tokens.danger}55` }]}
+              disabled={saving || acting}
+              onPress={confirmDelete}
+              accessibilityRole="button"
+              accessibilityLabel="Delete program"
+            >
+              <Ionicons name="trash-outline" size={18} color={tokens.danger} />
+              <Text style={[type.bodyEmphasis, { color: tokens.danger, fontSize: 15 }]}>Delete program</Text>
+            </Pressable>
+          ) : null}
         </ScrollView>
       </FacultySheetContainer>
     </Modal>
@@ -404,7 +508,10 @@ export function FacultySummerCampTrainingActionSheet({
     instructorApi
       .getSummerCampTrainingDetail(scope, training.id)
       .then(setDetail)
-      .catch(() => setDetail(null))
+      .catch((err) => {
+        setDetail(null)
+        setError(err instanceof ApiError ? err.message : "Could not load track metrics.")
+      })
       .finally(() => setLoadingDetail(false))
   }, [visible, training, scope])
 
@@ -446,6 +553,36 @@ export function FacultySummerCampTrainingActionSheet({
     }
   }
 
+  function confirmDelete() {
+    if (!scope || !training) return
+    AppAlert.alert(
+      "Delete track?",
+      "This permanently removes the draft training track.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            void (async () => {
+              setSaving(true)
+              setError("")
+              try {
+                await instructorApi.deleteSummerCampTraining(scope, training.id)
+                onClose()
+                onUpdated()
+              } catch (err) {
+                setError(err instanceof ApiError ? err.message : "Could not delete track.")
+              } finally {
+                setSaving(false)
+              }
+            })()
+          },
+        },
+      ],
+    )
+  }
+
   const isPublished = training.status === "published" || training.status === "active"
 
   return (
@@ -457,7 +594,13 @@ export function FacultySummerCampTrainingActionSheet({
           onClose={onClose}
           rightSlot={
             dirty ? (
-              <Pressable onPress={() => void saveEdits()} disabled={saving} hitSlop={8}>
+              <Pressable
+                onPress={() => void saveEdits()}
+                disabled={saving}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Save"
+              >
                 {saving ? (
                   <ActivityIndicator size="small" color={FACULTY_SUMMER_CAMP_COLOR.action} />
                 ) : (
@@ -482,7 +625,10 @@ export function FacultySummerCampTrainingActionSheet({
                 instructorApi
                   .getSummerCampTrainingDetail(scope, training.id)
                   .then(setDetail)
-                  .catch(() => setDetail(null))
+                  .catch((err) => {
+                    setDetail(null)
+                    setError(err instanceof ApiError ? err.message : "Could not load track metrics.")
+                  })
                   .finally(() => setLoadingDetail(false))
               }}
               tintColor={FACULTY_SUMMER_CAMP_COLOR.action}
@@ -543,11 +689,19 @@ export function FacultySummerCampTrainingActionSheet({
             </FacultySheetSection>
           ) : null}
 
+          {(detail?.pending_submission_count ?? 0) > 0 ? (
+            <FacultySheetNotice
+              tone="warning"
+              message="Pending submissions are reviewed in the instructor web dashboard (Dashboard → Summer Camp → this track). Counts on mobile are read-only."
+            />
+          ) : null}
+
           <FacultySheetSection label="Track details" tone={SHEET_SECTION.edit}>
             <FacultySheetField label="Title">
               <FacultySheetTextInput
                 value={title}
                 placeholder="Track title"
+                accessibilityLabel="Title"
                 onChangeText={(v) => {
                   setTitle(v)
                   setDirty(true)
@@ -559,6 +713,7 @@ export function FacultySummerCampTrainingActionSheet({
                 multiline
                 value={description}
                 placeholder="Describe this training track…"
+                accessibilityLabel="Description"
                 onChangeText={(v) => {
                   setDescription(v)
                   setDirty(true)
@@ -576,11 +731,255 @@ export function FacultySummerCampTrainingActionSheet({
               onAction={() => void publish()}
             />
           ) : null}
+
+          {!isPublished ? (
+            <Pressable
+              style={[localStyles.deleteBtn, { borderColor: `${tokens.danger}55` }]}
+              disabled={saving || acting}
+              onPress={confirmDelete}
+              accessibilityRole="button"
+              accessibilityLabel="Delete track"
+            >
+              <Ionicons name="trash-outline" size={18} color={tokens.danger} />
+              <Text style={[type.bodyEmphasis, { color: tokens.danger, fontSize: 15 }]}>Delete track</Text>
+            </Pressable>
+          ) : null}
         </ScrollView>
       </FacultySheetContainer>
     </Modal>
   )
 }
+
+export function FacultySummerCampRejectReasonSheet({
+  visible,
+  submitting,
+  onClose,
+  onSubmit,
+}: {
+  visible: boolean
+  submitting: boolean
+  onClose: () => void
+  onSubmit: (reason: string) => void
+}) {
+  const insets = useSafeAreaInsets()
+  const native = useThemedNative()
+  const { type } = useModuleTheme()
+  const [reason, setReason] = useState("")
+
+  useEffect(() => {
+    if (visible) setReason("")
+  }, [visible])
+
+  return (
+    <GlassBottomSheetModal
+      visible={visible}
+      onClose={onClose}
+      scrollable={false}
+      accessibilityLabel="Close reject request"
+    >
+      <GlassSheetBackground style={{ paddingHorizontal: 16, paddingBottom: Math.max(insets.bottom, 12) }}>
+        <GlassSheetHandle />
+        <Text style={[type.sheetTitle, { color: native.label, marginTop: 4 }]}>Reject camper request?</Text>
+        <Text style={[type.caption, { color: native.secondaryLabel, lineHeight: 18, marginBottom: 12 }]}>
+          The camper will not gain access unless they submit a new request.
+        </Text>
+        <TextInput
+          value={reason}
+          onChangeText={setReason}
+          placeholder="Reason (optional)"
+          placeholderTextColor={native.tertiaryLabel}
+          multiline
+          style={[
+            requestSheetStyles.rejectInput,
+            {
+              color: native.label,
+              borderColor: native.separator,
+              backgroundColor: native.secondaryGrouped,
+            },
+          ]}
+        />
+        <View style={requestSheetStyles.rejectActions}>
+          <Pressable
+            style={({ pressed }) => [
+              requestSheetStyles.rejectBtn,
+              { borderColor: native.separator, opacity: pressed ? 0.8 : 1 },
+            ]}
+            disabled={submitting}
+            onPress={onClose}
+          >
+            <Text style={[type.caption, { color: native.label, fontWeight: "700" }]}>Cancel</Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [
+              requestSheetStyles.rejectBtn,
+              requestSheetStyles.rejectBtnPrimary,
+              { backgroundColor: NATIVE.destructive, opacity: pressed || submitting ? 0.85 : 1 },
+            ]}
+            disabled={submitting}
+            onPress={() => onSubmit(reason.trim())}
+          >
+            <Text style={[type.caption, { color: "#fff", fontWeight: "700" }]}>Reject</Text>
+          </Pressable>
+        </View>
+      </GlassSheetBackground>
+    </GlassBottomSheetModal>
+  )
+}
+
+export function FacultySummerCampRequestActionSheet({
+  visible,
+  request,
+  acting,
+  onClose,
+  onApprove,
+  onReject,
+}: {
+  visible: boolean
+  request: SummerCampRequest | null
+  acting: boolean
+  onClose: () => void
+  onApprove: () => void
+  onReject: (reason?: string) => void
+}) {
+  const collabSheetStyles = useCollabSheetStyles()
+  const insets = useSafeAreaInsets()
+  const { type } = useModuleTheme()
+  const [confirmApprove, setConfirmApprove] = useState(false)
+  const [rejectOpen, setRejectOpen] = useState(false)
+
+  useEffect(() => {
+    if (!visible) {
+      setConfirmApprove(false)
+      setRejectOpen(false)
+    }
+  }, [visible])
+
+  if (!request) return null
+
+  const pending = request.status === "pending" || request.status === "requested"
+  const statusMeta = facultySummerCampStatus(pending ? "pending" : request.status)
+  const thumb = facultySummerCampRequestThumb(request.id)
+
+  return (
+    <>
+      <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+        <FacultySheetContainer>
+          <FacultySheetChrome
+            topInset={insets.top}
+            title="Request details"
+            onClose={onClose}
+            accentColor={FACULTY_SUMMER_CAMP_COLOR.link}
+          />
+
+          <ScrollView
+            contentContainerStyle={[collabSheetStyles.scroll, { paddingBottom: insets.bottom + 24 }]}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
+            <FacultySheetHero
+              title={request.full_name}
+              subtitle={request.email ?? request.student_id ?? "Summer camp request"}
+              icon="mail-outline"
+              thumbColor={thumb.fill}
+              pills={
+                statusMeta ? (
+                  <FacultyStatusPill label={statusMeta.label} tone={pending ? "warning" : "neutral"} />
+                ) : null
+              }
+            />
+
+            <FacultySheetSection label="Inbox request" tone={SHEET_SECTION.roster}>
+              <FacultySheetGroupedList>
+                <FacultySheetMetricRow icon="id-card-outline" label="Student ID" value={request.student_id || "—"} />
+                {request.email ? (
+                  <FacultySheetMetricRow icon="mail-outline" label="Email" value={request.email} />
+                ) : null}
+                <FacultySheetMetricRow
+                  icon="pricetag-outline"
+                  label="Kind"
+                  value={(request.request_kind ?? "request").replace(/_/g, " ")}
+                />
+                {request.organization ? (
+                  <FacultySheetMetricRow icon="business-outline" label="Organization" value={request.organization} />
+                ) : null}
+                {request.school_affiliation ? (
+                  <FacultySheetMetricRow icon="school-outline" label="School" value={request.school_affiliation} />
+                ) : null}
+                <FacultySheetMetricRow
+                  icon="time-outline"
+                  label="Submitted"
+                  value={formatFacultyRelativeTime(request.created_at)}
+                  isLast
+                />
+              </FacultySheetGroupedList>
+            </FacultySheetSection>
+
+            {pending ? (
+              <FacultySheetSection label="Your decision" tone={SHEET_SECTION.workflow}>
+                <FacultySheetWorkflow
+                  title="Pending review"
+                  body="Approving creates the camper account so they can sign in. Reject if the request should not proceed."
+                  acting={acting}
+                  approveLabel="Approve request"
+                  rejectLabel="Reject"
+                  onApprove={() => setConfirmApprove(true)}
+                  onReject={() => setRejectOpen(true)}
+                />
+              </FacultySheetSection>
+            ) : null}
+          </ScrollView>
+
+          {confirmApprove ? (
+            <FacultySheetConfirm
+              title="Approve camper request?"
+              body={`${request.full_name} will be able to sign in with the credentials from this request.`}
+              confirmLabel="Approve"
+              danger={false}
+              onCancel={() => setConfirmApprove(false)}
+              onConfirm={() => {
+                setConfirmApprove(false)
+                onApprove()
+              }}
+            />
+          ) : null}
+        </FacultySheetContainer>
+      </Modal>
+
+      <FacultySummerCampRejectReasonSheet
+        visible={rejectOpen}
+        submitting={acting}
+        onClose={() => setRejectOpen(false)}
+        onSubmit={(reason) => {
+          setRejectOpen(false)
+          onReject(reason || undefined)
+        }}
+      />
+    </>
+  )
+}
+
+const requestSheetStyles = StyleSheet.create({
+  rejectInput: {
+    minHeight: 88,
+    borderRadius: NATIVE.sectionRadius,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    textAlignVertical: "top",
+    fontSize: 15,
+    lineHeight: 20,
+  },
+  rejectActions: { flexDirection: "row", gap: 10, marginTop: 12 },
+  rejectBtn: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 12,
+    borderRadius: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  rejectBtnPrimary: { borderWidth: 0 },
+})
 
 const localStyles = StyleSheet.create({
   publishCard: {
@@ -618,4 +1017,15 @@ const localStyles = StyleSheet.create({
   },
   trackCopy: { flex: 1, gap: 2, minWidth: 0 },
   trackMetaRow: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 2, marginTop: 2 },
+  deleteBtn: {
+    marginTop: 16,
+    minHeight: 44,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingVertical: 12,
+  },
 })

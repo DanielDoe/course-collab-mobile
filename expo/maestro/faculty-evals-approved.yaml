@@ -1,0 +1,5 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Approved"
+- tapOn: "Joseph Izaiah Gutierrez"
+- waitForAnimationToEnd

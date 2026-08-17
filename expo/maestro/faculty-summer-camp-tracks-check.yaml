@@ -1,0 +1,7 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Tracks"
+- extendedWaitUntil:
+    visible: "Search training tracks…|QA16T|AI & Edge"
+    timeout: 15000
+- takeScreenshot: summer-tracks-after-create

@@ -6,6 +6,21 @@ import { useNativeType } from "../../lib/themed-module-theme"
 import { needsMarkdownRichRender } from "../../lib/assessment-report-markdown"
 import { buildMarkdownHtml } from "../../lib/markdown-html"
 
+const MARKDOWN_HEIGHT_CACHE = new Map<string, number>()
+const MARKDOWN_HEIGHT_CACHE_LIMIT = 256
+
+function readCachedMarkdownHeight(messageId?: string): number | undefined {
+  if (!messageId) return undefined
+  return MARKDOWN_HEIGHT_CACHE.get(messageId)
+}
+
+function writeCachedMarkdownHeight(messageId: string, height: number) {
+  MARKDOWN_HEIGHT_CACHE.set(messageId, height)
+  if (MARKDOWN_HEIGHT_CACHE.size <= MARKDOWN_HEIGHT_CACHE_LIMIT) return
+  const oldest = MARKDOWN_HEIGHT_CACHE.keys().next().value
+  if (oldest) MARKDOWN_HEIGHT_CACHE.delete(oldest)
+}
+
 function useDebouncedValue(value: string, delayMs: number): string {
   const [debounced, setDebounced] = useState(value)
 
@@ -54,8 +69,9 @@ export function AiTutorMessageMarkdown({
   const tokens = useAppThemeTokens()
   const type = useNativeType()
   const rendered = useDebouncedValue(markdown, streaming ? 160 : 0)
-  const [layoutWidth, setLayoutWidth] = useState(0)
-  const [height, setHeight] = useState(72)
+  const cachedHeight = readCachedMarkdownHeight(messageId)
+  const [height, setHeight] = useState(cachedHeight ?? 96)
+  const [paintReady, setPaintReady] = useState(Boolean(streaming || cachedHeight))
   const rich = useMemo(() => needsMarkdownRichRender(markdown), [markdown])
 
   const html = useMemo(
@@ -81,6 +97,17 @@ export function AiTutorMessageMarkdown({
     ],
   )
 
+  useEffect(() => {
+    if (streaming) {
+      setPaintReady(true)
+      return
+    }
+
+    const nextCached = readCachedMarkdownHeight(messageId)
+    setHeight(nextCached ?? 96)
+    setPaintReady(Boolean(nextCached))
+  }, [messageId, markdown, streaming])
+
   if (!markdown.trim()) return null
 
   if (!rich) {
@@ -100,32 +127,29 @@ export function AiTutorMessageMarkdown({
   const webViewKey = messageId ?? "markdown"
 
   return (
-    <View
-      style={styles.wrap}
-      onLayout={(event) => {
-        const next = Math.round(event.nativeEvent.layout.width)
-        if (next > 0 && next !== layoutWidth) setLayoutWidth(next)
-      }}
-    >
-      {layoutWidth > 0 ? (
-        <WebView
-          key={webViewKey}
-          source={{ html, baseUrl: "about:blank" }}
-          style={{ width: layoutWidth, height, backgroundColor: "transparent" }}
-          {...WEBVIEW_PROPS}
-          onMessage={(event) => {
-            const next = Number(event.nativeEvent.data)
-            if (Number.isFinite(next) && next > 0) {
-              setHeight((prev) => {
-                const clamped = Math.min(Math.max(next + 2, 48), 8000)
-                return Math.abs(clamped - prev) > 2 ? clamped : prev
-              })
-            }
-          }}
-        />
-      ) : (
-        <View style={styles.measurePlaceholder} />
-      )}
+    <View style={[styles.wrap, { minHeight: height }]}>
+      <WebView
+        key={webViewKey}
+        source={{ html, baseUrl: "about:blank" }}
+        style={{
+          width: "100%",
+          height,
+          backgroundColor: "transparent",
+          opacity: paintReady ? 1 : 0,
+        }}
+        {...WEBVIEW_PROPS}
+        onLoadEnd={() => setPaintReady(true)}
+        onMessage={(event) => {
+          const next = Number(event.nativeEvent.data)
+          if (!Number.isFinite(next) || next <= 0) return
+          const clamped = Math.min(Math.max(next + 2, 48), 8000)
+          setHeight((prev) => {
+            if (Math.abs(clamped - prev) <= 2) return prev
+            if (messageId) writeCachedMarkdownHeight(messageId, clamped)
+            return clamped
+          })
+        }}
+      />
     </View>
   )
 }
@@ -137,10 +161,5 @@ const styles = StyleSheet.create({
   },
   plain: {
     alignSelf: "stretch",
-  },
-  measurePlaceholder: {
-    alignSelf: "stretch",
-    width: "100%",
-    minHeight: 48,
   },
 })

@@ -10,10 +10,19 @@ import { AppearanceProvider } from "../src/context/AppearanceProvider"
 import { NotificationProvider } from "../src/context/NotificationProvider"
 import { AppAlertProvider } from "../src/context/AppAlertProvider"
 import { PresenceSelfProvider } from "../src/context/PresenceSelfProvider"
+import { StripeAppProvider } from "../src/context/StripeAppProvider"
 import { SystemErrorBoundary } from "../src/components/SystemErrorBoundary"
 import { SystemErrorCapture } from "../src/components/SystemErrorCapture"
+import { runProductionGuard } from "../src/config/production-guard"
 
 void SplashScreen.preventAutoHideAsync().catch(() => {})
+
+if (typeof __DEV__ === "undefined" || !__DEV__) {
+  const productionGuard = runProductionGuard()
+  if (!productionGuard.ok) {
+    throw new Error(`Production configuration invalid:\n${productionGuard.errors.join("\n")}`)
+  }
+}
 
 export default function RootLayout() {
   return (
@@ -22,6 +31,7 @@ export default function RootLayout() {
         <SessionProvider>
           <SystemErrorCapture />
           <AppearanceProvider>
+            <StripeAppProvider>
             <AppAlertProvider>
             <PresenceSelfProvider>
               <NotificationProvider>
@@ -44,6 +54,7 @@ export default function RootLayout() {
               </NotificationProvider>
             </PresenceSelfProvider>
             </AppAlertProvider>
+            </StripeAppProvider>
           </AppearanceProvider>
         </SessionProvider>
       </SafeAreaProvider>

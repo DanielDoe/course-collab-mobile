@@ -95,8 +95,24 @@ export function guestCanSubmitLetter(status: string): boolean {
   return ["approved", "ai_generated", "revision_requested"].includes(status)
 }
 
-export function guestCanDownload(status: string): boolean {
-  return ["finalized", "downloaded"].includes(status)
+export function guestCanDownload(status: string, deliveryMode?: string | null): boolean {
+  if (!["finalized", "downloaded"].includes(status)) return false
+  const mode = String(deliveryMode ?? "student_download").toLowerCase()
+  return mode === "student_download"
+}
+
+export function guestDeliveryStatusLabel(deliveryMode?: string | null, status?: string): string | null {
+  const mode = String(deliveryMode ?? "").toLowerCase()
+  if (mode === "confidential" && ["finalized", "downloaded"].includes(String(status ?? ""))) {
+    return "Completed (confidential delivery — no file download)"
+  }
+  if (mode === "faculty_submits" && ["finalized", "downloaded"].includes(String(status ?? ""))) {
+    return "Completed — your instructor submitted the letter directly"
+  }
+  if (mode === "designated_recipient" && ["finalized", "downloaded"].includes(String(status ?? ""))) {
+    return "Completed — sent to the designated recipient"
+  }
+  return null
 }
 
 export function guestCanCancel(status: string): boolean {

@@ -1,0 +1,15 @@
+appId: com.coursecollab.app
+---
+- tapOn:
+    text: "Show previous tabs"
+    optional: true
+- tapOn:
+    text: "Show previous tabs"
+    optional: true
+- tapOn: "Board"
+- takeScreenshot: projects-board-now
+- tapOn: "ZipScoot"
+- extendedWaitUntil:
+    visible: "Score breakdown|ZipScoot"
+    timeout: 10000
+- takeScreenshot: projects-board-zipscoot

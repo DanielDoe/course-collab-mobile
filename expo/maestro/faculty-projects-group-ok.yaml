@@ -1,0 +1,6 @@
+appId: com.coursecollab.app
+---
+- extendedWaitUntil:
+    visible: "OK|Group created"
+    timeout: 15000
+- tapOn: "OK"

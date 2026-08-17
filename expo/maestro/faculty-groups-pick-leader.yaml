@@ -1,0 +1,9 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Leader Beta Tester"
+- extendedWaitUntil:
+    visible: "Invite members"
+    timeout: 8000
+- tapOn:
+    id: "group-name"
+- eraseText

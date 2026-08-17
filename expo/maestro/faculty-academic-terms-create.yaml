@@ -1,0 +1,37 @@
+appId: com.coursecollab.app
+---
+# Finish leftover Winter 2026 delete confirm if still open
+- tapOn:
+    text: "Delete"
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn: "Add academic term"
+- extendedWaitUntil:
+    visible: "Add academic term"
+    timeout: 10000
+- tapOn: "Winter"
+- tapOn: "Start date"
+- inputText: "2026-12-15"
+- hideKeyboard
+- tapOn: "End date"
+- inputText: "2027-01-15"
+- hideKeyboard
+- takeScreenshot: terms-create-valid
+- tapOn: "Create"
+- extendedWaitUntil:
+    visible: ".*Winter 2026.*|Start date must|already exists|Failed to create"
+    timeout: 15000
+- takeScreenshot: terms-create-result
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn:
+    text: ".*Winter 2026.*"
+- swipe:
+    direction: UP
+- tapOn:
+    text: ".*Delete term.*"
+- tapOn: "Delete"
+- takeScreenshot: terms-deleted

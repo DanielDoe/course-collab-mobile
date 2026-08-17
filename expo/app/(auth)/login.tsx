@@ -74,7 +74,7 @@ export default function LoginScreen() {
           readRememberedUniversity(),
         ])
         if (!mounted) return
-        if (lastPortal) {
+        if (lastPortal && lastPortal !== "summer") {
           setFocusedPortal(lastPortal)
         } else if (university) {
           setFocusedPortal("student")
@@ -90,7 +90,7 @@ export default function LoginScreen() {
 
   function focusPortal(id: FocusedPortal) {
     setFocusedPortal(id)
-    void persistRememberedLoginPortal(id)
+    if (id !== "summer") void persistRememberedLoginPortal(id)
   }
 
   if (!sessionLoading && session) {

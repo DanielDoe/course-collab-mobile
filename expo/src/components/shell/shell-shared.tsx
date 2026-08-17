@@ -3,7 +3,7 @@ import { Platform, Pressable, StyleSheet, Text, View } from "react-native"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { BRAND } from "../../constants"
 import { NATIVE, nativeType } from "../../constants/faculty-native-theme"
-import { useAppThemeTokens } from "../../context/AppearanceProvider"
+import { useAppThemeTokens, useShellChrome } from "../../context/AppearanceProvider"
 import { useSelfPresence } from "../../context/PresenceSelfProvider"
 import type { StudentSession } from "../../lib/session"
 import { PresenceAvatarBadge } from "../presence/PresenceAvatarBadge"
@@ -197,6 +197,41 @@ export function HeaderProfileAvatar({ name, active }: { name: string; active?: b
   )
 }
 
+/** Native nav-bar notification control — bell with unread dot. */
+export function HeaderNotificationButton({
+  onPress,
+  hasUnread = false,
+  accessibilityLabel = "Open notifications",
+}: {
+  onPress: () => void
+  hasUnread?: boolean
+  accessibilityLabel?: string
+}) {
+  const tokens = useAppThemeTokens()
+  const chrome = useShellChrome()
+
+  return (
+    <Pressable
+      style={({ pressed }) => [
+        shellTopBarStyles.iconBtn,
+        pressed && { backgroundColor: tokens.native.fill },
+      ]}
+      onPress={onPress}
+      hitSlop={6}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      accessibilityState={{ selected: hasUnread }}
+    >
+      <View style={notificationStyles.anchor}>
+        <Ionicons name="notifications-outline" size={22} color={chrome.label} />
+        {hasUnread ? (
+          <View style={[notificationStyles.dot, { borderColor: chrome.headerBg }]} />
+        ) : null}
+      </View>
+    </Pressable>
+  )
+}
+
 /** Native nav-bar account control — themed initials avatar. */
 export function HeaderProfileButton({
   name,
@@ -257,3 +292,24 @@ const avatarStyles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     overflow: "visible"}})
+
+const notificationStyles = StyleSheet.create({
+  anchor: {
+    width: 24,
+    height: 24,
+    alignItems: "center",
+    justifyContent: "center",
+    position: "relative",
+    overflow: "visible",
+  },
+  dot: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+    backgroundColor: "#FF3B30",
+    borderWidth: 1.5,
+  },
+})

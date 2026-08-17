@@ -1,0 +1,10 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Flashcards"
+- tapOn:
+    text: "Clear search"
+    optional: true
+- tapOn:
+    text: "Flashcards"
+    optional: true
+- takeScreenshot: flashcards-dismissed

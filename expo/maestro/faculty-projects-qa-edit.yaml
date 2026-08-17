@@ -1,0 +1,21 @@
+appId: com.coursecollab.app
+---
+- scrollUntilVisible:
+    element: "Title"
+    direction: DOWN
+    timeout: 10000
+    visibilityPercentage: 40
+- tapOn:
+    text: "Title"
+- eraseText: 20
+- inputText: "QA16P"
+- scrollUntilVisible:
+    element: "Reject"
+    direction: UP
+    timeout: 8000
+    visibilityPercentage: 40
+- tapOn: "Reject"
+- extendedWaitUntil:
+    visible: "Cancel"
+    timeout: 8000
+- tapOn: "Cancel"

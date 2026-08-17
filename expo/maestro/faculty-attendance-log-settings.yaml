@@ -1,0 +1,12 @@
+appId: com.coursecollab.app
+---
+- tapOn: "All statuses"
+- waitForAnimationToEnd
+- tapOn:
+    text: "Present"
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn: "Attendance settings"
+- waitForAnimationToEnd

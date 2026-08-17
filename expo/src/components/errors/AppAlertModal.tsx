@@ -112,6 +112,8 @@ export function AppAlertOverlay({
               <Pressable
                 key={button.text}
                 onPress={() => onButtonPress(button)}
+                accessibilityRole="button"
+                accessibilityLabel={button.text}
                 style={({ pressed }) => [
                   styles.actionBtn,
                   isCancel && [
@@ -121,7 +123,6 @@ export function AppAlertOverlay({
                   !isCancel && { backgroundColor: primaryBg },
                   pressed && { opacity: 0.88, transform: [{ scale: 0.985 }] },
                 ]}
-                accessibilityRole="button"
               >
                 <Text
                   style={[

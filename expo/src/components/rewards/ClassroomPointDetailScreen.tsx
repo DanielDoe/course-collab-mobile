@@ -4,6 +4,8 @@ import { Ionicons } from "@/components/icons/AppIcon"
 import { useLocalSearchParams } from "expo-router"
 import { useModuleScrollContentPadding } from "../../context/ChromeInsetContext"
 import { useAppThemeTokens } from "../../context/AppearanceProvider"
+import { hexToRgba, type AppThemeTokens } from "../../constants/app-themes"
+import { semanticSoft } from "../../lib/themed-module-theme"
 import { useSession } from "../../context/SessionProvider"
 import { ApiError } from "../../lib/student-api"
 import type { StudentSession } from "../../lib/session"
@@ -45,11 +47,11 @@ function normalizePointRecord(raw: ClassroomPointRecord): ClassroomPointRow {
   }
 }
 
-function pointStatusColor(status: string | undefined): string {
-  if (status === "approved") return "#16a34a"
-  if (status === "pending") return "#d97706"
-  if (status === "rejected") return "#dc2626"
-  return "#64748b"
+function pointStatusColor(status: string | undefined, tokens: AppThemeTokens): string {
+  if (status === "approved") return tokens.success
+  if (status === "pending") return tokens.warning
+  if (status === "rejected") return tokens.danger
+  return tokens.textMuted
 }
 
 export function ClassroomPointDetailScreen() {
@@ -129,15 +131,24 @@ export function ClassroomPointDetailScreen() {
         keyboardShouldPersistTaps="handled"
       >
         {error ? (
-          <View style={styles.errorBox}>
-            <Text style={styles.errorText}>{error}</Text>
+          <View
+            style={[
+              styles.errorBox,
+              {
+                backgroundColor: semanticSoft(tokens.danger, tokens.isDark),
+                borderColor: hexToRgba(tokens.danger, tokens.isDark ? 0.4 : 0.28),
+              },
+            ]}
+          >
+            <Ionicons name="alert-circle-outline" size={16} color={tokens.danger} />
+            <Text style={[styles.errorText, { color: tokens.text }]}>{error}</Text>
           </View>
         ) : null}
 
         {point ? (
           <>
             <View style={styles.titleBlock}>
-              <Text style={styles.title}>{title}</Text>
+              <Text style={[styles.title, { color: tokens.text }]}>{title}</Text>
               <View style={styles.chipRow}>
                 <TaskMetaChip label={categoryLabel(point.category)} tone="kind" />
                 <TaskMetaChip
@@ -151,30 +162,38 @@ export function ClassroomPointDetailScreen() {
             <TaskSectionCard title="Award summary" icon="ribbon-outline">
               <View style={styles.summaryRows}>
                 <View style={styles.summaryRow}>
-                  <Text style={styles.summaryLabel}>Status</Text>
-                  <Text style={[styles.summaryValue, { color: pointStatusColor(point.status) }]}>
+                  <Text style={[styles.summaryLabel, { color: tokens.textMuted }]}>Status</Text>
+                  <Text style={[styles.summaryValue, { color: pointStatusColor(point.status, tokens) }]}>
                     {point.status ?? "Awarded"}
                   </Text>
                 </View>
                 <View style={styles.summaryRow}>
-                  <Text style={styles.summaryLabel}>Awarded</Text>
-                  <Text style={styles.summaryValue}>
+                  <Text style={[styles.summaryLabel, { color: tokens.textMuted }]}>Awarded</Text>
+                  <Text style={[styles.summaryValue, { color: tokens.text }]}>
                     {formatRelativeTime(point.awarded_at) || "—"}
                   </Text>
                 </View>
                 {point.instructor_name ? (
                   <View style={styles.summaryRow}>
-                    <Text style={styles.summaryLabel}>Instructor</Text>
-                    <Text style={styles.summaryValue}>{point.instructor_name}</Text>
+                    <Text style={[styles.summaryLabel, { color: tokens.textMuted }]}>Instructor</Text>
+                    <Text style={[styles.summaryValue, { color: tokens.text }]}>{point.instructor_name}</Text>
                   </View>
                 ) : null}
               </View>
             </TaskSectionCard>
 
             {feedbackText ? (
-              <View style={styles.feedbackBox}>
-                <Ionicons name="chatbubble-ellipses-outline" size={16} color="#b45309" />
-                <Text style={styles.feedbackText}>{feedbackText}</Text>
+              <View
+                style={[
+                  styles.feedbackBox,
+                  {
+                    backgroundColor: semanticSoft(tokens.warning, tokens.isDark),
+                    borderColor: hexToRgba(tokens.warning, tokens.isDark ? 0.38 : 0.26),
+                  },
+                ]}
+              >
+                <Ionicons name="chatbubble-ellipses-outline" size={16} color={tokens.warning} />
+                <Text style={[styles.feedbackText, { color: tokens.text }]}>{feedbackText}</Text>
               </View>
             ) : null}
 
@@ -191,18 +210,18 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   content: { padding: 16, gap: 14 },
   errorBox: {
-    backgroundColor: "#fef2f2",
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
     borderRadius: 14,
     padding: 12,
     borderWidth: 1,
-    borderColor: "#fecaca",
   },
-  errorText: { color: "#b91c1c", fontSize: 14, lineHeight: 20 },
+  errorText: { flex: 1, fontSize: 14, lineHeight: 20 },
   titleBlock: { gap: 10 },
   title: {
     fontSize: 20,
     fontWeight: "600",
-    color: "#0f172a",
     letterSpacing: -0.2,
   },
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
@@ -213,17 +232,15 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     gap: 12,
   },
-  summaryLabel: { fontSize: 13, color: "#64748b", fontWeight: "600" },
-  summaryValue: { fontSize: 14, fontWeight: "700", color: "#0f172a", textAlign: "right", flex: 1 },
+  summaryLabel: { fontSize: 13, fontWeight: "600" },
+  summaryValue: { fontSize: 14, fontWeight: "700", textAlign: "right", flex: 1 },
   feedbackBox: {
     flexDirection: "row",
     alignItems: "flex-start",
     gap: 8,
     padding: 12,
     borderRadius: 14,
-    backgroundColor: "#fffbeb",
     borderWidth: 1,
-    borderColor: "#fde68a",
   },
-  feedbackText: { flex: 1, fontSize: 13, color: "#92400e", lineHeight: 18 },
+  feedbackText: { flex: 1, fontSize: 13, lineHeight: 18 },
 })

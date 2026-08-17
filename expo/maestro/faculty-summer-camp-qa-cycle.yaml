@@ -1,0 +1,21 @@
+appId: com.coursecollab.app
+---
+- swipe:
+    direction: UP
+- tapOn: "QA16S, Draft"
+- takeScreenshot: summer-qa-sheet
+- tapOn: "Description"
+- inputText: "QA probe safe"
+- tapOn: "Summer program"
+- tapOn: "Save"
+- takeScreenshot: summer-qa-saved
+- tapOn: "Add track"
+- tapOn: "Title"
+- eraseText
+- inputText: "QA16T"
+- tapOn: "New training track"
+- tapOn: "Create"
+- extendedWaitUntil:
+    visible: "QA16T, Draft|QA16T"
+    timeout: 20000
+- takeScreenshot: summer-qa-track

@@ -1,0 +1,10 @@
+appId: com.coursecollab.app
+---
+- tapOn: "New announcement"
+- tapOn: "Pin to top of student feed"
+- takeScreenshot: ann-qa-ready
+- tapOn: "Publish"
+- extendedWaitUntil:
+    visible: "QA16A"
+    timeout: 25000
+- takeScreenshot: ann-qa-published

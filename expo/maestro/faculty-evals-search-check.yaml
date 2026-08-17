@@ -1,0 +1,17 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Course Evaluations"
+    direction: DOWN
+    timeout: 20000
+- tapOn: "Course Evaluations"
+- tapOn:
+    text: "Close menu"
+    optional: true
+- extendedWaitUntil:
+    visible: "Course Evaluations|Search students"
+    timeout: 25000
+- tapOn:
+    id: "module-search"
+- waitForAnimationToEnd

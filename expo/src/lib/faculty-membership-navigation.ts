@@ -34,7 +34,7 @@ export function parseFacultyMembershipWebPath(input: string): {
   const path = pathOnly?.toLowerCase() ?? ""
   const params = queryPart ? new URLSearchParams(queryPart) : null
 
-  if (/\/instructor\/membership\/success/i.test(path)) {
+  if (/\/instructor\/(?:dashboard-v2\/)?membership\/success/i.test(path)) {
     return {
       flow: "success",
       plan: parseFacultyTier(params?.get("plan") ?? undefined),
@@ -42,18 +42,18 @@ export function parseFacultyMembershipWebPath(input: string): {
     }
   }
 
-  if (/\/instructor\/membership\/cancel/i.test(path)) {
+  if (/\/instructor\/(?:dashboard-v2\/)?membership\/cancel/i.test(path)) {
     return {
       flow: "cancel",
       plan: parseFacultyTier(params?.get("plan") ?? undefined),
     }
   }
 
-  if (/\/instructor\/membership\/manage/i.test(path)) {
+  if (/\/instructor\/(?:dashboard-v2\/)?membership\/manage/i.test(path)) {
     return { flow: "manage" }
   }
 
-  if (/\/instructor\/membership\/checkout/i.test(path)) {
+  if (/\/instructor\/(?:dashboard-v2\/)?membership\/checkout/i.test(path)) {
     return {
       flow: "checkout",
       plan: parseFacultyTier(params?.get("plan") ?? undefined),
@@ -101,13 +101,8 @@ export function tryHandleFacultyMembershipFlowExitNavigation(
     return true
   }
 
-  if (/\/instructor\/membership\/cancel/i.test(pathOnly)) {
-    const parsed = parseFacultyMembershipWebPath(full)
-    router.replace({
-      pathname: "/membership/cancel",
-      params: parsed?.plan ? { plan: parsed.plan } : {},
-    } as never)
-    return true
+  if (/\/instructor\/(?:dashboard-v2\/)?membership\/cancel/i.test(pathOnly)) {
+    return false
   }
 
   return false

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { Pressable, StyleSheet, Text, View } from "react-native"
+import { useRouter } from "expo-router"
 import { Ionicons } from "@/components/icons/AppIcon"
 import {
   instructorAdminApi,
@@ -44,6 +45,7 @@ function formatAssessmentType(type: string): string {
 }
 
 export function FacultySubmissionIssuesScreen() {
+  const router = useRouter()
   const { scope, course, ready } = useFacultyScope()
 
   const [days, setDays] = useState<DaysFilter>("7")
@@ -183,9 +185,17 @@ export function FacultySubmissionIssuesScreen() {
                 <DiagnosticEmptyRow message="No recent submission issues." />
               ) : (
                 recentItems.map((item, index) => (
-                  <View
+                  <Pressable
                     key={`${item.answerId}-${item.attemptId}`}
-                    style={[styles.itemRow, index < recentItems.length - 1 && styles.itemBorder]}
+                    onPress={() => router.push("/module/results" as never)}
+                    android_ripple={{ color: NATIVE.fill }}
+                    style={({ pressed }) => [
+                      styles.itemRow,
+                      index < recentItems.length - 1 && styles.itemBorder,
+                      pressed && { opacity: NATIVE.pressedOpacity },
+                    ]}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Open ${item.quizTitle} in Results`}
                   >
                     <View style={styles.itemCopy}>
                       <Text style={styles.itemTitle} numberOfLines={1}>
@@ -204,8 +214,10 @@ export function FacultySubmissionIssuesScreen() {
                         <Ionicons name="eye-outline" size={14} color={SYSTEM.orange.color} />
                         <Text style={styles.reviewText}>Review</Text>
                       </View>
-                    ) : null}
-                  </View>
+                    ) : (
+                      <Ionicons name="chevron-forward" size={16} color={NATIVE.tertiaryLabel} />
+                    )}
+                  </Pressable>
                 ))
               )}
             </FacultyAdminSection>

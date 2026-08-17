@@ -7,7 +7,6 @@ import { solidListThumbFixed, solidListThumbFromHash } from "./solid-list-thumb"
 import type { AttendanceStatus } from "./faculty-attendance-utils"
 import type { AttendanceSession } from "./instructor-api"
 import type { IoniconName } from "@/components/icons/AppIcon"
-import { meetingStatusBadge } from "./faculty-attendance-utils"
 
 /**
  * Faculty attendance — Color Hunt palette on neutral grouped list chrome.
@@ -53,17 +52,17 @@ export function facultyAttendanceMeetingStatusMeta(session: AttendanceSession): 
   color: string
   icon: IoniconName
 } {
-  const badge = meetingStatusBadge(session)
-  if (badge.tone === "danger") {
-    return { label: badge.label, color: FACULTY_ATTENDANCE_COLOR.cancelled, icon: "close-circle-outline" }
+  if (session.is_cancelled) {
+    return { label: "Cancelled", color: FACULTY_ATTENDANCE_COLOR.cancelled, icon: "close-circle-outline" }
   }
-  if (badge.tone === "success") {
-    return { label: badge.label, color: FACULTY_ATTENDANCE_COLOR.marked, icon: "checkmark-circle-outline" }
+  const attended = Number(session.total_attended ?? 0)
+  if (Number.isFinite(attended) && attended > 0) {
+    return { label: "Marked", color: FACULTY_ATTENDANCE_COLOR.marked, icon: "checkmark-circle-outline" }
   }
-  if (badge.tone === "live") {
-    return { label: badge.label, color: FACULTY_ATTENDANCE_COLOR.live, icon: "radio-outline" }
+  if (session.is_active) {
+    return { label: "QR live", color: FACULTY_ATTENDANCE_COLOR.live, icon: "radio-outline" }
   }
-  return { label: badge.label, color: FACULTY_ATTENDANCE_COLOR.scheduled, icon: "calendar-outline" }
+  return { label: "Scheduled", color: FACULTY_ATTENDANCE_COLOR.scheduled, icon: "calendar-outline" }
 }
 
 export function facultyAttendanceMeetingThumb(seed: string | number): SolidListThumb {

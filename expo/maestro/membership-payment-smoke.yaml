@@ -1,0 +1,123 @@
+appId: com.coursecollab.app
+---
+# Membership & payment flow smoke test (no real charge).
+# Uses App Store review student: 910000001 / Review26! @ UH
+# WebView checkout/success/cancel content is verified via native flow headers
+# (iOS does not expose in-WebView text to Maestro accessibility).
+
+- launchApp:
+    clearState: false
+
+- runFlow:
+    when:
+      visible: "Open debugger to view warnings."
+    commands:
+      - tapOn:
+          text: "Dismiss"
+          optional: true
+      - pressKey: Escape
+
+- runFlow:
+    when:
+      visible: "Sign in"
+    commands:
+      - tapOn:
+          text: "University of Houston"
+          optional: true
+      - tapOn:
+          text: "Continue"
+          optional: true
+      - tapOn:
+          text: "Student ID"
+          optional: true
+      - inputText: "910000001"
+      - tapOn:
+          text: "Password"
+          optional: true
+      - inputText: "Review26!"
+      - hideKeyboard
+      - tapOn: "Sign in"
+
+- runFlow:
+    when:
+      visible: "First sign-in"
+    commands:
+      - tapOn:
+          text: "Current password"
+          optional: true
+      - inputText: "Review26!"
+      - tapOn:
+          text: "New password"
+          optional: true
+      - inputText: "Review26!"
+      - tapOn:
+          text: "Confirm new password"
+          optional: true
+      - inputText: "Review26!"
+      - hideKeyboard
+      - tapOn: "Save password & continue"
+
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 90000
+
+# Native plans hub
+- tapOn:
+    point: "92%,8%"
+- extendedWaitUntil:
+    visible: "Membership & Plans"
+    timeout: 15000
+- tapOn: "Membership & Plans"
+- extendedWaitUntil:
+    visible: "Membership & Plans"
+    timeout: 20000
+- assertVisible: "Trailblazer"
+
+# Native checkout review screen
+- openLink: coursecollab://membership/checkout?plan=Explorer
+- extendedWaitUntil:
+    visible: "Checkout"
+    timeout: 45000
+- scrollUntilVisible:
+    element: "Payment method"
+    direction: DOWN
+    timeout: 20000
+    speed: 40
+    visibilityPercentage: 100
+- assertVisible: "Payment method"
+- assertVisible: "Choose a payment method"
+- back
+
+# Payment cancelled — native screen shows immediately (no WebView loop).
+- openLink: coursecollab://membership/cancel?plan=Explorer
+- extendedWaitUntil:
+    visible: "Payment not completed"
+    timeout: 15000
+- assertVisible: "Try checkout again"
+- assertVisible: "Back to plans"
+- back
+- openLink: coursecollab://membership
+- extendedWaitUntil:
+    visible: "Membership & Plans"
+    timeout: 20000
+
+# Success flow (mock session — native sync + confirmation)
+- openLink: coursecollab://membership/success?plan=Trailblazer&session_id=cs_test_maestro_mock
+- extendedWaitUntil:
+    visible: "Membership activated"
+    timeout: 45000
+- assertVisible:
+    text: "Welcome to"
+    optional: true
+- openLink: coursecollab://membership
+
+# Billing manage screen
+- openLink: coursecollab://membership/manage
+- extendedWaitUntil:
+    visible: "Billing"
+    timeout: 45000
+- back
+- openLink: coursecollab://membership
+- extendedWaitUntil:
+    visible: "Membership & Plans"
+    timeout: 20000

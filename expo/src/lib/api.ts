@@ -13,6 +13,7 @@ import {
 } from "./mfa-device-trust"
 import { isMfaGatedResponse } from "./mfa-types"
 import { mergeCookieHeaders, persistHttpCookiesFromResponse, studentHttpCookieHeader } from "./student-http-cookies"
+import { assertProductionHttpsUrl, createApiAbortSignal, noteApiFailure } from "./http"
 
 export class ApiError extends Error {
   constructor(
@@ -191,13 +192,12 @@ async function requestOnce<T>(
   timeoutMs: number,
 ): Promise<T> {
   const url = `${baseUrl}${path.startsWith("/") ? path : `/${path}`}`
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), timeoutMs)
 
   try {
+    assertProductionHttpsUrl(url)
     const response = await fetch(url, {
       ...init,
-      signal: controller.signal,
+      signal: createApiAbortSignal(timeoutMs, init?.signal ?? undefined),
       credentials: "include",
       headers: {
         Accept: "application/json",
@@ -217,6 +217,7 @@ async function requestOnce<T>(
     }
 
     if (!response.ok) {
+      noteApiFailure(path, response.status)
       const message =
         typeof body === "object" &&
         body !== null &&
@@ -234,8 +235,11 @@ async function requestOnce<T>(
     }
 
     return body as T
-  } finally {
-    clearTimeout(timer)
+  } catch (err) {
+    if (err instanceof Error && err.message.startsWith("Production requests must use HTTPS")) {
+      throw new ApiError(err.message, 0)
+    }
+    throw err
   }
 }
 
@@ -284,6 +288,23 @@ export const api = {
 
   getUniversities: () =>
     request<{ universities: UniversityRecord[] }>("/api/auth/universities"),
+
+  /** Search featured schools + the open university-domains catalog (2+ chars). */
+  searchUniversities: (query: string) =>
+    request<{ universities: UniversityRecord[] }>(
+      `/api/auth/universities/search?q=${encodeURIComponent(query)}`,
+    ),
+
+  /** Persist a catalog pick (id 0) into universities so accounts can FK to it. */
+  ensureUniversity: (payload: { name: string; domain?: string | null; shortName?: string }) =>
+    request<{ university: UniversityRecord }>("/api/auth/universities/ensure", {
+      method: "POST",
+      body: JSON.stringify({
+        name: payload.name,
+        domain: payload.domain ?? "",
+        shortName: payload.shortName ?? "",
+      }),
+    }),
 
   universityStudentLogin: async (payload: UniversityStudentLoginRequest) => {
     const authId = payload.identifier.trim()
@@ -382,23 +403,77 @@ export const api = {
     return data
   },
 
-  adminLogin: (username: string, password: string) =>
-    request<AdminLoginResponse>("/api/admin/login", {
+  adminLogin: async (username: string, password: string) => {
+    const authId = username.trim()
+    const loginKey = `admin:${authId.toLowerCase()}`
+    const trustHeaders = await mfaLoginCookieHeaders(loginKey)
+    const data = await request<AdminLoginResponse>("/api/admin/login", {
       method: "POST",
-      body: JSON.stringify({ username, password }),
-    }),
+      headers: trustHeaders,
+      body: JSON.stringify({ username: authId, password }),
+    })
+    const record = data as Record<string, unknown>
+    if (isMfaGatedResponse(record)) {
+      if (Object.keys(trustHeaders).length > 0) {
+        await clearMfaDeviceTrustKeys([loginKey])
+      }
+      return data
+    }
+    await persistMfaDeviceTrustFromLogin({
+      userType: "admin",
+      loginKey,
+      payload: record,
+    })
+    return data
+  },
 
-  guestLogin: (email: string, password: string) =>
-    request<GuestLoginResponse>("/api/guest/login", {
+  guestLogin: async (email: string, password: string) => {
+    const authId = email.trim().toLowerCase()
+    const loginKey = studentMfaLoginKey(0, authId)
+    const trustHeaders = await mfaLoginCookieHeadersForStudent(0, authId)
+    const data = await request<GuestLoginResponse>("/api/guest/login", {
       method: "POST",
-      body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
-    }),
+      headers: trustHeaders,
+      body: JSON.stringify({ email: authId, password }),
+    })
+    const record = data as Record<string, unknown>
+    if (isMfaGatedResponse(record)) {
+      if (Object.keys(trustHeaders).length > 0) {
+        await clearMfaDeviceTrustKeys([loginKey])
+      }
+      return data
+    }
+    await persistMfaDeviceTrustFromLogin({
+      userType: "student",
+      loginKey,
+      payload: record,
+    })
+    return data
+  },
 
-  summerLogin: (email: string, password: string) =>
-    request<SummerLoginResponse>("/api/summer-camp/login", {
+  summerLogin: async (email: string, password: string) => {
+    const authId = email.trim().toLowerCase()
+    const loginKey = studentMfaLoginKey(0, authId)
+    const trustHeaders = await mfaLoginCookieHeadersForStudent(0, authId)
+    const data = await request<SummerLoginResponse>("/api/summer-camp/login", {
       method: "POST",
+      headers: trustHeaders,
       body: JSON.stringify({ email: email.trim(), password }),
-    }),
+    })
+    const record = data as Record<string, unknown>
+    if (isMfaGatedResponse(record)) {
+      if (Object.keys(trustHeaders).length > 0) {
+        await clearMfaDeviceTrustKeys([loginKey])
+      }
+      return data
+    }
+    await persistMfaDeviceTrustFromLogin({
+      userType: "student",
+      loginKey,
+      payload: record,
+    })
+    return data
+  },
 
   /** Revoke server refresh/MFA-trust cookies (no-op if none were set). */
   logout: () =>

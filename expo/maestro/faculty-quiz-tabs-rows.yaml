@@ -1,0 +1,35 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Issues"
+- waitForAnimationToEnd
+- tapOn: "Deleted"
+- waitForAnimationToEnd
+- tapOn: "All quizzes"
+- waitForAnimationToEnd
+- tapOn: "Open filters"
+- waitForAnimationToEnd
+- tapOn: "Closed"
+- waitForAnimationToEnd
+- tapOn: "Open filters"
+- waitForAnimationToEnd
+- tapOn: "All"
+- waitForAnimationToEnd
+- tapOn: "ECE 2202 - Quiz 3"
+- waitForAnimationToEnd
+- tapOn: "Done"
+- waitForAnimationToEnd
+- tapOn: "ECE 2202 - Quiz 2"
+- waitForAnimationToEnd
+- scrollUntilVisible:
+    element: "Delete"
+    direction: DOWN
+    timeout: 12000
+- tapOn: "Delete"
+- waitForAnimationToEnd
+- tapOn: "Cancel"
+- waitForAnimationToEnd
+- tapOn: "Done"
+- waitForAnimationToEnd
+- tapOn: "Preview"
+- waitForAnimationToEnd
+- tapOn: "Close preview"

@@ -36,6 +36,7 @@ function isImmersiveRoute(pathname: string, webPath?: string) {
   if (/^\/announcements\/[^/]+$/.test(pathname)) return true
   if (/^\/practice\//.test(pathname)) return true
   if (/^\/membership/.test(pathname)) return true
+  if (pathname === "/settings" || pathname.startsWith("/settings/")) return true
   if (pathname === "/module/ai-tutor") return true
   if (pathname.includes("/web") && webPath) return isImmersiveStudentWebPath(webPath)
   return false

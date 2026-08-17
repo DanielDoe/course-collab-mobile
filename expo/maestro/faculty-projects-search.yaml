@@ -1,0 +1,21 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Search projects, groups…"
+- eraseText: 40
+- inputText: "zzz"
+- tapOn: "Manage"
+- extendedWaitUntil:
+    visible: "No matches|No projects"
+    timeout: 8000
+- tapOn: "Clear search"
+- tapOn: "Open filters"
+- extendedWaitUntil:
+    visible: "All statuses|Filter projects"
+    timeout: 8000
+- tapOn: "Pending"
+- tapOn: "Open filters"
+- tapOn: "All statuses"
+- tapOn: "Open filters"
+- tapOn: "Approved"
+- tapOn: "Open filters"
+- tapOn: "All statuses"

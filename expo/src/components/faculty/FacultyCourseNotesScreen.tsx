@@ -11,6 +11,7 @@ import {
 } from "../../lib/instructor-content-api"
 import type { CourseDigitalNote } from "../../lib/digital-notes-api"
 import { useFacultyScope } from "../../hooks/useFacultyScope"
+import { useSuppressModuleSearchDock } from "../../context/ModuleSearchDockContext"
 import { useModuleTheme } from "../../lib/themed-module-shell"
 import { FacultyEmptyState } from "./faculty-shared"
 import { FacultyCourseNoteListCard } from "./FacultyCourseNoteListCard"
@@ -26,6 +27,7 @@ import { NativeSelect } from "../NativeSelect"
 import { MarkdownNotePreview } from "../notes/MarkdownNotePreview"
 import { FacultyAdminStatRow } from "./faculty-admin-ui"
 import { CircuitWorkspaceEditor } from "../ink/CircuitWorkspaceEditor"
+import { CircuitWorkspaceViewer } from "../ink/CircuitWorkspaceViewer"
 import {
   createEmptyWorkspace,
   parseCircuitWorkspace,
@@ -36,15 +38,53 @@ import {
 type Tab = "all" | "topics" | "configuration" | "deleted"
 type ContentTab = "typed" | "ink"
 
+const NEW_TOPIC_VALUE = "__new_topic__"
+
+function serializeEditorState(state: {
+  title: string
+  bodyText: string
+  topic: string
+  sessionCode: string
+  isPublished: boolean
+  inkWorkspace: CircuitWorkspace
+}) {
+  return JSON.stringify(state)
+}
+
+function CourseNoteContentPreview({
+  bodyText,
+  workspace,
+}: {
+  bodyText: string
+  workspace: CircuitWorkspace | null
+}) {
+  const { native, type } = useModuleTheme()
+  const hasTyped = bodyText.trim().length > 0
+  const hasInk = workspaceHasContent(workspace)
+  if (!hasTyped && !hasInk) {
+    return (
+      <Text style={[type.caption, { color: native.tertiaryLabel, textAlign: "center", paddingVertical: 16 }]}>
+        No typed or handwritten content.
+      </Text>
+    )
+  }
+  return (
+    <>
+      {hasTyped ? <MarkdownNotePreview markdown={bodyText} minHeight={160} /> : null}
+      {hasInk && workspace ? <CircuitWorkspaceViewer workspace={workspace} /> : null}
+    </>
+  )
+}
+
 const TABS: Array<{ id: Tab; label: string; icon: keyof typeof Ionicons.glyphMap }> = [
-  { id: "all", label: "All Notes", icon: "document-text-outline" },
+  { id: "all", label: "All", icon: "document-text-outline" },
   { id: "topics", label: "Topics", icon: "folder-outline" },
-  { id: "configuration", label: "Configuration", icon: "options-outline" },
+  { id: "configuration", label: "Config", icon: "options-outline" },
   { id: "deleted", label: "Deleted", icon: "trash-outline" },
 ]
 
 export function FacultyCourseNotesScreen() {
-  const { listScrollPad } = useFacultyStickyHeaderScrollLayout()
+  const { listScrollPad } = useFacultyStickyHeaderScrollLayout({ extraBottom: 88 })
   const { scope, ready } = useFacultyScope()
   const { tokens, native, styles: moduleStyles, type } = useModuleTheme()
 
@@ -61,16 +101,20 @@ export function FacultyCourseNotesScreen() {
   const [topicSession, setTopicSession] = useState("ALL")
   const [editorOpen, setEditorOpen] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
+  useSuppressModuleSearchDock(editorOpen || previewOpen)
   const [previewNote, setPreviewNote] = useState<(CourseDigitalNote & { deletedAt?: string }) | null>(null)
   const [editing, setEditing] = useState<CourseDigitalNote | null>(null)
   const [title, setTitle] = useState("")
   const [bodyText, setBodyText] = useState("")
   const [topic, setTopic] = useState("")
+  const [topicMode, setTopicMode] = useState<"existing" | "new">("existing")
+  const [customTopic, setCustomTopic] = useState("")
   const [sessionCode, setSessionCode] = useState("")
   const [isPublished, setIsPublished] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
   const [contentTab, setContentTab] = useState<ContentTab>("typed")
   const [inkWorkspace, setInkWorkspace] = useState<CircuitWorkspace>(() => createEmptyWorkspace())
+  const [editorBaseline, setEditorBaseline] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [loadingEditor, setLoadingEditor] = useState(false)
 
@@ -99,28 +143,37 @@ export function FacultyCourseNotesScreen() {
       .finally(() => setLoading(false))
   }, [ready, scope, load])
 
+  const uniqueSessions = useMemo(() => {
+    const seen = new Set<string>()
+    return sessions.filter((session) => {
+      if (seen.has(session.code)) return false
+      seen.add(session.code)
+      return true
+    })
+  }, [sessions])
+
   const sessionOptions = useMemo(
     () => [
       { value: "", label: "All sections" },
-      ...sessions.map((session) => ({
+      ...uniqueSessions.map((session) => ({
         value: session.code,
         label: session.code,
         detail: session.description ?? undefined,
       })),
     ],
-    [sessions],
+    [uniqueSessions],
   )
 
   const topicSessionOptions = useMemo(
     () => [
       { value: "ALL", label: "All sections" },
-      ...sessions.map((session) => ({
+      ...uniqueSessions.map((session) => ({
         value: session.code,
         label: session.code,
         detail: session.description ?? undefined,
       })),
     ],
-    [sessions],
+    [uniqueSessions],
   )
 
   const topicOptions = useMemo(() => {
@@ -129,10 +182,62 @@ export function FacultyCourseNotesScreen() {
     notes.forEach((note) => {
       if (note.topic?.trim()) names.add(note.topic.trim())
     })
-    return Array.from(names)
+    const options = Array.from(names)
       .sort((a, b) => a.localeCompare(b))
       .map((name) => ({ value: name, label: name }))
+    return [
+      { value: "", label: "No topic" },
+      ...options,
+      { value: NEW_TOPIC_VALUE, label: "New topic…" },
+    ]
   }, [config?.topics, notes])
+
+  function effectiveTopic() {
+    return (topicMode === "new" ? customTopic : topic).trim()
+  }
+
+  function currentEditorSnapshot() {
+    return serializeEditorState({
+      title,
+      bodyText,
+      topic: effectiveTopic(),
+      sessionCode,
+      isPublished,
+      inkWorkspace,
+    })
+  }
+
+  function closeEditor() {
+    setEditorOpen(false)
+    setEditing(null)
+    setTopicMode("existing")
+    setCustomTopic("")
+    setEditorBaseline(null)
+  }
+
+  function requestCloseEditor() {
+    if (saving || loadingEditor) return
+    if (editorBaseline != null && currentEditorSnapshot() !== editorBaseline) {
+      AppAlert.alert("Discard changes?", "Unsaved edits will be lost.", [
+        { text: "Keep editing", style: "cancel" },
+        { text: "Discard", style: "destructive", onPress: closeEditor },
+      ])
+      return
+    }
+    closeEditor()
+  }
+
+  function handleTopicChange(value: string) {
+    if (value === NEW_TOPIC_VALUE) {
+      setTopicMode("new")
+      setTopic("")
+      setCustomTopic("")
+      return
+    }
+    setTopicMode("existing")
+    setCustomTopic("")
+    setTopic(value)
+  }
 
   const filteredNotes = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -147,15 +252,28 @@ export function FacultyCourseNotesScreen() {
   }, [notes, search])
 
   function openCreate() {
+    const emptyInk = createEmptyWorkspace()
     setEditing(null)
-    setTitle("Untitled note")
+    setTitle("")
     setBodyText("")
     setTopic("")
+    setTopicMode("existing")
+    setCustomTopic("")
     setSessionCode("")
     setIsPublished(false)
     setShowPreview(false)
     setContentTab("typed")
-    setInkWorkspace(createEmptyWorkspace())
+    setInkWorkspace(emptyInk)
+    setEditorBaseline(
+      serializeEditorState({
+        title: "",
+        bodyText: "",
+        topic: "",
+        sessionCode: "",
+        isPublished: false,
+        inkWorkspace: emptyInk,
+      }),
+    )
     setEditorOpen(true)
   }
 
@@ -165,6 +283,8 @@ export function FacultyCourseNotesScreen() {
     setTitle(note.title)
     setBodyText(note.bodyText)
     setTopic(note.topic ?? "")
+    setTopicMode("existing")
+    setCustomTopic("")
     setSessionCode(note.session ?? "")
     setIsPublished(note.isPublished)
     setShowPreview(false)
@@ -178,16 +298,33 @@ export function FacultyCourseNotesScreen() {
       setTitle(full.title)
       setBodyText(full.bodyText)
       setTopic(full.topic ?? "")
+      setTopicMode("existing")
+      setCustomTopic("")
       setSessionCode(full.session ?? "")
       setIsPublished(full.isPublished)
       setEditing(full)
       const loadedInk = parseCircuitWorkspace(full.inkWorkspace) ?? createEmptyWorkspace()
       setInkWorkspace(loadedInk)
+      setEditorBaseline(
+        serializeEditorState({
+          title: full.title,
+          bodyText: full.bodyText,
+          topic: (full.topic ?? "").trim(),
+          sessionCode: full.session ?? "",
+          isPublished: full.isPublished,
+          inkWorkspace: loadedInk,
+        }),
+      )
       if (workspaceHasContent(loadedInk) && !full.bodyText.trim()) {
         setContentTab("ink")
       }
-    } catch {
-      // Keep list snapshot if detail fetch fails.
+    } catch (err) {
+      setEditorOpen(false)
+      setEditing(null)
+      AppAlert.alert(
+        "Could not load note",
+        err instanceof ApiError ? err.message : "Failed to load note details.",
+      )
     } finally {
       setLoadingEditor(false)
     }
@@ -200,13 +337,21 @@ export function FacultyCourseNotesScreen() {
 
   async function saveNote() {
     if (!scope || saving) return
+    if (!title.trim()) {
+      AppAlert.alert("Missing title", "Enter a note title.")
+      return
+    }
+    if (isPublished && !bodyText.trim() && !workspaceHasContent(inkWorkspace)) {
+      AppAlert.alert("Add content", "Add typed or handwritten content before publishing.")
+      return
+    }
     setSaving(true)
     try {
       const payload = {
         title,
         bodyText,
         inkWorkspace,
-        topic: topic.trim() || null,
+        topic: effectiveTopic() || null,
         session: sessionCode.trim() || null,
         isPublished,
       }
@@ -215,7 +360,7 @@ export function FacultyCourseNotesScreen() {
       } else {
         await instructorCourseNotesApi.createNote(scope, payload)
       }
-      setEditorOpen(false)
+      closeEditor()
       await load()
     } catch (err) {
       AppAlert.alert("Save failed", err instanceof ApiError ? err.message : "Try again.")
@@ -257,8 +402,7 @@ export function FacultyCourseNotesScreen() {
             if (!scope) return
             try {
               await instructorCourseNotesApi.deleteNote(scope, editing.id)
-              setEditorOpen(false)
-              setEditing(null)
+              closeEditor()
               await load()
             } catch (err) {
               AppAlert.alert("Delete failed", err instanceof ApiError ? err.message : "Try again.")
@@ -279,10 +423,20 @@ export function FacultyCourseNotesScreen() {
     }
   }
 
+  if (!ready) {
+    return (
+      <FacultyEmptyState
+        icon="document-text-outline"
+        title="Select a course"
+        body="Course notes require an active course."
+      />
+    )
+  }
+
   return (
     <View style={moduleStyles.root}>
       <FacultyModuleStickyHeader>
-        <FacultyModuleTabBar tabs={TABS} tab={tab} onChange={setTab} />
+        <FacultyModuleTabBar tabs={TABS} tab={tab} onChange={setTab} scrollable={false} />
         {tab === "all" ? (
           <FacultySearchToolbar
             value={search}
@@ -314,12 +468,17 @@ export function FacultyCourseNotesScreen() {
           contentContainerStyle={[moduleStyles.content, listScrollPad]}
           contentInsetAdjustmentBehavior="never"
           automaticallyAdjustContentInsets={false}
+          keyboardShouldPersistTaps="always"
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
               onRefresh={() => {
                 setRefreshing(true)
-                load().finally(() => setRefreshing(false))
+                load()
+                  .catch((err) =>
+                    setError(err instanceof ApiError ? err.message : "Could not refresh course notes."),
+                  )
+                  .finally(() => setRefreshing(false))
               }}
             />
           }
@@ -327,9 +486,13 @@ export function FacultyCourseNotesScreen() {
           {tab === "all" ? (
             filteredNotes.length === 0 ? (
               <FacultyEmptyState
-                icon="document-text-outline"
-                title="No course notes"
-                body="Create a note for your students. Assign a topic to organize content by module section."
+                icon={search.trim() ? "search-outline" : "document-text-outline"}
+                title={search.trim() ? "No matches" : "No course notes"}
+                body={
+                  search.trim()
+                    ? "Try a different search."
+                    : "Create a note for your students. Assign a topic to organize content by module section."
+                }
               />
             ) : (
               <View style={localStyles.list}>
@@ -351,7 +514,7 @@ export function FacultyCourseNotesScreen() {
               <FacultyEmptyState
                 icon="folder-outline"
                 title="No topics yet"
-                body="Topics appear when you assign them on notes under All Notes."
+                body="Topics appear when you assign them on notes under All."
               />
             ) : (
               <>
@@ -369,10 +532,14 @@ export function FacultyCourseNotesScreen() {
                       <View style={localStyles.cardCopy}>
                         <Text style={[type.bodyEmphasis, { color: native.label }]}>{row.name}</Text>
                         <Text style={[type.caption, { color: native.secondaryLabel }]}>
-                          {row.note_count ?? 0} notes
+                          {row.note_count === 1 ? "1 note" : `${row.note_count ?? 0} notes`}
                         </Text>
                       </View>
-                      <Switch value={enabled} onValueChange={(value) => void toggleTopic(row.name, topicSession, value)} />
+                      <Switch
+                        value={enabled}
+                        onValueChange={(value) => void toggleTopic(row.name, topicSession, value)}
+                        accessibilityLabel={`${row.name} available`}
+                      />
                     </View>
                   )
                 })}
@@ -413,16 +580,30 @@ export function FacultyCourseNotesScreen() {
         </ScrollView>
       )}
 
-      <Modal visible={editorOpen} animationType="slide" presentationStyle="pageSheet">
+      <Modal
+        visible={editorOpen}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={requestCloseEditor}
+      >
         <View style={[localStyles.editorRoot, { backgroundColor: native.groupedBackground }]}>
           <View style={[localStyles.editorHeader, { borderBottomColor: native.separator }]}>
-            <Pressable onPress={() => setEditorOpen(false)}>
+            <Pressable
+              onPress={requestCloseEditor}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel"
+            >
               <Text style={[type.bodyEmphasis, { color: tokens.accent }]}>Cancel</Text>
             </Pressable>
-            <Text style={[type.sheetTitle, { color: native.label }]}>
+            <Text style={[type.sheetTitle, { color: native.label }]} accessibilityRole="header">
               {editing ? "Edit note" : "New note"}
             </Text>
-            <Pressable onPress={() => void saveNote()} disabled={saving || loadingEditor}>
+            <Pressable
+              onPress={() => void saveNote()}
+              disabled={saving || loadingEditor}
+              accessibilityRole="button"
+              accessibilityLabel="Save"
+            >
               <Text style={[type.bodyEmphasis, { color: tokens.accent }]}>{saving ? "…" : "Save"}</Text>
             </Pressable>
           </View>
@@ -436,16 +617,27 @@ export function FacultyCourseNotesScreen() {
               value={title}
               onChangeText={setTitle}
               placeholder="Title"
+              accessibilityLabel="Title"
               placeholderTextColor={native.tertiaryLabel}
               style={[localStyles.input, { color: native.label, borderColor: native.separator }]}
             />
             <NativeSelect
               placeholder="Topic"
-              value={topic}
+              value={topicMode === "new" ? NEW_TOPIC_VALUE : topic}
               options={topicOptions}
-              onChange={setTopic}
-              disabled={topicOptions.length === 0}
+              onChange={handleTopicChange}
             />
+            {topicMode === "new" ? (
+              <TextInput
+                value={customTopic}
+                onChangeText={setCustomTopic}
+                placeholder="New topic name"
+                accessibilityLabel="New topic name"
+                placeholderTextColor={native.tertiaryLabel}
+                autoFocus
+                style={[localStyles.input, { color: native.label, borderColor: native.separator }]}
+              />
+            ) : null}
             <NativeSelect
               placeholder="Section"
               value={sessionCode}
@@ -454,15 +646,26 @@ export function FacultyCourseNotesScreen() {
             />
             <View style={localStyles.publishRow}>
               <Text style={[type.body, { color: native.label }]}>Published</Text>
-              <Switch value={isPublished} onValueChange={setIsPublished} />
+              <Switch
+                value={isPublished}
+                onValueChange={setIsPublished}
+                accessibilityLabel="Published"
+              />
             </View>
-            <Pressable onPress={() => setShowPreview((value) => !value)} style={localStyles.previewToggle}>
+            <Pressable
+              onPress={() => setShowPreview((value) => !value)}
+              accessibilityRole="button"
+              accessibilityLabel={showPreview ? "Hide student preview" : "Show student preview"}
+              style={localStyles.previewToggle}
+            >
               <Text style={[type.bodyEmphasis, { color: tokens.accent }]}>
                 {showPreview ? "Hide student preview" : "Show student preview"}
               </Text>
               <Ionicons name={showPreview ? "chevron-up" : "chevron-down"} size={18} color={tokens.accent} />
             </Pressable>
-            {showPreview ? <MarkdownNotePreview markdown={bodyText} minHeight={160} /> : null}
+            {showPreview ? (
+              <CourseNoteContentPreview bodyText={bodyText} workspace={inkWorkspace} />
+            ) : null}
             <View style={[localStyles.segmentTrack, { backgroundColor: native.fill }]}>
               <Pressable
                 style={[
@@ -470,6 +673,9 @@ export function FacultyCourseNotesScreen() {
                   contentTab === "typed" && [localStyles.segmentBtnActive, { backgroundColor: native.secondaryGrouped }],
                 ]}
                 onPress={() => setContentTab("typed")}
+                accessibilityRole="button"
+                accessibilityState={{ selected: contentTab === "typed" }}
+                accessibilityLabel="Typed"
               >
                 <Text
                   style={[
@@ -487,6 +693,9 @@ export function FacultyCourseNotesScreen() {
                   contentTab === "ink" && [localStyles.segmentBtnActive, { backgroundColor: native.secondaryGrouped }],
                 ]}
                 onPress={() => setContentTab("ink")}
+                accessibilityRole="button"
+                accessibilityState={{ selected: contentTab === "ink" }}
+                accessibilityLabel="Handwritten"
               >
                 <Text
                   style={[
@@ -503,7 +712,9 @@ export function FacultyCourseNotesScreen() {
               <TextInput
                 value={bodyText}
                 onChangeText={setBodyText}
-                placeholder="Note body (Markdown supported)"
+                placeholder="Markdown supported"
+                accessibilityLabel="Note body"
+                accessibilityHint="Markdown supported"
                 placeholderTextColor={native.tertiaryLabel}
                 multiline
                 textAlignVertical="top"
@@ -513,7 +724,12 @@ export function FacultyCourseNotesScreen() {
               <CircuitWorkspaceEditor workspace={inkWorkspace} onChange={setInkWorkspace} />
             )}
             {editing ? (
-              <Pressable onPress={deleteNoteFromEditor} style={localStyles.deleteLink}>
+              <Pressable
+                onPress={deleteNoteFromEditor}
+                accessibilityRole="button"
+                accessibilityLabel="Delete note"
+                style={localStyles.deleteLink}
+              >
                 <Text style={[type.bodyEmphasis, { color: tokens.danger }]}>Delete note</Text>
               </Pressable>
             ) : null}
@@ -524,10 +740,14 @@ export function FacultyCourseNotesScreen() {
       <Modal visible={previewOpen} animationType="slide" presentationStyle="pageSheet">
         <View style={[localStyles.editorRoot, { backgroundColor: native.groupedBackground }]}>
           <View style={[localStyles.editorHeader, { borderBottomColor: native.separator }]}>
-            <Pressable onPress={() => setPreviewOpen(false)}>
+            <Pressable
+              onPress={() => setPreviewOpen(false)}
+              accessibilityRole="button"
+              accessibilityLabel="Close"
+            >
               <Text style={[type.bodyEmphasis, { color: tokens.accent }]}>Close</Text>
             </Pressable>
-            <Text style={[type.sheetTitle, { color: native.label }]} numberOfLines={1}>
+            <Text style={[type.sheetTitle, { color: native.label }]} numberOfLines={1} accessibilityRole="header">
               Deleted note
             </Text>
             <View style={localStyles.headerSpacer} />
@@ -541,7 +761,10 @@ export function FacultyCourseNotesScreen() {
                 {previewNote.topic ? (
                   <Text style={[type.caption, { color: native.secondaryLabel }]}>{previewNote.topic}</Text>
                 ) : null}
-                <MarkdownNotePreview markdown={previewNote.bodyText} minHeight={200} />
+                <CourseNoteContentPreview
+                  bodyText={previewNote.bodyText}
+                  workspace={parseCircuitWorkspace(previewNote.inkWorkspace)}
+                />
               </>
             ) : null}
           </ScrollView>
@@ -586,7 +809,7 @@ const localStyles = StyleSheet.create({
   },
   publishRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   previewToggle: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  deleteLink: { marginTop: 8, alignSelf: "flex-start" },
+  deleteLink: { marginTop: 8, alignSelf: "flex-start", minHeight: 44, justifyContent: "center" },
   segmentTrack: {
     flexDirection: "row",
     borderRadius: 10,

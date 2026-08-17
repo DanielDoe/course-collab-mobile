@@ -1,0 +1,53 @@
+appId: com.coursecollab.app
+---
+- tapOn: "search"
+- tapOn: "Course Objectives and Student Learning Outcomes, Required"
+- takeScreenshot: syllabus-objectives-sheet
+- swipe:
+    direction: UP
+- takeScreenshot: syllabus-objectives-scrolled
+- tapOn: "Done"
+
+- tapOn: "Clear search"
+- tapOn: "Search syllabus sections…"
+- inputText: "Grading"
+- tapOn: "search"
+- tapOn:
+    text: ".*Grading.*"
+- takeScreenshot: syllabus-grading-sheet
+- tapOn: "Done"
+
+- tapOn: "Clear search"
+- tapOn: "Search syllabus sections…"
+- inputText: "Policies"
+- tapOn: "search"
+- tapOn:
+    text: ".*Policies.*"
+- takeScreenshot: syllabus-policies-sheet
+- swipe:
+    direction: UP
+- takeScreenshot: syllabus-policies-scrolled
+- tapOn: "Done"
+- tapOn: "Clear search"
+
+- tapOn: "Add syllabus section"
+- tapOn: "Section title"
+- eraseText
+- inputText: "QA Syllabus Section"
+- tapOn: "Save"
+- tapOn:
+    text: "Clear search"
+    optional: true
+- tapOn:
+    text: "QA Syllabus Section"
+    optional: true
+- tapOn:
+    text: "Additional Section"
+    optional: true
+- swipe:
+    direction: UP
+- tapOn:
+    text: ".*Delete section.*"
+- takeScreenshot: syllabus-delete-confirm
+- tapOn: "Delete"
+- takeScreenshot: syllabus-final

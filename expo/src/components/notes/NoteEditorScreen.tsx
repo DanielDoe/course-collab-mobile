@@ -510,11 +510,32 @@ export function NoteEditorScreen() {
           ]}
         >
           <Pressable
+            onPress={openShareSheet}
+            style={({ pressed }) => [
+              styles.footerBtn,
+              styles.shareFooterBtn,
+              {
+                borderColor: native.separator,
+                backgroundColor: tokens.accentSoft,
+                opacity: pressed ? NATIVE.pressedOpacity : 1,
+              },
+            ]}
+            accessibilityLabel={
+              shareCount > 0
+                ? `Share note with classmates, currently shared with ${shareCount}`
+                : "Share note with classmates"
+            }
+          >
+            <Ionicons name="share-outline" size={18} color={tokens.accent} />
+            <Text style={[type.bodyEmphasis, { color: tokens.accent }]}>
+              {shareCount > 0 ? `Share · ${shareCount}` : "Share"}
+            </Text>
+          </Pressable>
+          <Pressable
             onPress={confirmDelete}
             style={({ pressed }) => [
               styles.footerBtn,
               styles.deleteBtn,
-              styles.footerBtnFull,
               { borderColor: native.separator, opacity: pressed ? NATIVE.pressedOpacity : 1 },
             ]}
             accessibilityLabel="Delete note"
@@ -687,7 +708,9 @@ const styles = StyleSheet.create({
     borderRadius: NATIVE.sectionRadius,
     minHeight: 48,
   },
-  footerBtnFull: { maxWidth: 220, alignSelf: "center" },
+  shareFooterBtn: {
+    borderWidth: StyleSheet.hairlineWidth,
+  },
   deleteBtn: {
     borderWidth: StyleSheet.hairlineWidth,
     backgroundColor: "transparent",

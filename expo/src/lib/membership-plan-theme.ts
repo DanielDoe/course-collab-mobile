@@ -70,7 +70,8 @@ export function membershipTierHeroCardStyle(
   const border = blendHex(badge.border, tokens.accentDark, 0.78)
   const onLightFill = tier === "Trailblazer"
   const title = onLightFill ? badge.ink : "#FFFFFF"
-  const muted = onLightFill ? "rgba(74, 46, 10, 0.72)" : "rgba(255, 255, 255, 0.78)"
+  const muted = onLightFill ? "rgba(74, 46, 10, 0.78)" : "rgba(255, 255, 255, 0.78)"
+  const exploreBtnOnDark = tokens.isDark && !onLightFill
 
   const bubbles = membershipTierHeroBubbles(tier, tokens, plan.accent)
 
@@ -82,9 +83,13 @@ export function membershipTierHeroCardStyle(
     title,
     subtitle: muted,
     eyebrow: muted,
-    exploreBtnBg: tokens.surface,
+    exploreBtnBg: onLightFill
+      ? hexToRgba("#FFFFFF", tokens.isDark ? 0.62 : 0.92)
+      : exploreBtnOnDark
+        ? hexToRgba(tokens.text, 0.14)
+        : tokens.surface,
     exploreBtnBorder: hexToRgba(plan.accent, tokens.isDark ? 0.42 : 0.34),
-    exploreBtnText: onLightFill ? plan.accentDark : plan.accent,
+    exploreBtnText: onLightFill ? plan.accentDark : exploreBtnOnDark ? tokens.text : plan.accent,
     billingBtnBg: plan.accent,
     billingBtnText: "#FFFFFF",
     bubbles,

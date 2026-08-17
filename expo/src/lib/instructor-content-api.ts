@@ -345,11 +345,16 @@ export const instructorFlashcardsApi = {
     })
   },
 
-  permanentlyDeleteDeleted(scope: InstructorScope, payload: { deckIds?: number[]; cardIds?: number[] }) {
-    return instructorRequest<{ success: boolean }>("/api/instructor/flashcards/deleted", scope, {
-      method: "DELETE",
-      body: JSON.stringify(payload),
-    })
+  async permanentlyDeleteDeleted(scope: InstructorScope, payload: { deckIds?: number[]; cardIds?: number[] }) {
+    const res = await instructorRequest<{ success: boolean; deletedDecks?: number; deletedCards?: number }>(
+      "/api/instructor/flashcards/deleted",
+      scope,
+      { method: "DELETE", body: JSON.stringify(payload) },
+    )
+    if ((payload.deckIds?.length ?? 0) > 0 && res.deletedDecks === 0) {
+      throw new Error("Deck was not permanently deleted.")
+    }
+    return res
   },
 
   generateFromBank(

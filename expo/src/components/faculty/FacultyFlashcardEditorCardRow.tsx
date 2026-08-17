@@ -85,6 +85,7 @@ export function FacultyFlashcardEditorCardRow({
               value={editFront}
               onChangeText={onEditFrontChange}
               placeholder="Front"
+              accessibilityLabel="Card front"
               placeholderTextColor={native.tertiaryLabel}
               style={[styles.input, { color: native.label, borderColor: tokens.border, backgroundColor: native.fill }]}
               multiline
@@ -93,16 +94,27 @@ export function FacultyFlashcardEditorCardRow({
               value={editBack}
               onChangeText={onEditBackChange}
               placeholder="Back"
+              accessibilityLabel="Card back"
               placeholderTextColor={native.tertiaryLabel}
               style={[styles.input, { color: native.label, borderColor: tokens.border, backgroundColor: native.fill }]}
               multiline
             />
             <FlashcardDifficultyPicker value={editDifficulty} onChange={onEditDifficultyChange} />
             <View style={styles.editActions}>
-              <Pressable onPress={onCancelEdit} disabled={saving}>
+              <Pressable
+                onPress={onCancelEdit}
+                disabled={saving}
+                accessibilityRole="button"
+                accessibilityLabel="Cancel card edit"
+              >
                 <Text style={[type.bodyEmphasis, { color: native.secondaryLabel }]}>Cancel</Text>
               </Pressable>
-              <Pressable onPress={onSaveEdit} disabled={saving}>
+              <Pressable
+                onPress={onSaveEdit}
+                disabled={saving}
+                accessibilityRole="button"
+                accessibilityLabel="Save card"
+              >
                 <Text style={[type.bodyEmphasis, { color: FACULTY_FLASHCARD_COLOR.action }]}>
                   {saving ? "Saving…" : "Save card"}
                 </Text>
@@ -110,7 +122,12 @@ export function FacultyFlashcardEditorCardRow({
             </View>
           </View>
         ) : (
-          <Pressable style={styles.copy} onPress={onStartEdit} accessibilityRole="button">
+          <Pressable
+            style={styles.copy}
+            onPress={onStartEdit}
+            accessibilityRole="button"
+            accessibilityLabel={`Edit card, ${card.frontText}`}
+          >
             <View style={styles.titleRow}>
               <Text style={[type.bodyEmphasis, styles.title, { color: native.label }]} numberOfLines={2}>
                 {card.frontText}
@@ -131,8 +148,9 @@ export function FacultyFlashcardEditorCardRow({
             <Pressable
               onPress={onMoveUp}
               disabled={index === 0 || saving}
-              hitSlop={6}
+              accessibilityRole="button"
               accessibilityLabel="Move card up"
+              style={styles.iconHit}
             >
               <Ionicons
                 name="chevron-up"
@@ -143,8 +161,9 @@ export function FacultyFlashcardEditorCardRow({
             <Pressable
               onPress={onMoveDown}
               disabled={index >= total - 1 || saving}
-              hitSlop={6}
+              accessibilityRole="button"
               accessibilityLabel="Move card down"
+              style={styles.iconHit}
             >
               <Ionicons
                 name="chevron-down"
@@ -153,13 +172,24 @@ export function FacultyFlashcardEditorCardRow({
               />
             </Pressable>
             {showQuizAction ? (
-              <Pressable onPress={onToggleQuiz} hitSlop={6} accessibilityLabel="Edit quiz distractors">
+              <Pressable
+                onPress={onToggleQuiz}
+                accessibilityRole="button"
+                accessibilityLabel="Edit quiz distractors"
+                style={styles.iconHit}
+              >
                 <Text style={[type.caption, styles.quizBtn, { color: FACULTY_FLASHCARD_COLOR.link }]}>
                   {expanded ? "Quiz" : "Quiz"}
                 </Text>
               </Pressable>
             ) : null}
-            <Pressable onPress={onDelete} hitSlop={6} accessibilityLabel="Delete card" disabled={saving}>
+            <Pressable
+              onPress={onDelete}
+              accessibilityRole="button"
+              accessibilityLabel="Delete card"
+              disabled={saving}
+              style={styles.iconHit}
+            >
               <Ionicons name="trash-outline" size={18} color={tokens.danger} />
             </Pressable>
           </View>
@@ -226,8 +256,14 @@ const styles = StyleSheet.create({
   },
   actions: {
     alignItems: "center",
-    gap: 8,
+    gap: 4,
     paddingTop: 2,
+  },
+  iconHit: {
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
   },
   quizBtn: {
     fontWeight: "700",

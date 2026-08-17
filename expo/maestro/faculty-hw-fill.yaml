@@ -1,0 +1,10 @@
+appId: com.coursecollab.app
+---
+- tapOn:
+    id: "assessment-title"
+- inputText: "QA16H"
+- tapOn: "New homework"
+- tapOn: "AC Power"
+- tapOn: "Select all"
+- tapOn: "Submit Create homework (12)"
+- waitForAnimationToEnd

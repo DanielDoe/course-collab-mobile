@@ -61,7 +61,12 @@ export function FacultyRecommendationLetterCard({
             </Text>
           ) : null}
           <View style={styles.footerRow}>
-            {item.latest_pdf_url ? <FacultyStatusPill label="PDF on file" tone="warning" /> : null}
+            {(item.latest_pdf_url || item.final_letter_text?.trim()) ? (
+              <FacultyStatusPill
+                label={item.latest_pdf_url ? "PDF on file" : "Letter draft"}
+                tone="warning"
+              />
+            ) : null}
             <Text style={[type.caption, { color: FACULTY_RECOMMENDATIONS_COLOR.link, fontWeight: "700" }]}>
               Open letter →
             </Text>

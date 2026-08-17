@@ -25,16 +25,21 @@ import {
   FacultySheetField,
   FacultySheetSaveAction,
   FacultySheetSection,
+  FacultySheetErrorBanner,
   useSheetPlaceholderColor,
 
 } from "./faculty-collab-sheet-ui"
 import { SHEET_SECTION } from "./faculty-sheet-semantics"
+import { NativeSelect } from "../NativeSelect"
+import { yearSelectOptions } from "./FacultyNativePickers"
+import { FacultySummerCampDatePicker } from "./FacultySummerCampDatePicker"
 
 type Props = {
   visible: boolean
   mode: "add" | "edit"
   initial?: InstructorAcademicTerm | null
   submitting: boolean
+  error?: string
   onClose: () => void
   onSubmit: (form: AcademicTermNameForm) => void
 }
@@ -44,13 +49,13 @@ export function FacultyAcademicTermFormModal({
   mode,
   initial,
   submitting,
+  error,
   onClose,
   onSubmit}: Props) {
   const collabSheetStyles = useCollabSheetStyles()
   const native = useThemedNative()
   const tokens = useAppThemeTokens()
   const type = useNativeType()
-  const placeholderColor = useSheetPlaceholderColor()
   const insets = useSafeAreaInsets()
   const [form, setForm] = useState<AcademicTermNameForm>(defaultTermFormData())
 
@@ -79,15 +84,15 @@ export function FacultyAcademicTermFormModal({
           contentContainerStyle={[collabSheetStyles.scroll, { paddingBottom: insets.bottom + 24 }]}
           keyboardShouldPersistTaps="handled"
         >
+          {error ? <FacultySheetErrorBanner message={error} /> : null}
+
           <FacultySheetSection label="Term details" tone={SHEET_SECTION.edit}>
             <FacultySheetField label="Year">
-              <TextInput
-                style={collabSheetStyles.fieldInput}
+              <NativeSelect
+                placeholder="Year"
                 value={form.year}
-                onChangeText={(year) => setForm((prev) => ({ ...prev, year }))}
-                keyboardType="number-pad"
-                placeholder="2026"
-                placeholderTextColor={placeholderColor}
+                options={yearSelectOptions(form.year)}
+                onChange={(year) => setForm((prev) => ({ ...prev, year }))}
               />
             </FacultySheetField>
 
@@ -107,6 +112,9 @@ export function FacultyAcademicTermFormModal({
                         },
                       ]}
                       onPress={() => setForm((prev) => ({ ...prev, term }))}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Term ${term}`}
+                      accessibilityState={{ selected: active }}
                     >
                       <View style={[styles.termChipIcon, { backgroundColor: season.thumb.fill }]}>
                         <Ionicons name={season.icon} size={14} color={season.thumb.icon} />
@@ -126,24 +134,18 @@ export function FacultyAcademicTermFormModal({
             </FacultySheetField>
 
             <FacultySheetField label="Start date">
-              <TextInput
-                style={collabSheetStyles.fieldInput}
+              <FacultySummerCampDatePicker
                 value={form.start_date}
-                onChangeText={(start_date) => setForm((prev) => ({ ...prev, start_date }))}
-                placeholder="YYYY-MM-DD"
-                placeholderTextColor={placeholderColor}
-                autoCapitalize="none"
+                onChange={(start_date) => setForm((prev) => ({ ...prev, start_date }))}
+                accessibilityLabel="Start date"
               />
             </FacultySheetField>
 
             <FacultySheetField label="End date">
-              <TextInput
-                style={collabSheetStyles.fieldInput}
+              <FacultySummerCampDatePicker
                 value={form.end_date}
-                onChangeText={(end_date) => setForm((prev) => ({ ...prev, end_date }))}
-                placeholder="YYYY-MM-DD"
-                placeholderTextColor={placeholderColor}
-                autoCapitalize="none"
+                onChange={(end_date) => setForm((prev) => ({ ...prev, end_date }))}
+                accessibilityLabel="End date"
               />
             </FacultySheetField>
           </FacultySheetSection>
@@ -212,6 +214,10 @@ export function FacultySectionFormModal({
                 placeholder="e.g. P01"
                 placeholderTextColor={placeholderColor}
                 autoCapitalize="characters"
+                autoCorrect={false}
+                keyboardType="ascii-capable"
+                accessibilityLabel="Section code"
+                testID="section-code"
               />
             </FacultySheetField>
 
@@ -223,6 +229,7 @@ export function FacultySectionFormModal({
                 placeholder="Optional description"
                 placeholderTextColor={placeholderColor}
                 multiline
+                accessibilityLabel="Section description"
               />
             </FacultySheetField>
           </FacultySheetSection>

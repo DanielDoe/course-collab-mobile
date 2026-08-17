@@ -1,0 +1,20 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Summer Camp 2026, Published"
+- extendedWaitUntil:
+    visible: "Summer program|Done"
+    timeout: 12000
+- scrollUntilVisible:
+    element: "Add track"
+    direction: DOWN
+    timeout: 8000
+- takeScreenshot: summer-camp-program-tracks
+- tapOn: "Add track"
+- extendedWaitUntil:
+    visible: "New training track|Done"
+    timeout: 10000
+- tapOn: "Create"
+- takeScreenshot: summer-camp-track-validation
+- tapOn: "Title"
+- inputText: "QA Track"
+- tapOn: "Done"

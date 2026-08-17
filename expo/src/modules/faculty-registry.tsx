@@ -20,7 +20,7 @@ import { FacultyOfficeHoursScreen } from "../components/faculty/FacultyOfficeHou
 import { FacultyStudentSupportScreen } from "../components/faculty/FacultyStudentSupportScreen"
 import { FacultyPlaygroundScreen } from "../components/faculty/FacultyPlaygroundScreen"
 import { FacultyPracticeScreen } from "../components/faculty/FacultyPracticeScreen"
-import { HelpCenterScreen } from "../components/support/HelpCenterScreen"
+import { FacultyHelpCenterScreen } from "../components/faculty/FacultyHelpCenterScreen"
 import { FacultySettingsHubScreen } from "../components/faculty/FacultySettingsHubScreen"
 import { FacultyProjectsScreen } from "../components/faculty/FacultyProjectsScreen"
 import { FacultyQuestionBankScreen } from "../components/faculty/FacultyQuestionBankScreen"
@@ -35,6 +35,7 @@ import { FacultySummerCampScreen } from "../components/faculty/FacultySummerCamp
 import { FacultySyllabusScreen } from "../components/faculty/FacultySyllabusScreen"
 import { FacultyTradeCenterScreen } from "../components/faculty/FacultyTradeCenterScreen"
 import { FacultyCourseSettingsScreen } from "../components/faculty/admin/FacultyCourseSettingsScreen"
+import { FacultyScheduleAdjustmentScreen } from "../components/faculty/admin/FacultyScheduleAdjustmentScreen"
 import { FacultyAssessmentGovernanceScreen } from "../components/faculty/admin/FacultyAssessmentGovernanceScreen"
 import { FacultyAssessmentDefaultsScreen } from "../components/faculty/admin/FacultyAssessmentDefaultsScreen"
 import { FacultyGradingPoliciesScreen } from "../components/faculty/admin/FacultyGradingPoliciesScreen"
@@ -45,7 +46,9 @@ import { FacultyTeamProjectPoliciesScreen } from "../components/faculty/admin/Fa
 import { FacultyAiAssistantSettingsScreen } from "../components/faculty/admin/FacultyAiAssistantSettingsScreen"
 import { FacultyTeachingAssistantsScreen } from "../components/faculty/admin/FacultyTeachingAssistantsScreen"
 import { FacultySubmissionIssuesScreen } from "../components/faculty/admin/FacultySubmissionIssuesScreen"
+import { FacultySupportFormScreen } from "../components/faculty/FacultySupportFormScreen"
 import { FacultyCoraScreen } from "../components/faculty/cora/FacultyCoraScreen"
+import type { SupportFormKind } from "../lib/support-color-theme"
 import type { AssessmentModuleSegment, AssessmentType } from "../lib/faculty-assessment-utils"
 import { FACULTY_MODULE_META } from "../lib/faculty-module-meta"
 
@@ -77,6 +80,12 @@ function assessmentModule(
         initialSegment={parseAssessmentSegment(segment, defaultSegment)}
       />
     )
+  }
+}
+
+function supportFormModule(kind: SupportFormKind): ModuleRenderer {
+  return function FacultySupportFormModule() {
+    return <FacultySupportFormScreen kind={kind} />
   }
 }
 
@@ -132,6 +141,7 @@ export const FACULTY_MODULE_RENDERERS: Record<string, ModuleRenderer> = {
   "my-courses": FacultyMyCoursesScreen,
 
   "course-settings": FacultyCourseSettingsScreen,
+  "schedule-adjustment": FacultyScheduleAdjustmentScreen,
   "assessment-governance": FacultyAssessmentGovernanceScreen,
   "assessment-defaults": FacultyAssessmentDefaultsScreen,
   "grading-policies": FacultyGradingPoliciesScreen,
@@ -145,7 +155,10 @@ export const FACULTY_MODULE_RENDERERS: Record<string, ModuleRenderer> = {
 
   profile: FacultySettingsHubScreen,
   settings: FacultySettingsHubScreen,
-  "help-center": HelpCenterScreen,
+  "help-center": FacultyHelpCenterScreen,
+  "report-bug": supportFormModule("bug"),
+  "submit-ticket": supportFormModule("support"),
+  "feature-requests": supportFormModule("feature"),
   cora: FacultyCoraScreen,
 }
 

@@ -5,7 +5,7 @@ import { useRouter } from "expo-router"
 import { WebView } from "react-native-webview"
 import { ApiError } from "../../lib/api"
 import { instructorApi, type InstructorLecture } from "../../lib/instructor-api"
-import { buildAuthenticatedDeckSource } from "../../lib/lecture-deck-url"
+import { buildAuthenticatedDeckSource, mergeLectureDeckFromContent } from "../../lib/lecture-deck-url"
 import { useFacultyScope } from "../../hooks/useFacultyScope"
 import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
 import { LectureSlidePreviewToolbar } from "../lectures/LectureSlidePreviewToolbar"
@@ -42,7 +42,12 @@ export function FacultyLectureSlidePreviewScreen({ lectureId }: Props) {
         setLecture(null)
         return
       }
-      setLecture(match)
+      try {
+        const content = await instructorApi.getLectureContent(scope, lectureId)
+        setLecture(mergeLectureDeckFromContent(match, content))
+      } catch {
+        setLecture(match)
+      }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not load lecture.")
       setLecture(null)

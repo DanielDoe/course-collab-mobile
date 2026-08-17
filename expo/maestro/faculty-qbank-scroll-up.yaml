@@ -1,0 +1,13 @@
+appId: com.coursecollab.app
+---
+- scrollUntilVisible:
+    element: "Question Bank"
+    direction: UP
+    timeout: 20000
+- tapOn: "Question Bank"
+- tapOn:
+    text: "Close menu"
+    optional: true
+- extendedWaitUntil:
+    visible: "Question Bank|Search questions|Create question"
+    timeout: 25000

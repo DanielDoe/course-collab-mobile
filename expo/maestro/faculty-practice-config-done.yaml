@@ -1,0 +1,14 @@
+appId: com.coursecollab.app
+---
+- tapOn: "ECE2202"
+- tapOn: "BETA"
+- tapOn: "All sections"
+- tapOn: "Done"
+- extendedWaitUntil:
+    visible: "Search topics…"
+    timeout: 8000
+- tapOn: "Students"
+- extendedWaitUntil:
+    visible: "Search students…"
+    timeout: 10000
+- takeScreenshot: practice-students

@@ -8,6 +8,8 @@ import {
   Text,
   View} from "react-native"
 import { Ionicons } from "@/components/icons/AppIcon"
+import { useRouter } from "expo-router"
+import { AppAlert } from "../../lib/app-alert"
 import { ApiError } from "../../lib/api"
 import { instructorApi, type InstructorGroup, type InstructorSession } from "../../lib/instructor-api"
 import { useFacultyScope } from "../../hooks/useFacultyScope"
@@ -35,13 +37,12 @@ type MenuTab = "all" | "pending" | "approved" | "rejected" | "deleted"
 const MENU_TABS: Array<{
   id: MenuTab
   label: string
-  icon: keyof typeof Ionicons.glyphMap
 }> = [
-  { id: "all", label: "All", icon: "layers-outline" },
-  { id: "pending", label: "Pending", icon: "time-outline" },
-  { id: "approved", label: "Approved", icon: "checkmark-circle-outline" },
-  { id: "rejected", label: "Rejected", icon: "close-circle-outline" },
-  { id: "deleted", label: "Deleted", icon: "trash-outline" },
+  { id: "all", label: "All" },
+  { id: "pending", label: "Queue" },
+  { id: "approved", label: "Active" },
+  { id: "rejected", label: "Denied" },
+  { id: "deleted", label: "Trash" },
 ]
 
 function isPendingGroup(group: InstructorGroup): boolean {
@@ -59,10 +60,11 @@ function tabMatches(group: InstructorGroup, tab: MenuTab): boolean {
 }
 
 export function FacultyGroupsScreen() {
-  const { listScrollPad } = useFacultyStickyHeaderScrollLayout()
+  const { listScrollPad } = useFacultyStickyHeaderScrollLayout({ extraBottom: 88 })
   const tokens = useAppThemeTokens()
   const styles = useFacultyModuleStyles()
   const type = useNativeType()
+  const router = useRouter()
   const { scope, ready } = useFacultyScope()
 
   const [menu, setMenu] = useState<MenuTab>("pending")
@@ -81,13 +83,15 @@ export function FacultyGroupsScreen() {
   const [projectCreateOpen, setProjectCreateOpen] = useState(false)
   const [selected, setSelected] = useState<InstructorGroup | null>(null)
 
-  const sessionOptions: FacultyFilterOption[] = useMemo(
-    () => [
-      { value: "all", label: "All sections" },
-      ...sessions.map((s) => ({ value: s.code, label: s.code })),
-    ],
-    [sessions],
-  )
+  const sessionOptions: FacultyFilterOption[] = useMemo(() => {
+    const seen = new Set<string>()
+    const unique = sessions.filter((s) => {
+      if (seen.has(s.code)) return false
+      seen.add(s.code)
+      return true
+    })
+    return [{ value: "all", label: "All sections" }, ...unique.map((s) => ({ value: s.code, label: s.code }))]
+  }, [sessions])
 
   const allGroups = useMemo(() => [...activeGroups, ...deletedGroups], [activeGroups, deletedGroups])
 
@@ -194,7 +198,7 @@ export function FacultyGroupsScreen() {
   return (
     <View style={styles.root}>
       <FacultyModuleStickyHeader>
-        <FacultyModuleTabBar tabs={tabItems} tab={menu} onChange={setMenu} scrollable />
+        <FacultyModuleTabBar tabs={tabItems} tab={menu} onChange={setMenu} scrollable={false} />
 
         <FacultySearchToolbar
           value={search}
@@ -230,6 +234,8 @@ export function FacultyGroupsScreen() {
               },
             ]}
             onPress={() => setMenu("pending")}
+            accessibilityRole="button"
+            accessibilityLabel={`${tabCounts.pending} group${tabCounts.pending === 1 ? "" : "s"} awaiting review`}
           >
             <Ionicons name="time-outline" size={18} color={FACULTY_COLLAB_COLOR.nudge} />
             <Text style={[type.caption, localStyles.nudgeText, { color: FACULTY_COLLAB_COLOR.nudge }]}>
@@ -263,16 +269,18 @@ export function FacultyGroupsScreen() {
           <ActivityIndicator color={FACULTY_COLLAB_COLOR.link} style={{ marginTop: 32 }} />
         ) : filtered.length === 0 ? (
           <FacultyEmptyState
-            icon="people-circle-outline"
-            title="No groups"
+            icon={search.trim() ? "search-outline" : "people-circle-outline"}
+            title={search.trim() ? "No matches" : "No groups"}
             body={
-              menu === "pending"
-                ? "No groups waiting for approval."
-                : menu === "rejected"
-                  ? "No rejected groups."
-                  : menu === "deleted"
-                    ? "No deleted groups."
-                    : "Use + in the search bar to create a group for a student, or wait for student submissions."
+              search.trim()
+                ? "Try a different search or reset your filters."
+                : menu === "pending"
+                  ? "No groups waiting for approval."
+                  : menu === "rejected"
+                    ? "No rejected groups."
+                    : menu === "deleted"
+                      ? "No deleted groups."
+                      : "Use + in the search bar to create a group for a student, or wait for student submissions."
             }
           />
         ) : (
@@ -290,9 +298,17 @@ export function FacultyGroupsScreen() {
                   })
                 }
                 onReject={() =>
-                  void runAction(async () => {
-                    await instructorApi.rejectGroup(scope!, group.id)
-                  })
+                  AppAlert.alert("Reject group?", `“${group.name}” will be denied and students can form a new group.`, [
+                    { text: "Cancel", style: "cancel" },
+                    {
+                      text: "Reject",
+                      style: "destructive",
+                      onPress: () =>
+                        void runAction(async () => {
+                          await instructorApi.rejectGroup(scope!, group.id)
+                        }),
+                    },
+                  ])
                 }
               />
             ))}
@@ -312,9 +328,17 @@ export function FacultyGroupsScreen() {
           })
         }
         onReject={(g) =>
-          void runAction(async () => {
-            await instructorApi.rejectGroup(scope!, g.id)
-          })
+          AppAlert.alert("Reject group?", `“${g.name}” will be denied and students can form a new group.`, [
+            { text: "Cancel", style: "cancel" },
+            {
+              text: "Reject",
+              style: "destructive",
+              onPress: () =>
+                void runAction(async () => {
+                  await instructorApi.rejectGroup(scope!, g.id)
+                }),
+            },
+          ])
         }
         onDelete={(g) =>
           void runAction(async () => {
@@ -354,7 +378,10 @@ export function FacultyGroupsScreen() {
         visible={projectCreateOpen}
         scope={scope}
         onClose={() => setProjectCreateOpen(false)}
-        onCreated={() => void load()}
+        onCreated={() => {
+          setProjectCreateOpen(false)
+          router.push("/module/projects")
+        }}
       />
     </View>
   )

@@ -12,6 +12,7 @@ import { TabbedModuleLayout } from "../theme/TabbedModuleLayout"
 import { EmptyBlock } from "../rewards/rewards-shared"
 import { COURSE_INFO_ACTION, COURSE_INFO_OFFICE_HOURS } from "../../lib/course-info-color-theme"
 import { InfoSectionCard, StatusBadge, statusTone, useCourseInfoTheme } from "./course-info-shared"
+import { FacultySummerCampDatePicker } from "../faculty/FacultySummerCampDatePicker"
 import { useNotificationModuleRefresh } from "../../lib/notifications/notification-events"
 
 function useStudentSession(): StudentSession | null {
@@ -149,6 +150,7 @@ export function OfficeHoursScreen() {
         <TextInput
           style={[styles.input, { borderColor: native.separator, color: native.label, backgroundColor: native.fill }]}
           placeholder="Topic *"
+          accessibilityLabel="Topic"
           placeholderTextColor={native.tertiaryLabel}
           value={topic}
           onChangeText={setTopic}
@@ -156,6 +158,7 @@ export function OfficeHoursScreen() {
         <TextInput
           style={[styles.input, { borderColor: native.separator, color: native.label, backgroundColor: native.fill }]}
           placeholder="Area of concern"
+          accessibilityLabel="Area of concern"
           placeholderTextColor={native.tertiaryLabel}
           value={area}
           onChangeText={setArea}
@@ -163,18 +166,17 @@ export function OfficeHoursScreen() {
         <TextInput
           style={[styles.input, styles.textArea, { borderColor: native.separator, color: native.label, backgroundColor: native.fill }]}
           placeholder="Description"
+          accessibilityLabel="Description"
           placeholderTextColor={native.tertiaryLabel}
           value={description}
           onChangeText={setDescription}
           multiline
         />
-        <TextInput
-          style={[styles.input, { borderColor: native.separator, color: native.label, backgroundColor: native.fill }]}
-          placeholder="Preferred date (YYYY-MM-DD)"
-          placeholderTextColor={native.tertiaryLabel}
+        <Text style={[type.sectionHeader, styles.label]}>Preferred date</Text>
+        <FacultySummerCampDatePicker
           value={preferredDate}
-          onChangeText={setPreferredDate}
-          autoCapitalize="none"
+          onChange={setPreferredDate}
+          accessibilityLabel="Preferred date"
         />
         <Text style={[type.sectionHeader, styles.label]}>Priority</Text>
         <View style={styles.priorityRow}>

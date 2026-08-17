@@ -116,9 +116,9 @@ export const MEMBERSHIP_FEATURE_MATRIX: MembershipFeatureRow[] = [
     id: "cora",
     label: "Cora AI tutor",
     icon: "chatbubble-ellipses-outline",
-    scholar: false,
-    explorer: "1,000 credits / week",
-    trailblazer: "Unlimited",
+    scholar: "250 credits / month",
+    explorer: "3,000 credits / month",
+    trailblazer: "7,500 credits / month",
   },
   {
     id: "notetaker",

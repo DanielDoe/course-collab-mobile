@@ -173,6 +173,8 @@ export function FacultyPracticeStudentReportModal({ visible, scope, student, onC
               <Pressable
                 style={[styles.retryBtn, { backgroundColor: FACULTY_PRACTICE_COLOR.action }]}
                 onPress={() => void load()}
+                accessibilityRole="button"
+                accessibilityLabel="Try again"
               >
                 <Text style={[type.bodyEmphasis, { color: "#ffffff", fontSize: 14 }]}>Try again</Text>
               </Pressable>

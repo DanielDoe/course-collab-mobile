@@ -124,8 +124,8 @@ const styles = StyleSheet.create({
   bannerEyebrowText: { letterSpacing: 0.2, fontWeight: "700" },
   bannerBody: { lineHeight: 18, fontWeight: "500" },
   closeBtn: {
-    width: 32,
-    height: 32,
+    width: 44,
+    height: 44,
     borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",

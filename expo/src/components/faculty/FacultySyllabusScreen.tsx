@@ -69,7 +69,7 @@ function SyllabusStatusChip({
   )
 }
 
-const FOOTER_BAR_HEIGHT = 58
+const FOOTER_BAR_HEIGHT = 132
 
 export function FacultySyllabusScreen() {
   const insets = useSafeAreaInsets()
@@ -99,16 +99,24 @@ export function FacultySyllabusScreen() {
     setCanEdit(data.canEdit ?? true)
   }, [scope])
 
+  const courseId = scope?.courseId
+
   useEffect(() => {
     if (!ready) {
       setLoading(false)
       return
     }
+    setSyllabus(null)
+    setCanEdit(false)
+    setSelectedSection(null)
+    setEditorSection(null)
+    setSearch("")
+    setError("")
     setLoading(true)
     load()
       .catch((err) => setError(err instanceof ApiError ? err.message : "Could not load syllabus."))
       .finally(() => setLoading(false))
-  }, [ready, load])
+  }, [ready, load, courseId])
 
   const sections = useMemo(
     () => [...(syllabus?.sections ?? [])].sort((a, b) => a.order - b.order),
@@ -182,6 +190,7 @@ export function FacultySyllabusScreen() {
 
   function addSection() {
     if (!syllabus || !canEdit) return
+    setSearch("")
     const id = `custom-${Date.now()}`
     const next: SyllabusSection = {
       sectionId: id,
@@ -310,7 +319,16 @@ export function FacultySyllabusScreen() {
                     key={section.sectionId}
                     style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
                     onPress={() => setSelectedSection(section)}
-                    disabled={!canEdit}
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      [
+                        displayTitle,
+                        !section.isVisible ? "Hidden" : null,
+                        section.isRequired ? "Required" : null,
+                      ]
+                        .filter(Boolean)
+                        .join(", ")
+                    }
                   >
                     <View style={localStyles.sectionRow}>
                       <SolidListThumbTile thumb={thumb} icon="document-text-outline" size="compact" />
@@ -338,7 +356,7 @@ export function FacultySyllabusScreen() {
                           </Text>
                         ) : (
                           <Text style={[type.caption, localStyles.sectionEmpty, { color: native.tertiaryLabel }]}>
-                            Tap to edit content
+                            {canEdit ? "Tap to edit content" : "Tap to view section"}
                           </Text>
                         )}
                       </View>
@@ -361,13 +379,21 @@ export function FacultySyllabusScreen() {
             },
           ]}
         >
-          <Pressable style={[styles.footerBtn, styles.draftBtn]} disabled={saving} onPress={() => void save()}>
+          <Pressable
+            style={[styles.footerBtn, styles.draftBtn]}
+            disabled={saving}
+            onPress={() => void save()}
+            accessibilityRole="button"
+            accessibilityLabel="Save draft"
+          >
             <Text style={styles.footerBtnText}>{saving ? "Saving…" : "Save draft"}</Text>
           </Pressable>
           <Pressable
             style={[styles.footerBtn, localStyles.publishBtn]}
             disabled={saving}
             onPress={() => void save("publish")}
+            accessibilityRole="button"
+            accessibilityLabel="Publish syllabus"
           >
             <Ionicons name="cloud-upload-outline" size={18} color={COURSE_INFO_ACTION.ink} />
             <Text style={localStyles.publishBtnText}>Publish</Text>
@@ -378,6 +404,7 @@ export function FacultySyllabusScreen() {
       <FacultySyllabusSectionActionSheet
         visible={selectedSection != null}
         section={selectedSection}
+        canEdit={canEdit}
         onClose={() => setSelectedSection(null)}
         onEdit={(section) => {
           setEditorSection(section)

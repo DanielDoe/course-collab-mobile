@@ -1,6 +1,6 @@
 import { FacultySummerCampScreen } from "./FacultySummerCampScreen"
 
-/** Legacy campers route — opens the unified summer camp hub on the Campers tab. */
+/** Students-group Campers surface — campers + inbox only (no Programs/Tracks). */
 export function FacultyCampersScreen() {
-  return <FacultySummerCampScreen initialTab="campers" />
+  return <FacultySummerCampScreen initialTab="campers" visibleTabs={["campers", "requests"]} />
 }

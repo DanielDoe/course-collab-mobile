@@ -38,6 +38,18 @@ export type CodebenchProgressSnapshot = {
   analysis: CodebenchAnalysis | null
   learningPlan: CodebenchLearningPlan | null
   hasCodeSample: boolean
+  /** Non-empty when one or more core requests failed — safe to surface as a retryable error. */
+  error: string
+}
+
+/** Human-readable message for the core CodeBench requests that failed to load. */
+export function codebenchFailureMessage(failed: string[]): string {
+  if (failed.length === 0) return ""
+  const list =
+    failed.length === 1
+      ? failed[0]
+      : `${failed.slice(0, -1).join(", ")} and ${failed[failed.length - 1]}`
+  return `Couldn't load your CodeBench ${list}. Check your connection and try again.`
 }
 
 function normalizeStreak(raw: CodebenchStreak & Record<string, unknown>): CodebenchStreak {
@@ -117,15 +129,28 @@ async function loadInsights(session: StudentSession, code: string) {
 }
 
 export async function fetchCodebenchProgress(session: StudentSession): Promise<CodebenchProgressSnapshot> {
+  const failed: string[] = []
   const [streakRes, badgesRes, lbRes, subsRes, localXp, localCode] = await Promise.all([
-    codebenchApi.getStreak(session).catch(() => ({ streakDays: 0 })),
-    codebenchApi.getBadges(session).catch(() => ({ badges: {}, badgeDetails: {} })),
-    codebenchApi.getLeaderboard(session).catch(() => ({ leaderboard: [] })),
-    codebenchApi.getSubmissions(session).catch(() => ({
-      codeSubmissions: [],
-      practiceSubmissions: [],
-      dailyChallengeSubmissions: [],
-    })),
+    codebenchApi.getStreak(session).catch(() => {
+      failed.push("streak")
+      return { streakDays: 0 }
+    }),
+    codebenchApi.getBadges(session).catch(() => {
+      failed.push("badges")
+      return { badges: {}, badgeDetails: {} }
+    }),
+    codebenchApi.getLeaderboard(session).catch(() => {
+      failed.push("leaderboard")
+      return { leaderboard: [] }
+    }),
+    codebenchApi.getSubmissions(session).catch(() => {
+      failed.push("submissions")
+      return {
+        codeSubmissions: [],
+        practiceSubmissions: [],
+        dailyChallengeSubmissions: [],
+      }
+    }),
     loadCodebenchXp(),
     loadCodebenchLatestCode(),
   ])
@@ -155,5 +180,6 @@ export async function fetchCodebenchProgress(session: StudentSession): Promise<C
     analysis,
     learningPlan,
     hasCodeSample: Boolean(latestCode),
+    error: codebenchFailureMessage(failed),
   }
 }

@@ -1,0 +1,43 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Abigael Mokua, 1 enrollment"
+- extendedWaitUntil:
+    visible: "Camper profile|Done|Close"
+    timeout: 15000
+- takeScreenshot: summer-camp-camper-1
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn:
+    text: "Close"
+    optional: true
+- tapOn: "Aleaha, 1 enrollment"
+- extendedWaitUntil:
+    visible: "Camper profile|Done|Close"
+    timeout: 15000
+- takeScreenshot: summer-camp-camper-2
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn:
+    text: "Close"
+    optional: true
+- tapOn: "Search campers…"
+- inputText: "Aleaha"
+- tapOn: "Summer Camp"
+- takeScreenshot: summer-camp-camper-search
+- tapOn:
+    text: "Clear search"
+    optional: true
+- tapOn: "Add summer camper"
+- extendedWaitUntil:
+    visible: "Add camper|Done"
+    timeout: 10000
+- tapOn: "Create camper account"
+- takeScreenshot: summer-camp-camper-validation
+- tapOn: "Full name"
+- inputText: "QA Camper"
+- tapOn: "Camper"
+- tapOn: "Summer student"
+- tapOn: "Camper"
+- tapOn: "Done"

@@ -1,0 +1,6 @@
+appId: com.coursecollab.app
+---
+- tapOn: "OK"
+- tapOn:
+    point: "6%,8%"
+- waitForAnimationToEnd

@@ -109,17 +109,9 @@ export function gradeLetterStyle(
 
 export function gradesHeroGradient(isDark: boolean): [string, string, string] {
   if (isDark) {
-    return [
-      hexToRgba(GRADES_WARM.orange, 0.24),
-      hexToRgba(GRADES_WARM.red, 0.1),
-      hexToRgba(GRADES_WARM.gold, 0.14),
-    ]
+    return ["#3A2418", "#261910", "#1F1612"]
   }
-  return [
-    hexToRgba(GRADES_WARM.cream, 0.98),
-    "#FFFBF3",
-    hexToRgba(GRADES_WARM.gold, 0.22),
-  ]
+  return ["#FFF6E8", "#FFFBF3", "#F8EED8"]
 }
 
 export const GRADES_COMPARE_ABOVE = GRADES_WARM.gold

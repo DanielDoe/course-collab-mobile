@@ -1,0 +1,7 @@
+appId: com.coursecollab.app
+---
+- swipe:
+    start: 50%, 28%
+    end: 50%, 78%
+    duration: 500
+- waitForAnimationToEnd

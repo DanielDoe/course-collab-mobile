@@ -1,0 +1,7 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Close editor"
+- tapOn:
+    text: "Discard"
+    optional: true
+- waitForAnimationToEnd

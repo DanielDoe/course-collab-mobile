@@ -1,3 +1,4 @@
+import { COLOR_HUNT_COOL } from "./codebench-badge-theme"
 import { COLOR_HUNT } from "./flashcard-difficulty-theme"
 import type { SolidListThumb } from "./solid-list-thumb"
 import { SOLID_THUMB_LOCKED, solidListThumb } from "./solid-list-thumb"
@@ -20,6 +21,6 @@ export function lectureStatusAccent(kind: LectureCardKind, thumb: LectureSolidTh
     case "locked":
       return thumb.label
     default:
-      return thumb.label
+      return COLOR_HUNT_COOL.cyan
   }
 }

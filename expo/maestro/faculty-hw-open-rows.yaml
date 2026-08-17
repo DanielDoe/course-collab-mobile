@@ -1,0 +1,17 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Manage Homework"
+- waitForAnimationToEnd
+- tapOn: "Clear search"
+- waitForAnimationToEnd
+- tapOn: "ECE 2202 - Homework 7"
+- waitForAnimationToEnd
+- tapOn: "Done"
+- waitForAnimationToEnd
+- tapOn: "ECE 2202 - Homework 6"
+- waitForAnimationToEnd
+- tapOn: "Delete"
+- waitForAnimationToEnd
+- tapOn: "Cancel"
+- waitForAnimationToEnd
+- tapOn: "Done"

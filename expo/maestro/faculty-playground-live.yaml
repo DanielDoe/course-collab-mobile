@@ -1,0 +1,33 @@
+appId: com.coursecollab.app
+---
+- tapOn:
+    text: ".*Playground Set 2.*"
+    optional: true
+- extendedWaitUntil:
+    visible: "Leaderboard|Controls|Questions|Sessions|Question bank"
+    timeout: 12000
+- takeScreenshot: playground-p30
+- tapOn:
+    text: "Controls"
+    optional: true
+- takeScreenshot: playground-p30-controls
+- scrollUntilVisible:
+    element:
+      text: "End session"
+    direction: DOWN
+    timeout: 8000
+- tapOn: "End session"
+- extendedWaitUntil:
+    visible: "End session?"
+    timeout: 8000
+- takeScreenshot: playground-p30-end
+- tapOn: "Cancel"
+- tapOn: "Reset session"
+- extendedWaitUntil:
+    visible: "Reset session?"
+    timeout: 8000
+- takeScreenshot: playground-p30-reset
+- tapOn: "Cancel"
+- tapOn: "Questions"
+- takeScreenshot: playground-p30-questions
+- tapOn: "Done"

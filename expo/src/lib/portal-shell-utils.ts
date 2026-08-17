@@ -19,8 +19,8 @@ export function getPortalScreenTitle(pathname: string, portal: LoginPortal): str
 export function portalSessionMeta(session: PortalSession): string {
   if (session.portal === "guest") {
     return session.guestAccessPurpose === "recommendation_letter"
-      ? "Guest · Recommendation letters"
-      : "Guest access"
+      ? "Career Member · Recommendation letters"
+      : "Career Member"
   }
   if (session.portal === "summer") {
     return session.studentProgramRole

@@ -18,6 +18,7 @@ import {
   playgroundSessionPhase,
   playgroundSessionStatusLabel,
   playgroundSessionStatusTone,
+  playgroundSessionSubtitle,
   stripQuestionPreview,
 } from "../../lib/faculty-playground-utils"
 import { APP_BUTTON_RADIUS } from "../../constants/app-button"
@@ -32,13 +33,16 @@ import {
   FacultySheetContainer,
   useCollabSheetStyles,
   FacultySheetChrome,
+  FacultySheetErrorBanner,
   FacultySheetNotice,
   FacultySheetStatChip,
   FacultySheetStatRow,
   FacultySheetSubmitButton,
 } from "./faculty-collab-sheet-ui"
 import { SHEET_METRIC } from "./faculty-sheet-semantics"
+import { FacultySignatureTabBar } from "./faculty-module-shell"
 import { useModuleTheme } from "../../lib/themed-module-shell"
+import { useSuppressModuleSearchDock } from "../../context/ModuleSearchDockContext"
 
 type Scope = { instructorId: number; courseId: number }
 
@@ -79,6 +83,8 @@ function ActionButton({
       ]}
       disabled={disabled}
       onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
     >
       <Ionicons name={icon} size={16} color={stylesByTone.text} />
       <Text style={[layoutStyles.actionBtnText, { color: stylesByTone.text }]}>{label}</Text>
@@ -91,6 +97,7 @@ export function FacultyPlaygroundSessionDetailModal({
   scope,
   onClose,
   onUpdated}: Props) {
+  useSuppressModuleSearchDock(session != null)
   const collabSheetStyles = useCollabSheetStyles()
   const { native, tokens, type } = useModuleTheme()
   const insets = useSafeAreaInsets()
@@ -109,6 +116,7 @@ export function FacultyPlaygroundSessionDetailModal({
   const [draftDuration, setDraftDuration] = useState(10)
   const [questionsDirty, setQuestionsDirty] = useState(false)
   const [savingQuestions, setSavingQuestions] = useState(false)
+  const [loadError, setLoadError] = useState("")
 
   const phase = session ? playgroundSessionPhase(session) : "ended"
   const label = session ? playgroundSessionLabel(session) : ""
@@ -132,13 +140,15 @@ export function FacultyPlaygroundSessionDetailModal({
           setLeaderboard(nextEntries)
           setLeaderboardStats(nextStats)
         }
+        if (!silent) setLoadError("")
         return nextEntries
-      } catch {
+      } catch (err) {
         if (!silent) {
           leaderboardFingerprintRef.current = ""
           setLeaderboard([])
           setLeaderboardStats(null)
           setPollLeaderboard(false)
+          setLoadError(err instanceof ApiError ? err.message : "Could not load the leaderboard.")
         }
         return []
       } finally {
@@ -156,8 +166,10 @@ export function FacultyPlaygroundSessionDetailModal({
       setQuestions(res.questions ?? [])
       setDraftDuration(res.session?.durationSec ?? session.duration_sec ?? 10)
       setQuestionsDirty(false)
-    } catch {
+      setLoadError("")
+    } catch (err) {
       setQuestions([])
+      setLoadError(err instanceof ApiError ? err.message : "Could not load session questions.")
     } finally {
       setQuestionsLoading(false)
     }
@@ -305,14 +317,20 @@ export function FacultyPlaygroundSessionDetailModal({
   }
 
   const tabOptions = useMemo(
-    (): Array<{ id: DetailTab; label: string; icon: keyof typeof Ionicons.glyphMap; badge?: number }> => [
+    () => [
       {
-        id: "leaderboard",
+        id: "leaderboard" as const,
         label: "Leaderboard",
-        icon: "podium-outline",
-        badge: leaderboard.length > 0 ? leaderboard.length : session?.participant_count},
-      { id: "controls", label: "Controls", icon: "settings-outline" },
-      { id: "questions", label: "Questions", icon: "list-outline" },
+        icon: "podium-outline" as const,
+        count:
+          leaderboard.length > 0
+            ? leaderboard.length
+            : session?.participant_count && session.participant_count > 0
+              ? session.participant_count
+              : undefined,
+      },
+      { id: "controls" as const, label: "Controls", icon: "settings-outline" as const },
+      { id: "questions" as const, label: "Questions", icon: "list-outline" as const },
     ],
     [leaderboard.length, session?.participant_count],
   )
@@ -325,7 +343,7 @@ export function FacultyPlaygroundSessionDetailModal({
         <FacultySheetChrome
           topInset={insets.top}
           title={label}
-          subtitle={session.session_code}
+          subtitle={playgroundSessionSubtitle(session)}
           onClose={onClose}
           rightSlot={
             <FacultyStatusPill
@@ -335,62 +353,13 @@ export function FacultyPlaygroundSessionDetailModal({
           }
         />
 
-        <View style={[layoutStyles.tabs, { backgroundColor: native.groupedBackground, borderBottomColor: native.separator }]}>
-          {tabOptions.map((option) => {
-            const active = tab === option.id
-            return (
-              <Pressable
-                key={option.id}
-                style={[
-                  layoutStyles.tab,
-                  { backgroundColor: native.fill },
-                  active && { backgroundColor: `${FACULTY_PLAYGROUND_COLOR.link}18` },
-                ]}
-                onPress={() => setTab(option.id)}
-              >
-                <Ionicons
-                  name={option.icon}
-                  size={15}
-                  color={active ? FACULTY_PLAYGROUND_COLOR.tabActive : native.secondaryLabel}
-                />
-                <Text
-                  style={[
-                    type.caption,
-                    layoutStyles.tabText,
-                    { color: native.secondaryLabel },
-                    active && { color: FACULTY_PLAYGROUND_COLOR.tabActive, fontWeight: "700" },
-                  ]}
-                >
-                  {option.label}
-                </Text>
-                {option.badge != null && option.badge > 0 ? (
-                  <View
-                    style={[
-                      layoutStyles.tabBadge,
-                      { backgroundColor: native.separator },
-                      active && { backgroundColor: FACULTY_PLAYGROUND_COLOR.tabActive },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        layoutStyles.tabBadgeText,
-                        { color: native.secondaryLabel },
-                        active && { color: "#ffffff" },
-                      ]}
-                    >
-                      {option.badge}
-                    </Text>
-                  </View>
-                ) : null}
-              </Pressable>
-            )
-          })}
-        </View>
+        <FacultySignatureTabBar tabs={tabOptions} tab={tab} onChange={setTab} scrollable={false} embedded />
 
         <ScrollView
           contentContainerStyle={[collabSheetStyles.scroll, { paddingBottom: insets.bottom + 24 }]}
           keyboardShouldPersistTaps="handled"
         >
+          {loadError ? <FacultySheetErrorBanner message={loadError} /> : null}
           {tab === "leaderboard" ? (
             <FacultyPlaygroundLeaderboard
               loading={leaderboardLoading}
@@ -422,6 +391,8 @@ export function FacultyPlaygroundSessionDetailModal({
                     <Pressable
                       style={[layoutStyles.shareBtn, { backgroundColor: FACULTY_PLAYGROUND_COLOR.link }]}
                       onPress={() => void sharePasscode()}
+                      accessibilityRole="button"
+                      accessibilityLabel="Share code"
                     >
                       <Ionicons name="share-outline" size={16} color="#ffffff" />
                       <Text style={layoutStyles.shareBtnText}>Share code</Text>
@@ -586,6 +557,8 @@ export function FacultyPlaygroundSessionDetailModal({
                         setDraftDuration((d) => Math.max(5, d - 5))
                         setQuestionsDirty(true)
                       }}
+                      accessibilityRole="button"
+                      accessibilityLabel="Decrease question timer"
                     >
                       <Ionicons name="remove" size={18} color={native.label} />
                     </Pressable>
@@ -598,6 +571,8 @@ export function FacultyPlaygroundSessionDetailModal({
                         setDraftDuration((d) => Math.min(60, d + 5))
                         setQuestionsDirty(true)
                       }}
+                      accessibilityRole="button"
+                      accessibilityLabel="Increase question timer"
                     >
                       <Ionicons name="add" size={18} color={native.label} />
                     </Pressable>
@@ -651,18 +626,24 @@ export function FacultyPlaygroundSessionDetailModal({
                         <Pressable
                           style={[layoutStyles.iconBtn, { backgroundColor: native.fill }]}
                           onPress={() => moveQuestion(index, -1)}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Move question ${index + 1} up`}
                         >
                           <Ionicons name="arrow-up" size={16} color={native.label} />
                         </Pressable>
                         <Pressable
                           style={[layoutStyles.iconBtn, { backgroundColor: native.fill }]}
                           onPress={() => moveQuestion(index, 1)}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Move question ${index + 1} down`}
                         >
                           <Ionicons name="arrow-down" size={16} color={native.label} />
                         </Pressable>
                         <Pressable
                           style={[layoutStyles.iconBtn, { backgroundColor: native.fill }]}
                           onPress={() => removeQuestion(index)}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Remove question ${index + 1}`}
                         >
                           <Ionicons name="trash-outline" size={16} color={FACULTY_PLAYGROUND_COLOR.danger} />
                         </Pressable>
@@ -690,32 +671,6 @@ export function FacultyPlaygroundSessionDetailModal({
 }
 
 const layoutStyles = StyleSheet.create({
-  tabs: {
-    flexDirection: "row",
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  tab: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    paddingVertical: 10,
-    borderRadius: 10,
-  },
-  tabText: { fontSize: 12, fontWeight: "700" },
-  tabBadge: {
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
-    paddingHorizontal: 5,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  tabBadgeText: { fontSize: 10, fontWeight: "600" },
   sectionGap: { gap: 16 },
   passcodeCard: {
     flexDirection: "row",

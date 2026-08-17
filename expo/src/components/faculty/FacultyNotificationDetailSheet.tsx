@@ -138,7 +138,7 @@ function createStyles(
       alignItems: "center",
       justifyContent: "center",
     },
-    aiLabel: { fontWeight: "700", letterSpacing: 0.2, textTransform: "uppercase" },
+    aiLabel: { fontWeight: "700", letterSpacing: 0.2 },
     aiText: { lineHeight: 23 },
     aiHint: {},
     messageCard: {

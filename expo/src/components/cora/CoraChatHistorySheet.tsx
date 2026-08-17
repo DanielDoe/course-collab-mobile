@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react"
+import { memo, useCallback, useEffect, useRef, useState } from "react"
 import { Animated, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, ActivityIndicator } from "react-native";
 import { AppAlert } from '../../lib/app-alert'
 import { Swipeable } from "react-native-gesture-handler"
@@ -111,7 +111,7 @@ function SwipeActionButton({
   )
 }
 
-function SwipeableHistoryRow({
+const SwipeableHistoryRow = memo(function SwipeableHistoryRow({
   thread,
   isActive,
   isLast,
@@ -148,6 +148,10 @@ function SwipeableHistoryRow({
   }
   const swipeRef = useRef<Swipeable>(null)
   const trayBackground = swipeTrayBackground(tokens.isDark)
+  const rowBg = isActive
+    ? hexToRgba(SN.accent, tokens.isDark ? 0.14 : 0.08)
+    : native.secondaryGrouped
+  const iconBg = isActive ? SN.accentSoft : hexToRgba(native.secondaryLabel, 0.1)
 
   const closeSwipe = useCallback(() => {
     swipeRef.current?.close()
@@ -235,55 +239,68 @@ function SwipeableHistoryRow({
       <Pressable
         onPress={onPress}
         android_ripple={{ color: hexToRgba(NATIVE.label, 0.08) }}
-        style={({ pressed }) => [
-          styles.threadRow,
-          { backgroundColor: native.secondaryGrouped },
-          !isLast && { borderBottomColor: native.separator, borderBottomWidth: StyleSheet.hairlineWidth },
-          Platform.OS === "ios" && pressed && { opacity: NATIVE.pressedOpacity },
-        ]}
+        style={({ pressed }) => [Platform.OS === "ios" && pressed && { opacity: NATIVE.pressedOpacity }]}
       >
-        <View style={[styles.threadIcon, { backgroundColor: isActive ? SN.accentSoft : hexToRgba(native.secondaryLabel, 0.1) }]}>
+        <View
+          style={[
+            styles.threadRow,
+            { backgroundColor: rowBg },
+            !isLast && { borderBottomColor: native.separator, borderBottomWidth: StyleSheet.hairlineWidth },
+          ]}
+        >
+          {isActive ? (
+            <View style={[styles.activeStripe, { backgroundColor: SN.accent }]} />
+          ) : null}
+          <View style={[styles.threadIcon, { backgroundColor: iconBg }]}>
+            <Ionicons
+              name="chatbubble-ellipses-outline"
+              size={18}
+              color={isActive ? SN.accent : native.secondaryLabel}
+            />
+          </View>
+          <View style={styles.threadCopy}>
+            <View style={styles.threadTitleRow}>
+              <Text style={[type.bodyEmphasis, styles.threadTitle]} numberOfLines={1}>
+                {thread.title}
+              </Text>
+              {thread.capabilityBadge ? (
+                <View style={[styles.capabilityBadge, { backgroundColor: badgeTheme.soft }]}>
+                  <Text style={[styles.capabilityBadgeText, { color: badgeTheme.color }]}>
+                    {thread.capabilityBadge.label}
+                  </Text>
+                </View>
+              ) : null}
+              {isActive ? (
+                <View style={[styles.activeBadge, { backgroundColor: SN.accentSoft }]}>
+                  <Text style={[styles.activeBadgeText, { color: SN.accent }]}>Current</Text>
+                </View>
+              ) : null}
+            </View>
+            <Text style={[type.caption, { color: SN.secondaryLabel }]} numberOfLines={1}>
+              {thread.preview}
+            </Text>
+            <Text style={[type.caption, styles.threadMeta, { color: native.tertiaryLabel }]}>
+              {meta ?? formatRelativeTime(thread.updatedAt)}
+            </Text>
+          </View>
           <Ionicons
-            name="chatbubble-ellipses-outline"
-            size={18}
-            color={isActive ? SN.accent : native.secondaryLabel}
+            name="chevron-forward"
+            size={16}
+            color={isActive ? SN.accent : native.tertiaryLabel}
+            style={styles.rowChevron}
           />
         </View>
-        <View style={styles.threadCopy}>
-          <View style={styles.threadTitleRow}>
-            <Text style={[type.bodyEmphasis, styles.threadTitle]} numberOfLines={1}>
-              {thread.title}
-            </Text>
-            {thread.capabilityBadge ? (
-              <View
-                style={[
-                  styles.capabilityBadge,
-                  { backgroundColor: badgeTheme.soft },
-                ]}
-              >
-                <Text style={[styles.capabilityBadgeText, { color: badgeTheme.color }]}>
-                  {thread.capabilityBadge.label}
-                </Text>
-              </View>
-            ) : null}
-            {isActive ? (
-              <View style={[styles.activeBadge, { backgroundColor: SN.accentSoft }]}>
-                <Text style={[styles.activeBadgeText, { color: SN.accent }]}>Current</Text>
-              </View>
-            ) : null}
-          </View>
-          <Text style={[type.caption, { color: SN.secondaryLabel }]} numberOfLines={1}>
-            {thread.preview}
-          </Text>
-          <Text style={[type.caption, styles.threadMeta, { color: native.tertiaryLabel }]}>
-            {meta ?? formatRelativeTime(thread.updatedAt)}
-          </Text>
-        </View>
-        <Ionicons name="chevron-forward" size={16} color={native.tertiaryLabel} style={styles.rowChevron} />
       </Pressable>
     </Swipeable>
   )
-}
+}, (prev, next) =>
+  prev.thread.id === next.thread.id &&
+  prev.isActive === next.isActive &&
+  prev.isLast === next.isLast &&
+  prev.variant === next.variant &&
+  prev.meta === next.meta &&
+  prev.thread.title === next.thread.title &&
+  prev.thread.preview === next.thread.preview)
 
 function RenameThreadModal({
   visible,
@@ -444,8 +461,8 @@ export function CoraChatSideNav({
 
   const handleOpenThread = (thread: CoraHistoryThreadItem) => {
     closeOpenSwipe()
-    onClose()
     onOpenThread(thread)
+    onClose()
   }
 
   const handleNewChat = () => {
@@ -702,6 +719,16 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingHorizontal: 14,
     paddingVertical: 12,
+    position: "relative",
+    overflow: "hidden",
+  },
+  activeStripe: {
+    position: "absolute",
+    left: 0,
+    top: 10,
+    bottom: 10,
+    width: 3,
+    borderRadius: 999,
   },
   threadIcon: {
     width: 36,

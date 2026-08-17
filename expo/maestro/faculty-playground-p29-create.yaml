@@ -1,0 +1,38 @@
+appId: com.coursecollab.app
+---
+- tapOn:
+    text: ".*Playground Set 1.*"
+    optional: true
+- extendedWaitUntil:
+    visible: "Join passcode|Reopen lobby|Questions|No scores yet"
+    timeout: 12000
+- takeScreenshot: playground-p29
+- tapOn: "Controls"
+- scrollUntilVisible:
+    element:
+      text: "Delete session"
+    direction: DOWN
+    timeout: 8000
+- tapOn: "Delete session"
+- tapOn: "Cancel"
+- tapOn: "Done"
+- tapOn: "Create playground session"
+- extendedWaitUntil:
+    visible: "Quick random session"
+    timeout: 10000
+- takeScreenshot: playground-create
+- tapOn: "Questions"
+- eraseText
+- inputText: "0"
+- tapOn:
+    text: "Create & open lobby"
+    optional: true
+- extendedWaitUntil:
+    visible: "Question count must be at least 1.|Quick random session|Create & open lobby"
+    timeout: 8000
+- takeScreenshot: playground-create-invalid
+- tapOn: "Seconds per question"
+- eraseText
+- inputText: "15"
+- tapOn: "Quick random session"
+- tapOn: "Done"

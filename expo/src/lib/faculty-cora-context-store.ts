@@ -60,6 +60,10 @@ export async function clearFacultyCoraInstructorContext(
   await SecureStore.deleteItemAsync(storageKey(instructorId, courseId))
 }
 
+export function clearFacultyCoraContextMemory(): void {
+  memoryCache.clear()
+}
+
 export function resolveFacultyCoraCapabilities(context: FacultyCoraInstructorContext | null) {
   return context?.tailoredCapabilities ?? FACULTY_CORA_CAPABILITIES
 }

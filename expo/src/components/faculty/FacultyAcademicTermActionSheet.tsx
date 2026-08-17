@@ -7,7 +7,8 @@ import {
   academicTermLabel,
   academicTermSeasonVisual,
   canonicalSectionLabel,
-  formatAcademicTermDateRange} from "../../lib/faculty-academic-term-utils"
+  formatAcademicTermDateRange,
+  uniqueTermCourses} from "../../lib/faculty-academic-term-utils"
 import {
   instructorApi,
   type InstructorAcademicTerm,
@@ -32,7 +33,7 @@ import { SHEET_METRIC, SHEET_SECTION } from "./faculty-sheet-semantics"
 
 type Scope = { instructorId: number; courseId: number }
 
-type ConfirmKind = "delete-term" | "delete-section" | null
+type ConfirmKind = "delete-term" | "delete-section" | "activate" | "unlink-course" | null
 
 type Props = {
   visible: boolean
@@ -66,6 +67,7 @@ export function FacultyAcademicTermActionSheet({
   const [acting, setActing] = useState(false)
   const [confirm, setConfirm] = useState<ConfirmKind>(null)
   const [pendingSection, setPendingSection] = useState<InstructorSession | null>(null)
+  const [pendingCourseId, setPendingCourseId] = useState<number | null>(null)
   const [error, setError] = useState("")
 
   const loadSections = useCallback(async () => {
@@ -129,6 +131,22 @@ export function FacultyAcademicTermActionSheet({
     }
   }
 
+  async function handleUnlinkCourse() {
+    if (!scope || !term || pendingCourseId == null) return
+    setActing(true)
+    setError("")
+    try {
+      await instructorApi.removeCourseFromTerm(scope.instructorId, term.id, pendingCourseId)
+      setConfirm(null)
+      setPendingCourseId(null)
+      onUpdated()
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not unlink course.")
+    } finally {
+      setActing(false)
+    }
+  }
+
   async function handleDeleteSection() {
     if (!scope || !pendingSection) return
     setActing(true)
@@ -149,6 +167,7 @@ export function FacultyAcademicTermActionSheet({
   if (!term) return null
 
   const season = academicTermSeasonVisual(term)
+  const courses = uniqueTermCourses(term.courses)
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
@@ -170,30 +189,41 @@ export function FacultyAcademicTermActionSheet({
           <FacultySheetStatRow>
             <FacultySheetStatChip icon="book-outline" label="Sections" value={String(term.session_count ?? sections.length)} tone={SHEET_METRIC.info} />
             <FacultySheetStatChip icon="people-outline" label="Students" value={String(term.total_students ?? 0)} tone={SHEET_METRIC.people} />
-            <FacultySheetStatChip icon="school-outline" label="Courses" value={String(term.course_count ?? term.courses?.length ?? 0)} tone={SHEET_METRIC.secondary} />
+            <FacultySheetStatChip icon="school-outline" label="Courses" value={String(courses.length || term.course_count || 0)} tone={SHEET_METRIC.secondary} />
           </FacultySheetStatRow>
 
-          {Array.isArray(term.courses) && term.courses.length > 0 ? (
-            <FacultySheetSection label="Course offerings">
+          {courses.length > 0 ? (
+            <FacultySheetSection label="Course offerings" hint="Tap a course to unlink it from this term">
               <View style={localStyles.chipRow}>
-                {term.courses.map((course) => (
-                  <View
+                {courses.map((course) => (
+                  <Pressable
                     key={course.id}
+                    onPress={() => {
+                      setPendingCourseId(course.id)
+                      setConfirm("unlink-course")
+                    }}
                     style={[
                       localStyles.chip,
                       { backgroundColor: native.fill, borderColor: tokens.border },
                     ]}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Unlink ${course.course_code}`}
                   >
                     <Text style={[type.caption, { fontWeight: "700", color: native.label }]} numberOfLines={1}>
                       {course.course_code}
                     </Text>
-                  </View>
+                    <Ionicons name="close" size={12} color={native.secondaryLabel} />
+                  </Pressable>
                 ))}
               </View>
             </FacultySheetSection>
           ) : null}
 
-          <FacultySheetSection label="Sections for this course" hint={`${sections.length} linked`} tone={SHEET_SECTION.roster}>
+          <FacultySheetSection
+            label="Sections for this course"
+            hint={`${sections.length} linked to ${courseCode ?? "this course"}`}
+            tone={SHEET_SECTION.roster}
+          >
             {sectionsLoading ? (
               <ActivityIndicator color={FACULTY_SHEET_COLOR.link} style={{ marginVertical: 16 }} />
             ) : sections.length === 0 ? (
@@ -223,6 +253,8 @@ export function FacultyAcademicTermActionSheet({
                     <Pressable
                       style={localStyles.sectionCopyPressable}
                       onPress={() => term && onEditSection(term, session)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Edit section ${label}`}
                     >
                       <View style={localStyles.sectionCopy}>
                         <Text style={[type.bodyEmphasis, { color: native.label, fontVariant: ["tabular-nums"] }]}>
@@ -245,6 +277,8 @@ export function FacultyAcademicTermActionSheet({
                         setPendingSection(session)
                         setConfirm("delete-section")
                       }}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Delete section ${label}`}
                     >
                       <Ionicons name="trash-outline" size={18} color={native.secondaryLabel} />
                     </Pressable>
@@ -264,7 +298,7 @@ export function FacultyAcademicTermActionSheet({
                 subtitle="Students and faculty will use this term by default"
                 tone="primary"
                 loading={acting}
-                onPress={() => void handleSetActive()}
+                onPress={() => setConfirm("activate")}
               />
             ) : null}
             <FacultySheetActionRow icon="create-outline" label="Edit term" onPress={() => onEditTerm(term)} />
@@ -286,18 +320,42 @@ export function FacultyAcademicTermActionSheet({
 
         {confirm ? (
           <FacultySheetConfirm
-            title={confirm === "delete-term" ? "Delete academic term?" : "Delete section?"}
-            body={
-              confirm === "delete-term"
-                ? `This permanently deletes ${academicTermLabel(term)}. Terms with sections cannot be deleted until sections are removed or reassigned.`
-                : `This deletes section ${pendingSection?.code} and all ${pendingSection?.student_count ?? 0} enrolled student(s).`
+            title={
+              confirm === "activate"
+                ? "Set as active term?"
+                : confirm === "delete-term"
+                  ? "Delete academic term?"
+                  : confirm === "unlink-course"
+                    ? "Unlink course?"
+                    : "Delete section?"
             }
-            confirmLabel="Delete"
+            body={
+              confirm === "activate"
+                ? `Students will sign into ${academicTermLabel(term)} instead of the current term. You can switch back from this list.`
+                : confirm === "delete-term"
+                  ? `This permanently deletes ${academicTermLabel(term)}. Terms with sections cannot be deleted until sections are removed or reassigned.`
+                  : confirm === "unlink-course"
+                    ? "This course will no longer be offered in this term. You can add it again from My Courses."
+                    : `This deletes section ${pendingSection?.code} and all ${pendingSection?.student_count ?? 0} enrolled student(s).`
+            }
+            confirmLabel={confirm === "activate" ? "Set active" : confirm === "unlink-course" ? "Unlink" : "Delete"}
+            danger={confirm !== "activate"}
             onCancel={() => {
               setConfirm(null)
               setPendingSection(null)
+              setPendingCourseId(null)
             }}
-            onConfirm={() => void (confirm === "delete-term" ? handleDeleteTerm() : handleDeleteSection())}
+            onConfirm={() => {
+              const kind = confirm
+              setConfirm(null)
+              void (kind === "activate"
+                ? handleSetActive()
+                : kind === "delete-term"
+                  ? handleDeleteTerm()
+                  : kind === "unlink-course"
+                    ? handleUnlinkCourse()
+                    : handleDeleteSection())
+            }}
           />
         ) : null}
       </FacultySheetContainer>
@@ -308,6 +366,9 @@ export function FacultyAcademicTermActionSheet({
 const localStyles = StyleSheet.create({
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   chip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,

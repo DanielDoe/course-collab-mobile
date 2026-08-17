@@ -3,8 +3,9 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { AppAlert } from '../../lib/app-alert'
 import Constants from "expo-constants"
 import { Ionicons } from "@/components/icons/AppIcon"
-import { useRouter } from "expo-router"
+import { useLocalSearchParams, useRouter } from "expo-router"
 import { ModuleScreen } from "../modules/ModuleScreen"
+import { NotetakerScreenHeader } from "../notetaker/NotetakerScreenHeader"
 import { useFacultyShell } from "../../context/FacultyShellContext"
 import { useSession } from "../../context/SessionProvider"
 import { useAppearance, useAppThemeTokens } from "../../context/AppearanceProvider"
@@ -166,6 +167,12 @@ export function FacultySettingsHubScreen() {
     studentMessageAlerts: true,
   })
   const [activeSheet, setActiveSheet] = useState<SheetId>(null)
+  const params = useLocalSearchParams<{ open?: string | string[] }>()
+  const openSheet = Array.isArray(params.open) ? params.open[0] : params.open
+
+  useEffect(() => {
+    if (openSheet === "security") setActiveSheet("security")
+  }, [openSheet])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [savingProfile, setSavingProfile] = useState(false)
@@ -337,15 +344,19 @@ export function FacultySettingsHubScreen() {
       .join(", ") || "Off"
 
   return (
-    <ModuleScreen
-      loading={loading}
-      error={error}
-      refreshing={refreshing}
-      onRefresh={() => {
-        setRefreshing(true)
-        load().finally(() => setRefreshing(false))
-      }}
-    >
+    <View style={[styles.screenRoot, { backgroundColor: native.groupedBackground }]}>
+      <NotetakerScreenHeader title="Settings" fallbackHref="/dashboard" />
+      <ModuleScreen
+        loading={loading}
+        error={error}
+        refreshing={refreshing}
+        disableTopInsetAdjustment
+        stackedHeader
+        onRefresh={() => {
+          setRefreshing(true)
+          load().finally(() => setRefreshing(false))
+        }}
+      >
       {message ? (
         <View style={[styles.bannerSuccess, { backgroundColor: `${tokens.success}18`, borderColor: `${tokens.success}33` }]}>
           <Ionicons name="checkmark-circle" size={18} color={tokens.success} />
@@ -406,6 +417,12 @@ export function FacultySettingsHubScreen() {
               : "View plan"
           }
           onPress={() => router.push("/membership" as never)}
+        />
+        <SettingsRow
+          icon="time-outline"
+          label="Cora usage history"
+          detail="Search & review logs"
+          onPress={() => router.push("/settings/cora-usage" as never)}
         />
         <SettingsRow
           icon="lock-closed-outline"
@@ -485,6 +502,11 @@ export function FacultySettingsHubScreen() {
           icon="megaphone-outline"
           label="Announcements"
           onPress={() => router.push("/module/announcements" as never)}
+        />
+        <SettingsRow
+          icon="shield-outline"
+          label="Privacy & security"
+          onPress={() => router.push("/settings/privacy-security" as never)}
           isLast
         />
       </SettingsGroup>
@@ -539,10 +561,12 @@ export function FacultySettingsHubScreen() {
         onClose={() => setActiveSheet(null)}
       />
     </ModuleScreen>
+    </View>
   )
 }
 
 const styles = StyleSheet.create({
+  screenRoot: { flex: 1 },
   bannerSuccess: {
     flexDirection: "row",
     alignItems: "center",

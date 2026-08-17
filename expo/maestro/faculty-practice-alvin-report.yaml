@@ -1,0 +1,8 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Students"
+- tapOn:
+    text: "Clear search"
+    optional: true
+- tapOn: "Search students…"
+- eraseText: 40

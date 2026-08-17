@@ -1,0 +1,12 @@
+appId: com.coursecollab.app
+---
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn: "Add academic term"
+- extendedWaitUntil:
+    visible: "Term Winter"
+    timeout: 10000
+- tapOn: "Term Winter"
+- tapOn:
+    id: "term-start-date"

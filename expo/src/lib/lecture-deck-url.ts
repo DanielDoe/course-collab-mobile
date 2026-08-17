@@ -1,4 +1,34 @@
 import { API_BASE_URL } from "../constants"
+import type { InstructorLecture } from "./instructor-api"
+
+function stringField(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value : null
+}
+
+/** Merge viewer/content payload deck URLs onto a list lecture (content uses camelCase). */
+export function mergeLectureDeckFromContent(
+  lecture: InstructorLecture,
+  content: Record<string, unknown>,
+): InstructorLecture {
+  const nested =
+    content.lecture && typeof content.lecture === "object"
+      ? (content.lecture as InstructorLecture)
+      : null
+  const pdfUrl =
+    stringField(content.pdfUrl) ??
+    stringField(content.pdf_url) ??
+    nested?.pdf_url ??
+    lecture.pdf_url ??
+    null
+  const documentUrl =
+    stringField(content.document_url) ??
+    stringField(content.originalFileUrl) ??
+    stringField(content.original_file_url) ??
+    nested?.document_url ??
+    lecture.document_url ??
+    null
+  return { ...lecture, ...nested, pdf_url: pdfUrl, document_url: documentUrl }
+}
 
 export function resolveLectureDeckUrl(url: string | null | undefined): string | null {
   if (!url?.trim()) return null

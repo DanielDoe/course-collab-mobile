@@ -1,0 +1,10 @@
+appId: com.coursecollab.app
+---
+- hideKeyboard
+- swipe:
+    direction: DOWN
+    duration: 300
+- swipe:
+    direction: DOWN
+    duration: 300
+- takeScreenshot: groups-form-top

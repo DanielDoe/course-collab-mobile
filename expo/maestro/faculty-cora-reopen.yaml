@@ -1,0 +1,49 @@
+appId: com.coursecollab.app
+---
+- launchApp
+- tapOn:
+    text: "Close menu"
+    optional: true
+- tapOn:
+    text: "Not now"
+    optional: true
+- tapOn:
+    text: "Open navigation menu"
+    optional: true
+- scrollUntilVisible:
+    element: "Cora Copilot"
+    direction: UP
+    timeout: 12000
+    optional: true
+- tapOn:
+    text: "Cora Copilot"
+    optional: true
+- tapOn:
+    text: "Close menu"
+    optional: true
+- extendedWaitUntil:
+    visible: "Capabilities|Exit Cora Copilot|Open Cora chat"
+    timeout: 45000
+- tapOn: "Open Cora chat"
+- extendedWaitUntil:
+    visible: "Open chat menu|Ask a follow-up…|Ask Cora about your course…"
+    timeout: 20000
+- tapOn: "Open chat menu"
+- tapOn: "New chat"
+- takeScreenshot: cora-new-chat-confirm
+- tapOn:
+    text: "Cancel"
+    optional: true
+- tapOn:
+    text: "OK"
+    optional: true
+- tapOn:
+    text: "Close chat menu"
+    optional: true
+- tapOn: "Exit to Cora"
+- extendedWaitUntil:
+    visible: "Capabilities|Exit Cora Copilot"
+    timeout: 15000
+- swipe:
+    direction: UP
+- takeScreenshot: cora-hub-scrolled

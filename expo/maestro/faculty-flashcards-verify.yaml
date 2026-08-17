@@ -1,0 +1,12 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Topics"
+- takeScreenshot: flashcards-topics-verify
+- tapOn: "Config"
+- takeScreenshot: flashcards-config-verify
+- tapOn: "Deleted"
+- takeScreenshot: flashcards-deleted-verify
+- tapOn: "All"
+- tapOn: "Delete First-Order & Op-Amp Review"
+- takeScreenshot: flashcards-alert-tone
+- tapOn: "Cancel"

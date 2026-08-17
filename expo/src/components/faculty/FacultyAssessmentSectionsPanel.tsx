@@ -13,6 +13,8 @@ import { FACULTY_ASSESSMENT_COLOR } from "../../lib/faculty-assessment-theme"
 import { semanticSoft } from "../../lib/themed-module-theme"
 import { useModuleTheme } from "../../lib/themed-module-shell"
 import { FACULTY_SHEET_CHIP_RADIUS } from "./faculty-collab-sheet-ui"
+import { NativeSelect } from "../NativeSelect"
+import { secondsSelectOptions, WEIGHT_PERCENT_OPTIONS, withCurrentOption } from "./FacultyNativePickers"
 import {
   EditorNotice,
   EditorSectionCard,
@@ -168,26 +170,27 @@ export function FacultyAssessmentSectionsPanel({
                   onChangeText={(v) => patchSection(index, { title: v })}
                   placeholder="Section I"
                 />
-                <EditorTextField
+                <NativeSelect
                   label="Weight %"
+                  placeholder="25%"
                   value={String(section.weight_percent ?? 0)}
-                  onChangeText={(v) => {
-                    const n = Number(v)
-                    patchSection(index, { weight_percent: Number.isFinite(n) ? n : 0 })
-                  }}
-                  keyboardType="numeric"
+                  options={withCurrentOption(WEIGHT_PERCENT_OPTIONS, String(section.weight_percent ?? 0), `${section.weight_percent ?? 0}%`)}
+                  onChange={(v) => patchSection(index, { weight_percent: Number(v) || 0 })}
                 />
-                <EditorTextField
-                  label="Section timer (seconds)"
-                  hint="Optional pooled time when timer mode is section timer"
+                <NativeSelect
+                  label="Section timer"
+                  placeholder="No pooled timer"
                   value={section.total_time_seconds != null ? String(section.total_time_seconds) : ""}
-                  onChangeText={(v) => {
-                    const n = Number(v)
+                  options={[
+                    { value: "", label: "No pooled timer" },
+                    ...secondsSelectOptions(section.total_time_seconds),
+                  ]}
+                  onChange={(v) =>
                     patchSection(index, {
-                      total_time_seconds: v.trim() && Number.isFinite(n) ? n : undefined,
-                      timer_mode: v.trim() ? "section_timer" : section.timer_mode})
-                  }}
-                  keyboardType="numeric"
+                      total_time_seconds: v ? Number(v) : undefined,
+                      timer_mode: v ? "section_timer" : section.timer_mode,
+                    })
+                  }
                 />
                 <Text style={styles.typesLabel}>Question types in this section</Text>
                 <View style={styles.typeWrap}>

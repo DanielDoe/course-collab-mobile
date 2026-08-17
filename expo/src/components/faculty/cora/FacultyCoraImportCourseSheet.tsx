@@ -184,11 +184,27 @@ export function FacultyCoraImportCourseSheet({
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose}>
-        <Pressable style={[styles.sheet, { backgroundColor: native.secondaryGrouped }]} onPress={() => {}}>
+      <Pressable
+        accessible={false}
+        importantForAccessibility="no-hide-descendants"
+        style={styles.backdrop}
+        onPress={onClose}
+      >
+        <Pressable
+          accessible={false}
+          importantForAccessibility="no-hide-descendants"
+          style={[styles.sheet, { backgroundColor: native.secondaryGrouped }]}
+          onPress={() => {}}
+        >
           <View style={[styles.handle, { backgroundColor: native.separator }]} />
           <View style={styles.header}>
-            <Pressable onPress={goBack} hitSlop={8} style={styles.backBtn}>
+            <Pressable
+              onPress={goBack}
+              hitSlop={8}
+              style={styles.backBtn}
+              accessibilityRole="button"
+              accessibilityLabel={step === "sources" ? "Close import sheet" : "Back"}
+            >
               <Ionicons name={step === "sources" ? "close" : "chevron-back"} size={22} color={accent} />
             </Pressable>
             <Text style={[type.bodyEmphasis, styles.title]} numberOfLines={1}>
@@ -217,6 +233,8 @@ export function FacultyCoraImportCourseSheet({
             <FlatList
               data={filteredContainers}
               keyExtractor={(row) => row.id}
+              accessible={false}
+              importantForAccessibility="no-hide-descendants"
               showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.list}
               ItemSeparatorComponent={() => <View style={styles.listGap} />}
@@ -225,6 +243,11 @@ export function FacultyCoraImportCourseSheet({
                 const highlighted = matchesHint(container.label, hint?.containerHint)
                 return (
                   <Pressable
+                    testID={`faculty-cora-import-container-${container.id}`}
+                    accessible
+                    importantForAccessibility="yes"
+                    accessibilityRole="button"
+                    accessibilityLabel={container.label}
                     onPress={() => void openContainer(container, sourceKey ?? "")}
                     style={({ pressed }) => [
                       styles.row,
@@ -235,9 +258,16 @@ export function FacultyCoraImportCourseSheet({
                       },
                     ]}
                   >
-                    <View style={styles.rowCopy}>
-                      <Text style={[type.bodyEmphasis, styles.rowTitle]}>{container.label}</Text>
-                      <Text style={[type.caption, { color: native.secondaryLabel }]}>{container.subtitle}</Text>
+                    <View style={styles.rowCopy} importantForAccessibility="no">
+                      <Text style={[type.bodyEmphasis, styles.rowTitle]} importantForAccessibility="no">
+                        {container.label}
+                      </Text>
+                      <Text
+                        style={[type.caption, { color: native.secondaryLabel }]}
+                        importantForAccessibility="no"
+                      >
+                        {container.subtitle}
+                      </Text>
                     </View>
                     <Ionicons name="chevron-forward" size={18} color={native.tertiaryLabel} />
                   </Pressable>
@@ -248,12 +278,19 @@ export function FacultyCoraImportCourseSheet({
             <FlatList
               data={filteredItems}
               keyExtractor={(row) => row.ref}
+              accessible={false}
+              importantForAccessibility="no-hide-descendants"
               showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.list}
               ItemSeparatorComponent={() => <View style={styles.listGap} />}
               keyboardShouldPersistTaps="handled"
               renderItem={({ item }) => (
                 <Pressable
+                  testID={`faculty-cora-import-question-${item.ref}`}
+                  accessible
+                  importantForAccessibility="yes"
+                  accessibilityRole="button"
+                  accessibilityLabel={item.label}
                   onPress={() => void importQuestion(item)}
                   disabled={importingRef != null}
                   style={({ pressed }) => [
@@ -265,8 +302,14 @@ export function FacultyCoraImportCourseSheet({
                     },
                   ]}
                 >
-                  <Text style={[type.bodyEmphasis, styles.rowTitle]}>{item.label}</Text>
-                  <Text style={[type.caption, styles.preview, { color: native.secondaryLabel }]} numberOfLines={3}>
+                  <Text style={[type.bodyEmphasis, styles.rowTitle]} importantForAccessibility="no">
+                    {item.label}
+                  </Text>
+                  <Text
+                    style={[type.caption, styles.preview, { color: native.secondaryLabel }]}
+                    numberOfLines={3}
+                    importantForAccessibility="no"
+                  >
                     {item.preview}
                   </Text>
                   {importingRef === item.ref ? (
@@ -279,23 +322,42 @@ export function FacultyCoraImportCourseSheet({
             <FlatList
               data={sources}
               keyExtractor={(row) => row.key}
+              accessible={false}
+              importantForAccessibility="no-hide-descendants"
               showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.list}
               ItemSeparatorComponent={() => <View style={styles.listGap} />}
               keyboardShouldPersistTaps="handled"
               renderItem={({ item: source }) => (
                 <Pressable
+                  testID={`faculty-cora-import-source-${source.key}`}
+                  accessible
+                  importantForAccessibility="yes"
+                  accessibilityRole="button"
+                  accessibilityLabel={source.label}
                   onPress={() => void openSource(source)}
                   style={({ pressed }) => [
                     styles.row,
                     { borderColor: native.separator, opacity: pressed ? NATIVE.pressedOpacity : 1 },
                   ]}
                 >
-                  <View style={styles.rowCopy}>
-                    <Text style={[type.bodyEmphasis, styles.rowTitle]}>{source.label}</Text>
-                    <Text style={[type.caption, { color: native.secondaryLabel }]}>{source.description}</Text>
+                  <View style={styles.rowCopy} importantForAccessibility="no">
+                    <Text style={[type.bodyEmphasis, styles.rowTitle]} importantForAccessibility="no">
+                      {source.label}
+                    </Text>
+                    <Text
+                      style={[type.caption, { color: native.secondaryLabel }]}
+                      importantForAccessibility="no"
+                    >
+                      {source.description}
+                    </Text>
                   </View>
-                  <Text style={[type.caption, { color: native.tertiaryLabel }]}>{source.count}</Text>
+                  <Text
+                    style={[type.caption, { color: native.tertiaryLabel }]}
+                    importantForAccessibility="no"
+                  >
+                    {source.count}
+                  </Text>
                 </Pressable>
               )}
             />

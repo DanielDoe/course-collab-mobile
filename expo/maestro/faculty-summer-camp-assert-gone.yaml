@@ -1,0 +1,21 @@
+appId: com.coursecollab.app
+---
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn: "Programs"
+- tapOn: "Search programs…"
+- inputText: "QA16S"
+- hideKeyboard
+- takeScreenshot: summer-qa-search-gone
+- tapOn:
+    text: "Clear search"
+    optional: true
+- tapOn: "Campers"
+- takeScreenshot: summer-campers-2
+- tapOn: "Add summer camper"
+- tapOn: "Create camper|Create|Add camper"
+- takeScreenshot: summer-add-camper-validation
+- tapOn: "Done"
+- tapOn: "Inbox"
+- takeScreenshot: summer-inbox-2

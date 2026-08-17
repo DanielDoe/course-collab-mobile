@@ -1,0 +1,7 @@
+appId: com.coursecollab.app
+---
+- waitForAnimationToEnd
+- tapOn:
+    text: "QA99 Course Note.*, Draft"
+- waitForAnimationToEnd
+- takeScreenshot: course-notes-qa-opened

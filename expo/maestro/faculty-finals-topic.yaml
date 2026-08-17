@@ -1,0 +1,5 @@
+appId: com.coursecollab.app
+---
+- tapOn: "New final"
+- tapOn: "AC Power"
+- waitForAnimationToEnd

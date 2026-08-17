@@ -1,0 +1,11 @@
+appId: com.coursecollab.app
+---
+- scrollUntilVisible:
+    element: "Delete"
+    direction: DOWN
+    timeout: 12000
+- tapOn: "Delete"
+- waitForAnimationToEnd
+- tapOn: "Cancel"
+- waitForAnimationToEnd
+- tapOn: "Done"

@@ -1,0 +1,26 @@
+appId: com.coursecollab.app
+---
+- tapOn:
+    text: "Dismiss student feed info"
+    optional: true
+- tapOn: "Search title, summary, section…"
+- inputText: "zzzqnofind"
+- tapOn: "Announcements"
+- takeScreenshot: ann-search-empty
+- tapOn:
+    text: "Clear search"
+    optional: true
+- tapOn: "Open filters"
+- takeScreenshot: ann-filters
+- tapOn:
+    text: "Pinned / high priority.*"
+    optional: true
+- tapOn: "Done"
+- tapOn: "Open filters"
+- tapOn: "All announcements"
+- tapOn: "Done"
+- tapOn: "ECE 2202 — Final grades posted (Canvas + CourseCollab report card)"
+- takeScreenshot: ann-live-detail
+- tapOn: "Delete announcement"
+- tapOn: "Cancel"
+- tapOn: "Back"

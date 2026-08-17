@@ -1,0 +1,6 @@
+appId: com.coursecollab.app
+---
+- swipe:
+    direction: UP
+- takeScreenshot: summer-qa-sheet-rest
+- tapOn: "Add track"

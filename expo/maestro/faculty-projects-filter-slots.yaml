@@ -1,0 +1,21 @@
+appId: com.coursecollab.app
+---
+- tapOn: "ECE2202"
+- tapOn:
+    text: "Open filters"
+    optional: true
+- tapOn:
+    text: "All sections"
+    optional: true
+- tapOn:
+    text: "Show more tabs"
+    optional: true
+- tapOn: "Slots"
+- takeScreenshot: projects-slots-now
+- tapOn:
+    text: "Rate my student"
+    optional: true
+- extendedWaitUntil:
+    visible: "Presentation|Notes|Delete presentation"
+    timeout: 10000
+- takeScreenshot: projects-slot-detail

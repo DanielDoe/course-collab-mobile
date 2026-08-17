@@ -1,10 +1,10 @@
 import { Redirect, useLocalSearchParams } from "expo-router"
 import { useSession } from "../../../src/context/SessionProvider"
-import { MembershipWebFlowScreen } from "../../../src/components/support/MembershipWebFlowScreen"
-import { FacultyMembershipWebFlowScreen } from "../../../src/components/support/FacultyMembershipWebFlowScreen"
+import { MembershipSuccessScreen } from "../../../src/components/support/MembershipSuccessScreen"
+import { FacultyMembershipSuccessScreen } from "../../../src/components/support/FacultyMembershipSuccessScreen"
 import type { FacultyMembershipTier, MembershipTier } from "../../../src/types/dashboard"
 
-export default function MembershipSuccessScreen() {
+export default function MembershipSuccessRoute() {
   const { session } = useSession()
   const { session_id, plan } = useLocalSearchParams<{
     session_id?: string
@@ -17,8 +17,7 @@ export default function MembershipSuccessScreen() {
         ? (plan as FacultyMembershipTier)
         : undefined
     return (
-      <FacultyMembershipWebFlowScreen
-        flow="success"
+      <FacultyMembershipSuccessScreen
         sessionId={typeof session_id === "string" ? session_id : undefined}
         plan={facultyPlan}
       />
@@ -30,8 +29,7 @@ export default function MembershipSuccessScreen() {
   }
 
   return (
-    <MembershipWebFlowScreen
-      flow="success"
+    <MembershipSuccessScreen
       sessionId={typeof session_id === "string" ? session_id : undefined}
       plan={
         plan === "Explorer" || plan === "Trailblazer" || plan === "Scholar"

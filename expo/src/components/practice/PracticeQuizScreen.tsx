@@ -6,7 +6,7 @@ import { useRouter } from "expo-router"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { hexToRgba } from "../../constants/app-themes"
 import { useAppThemeTokens } from "../../context/AppearanceProvider"
-import { useThemedStudentNative } from "../../lib/themed-module-theme"
+import { semanticSoft, useThemedStudentNative } from "../../lib/themed-module-theme"
 import { useSession } from "../../context/SessionProvider"
 import { practiceApi, type SubmitPracticeResult } from "../../lib/practice-api"
 import {
@@ -350,7 +350,7 @@ export function PracticeQuizScreen() {
       >
         <View style={[styles.resultsCard, { backgroundColor: tokens.surface, borderColor: tokens.border }]}>
           <Ionicons name="trophy" size={48} color={tokens.warning} />
-          <Text style={styles.resultsTitle}>Practice complete!</Text>
+          <Text style={[styles.resultsTitle, { color: tokens.text }]}>Practice complete!</Text>
           <Text style={[styles.resultsScore, { color: tokens.accent }]}>{results.score}%</Text>
           <Text style={[styles.resultsMeta, { color: SN.secondaryLabel }]}>
             {results.correctCount} of {results.totalQuestions} correct
@@ -504,7 +504,15 @@ export function PracticeQuizScreen() {
           <QuestionContentWebView text={currentQuestion.question_text} embedded />
 
           {showHint && currentQuestion.hint ? (
-            <View style={styles.hintBox}>
+            <View
+              style={[
+                styles.hintBox,
+                {
+                  backgroundColor: semanticSoft(tokens.warning, tokens.isDark),
+                  borderColor: hexToRgba(tokens.warning, tokens.isDark ? 0.34 : 0.24),
+                },
+              ]}
+            >
               <QuestionContentWebView text={currentQuestion.hint} embedded compact />
             </View>
           ) : null}
@@ -652,13 +660,23 @@ export function PracticeQuizScreen() {
           )}
 
           {showFeedback ? (
-            <View style={[styles.feedbackBox, isCorrect ? styles.feedbackCorrect : styles.feedbackWrong]}>
+            <View
+              style={[
+                styles.feedbackBox,
+                {
+                  backgroundColor: semanticSoft(
+                    isCorrect ? tokens.success : tokens.danger,
+                    tokens.isDark,
+                  ),
+                },
+              ]}
+            >
               <Ionicons
                 name={isCorrect ? "checkmark-circle" : "close-circle"}
                 size={20}
-                color={isCorrect ? "#15803d" : "#b91c1c"}
+                color={isCorrect ? tokens.success : tokens.danger}
               />
-              <Text style={styles.feedbackText}>{feedbackText}</Text>
+              <Text style={[styles.feedbackText, { color: tokens.text }]}>{feedbackText}</Text>
             </View>
           ) : null}
         </View>
@@ -742,7 +760,7 @@ const styles = StyleSheet.create({
   badgeOutline: { backgroundColor: "transparent", borderWidth: 1 },
   badgeText: { color: "#ffffff", fontSize: 11, fontWeight: "700", textTransform: "capitalize" },
   badgeTextOutline: { fontSize: 11, fontWeight: "600" },
-  hintBox: { backgroundColor: "#fef9c3", borderRadius: 10, padding: 10 },
+  hintBox: { borderRadius: 10, padding: 10, borderWidth: 1 },
   textInput: {
     borderWidth: 1,
     borderRadius: 12,
@@ -799,9 +817,7 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 10,
   },
-  feedbackCorrect: { backgroundColor: "#dcfce7" },
-  feedbackWrong: { backgroundColor: "#fee2e2" },
-  feedbackText: { flex: 1, fontSize: 13, lineHeight: 18, color: "#0f172a" },
+  feedbackText: { flex: 1, fontSize: 13, lineHeight: 18 },
   footer: { paddingHorizontal: 16, paddingTop: 8 },
   primaryBtn: {
     borderRadius: 999,
@@ -818,7 +834,7 @@ const styles = StyleSheet.create({
     gap: 10,
     borderWidth: 1,
   },
-  resultsTitle: { fontSize: 22, fontWeight: "600", color: "#0f172a" },
+  resultsTitle: { fontSize: 22, fontWeight: "600" },
   resultsScore: { fontSize: 48, fontWeight: "600" },
   resultsMeta: { fontSize: 15 },
 })

@@ -1,0 +1,10 @@
+appId: com.coursecollab.app
+---
+- tapOn:
+    text: "Dismiss"
+    optional: true
+- swipe:
+    direction: UP
+- swipe:
+    direction: UP
+- takeScreenshot: announcements-list-scrolled

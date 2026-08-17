@@ -38,7 +38,9 @@ export function FacultyAppShellChrome({ session, children }: Props) {
     pathname.startsWith(`${FACULTY_CORA_ROUTE}/`) ||
     pathname.includes("/faculty/lecture/") ||
     /^\/messages\//.test(pathname) ||
-    /^\/membership/.test(pathname)
+    /^\/membership/.test(pathname) ||
+    pathname === "/settings" ||
+    pathname.startsWith("/settings/")
   const native = useThemedNative()
   useFacultyShellRefresh(session)
 

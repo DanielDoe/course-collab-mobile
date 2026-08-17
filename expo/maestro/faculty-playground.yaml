@@ -1,0 +1,19 @@
+appId: com.coursecollab.app
+---
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element:
+      text: "Manage Playground"
+    direction: DOWN
+    timeout: 20000
+- tapOn: "Manage Playground"
+- tapOn:
+    text: "Close menu"
+    optional: true
+- extendedWaitUntil:
+    visible: "Search sessions, codes, passcodes…|No playground sessions yet|Sessions|Question bank"
+    timeout: 20000
+- takeScreenshot: playground-open

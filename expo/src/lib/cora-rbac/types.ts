@@ -9,7 +9,7 @@ export type CoraToolId =
   | "step_by_step_solver"
   | "code_assistant"
   | "circuit_assistant"
-  | "create_flashcards"
+  | "personal_flashcards"
   | "generate_questions"
   | "build_quizzes"
   | "grade_assistance"

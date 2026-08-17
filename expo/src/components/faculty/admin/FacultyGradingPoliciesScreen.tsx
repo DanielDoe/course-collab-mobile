@@ -3,19 +3,32 @@ import { StyleSheet, Text, View } from "react-native"
 import {
   instructorAdminApi,
   type GradeWeightsView,
-  type GradingPolicyResponse} from "../../../lib/instructor-admin-api"
+  type GradingPolicyResponse,
+} from "../../../lib/instructor-admin-api"
 import { useFacultyScope } from "../../../hooks/useFacultyScope"
+import { NATIVE } from "../../../constants/faculty-native-theme"
 import { FACULTY_ADMIN_COLOR } from "../../../lib/faculty-admin-theme"
+import { semanticSoft } from "../../../lib/themed-module-theme"
+import { FacultyModuleTabBar } from "../faculty-module-shell"
 import {
   FacultyAdminCourseGate,
-  FacultyAdminNumberField,
+  FacultyAdminChoiceField,
   FacultyAdminScreen,
   FacultyAdminSection,
   FacultyAdminToggleRow,
   useAdminSaveState,
-  useAdminStyles} from "../faculty-admin-ui"
+  useAdminStyles,
+} from "../faculty-admin-ui"
+import { DAY_COUNT_OPTIONS, MULTIPLIER_OPTIONS, WEIGHT_PERCENT_OPTIONS } from "../FacultyNativePickers"
 
 type WeightKey = keyof Omit<GradeWeightsView, "total">
+type PolicyTab = "automation" | "deadlines" | "weights"
+
+const TABS: Array<{ id: PolicyTab; label: string }> = [
+  { id: "automation", label: "Automation" },
+  { id: "deadlines", label: "Deadlines" },
+  { id: "weights", label: "Weights" },
+]
 
 const WEIGHT_FIELDS: Array<{ key: WeightKey; label: string }> = [
   { key: "quiz", label: "Quiz" },
@@ -46,7 +59,8 @@ function weightsToStrings(weights: GradeWeightsView): Record<WeightKey, string> 
     attendance: strNum(weights.attendance),
     project: strNum(weights.project),
     classroom: strNum(weights.classroom),
-    engagement: strNum(weights.engagement)}
+    engagement: strNum(weights.engagement),
+  }
 }
 
 function sumWeights(values: Record<WeightKey, string>) {
@@ -58,23 +72,28 @@ export function FacultyGradingPoliciesScreen() {
   const { dirty, saving, error, successMessage, markDirty, resetDirty, runSave, showSuccess, setError } =
     useAdminSaveState()
 
+  const [tab, setTab] = useState<PolicyTab>("automation")
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [grading, setGrading] = useState<GradingPolicyResponse | null>(null)
   const [graceDays, setGraceDays] = useState("0")
   const [multiplier, setMultiplier] = useState("1")
-  const [weights, setWeights] = useState<Record<WeightKey, string>>(weightsToStrings({
-    quiz: 0,
-    homework: 0,
-    midterm: 0,
-    final: 0,
-    attendance: 0,
-    project: 0,
-    classroom: 0,
-    engagement: 0,
-    total: 0}))
+  const [weights, setWeights] = useState<Record<WeightKey, string>>(
+    weightsToStrings({
+      quiz: 0,
+      homework: 0,
+      midterm: 0,
+      final: 0,
+      attendance: 0,
+      project: 0,
+      classroom: 0,
+      engagement: 0,
+      total: 0,
+    }),
+  )
 
   const weightTotal = useMemo(() => sumWeights(weights), [weights])
+  const weightsBalanced = Math.abs(weightTotal - 100) < 0.05
 
   const load = useCallback(async () => {
     if (!scope) return
@@ -126,10 +145,15 @@ export function FacultyGradingPoliciesScreen() {
 
   function handleSave() {
     if (!scope) return
+    if (!weightsBalanced) {
+      setError("Grade weights must total 100% before saving.")
+      return
+    }
     void runSave(async () => {
       await instructorAdminApi.patchGradingPolicy(scope, {
         assessment_perks_grace_days_after_deadline: parseWeight(graceDays, 0),
-        multi_part_upload_multiplier: parseWeight(multiplier, 1)})
+        multi_part_upload_multiplier: parseWeight(multiplier, 1),
+      })
       await instructorAdminApi.saveGradeWeights(scope, {
         session: "ALL",
         quizWeight: parseWeight(weights.quiz, 0),
@@ -139,7 +163,8 @@ export function FacultyGradingPoliciesScreen() {
         attendanceWeight: parseWeight(weights.attendance, 0),
         projectWeight: parseWeight(weights.project, 0),
         classroomWeight: parseWeight(weights.classroom, 0),
-        engagementWeight: parseWeight(weights.engagement, 0)})
+        engagementWeight: parseWeight(weights.engagement, 0),
+      })
       await load()
     })
   }
@@ -149,17 +174,31 @@ export function FacultyGradingPoliciesScreen() {
   const styles = useMemo(
     () =>
       StyleSheet.create({
+        balanceBanner: {
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 10,
+          borderRadius: NATIVE.sectionRadius,
+          paddingHorizontal: 14,
+          paddingVertical: 12,
+          borderWidth: StyleSheet.hairlineWidth,
+        },
+        balanceCopy: { flex: 1, gap: 2 },
+        balanceTitle: { ...type.bodyEmphasis, color: native.label },
+        balanceBody: { ...type.caption, lineHeight: 17 },
         totalRow: {
           flexDirection: "row",
           alignItems: "center",
           justifyContent: "space-between",
+          minHeight: NATIVE.rowMinHeight,
           paddingHorizontal: 14,
-          paddingVertical: 14,
+          paddingVertical: 11,
           backgroundColor: native.secondaryGrouped,
         },
         totalLabel: { ...type.bodyEmphasis, color: native.label },
         totalValue: {
           ...type.bodyEmphasis,
+          fontSize: 17,
           fontVariant: ["tabular-nums"],
           color: FACULTY_ADMIN_COLOR.link,
         },
@@ -180,53 +219,93 @@ export function FacultyGradingPoliciesScreen() {
         onSave={handleSave}
         onRefresh={() => void handleRefresh()}
       >
-        <FacultyAdminSection title="Automation">
-          <FacultyAdminToggleRow
-            label="Auto-Finalize Perfect Scores"
-            subtitle="Immediately finalize submissions scored at 100%."
-            value={grading?.auto_finalize_perfect_scores ?? false}
-            onChange={(next) => void handleAutoFinalizeToggle(next)}
-          />
-        </FacultyAdminSection>
+        <FacultyModuleTabBar tabs={TABS} tab={tab} onChange={setTab} scrollable />
 
-        <FacultyAdminSection title="Deadlines & Uploads">
-          <FacultyAdminNumberField
-            label="Grace Days After Deadline"
-            value={graceDays}
-            suffix="days"
-            onChangeText={(text) => {
-              setGraceDays(text)
-              markDirty()
-            }}
-          />
-          <FacultyAdminNumberField
-            label="Multi-Part Upload Multiplier"
-            value={multiplier}
-            onChangeText={(text) => {
-              setMultiplier(text)
-              markDirty()
-            }}
-          />
-        </FacultyAdminSection>
-
-        <FacultyAdminSection
-          title="Grade Weights (All Sessions)"
-          footer="Weights should total 100. Adjust each category for the course gradebook."
-        >
-          {WEIGHT_FIELDS.map((field) => (
-            <FacultyAdminNumberField
-              key={field.key}
-              label={field.label}
-              value={weights[field.key]}
-              suffix="%"
-              onChangeText={(text) => updateWeight(field.key, text)}
+        {tab === "automation" ? (
+          <FacultyAdminSection
+            title="Automation"
+            footer="Perfect-score submissions finalize immediately without manual review."
+          >
+            <FacultyAdminToggleRow
+              label="Auto-Finalize Perfect Scores"
+              subtitle="Immediately finalize submissions scored at 100%."
+              value={grading?.auto_finalize_perfect_scores ?? false}
+              onChange={(next) => void handleAutoFinalizeToggle(next)}
             />
-          ))}
-          <View style={styles.totalRow}>
-            <Text style={styles.totalLabel}>Total</Text>
-            <Text style={[styles.totalValue, weightTotal !== 100 && styles.totalWarn]}>{weightTotal.toFixed(1)}%</Text>
-          </View>
-        </FacultyAdminSection>
+          </FacultyAdminSection>
+        ) : null}
+
+        {tab === "deadlines" ? (
+          <FacultyAdminSection
+            title="Deadlines & Uploads"
+            footer="Grace days extend late submission perks. The upload multiplier scales multi-part file limits."
+          >
+            <FacultyAdminChoiceField
+              label="Grace Days After Deadline"
+              value={graceDays}
+              options={DAY_COUNT_OPTIONS}
+              onChange={(text) => {
+                setGraceDays(text)
+                markDirty()
+              }}
+            />
+            <FacultyAdminChoiceField
+              label="Multi-Part Upload Multiplier"
+              value={multiplier}
+              options={MULTIPLIER_OPTIONS}
+              onChange={(text) => {
+                setMultiplier(text)
+                markDirty()
+              }}
+            />
+          </FacultyAdminSection>
+        ) : null}
+
+        {tab === "weights" ? (
+          <>
+            <View
+              style={[
+                styles.balanceBanner,
+                {
+                  backgroundColor: semanticSoft(weightsBalanced ? tokens.success : tokens.warning, tokens.isDark),
+                  borderColor: `${weightsBalanced ? tokens.success : tokens.warning}33`,
+                },
+              ]}
+            >
+              <View style={styles.balanceCopy}>
+                <Text style={styles.balanceTitle}>
+                  {weightsBalanced ? "Weights total 100%" : "Weights need adjustment"}
+                </Text>
+                <Text style={[styles.balanceBody, { color: native.secondaryLabel }]}>
+                  {weightsBalanced
+                    ? "Course gradebook categories are balanced for this course."
+                    : `Current total is ${weightTotal.toFixed(1)}%. Adjust categories until they sum to 100%.`}
+                </Text>
+              </View>
+            </View>
+
+            <FacultyAdminSection
+              title="Grade Weights"
+              footer="Applies to this course. Each category contributes to the course gradebook total."
+            >
+              {WEIGHT_FIELDS.map((field) => (
+                <FacultyAdminChoiceField
+                  key={field.key}
+                  label={field.label}
+                  value={weights[field.key]}
+                  options={WEIGHT_PERCENT_OPTIONS}
+                  onChange={(text) => updateWeight(field.key, text)}
+                />
+              ))}
+              <View style={styles.totalRow}>
+                <Text style={styles.totalLabel}>Total</Text>
+                <Text style={[styles.totalValue, !weightsBalanced && styles.totalWarn]}>
+                  {weightTotal.toFixed(1)}%
+                </Text>
+              </View>
+            </FacultyAdminSection>
+          </>
+        ) : null}
       </FacultyAdminScreen>
     </FacultyAdminCourseGate>
   )

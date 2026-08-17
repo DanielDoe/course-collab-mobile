@@ -1,0 +1,10 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Syllabus"
+- tapOn:
+    text: "Close menu"
+    optional: true
+- extendedWaitUntil:
+    visible: "Search syllabus sections…|Save draft|No syllabus|No sections"
+    timeout: 30000
+- takeScreenshot: syllabus-page

@@ -1,0 +1,10 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Stats"
+- scroll
+- tapOn: "Activity"
+- scroll
+- tapOn: "Topics"
+- extendedWaitUntil:
+    visible: "AC Power, Available"
+    timeout: 10000

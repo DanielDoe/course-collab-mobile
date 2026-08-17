@@ -9,6 +9,23 @@ export function projectModuleSessionCodes(): string[] {
   return PROJECT_MODULE_SESSIONS.map((s) => s.code)
 }
 
+/** Keep Board / Slots on the current course when those APIs ignore course scope. */
+export function filterRowsToCourseSessions<T>(
+  rows: T[],
+  sessionOf: (row: T) => string | undefined,
+  courseCodes: Iterable<string>,
+): T[] {
+  const codes = new Set(
+    Array.from(courseCodes, (code) => code.trim().toUpperCase()).filter(Boolean),
+  )
+  if (codes.size === 0) return rows
+  return rows.filter((row) => {
+    const code = String(sessionOf(row) ?? "").trim().toUpperCase()
+    if (!code) return true
+    return codes.has(code)
+  })
+}
+
 export function formatPresentationTime(value: string | null | undefined): string {
   if (!value) return "—"
   const raw = String(value).trim()

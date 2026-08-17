@@ -1,0 +1,22 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Issues"
+- waitForAnimationToEnd
+- tapOn: "Deleted"
+- waitForAnimationToEnd
+- tapOn: "All homework"
+- waitForAnimationToEnd
+- tapOn: "Open filters"
+- waitForAnimationToEnd
+- tapOn: "Live"
+- waitForAnimationToEnd
+- tapOn: "Closed"
+- waitForAnimationToEnd
+- tapOn: "All"
+- waitForAnimationToEnd
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn:
+    text: "Close filters"
+    optional: true

@@ -1,0 +1,7 @@
+appId: com.coursecollab.app
+---
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn: "Open navigation menu"
+- waitForAnimationToEnd

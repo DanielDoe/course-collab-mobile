@@ -1,0 +1,5 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Abigael Mokua, 1 enrollment"
+- takeScreenshot: summer-camper-detail
+- tapOn: "Done"

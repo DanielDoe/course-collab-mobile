@@ -1,0 +1,19 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Create playground session"
+- extendedWaitUntil:
+    visible: "Quick random session"
+    timeout: 8000
+- tapOn: "Questions"
+- eraseText
+- eraseText
+- inputText: "0"
+- tapOn: "Quick random session"
+- takeScreenshot: playground-create-typed
+- scrollUntilVisible:
+    element:
+      text: "Create & open lobby"
+    direction: DOWN
+    timeout: 8000
+- takeScreenshot: playground-create-val
+- tapOn: "Done"

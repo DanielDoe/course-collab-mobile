@@ -1,0 +1,202 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Manage Quizzes"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Manage Quizzes"
+- extendedWaitUntil:
+    visible: "Quizzes"
+    timeout: 45000
+- tapOn:
+    text: "Search quizzes…"
+    optional: true
+- inputText: "quiz"
+- hideKeyboard
+- tapOn:
+    text: "Create quiz"
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn:
+    text: "Cancel"
+    optional: true
+- tapOn:
+    text: ".*Quiz.*"
+    index: 0
+    optional: true
+- swipe:
+    direction: UP
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn:
+    text: "Close"
+    optional: true
+- tapOn:
+    text: "Go back"
+    optional: true
+- back
+- takeScreenshot: fac-quizzes
+
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Question Bank"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Question Bank"
+- extendedWaitUntil:
+    visible: "Question Bank"
+    timeout: 45000
+- tapOn:
+    text: "Search questions…"
+    optional: true
+- inputText: "voltage"
+- hideKeyboard
+- swipe:
+    direction: UP
+- tapOn:
+    text: "Create question"
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn:
+    text: "Cancel"
+    optional: true
+- takeScreenshot: fac-qbank
+
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Manage Homework"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Manage Homework"
+- extendedWaitUntil:
+    visible: "Homework"
+    timeout: 45000
+- tapOn:
+    text: "Search homework…"
+    optional: true
+- inputText: "hw"
+- hideKeyboard
+- tapOn:
+    text: "Create homework"
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn:
+    text: "Cancel"
+    optional: true
+- tapOn:
+    text: ".*Homework.*"
+    index: 0
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn:
+    text: "Go back"
+    optional: true
+- back
+- takeScreenshot: fac-homework
+
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Mid-Semester Exams"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Mid-Semester Exams"
+- extendedWaitUntil:
+    visible: "Mid-Semester"
+    timeout: 30000
+- swipe:
+    direction: UP
+- tapOn:
+    text: "Create exam"
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn:
+    text: "Cancel"
+    optional: true
+- takeScreenshot: fac-midsem
+
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Final Exams"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Final Exams"
+- extendedWaitUntil:
+    visible: "Final"
+    timeout: 30000
+- swipe:
+    direction: UP
+- takeScreenshot: fac-finals
+
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Classroom Points"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Classroom Points"
+- extendedWaitUntil:
+    visible: "Points|Classroom"
+    timeout: 30000
+- swipe:
+    direction: UP
+- tapOn:
+    text: "Create assignment"
+    optional: true
+- tapOn:
+    text: "Assignment title…"
+    optional: true
+- inputText: "QA points"
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn:
+    text: "Cancel"
+    optional: true
+- takeScreenshot: fac-points
+
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Course Evaluations"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Course Evaluations"
+- extendedWaitUntil:
+    visible: "Evaluation"
+    timeout: 30000
+- swipe:
+    direction: UP
+- takeScreenshot: fac-evals
+
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Attendance"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Attendance"
+- extendedWaitUntil:
+    visible: "Attendance"
+    timeout: 30000
+- swipe:
+    direction: UP
+- tapOn:
+    text: "Create session"
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn:
+    text: "Cancel"
+    optional: true
+- takeScreenshot: fac-attendance

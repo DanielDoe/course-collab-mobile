@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Keyboard, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { AppAlert } from '../../lib/app-alert'
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
@@ -28,6 +28,8 @@ import {
 
 } from "./faculty-collab-sheet-ui"
 import { SHEET_SECTION } from "./faculty-sheet-semantics"
+import { NativeSelect } from "../NativeSelect"
+import { secondsSelectOptions } from "./FacultyNativePickers"
 
 type Scope = { instructorId: number; courseId: number }
 
@@ -142,6 +144,7 @@ export function FacultyAssessmentCreateModal({
   }, [questions, search])
 
   function openTopic(topicName: string) {
+    Keyboard.dismiss()
     setActiveTopic(topicName)
     setView("questions")
     setSearch("")
@@ -149,6 +152,7 @@ export function FacultyAssessmentCreateModal({
   }
 
   function backToTopics() {
+    Keyboard.dismiss()
     setView("topics")
     setActiveTopic(null)
     setQuestions([])
@@ -168,6 +172,7 @@ export function FacultyAssessmentCreateModal({
   }
 
   async function handleCreate() {
+    Keyboard.dismiss()
     if (!scope) return
     const trimmedTitle = title.trim()
     if (!trimmedTitle) {
@@ -221,7 +226,8 @@ export function FacultyAssessmentCreateModal({
         <ScrollView
           style={moduleStyles.scroll}
           contentContainerStyle={[collabSheetStyles.scroll, { paddingBottom: insets.bottom + 100 }]}
-          keyboardShouldPersistTaps="handled"
+          keyboardShouldPersistTaps="always"
+          keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}
         >
           <FacultySheetSection label="Details" tone={SHEET_SECTION.edit}>
@@ -230,6 +236,18 @@ export function FacultyAssessmentCreateModal({
                 value={title}
                 onChangeText={setTitle}
                 placeholder={`${config.shortLabel} title…`}
+                accessibilityLabel="Title"
+                testID="assessment-title"
+                keyboardType="ascii-capable"
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoComplete="off"
+                spellCheck={false}
+                textContentType="none"
+                returnKeyType="done"
+                blurOnSubmit
+                onSubmitEditing={() => Keyboard.dismiss()}
+                autoFocus
               />
             </FacultySheetField>
             <FacultySheetField label="Description (optional)">
@@ -240,12 +258,12 @@ export function FacultyAssessmentCreateModal({
                 placeholder="Brief description for students…"
               />
             </FacultySheetField>
-            <FacultySheetField label="Seconds per question">
-              <FacultySheetTextInput
+            <FacultySheetField label="Time per question">
+              <NativeSelect
+                placeholder="30 seconds"
                 value={timeLimit}
-                onChangeText={setTimeLimit}
-                keyboardType="number-pad"
-                maxLength={4}
+                options={secondsSelectOptions(Number(timeLimit))}
+                onChange={setTimeLimit}
               />
             </FacultySheetField>
           </FacultySheetSection>
@@ -281,7 +299,11 @@ export function FacultyAssessmentCreateModal({
                 <Text style={[type.caption, { color: native.secondaryLabel, fontWeight: "700" }]}>
                   {selectionCount} selected · {filteredQuestions.length} shown
                 </Text>
-                <Pressable onPress={allVisibleSelected ? clearSelection : selectAllVisible}>
+                <Pressable
+                  onPress={allVisibleSelected ? clearSelection : selectAllVisible}
+                  accessibilityRole="button"
+                  accessibilityLabel={allVisibleSelected ? "Clear all" : "Select all"}
+                >
                   <Text style={[type.caption, { color: FACULTY_ASSESSMENT_COLOR.link, fontWeight: "600" }]}>
                     {allVisibleSelected ? "Clear all" : "Select all"}
                   </Text>
@@ -349,6 +371,9 @@ export function FacultyAssessmentCreateModal({
                         pressed && moduleStyles.cardPressed,
                       ]}
                       onPress={() => toggleQuestion(question.id)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Select question ${preview}`}
+                      accessibilityState={{ selected }}
                     >
                       <View
                         style={[

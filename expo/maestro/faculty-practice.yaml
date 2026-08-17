@@ -1,0 +1,21 @@
+appId: com.coursecollab.app
+---
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn:
+    text: "Close menu"
+    optional: true
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Manage Practice"
+    direction: DOWN
+    timeout: 12000
+- tapOn: "Manage Practice"
+- tapOn:
+    text: "Close menu"
+    optional: true
+- extendedWaitUntil:
+    visible: "Search topics…|No topics|Configure practice|Practice bank unavailable"
+    timeout: 30000
+- takeScreenshot: practice-page

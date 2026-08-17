@@ -33,6 +33,7 @@ import { FacultyAttemptReportModal } from "./FacultyAttemptReportModal"
 import { FacultyResultCard } from "./FacultyResultsListCards"
 import { FACULTY_RESULTS_COLOR } from "../../lib/faculty-results-theme"
 import { useModuleTheme } from "../../lib/themed-module-shell"
+import { FacultyAdminTierGate } from "./faculty-admin-ui"
 
 const RESULT_TABS: Array<{ id: ResultsTab; icon: keyof typeof Ionicons.glyphMap }> = [
   { id: "all", icon: "layers-outline" },
@@ -44,6 +45,14 @@ const RESULT_TABS: Array<{ id: ResultsTab; icon: keyof typeof Ionicons.glyphMap 
 ]
 
 export function FacultyResultsScreen() {
+  return (
+    <FacultyAdminTierGate minTier="Pro" featureLabel="Manage Results">
+      <FacultyResultsContent />
+    </FacultyAdminTierGate>
+  )
+}
+
+function FacultyResultsContent() {
   const { styles: moduleStyles, native, tokens, type } = useModuleTheme()
   const insets = useSafeAreaInsets()
   const { listScrollPad } = useFacultyStickyHeaderScrollLayout()
@@ -63,13 +72,12 @@ export function FacultyResultsScreen() {
   const load = useCallback(async () => {
     if (!scope) return
     setError("")
-    const sessionCode = resolveSessionFilterCode(sessions, sessionFilter)
-    const [rows, sessionRes] = await Promise.all([
-      instructorApi.getAssessmentResults(scope, { sessionCode, limit: 500 }),
-      instructorApi.getSessions(scope),
-    ])
+    const sessionRes = await instructorApi.getSessions(scope)
+    const nextSessions = sessionRes.sessions ?? []
+    setSessions(nextSessions)
+    const sessionCode = resolveSessionFilterCode(nextSessions, sessionFilter)
+    const rows = await instructorApi.getAssessmentResults(scope, { sessionCode, limit: 200 })
     setResults(rows)
-    setSessions(sessionRes.sessions ?? [])
   }, [scope, sessionFilter])
 
   useEffect(() => {
@@ -169,14 +177,14 @@ export function FacultyResultsScreen() {
             }
           />
         ) : (
-          filtered.slice(0, 80).map((item) => (
+          filtered.slice(0, 200).map((item) => (
             <FacultyResultCard key={item.attempt_id} item={item} onPress={() => setSelectedResult(item)} />
           ))
         )}
 
-        {!loading && filtered.length > 80 ? (
+        {!loading && filtered.length > 200 ? (
           <Text style={[type.caption, styles.moreNote, { color: native.tertiaryLabel }]}>
-            Showing first 80 matches. Refine your search to see more.
+            Showing first 200 matches. Refine your search to see more.
           </Text>
         ) : null}
       </ScrollView>

@@ -1,0 +1,9 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Create project"
+- scrollUntilVisible:
+    element: "Submit Create project"
+    direction: DOWN
+    timeout: 12000
+    visibilityPercentage: 40
+- tapOn: "Submit Create project"

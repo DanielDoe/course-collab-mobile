@@ -135,6 +135,34 @@ export const assessmentQuizApi = {
       body: JSON.stringify(payload),
     }),
 
+  /** Anti-cheat telemetry (tab_switch / copy_paste / app_backgrounded). Best-effort. */
+  logViolation: (
+    session: StudentSession,
+    payload: {
+      attemptId: number
+      type: string
+      reason?: string
+      details?: string
+    },
+  ) =>
+    request<{ success: boolean; counts?: Record<string, number> }>(
+      session,
+      "/api/quiz/log-violation",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          attemptId: payload.attemptId,
+          violation: {
+            type: payload.type,
+            reason: payload.reason ?? payload.type,
+            details: payload.details ?? null,
+            source: "native_app",
+            timestamp: new Date().toISOString(),
+          },
+        }),
+      },
+    ),
+
   saveAndFinishLater: (
     session: StudentSession,
     payload: { attemptId: number; currentQuestionIndex?: number; remainingTimeSeconds?: number },

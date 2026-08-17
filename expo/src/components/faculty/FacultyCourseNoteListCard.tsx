@@ -48,47 +48,51 @@ export function FacultyCourseNoteListCard({
     : `${facultyCourseNoteMetaLine(note)} · Updated ${formatNoteWhen(note.updatedAt)}`
 
   return (
-    <Pressable
-      style={({ pressed }) => [
+    <View
+      style={[
         styles.card,
         tokens.cardShadow,
         {
           backgroundColor: native.secondaryGrouped,
           borderColor: tokens.border,
-          opacity: pressed ? NATIVE.pressedOpacity : 1,
         },
       ]}
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={`${note.title}, ${status.label}`}
     >
-      <SolidListThumbTile thumb={solidThumb} icon={noteThumbIcon("course")} />
+      <Pressable
+        style={({ pressed }) => [styles.cardMain, { opacity: pressed ? NATIVE.pressedOpacity : 1 }]}
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel={`${note.title || "Untitled note"}, ${status.label}`}
+      >
+        <SolidListThumbTile thumb={solidThumb} icon={noteThumbIcon("course")} />
 
-      <View style={styles.copy}>
-        <Text style={[type.bodyEmphasis, styles.title, { color: native.label }]} numberOfLines={2}>
-          {note.title || "Untitled note"}
-        </Text>
-        <Text style={[type.caption, styles.preview, { color: native.secondaryLabel }]} numberOfLines={2}>
-          {notePreview(note.bodyText)}
-        </Text>
+        <View style={styles.copy}>
+          <Text style={[type.bodyEmphasis, styles.title, { color: native.label }]} numberOfLines={2}>
+            {note.title || "Untitled note"}
+          </Text>
+          <Text style={[type.caption, styles.preview, { color: native.secondaryLabel }]} numberOfLines={2}>
+            {notePreview(note.bodyText)}
+          </Text>
 
-        <View style={styles.statusRow}>
-          <Ionicons
-            name={status.icon}
-            size={status.icon === "ellipse" ? 8 : 14}
-            color={status.color}
-            style={status.icon === "ellipse" ? styles.statusDot : undefined}
-          />
-          <Text style={[type.footnote, styles.statusText, { color: status.color }]}>{status.label}</Text>
-          <Text style={[type.footnote, { color: native.tertiaryLabel }]}>• {metaLine}</Text>
+          <View style={styles.statusRow}>
+            <Ionicons
+              name={status.icon}
+              size={status.icon === "ellipse" ? 8 : 14}
+              color={status.color}
+              style={status.icon === "ellipse" ? styles.statusDot : undefined}
+            />
+            <Text style={[type.footnote, styles.statusText, { color: status.color }]}>{status.label}</Text>
+            <Text style={[type.footnote, { color: native.tertiaryLabel }]}>• {metaLine}</Text>
+          </View>
         </View>
-      </View>
+      </Pressable>
 
       {onRestore ? (
         <Pressable
           onPress={onRestore}
           hitSlop={8}
-          accessibilityLabel={`Restore ${note.title}`}
+          accessibilityRole="button"
+          accessibilityLabel={`Restore ${note.title || "Untitled note"}`}
           style={styles.actionBtn}
         >
           <Ionicons name="arrow-undo-outline" size={18} color={tokens.accent} />
@@ -97,7 +101,8 @@ export function FacultyCourseNoteListCard({
         <Pressable
           onPress={onDelete}
           hitSlop={8}
-          accessibilityLabel={`Delete ${note.title}`}
+          accessibilityRole="button"
+          accessibilityLabel={`Delete ${note.title || "Untitled note"}`}
           style={styles.actionBtn}
         >
           <Ionicons name="trash-outline" size={18} color={tokens.danger} />
@@ -105,7 +110,7 @@ export function FacultyCourseNoteListCard({
       ) : (
         <Ionicons name="chevron-forward" size={16} color={native.tertiaryLabel} style={styles.chevron} />
       )}
-    </Pressable>
+    </View>
   )
 }
 
@@ -119,6 +124,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 12,
     minHeight: 88,
+  },
+  cardMain: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    minWidth: 0,
   },
   copy: {
     flex: 1,

@@ -1,0 +1,16 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Delete QA99 Course NoteQA probe body. Safe to delete."
+- takeScreenshot: course-notes-qa-list-delete-confirm
+- tapOn: "Delete"
+- extendedWaitUntil:
+    visible: "No course notes|No matches"
+    timeout: 15000
+- tapOn: "Search course notes…"
+- eraseText
+- tapOn:
+    text: "Clear search"
+    optional: true
+- tapOn: "Course Notes"
+- tapOn: "Deleted"
+- takeScreenshot: course-notes-deleted-tab

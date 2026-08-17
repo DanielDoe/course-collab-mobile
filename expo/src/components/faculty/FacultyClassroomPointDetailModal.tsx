@@ -14,6 +14,8 @@ import { formatFacultyRelativeTime } from "../../lib/instructor-api"
 import { FACULTY_CLASSROOM_POINTS_COLOR } from "../../lib/faculty-classroom-points-theme"
 import { semanticSoft } from "../../lib/themed-module-theme"
 import { useModuleTheme } from "../../lib/themed-module-shell"
+import { NativeSelect } from "../NativeSelect"
+import { POINT_AWARD_OPTIONS, withCurrentOption } from "./FacultyNativePickers"
 import { FacultySubmissionReviewPanel } from "./FacultySubmissionReviewPanel"
 import { FacultyStatusPill } from "./faculty-shared"
 import {
@@ -26,7 +28,6 @@ import {
   FacultySheetSection,
   FacultySheetStatChip,
   FacultySheetStatRow,
-  FacultySheetTextInput,
   FACULTY_SHEET_CHIP_RADIUS,
 } from "./faculty-collab-sheet-ui"
 import { SHEET_CLASSROOM_POINTS } from "./faculty-sheet-semantics"
@@ -252,11 +253,14 @@ export function FacultyClassroomPointDetailModal({ point, scope, variant, onClos
               tone={SHEET_CLASSROOM_POINTS.review}
             >
               <FacultySheetField label="Custom points">
-                <FacultySheetTextInput
+                <NativeSelect
+                  placeholder={`Suggested ${suggested} pts`}
                   value={customPoints}
-                  onChangeText={setCustomPoints}
-                  placeholder={suggested}
-                  keyboardType="decimal-pad"
+                  options={[
+                    { value: "", label: `Suggested ${suggested} pts` },
+                    ...withCurrentOption(POINT_AWARD_OPTIONS, customPoints, `${customPoints} pts`),
+                  ]}
+                  onChange={setCustomPoints}
                 />
               </FacultySheetField>
               <View style={localStyles.actions}>

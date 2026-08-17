@@ -1,0 +1,8 @@
+appId: com.coursecollab.app
+---
+- scrollUntilVisible:
+    element: "Delete term. Permanently removes this academic term"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Delete term. Permanently removes this academic term"
+- tapOn: "Delete"

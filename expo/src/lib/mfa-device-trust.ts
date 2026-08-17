@@ -88,6 +88,7 @@ export function resolveStudentMfaLoginKeys(
 
 function userTypeFromLoginKey(loginKey: string): MfaUserType {
   if (loginKey.startsWith("instructor:")) return "instructor"
+  if (loginKey.startsWith("admin:")) return "admin"
   return "student"
 }
 

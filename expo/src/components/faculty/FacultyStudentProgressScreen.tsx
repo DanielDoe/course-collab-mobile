@@ -13,23 +13,29 @@ import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { ApiError } from "../../lib/api"
 import {
   buildAtRiskRows,
+  buildPracticeScoreDistribution,
   filterAtRiskRows,
   filterPracticeProgress,
-  type StudentProgressTab} from "../../lib/faculty-analytics-utils"
+  hasPracticeScoreDistributionData,
+  type AtRiskStudentRow,
+  type StudentProgressTab,
+} from "../../lib/faculty-analytics-utils"
 import {
   instructorApi,
   type AttendanceAnalytics,
   type InstructorDashboardCharts,
   type InstructorDashboardStats,
   type InstructorSession,
-  type PracticeStudentProgress} from "../../lib/instructor-api"
+  type InstructorStudent,
+  type PracticeStudentProgress,
+} from "../../lib/instructor-api"
 import {
   buildFacultyBreakdownChartHtml,
+  buildFacultyPracticeScoreDistributionChartHtml,
   buildFacultyScoreTrendChartHtml,
-  buildFacultySubmissionsChartHtml,
   hasBreakdownChartData,
   hasScoreTrendChartData,
-  hasSubmissionsChartData} from "./faculty-chart-html"
+} from "./faculty-chart-html"
 import { useFacultyScope } from "../../hooks/useFacultyScope"
 import { NATIVE } from "../../constants/faculty-native-theme"
 import { FacultyChartCard } from "./FacultyChartCard"
@@ -44,6 +50,9 @@ import { useFacultyStickyHeaderScrollLayout,
   FacultySearchToolbar,
   sectionFilterSheetOptions} from "./faculty-module-shell"
 import { FacultyPracticeStudentReportModal } from "./FacultyPracticeStudentReportModal"
+import { FacultyAtRiskActionSheet } from "./FacultyAtRiskActionSheet"
+import { FacultyStudentDetailModal } from "./FacultyStudentDetailModal"
+import { useSuppressModuleSearchDock } from "../../context/ModuleSearchDockContext"
 import { useModuleTheme } from "../../lib/themed-module-shell"
 
 const TABS: Array<{ id: StudentProgressTab; label: string; icon: keyof typeof Ionicons.glyphMap }> = [
@@ -72,6 +81,8 @@ export function FacultyStudentProgressScreen() {
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState("")
   const [selectedStudent, setSelectedStudent] = useState<PracticeStudentProgress | null>(null)
+  const [selectedAtRisk, setSelectedAtRisk] = useState<AtRiskStudentRow | null>(null)
+  const [profileStudent, setProfileStudent] = useState<InstructorStudent | null>(null)
 
   const chartWidth = Math.max(280, width - 64)
 
@@ -141,9 +152,10 @@ export function FacultyStudentProgressScreen() {
           ? `${t.label} · ${students.length}`
           : t.label}))
 
-  const submissionsHtml = useMemo(
-    () => (charts ? buildFacultySubmissionsChartHtml(charts.submissionsOverTime, chartWidth) : ""),
-    [charts, chartWidth],
+  const practiceDistribution = useMemo(() => buildPracticeScoreDistribution(students), [students])
+  const practiceDistributionHtml = useMemo(
+    () => buildFacultyPracticeScoreDistributionChartHtml(practiceDistribution, chartWidth),
+    [practiceDistribution, chartWidth],
   )
   const breakdownHtml = useMemo(
     () => (charts ? buildFacultyBreakdownChartHtml(charts.assessmentBreakdown, chartWidth) : ""),
@@ -152,6 +164,10 @@ export function FacultyStudentProgressScreen() {
   const scoreTrendHtml = useMemo(
     () => (charts ? buildFacultyScoreTrendChartHtml(charts.scoreTrend, chartWidth) : ""),
     [charts, chartWidth],
+  )
+
+  useSuppressModuleSearchDock(
+    selectedAtRisk != null || profileStudent != null || selectedStudent != null,
   )
 
   if (!ready) {
@@ -216,8 +232,8 @@ export function FacultyStudentProgressScreen() {
                 statColor={FACULTY_STUDENT_PROGRESS_COLOR.link}
               />
               <FacultyKpiGrid stats={stats} />
-              {hasSubmissionsChartData(charts?.submissionsOverTime ?? []) ? (
-                <FacultyChartCard title="Submissions over time" html={submissionsHtml} />
+              {hasPracticeScoreDistributionData(practiceDistribution) ? (
+                <FacultyChartCard title="Practice mastery distribution" html={practiceDistributionHtml} />
               ) : null}
               {hasBreakdownChartData(charts?.assessmentBreakdown ?? []) ? (
                 <FacultyChartCard title="Assessment breakdown" html={breakdownHtml} />
@@ -276,7 +292,7 @@ export function FacultyStudentProgressScreen() {
         ) : (
           <View style={styles.list}>
             {filteredAtRisk.map((row) => (
-              <FacultyAtRiskCard key={row.id} row={row} />
+              <FacultyAtRiskCard key={row.id} row={row} onPress={() => setSelectedAtRisk(row)} />
             ))}
           </View>
         )}
@@ -297,6 +313,29 @@ export function FacultyStudentProgressScreen() {
         scope={scope}
         student={selectedStudent}
         onClose={() => setSelectedStudent(null)}
+      />
+
+      <FacultyAtRiskActionSheet
+        visible={selectedAtRisk != null}
+        row={selectedAtRisk}
+        allRows={atRiskRows}
+        scope={scope}
+        onClose={() => setSelectedAtRisk(null)}
+        onOpenProfile={(student) => {
+          setSelectedAtRisk(null)
+          setProfileStudent(student)
+        }}
+        onOpenPracticeReport={(student) => {
+          setSelectedAtRisk(null)
+          setSelectedStudent(student)
+        }}
+      />
+
+      <FacultyStudentDetailModal
+        student={profileStudent}
+        scope={scope}
+        profileEyebrow="Student profile"
+        onClose={() => setProfileStudent(null)}
       />
     </View>
   )

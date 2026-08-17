@@ -1,4 +1,5 @@
 import { API_BASE_URL } from "../constants"
+import { abortTimeout } from "./abort-timeout"
 import { ApiError } from "./api"
 import { apiErrorMessage, isApiRouteMissingError } from "./http-errors"
 import type { InstructorScope } from "./instructor-content-api"
@@ -32,7 +33,7 @@ async function instructorChatRequest<T>(
     ...init,
     headers,
     body: init?.body,
-    signal: init?.signal ?? AbortSignal.timeout(12_000),
+    signal: init?.signal ?? abortTimeout(12_000),
   })
   const text = await response.text()
   let body: unknown = null
@@ -61,13 +62,31 @@ export const facultyCoraChatApi = {
     )
   },
 
-  async upsertThread(scope: InstructorScope, thread: FacultyCoraChatThread): Promise<FacultyCoraChatThreadResponse> {
+  async upsertThread(
+    scope: InstructorScope,
+    thread: FacultyCoraChatThread,
+    opts?: { setActive?: boolean },
+  ): Promise<FacultyCoraChatThreadResponse> {
     return instructorChatRequest<FacultyCoraChatThreadResponse>(
       `/api/instructor/cora/threads/${encodeURIComponent(thread.id)}`,
       scope,
       {
         method: "PUT",
-        body: JSON.stringify({ thread, setActive: true }),
+        body: JSON.stringify({
+          thread,
+          setActive: opts?.setActive !== false && !thread.archivedAt,
+        }),
+      },
+    )
+  },
+
+  async setActiveThread(scope: InstructorScope, threadId: string): Promise<void> {
+    await instructorChatRequest<{ ok: true }>(
+      `/api/instructor/cora/threads/${encodeURIComponent(threadId)}`,
+      scope,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ setActive: true }),
       },
     )
   },

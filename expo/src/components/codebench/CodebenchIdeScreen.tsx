@@ -45,6 +45,7 @@ import type { CoraImportedProblem } from "../../lib/cora-api"
 import { CoraThinkingIndicator } from "../ai-tutor/CoraThinkingIndicator"
 import { CoraToolPickerCard, CoraToolPickerList } from "../ai-tutor/CoraToolPickerCard"
 import { CoraBrand } from "../cora/CoraBrand"
+import { CodebenchAiFullscreenShell } from "./CodebenchAiFullscreenShell"
 import { CodebenchAskCoraPanel } from "./CodebenchAskCoraPanel"
 import { CodebenchWalkthroughPanel } from "./CodebenchWalkthroughPanel"
 import { MarkdownContentWebView } from "../course-info/MarkdownContentWebView"
@@ -67,6 +68,8 @@ type TutorMessage = { role: "user" | "assistant"; content: string }
 type SheetKind = "language" | "mode" | "cora-tool" | "assignment" | null
 
 const CORA_ACCENT = "#7C3AED"
+
+const FULLSCREEN_AI_PANELS = new Set<PanelMode>(["result", "practice", "evaluate", "xp"])
 
 const CORA_TOOLS: Array<{
   id: ToolId
@@ -146,6 +149,7 @@ export function CodebenchIdeScreen() {
   const [resultBody, setResultBody] = useState("")
   const [walkthroughSteps, setWalkthroughSteps] = useState<CodeReplayStep[]>([])
   const [walkthroughCode, setWalkthroughCode] = useState("")
+  const [walkthroughIndex, setWalkthroughIndex] = useState(0)
   const [tutorInput, setTutorInput] = useState("")
   const [tutorMessages, setTutorMessages] = useState<TutorMessage[]>([])
   const [practiceProblem, setPracticeProblem] = useState("")
@@ -255,6 +259,7 @@ export function CodebenchIdeScreen() {
 
       setPanel("walkthrough")
       setWalkthroughSteps([])
+      setWalkthroughIndex(0)
       setWalkthroughCode(codeToWalk)
       setAiExpanded(true)
       setBusy(true)
@@ -530,6 +535,137 @@ export function CodebenchIdeScreen() {
           ? "Cora tools"
           : "Assignment"
 
+  const aiPanelFullscreen = aiExpanded && FULLSCREEN_AI_PANELS.has(panel)
+  const hideAiPanel =
+    (panel === "tutor" && aiExpanded) ||
+    (panel === "walkthrough" && aiExpanded) ||
+    aiPanelFullscreen
+
+  const closeAiPanel = () => {
+    setAiExpanded(false)
+    setPanel("ready")
+  }
+
+  const collapseAiPanel = () => setAiExpanded(false)
+
+  const evaluateFooter = (
+    <View style={[styles.evalActions, aiPanelFullscreen && styles.evalActionsFullscreen]}>
+      <Pressable
+        disabled={evalIndex === 0}
+        onPress={() => setEvalIndex((i) => Math.max(0, i - 1))}
+        style={[styles.secondaryBtn, { borderColor: native.separator }]}
+      >
+        <Text style={[type.caption, { color: native.label, fontWeight: "700" }]}>Back</Text>
+      </Pressable>
+      {evalIndex < evalQuestions.length - 1 ? (
+        <Pressable
+          onPress={() => setEvalIndex((i) => i + 1)}
+          style={[styles.primaryBtn, { backgroundColor: tokens.accent, flex: 1, marginHorizontal: 0 }]}
+        >
+          <Text style={styles.primaryBtnText}>Next</Text>
+        </Pressable>
+      ) : (
+        <Pressable
+          onPress={() => void finishEvaluate()}
+          disabled={busy}
+          style={[styles.primaryBtn, { backgroundColor: tokens.accent, flex: 1, marginHorizontal: 0 }]}
+        >
+          <Text style={styles.primaryBtnText}>{busy ? "Submitting…" : "Submit"}</Text>
+        </Pressable>
+      )}
+    </View>
+  )
+
+  const evaluateBody = currentEval ? (
+    <>
+      <View style={{ marginBottom: 10 }}>
+        <MarkdownContentWebView markdown={currentEval.question} embedded />
+      </View>
+      {currentEval.type === "multiple_choice" && currentEval.options?.length ? (
+        currentEval.options.map((opt) => {
+          const selected = evalAnswers[evalIndex] === opt
+          return (
+            <Pressable
+              key={opt}
+              onPress={() =>
+                setEvalAnswers((prev) => {
+                  const next = [...prev]
+                  next[evalIndex] = opt
+                  return next
+                })
+              }
+              style={[
+                styles.choice,
+                {
+                  borderColor: selected ? tokens.accent : native.separator,
+                  backgroundColor: selected ? hexToRgba(tokens.accent, 0.14) : native.fill,
+                },
+              ]}
+            >
+              <Text style={[type.body, { color: selected ? tokens.accent : native.label }]}>{opt}</Text>
+            </Pressable>
+          )
+        })
+      ) : (
+        <TextInput
+          value={evalAnswers[evalIndex] ?? ""}
+          onChangeText={(text) =>
+            setEvalAnswers((prev) => {
+              const next = [...prev]
+              next[evalIndex] = text
+              return next
+            })
+          }
+          placeholder="Your answer"
+          placeholderTextColor={native.tertiaryLabel}
+          style={[
+            styles.composeInput,
+            {
+              color: native.label,
+              borderColor: native.separator,
+              backgroundColor: native.fill,
+              minHeight: 72,
+              textAlignVertical: "top",
+            },
+          ]}
+          multiline
+        />
+      )}
+    </>
+  ) : null
+
+  const xpBody = (
+    <>
+      <View style={styles.xpHero}>
+        <View style={[styles.xpIcon, { backgroundColor: hexToRgba(ide.gold, 0.2) }]}>
+          <Ionicons name="flash" size={22} color={ide.gold} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={[type.caption, { color: ide.gold, fontWeight: "800" }]}>LEVEL {level}</Text>
+          <Text style={[type.sheetTitle, { color: native.label }]}>{xp} XP</Text>
+        </View>
+        <Text style={[type.caption, { color: ide.gold, fontWeight: "800" }]}>{xpInLevel}/100</Text>
+      </View>
+      <View style={[styles.xpTrack, { backgroundColor: native.fill }]}>
+        <View style={[styles.xpFill, { width: `${xpInLevel}%`, backgroundColor: ide.gold }]} />
+      </View>
+      <Text style={[type.caption, { color: native.secondaryLabel, marginTop: 8 }]}>
+        Progress to Lv {level + 1}
+      </Text>
+      <Pressable
+        onPress={() => {
+          setAiExpanded(false)
+          setPanel("ready")
+          router.push("/module/codebench-more" as never)
+        }}
+        style={[styles.primaryBtn, { backgroundColor: tokens.accent }]}
+      >
+        <Ionicons name="bar-chart-outline" size={16} color="#FFFFFF" />
+        <Text style={styles.primaryBtnText}>Analytics & progress</Text>
+      </Pressable>
+    </>
+  )
+
   return (
     <View style={[styles.root, { backgroundColor: ide.canvas }]}>
       <KeyboardAvoidingView
@@ -654,15 +790,21 @@ export function CodebenchIdeScreen() {
           />
         </View>
 
-        {/* AI Assistant panel — hidden when Ask Cora is full screen (overlay handles it) */}
-        {!(panel === "tutor" && aiExpanded) ? (
+        {/* AI Assistant panel — hidden when a full-screen overlay handles it */}
+        {!hideAiPanel ? (
         <View
           style={[
             styles.aiPanel,
             {
               backgroundColor: panel === "tutor" ? "transparent" : native.secondaryGrouped,
               borderTopColor: panel === "tutor" ? "transparent" : native.separator,
-              paddingBottom: panel === "tutor" ? 0 : Math.max(insets.bottom, 10),
+              paddingBottom:
+                panel === "tutor"
+                  ? 0
+                  : aiExpanded
+                    ? 0
+                    : Math.max(insets.bottom, 10),
+              paddingTop: aiExpanded && panel !== "tutor" ? insets.top : 0,
               minHeight: panel === "tutor" || aiExpanded ? undefined : aiPanelMinHeight,
             },
             aiExpanded && styles.aiPanelExpanded,
@@ -781,7 +923,7 @@ export function CodebenchIdeScreen() {
             </View>
           ) : null}
 
-          {panel === "walkthrough" ? (
+          {panel === "walkthrough" && !aiExpanded ? (
             <View style={styles.walkthroughHost}>
               {busy && walkthroughSteps.length === 0 ? (
                 <View style={styles.thinkingHost}>
@@ -791,13 +933,15 @@ export function CodebenchIdeScreen() {
                 <CodebenchWalkthroughPanel
                   steps={walkthroughSteps}
                   sourceCode={walkthroughCode || code}
-                  expanded={aiExpanded}
+                  index={walkthroughIndex}
+                  onIndexChange={setWalkthroughIndex}
+                  bottomInset={insets.bottom}
                 />
               )}
             </View>
           ) : null}
 
-          {panel === "result" ? (
+          {panel === "result" && !aiPanelFullscreen ? (
             <ScrollView
               style={[styles.aiScroll, aiExpanded ? styles.aiScrollExpanded : styles.aiScrollCollapsed]}
               contentContainerStyle={{ paddingBottom: 16 }}
@@ -827,7 +971,7 @@ export function CodebenchIdeScreen() {
             />
           ) : null}
 
-          {panel === "practice" ? (
+          {panel === "practice" && !aiPanelFullscreen ? (
             <>
               <ScrollView
                 style={[styles.aiScroll, aiExpanded ? styles.aiScrollExpanded : styles.aiScrollCollapsed]}
@@ -845,129 +989,25 @@ export function CodebenchIdeScreen() {
             </>
           ) : null}
 
-          {panel === "evaluate" && currentEval ? (
+          {panel === "evaluate" && currentEval && !aiPanelFullscreen ? (
             <>
               <ScrollView
                 style={[styles.aiScroll, aiExpanded ? styles.aiScrollExpanded : styles.aiScrollCollapsed]}
                 contentContainerStyle={{ paddingBottom: 8 }}
               >
-                <View style={{ marginBottom: 10 }}>
-                  <MarkdownContentWebView markdown={currentEval.question} embedded />
-                </View>
-                {currentEval.type === "multiple_choice" && currentEval.options?.length ? (
-                  currentEval.options.map((opt) => {
-                    const selected = evalAnswers[evalIndex] === opt
-                    return (
-                      <Pressable
-                        key={opt}
-                        onPress={() =>
-                          setEvalAnswers((prev) => {
-                            const next = [...prev]
-                            next[evalIndex] = opt
-                            return next
-                          })
-                        }
-                        style={[
-                          styles.choice,
-                          {
-                            borderColor: selected ? tokens.accent : native.separator,
-                            backgroundColor: selected ? hexToRgba(tokens.accent, 0.14) : native.fill,
-                          },
-                        ]}
-                      >
-                        <Text style={[type.body, { color: selected ? tokens.accent : native.label }]}>
-                          {opt}
-                        </Text>
-                      </Pressable>
-                    )
-                  })
-                ) : (
-                  <TextInput
-                    value={evalAnswers[evalIndex] ?? ""}
-                    onChangeText={(text) =>
-                      setEvalAnswers((prev) => {
-                        const next = [...prev]
-                        next[evalIndex] = text
-                        return next
-                      })
-                    }
-                    placeholder="Your answer"
-                    placeholderTextColor={native.tertiaryLabel}
-                    style={[
-                      styles.composeInput,
-                      {
-                        color: native.label,
-                        borderColor: native.separator,
-                        backgroundColor: native.fill,
-                        minHeight: 72,
-                        textAlignVertical: "top",
-                      },
-                    ]}
-                    multiline
-                  />
-                )}
+                {evaluateBody}
               </ScrollView>
-              <View style={styles.evalActions}>
-                <Pressable
-                  disabled={evalIndex === 0}
-                  onPress={() => setEvalIndex((i) => Math.max(0, i - 1))}
-                  style={[styles.secondaryBtn, { borderColor: native.separator }]}
-                >
-                  <Text style={[type.caption, { color: native.label, fontWeight: "700" }]}>Back</Text>
-                </Pressable>
-                {evalIndex < evalQuestions.length - 1 ? (
-                  <Pressable
-                    onPress={() => setEvalIndex((i) => i + 1)}
-                    style={[styles.primaryBtn, { backgroundColor: tokens.accent, flex: 1, marginHorizontal: 0 }]}
-                  >
-                    <Text style={styles.primaryBtnText}>Next</Text>
-                  </Pressable>
-                ) : (
-                  <Pressable
-                    onPress={() => void finishEvaluate()}
-                    disabled={busy}
-                    style={[styles.primaryBtn, { backgroundColor: tokens.accent, flex: 1, marginHorizontal: 0 }]}
-                  >
-                    <Text style={styles.primaryBtnText}>{busy ? "Submitting…" : "Submit"}</Text>
-                  </Pressable>
-                )}
-              </View>
+              {evaluateFooter}
             </>
           ) : null}
 
-          {panel === "xp" ? (
+          {panel === "xp" && !aiPanelFullscreen ? (
             <View style={[styles.aiScroll, aiExpanded ? styles.aiScrollExpanded : styles.aiScrollCollapsed]}>
-              <View style={styles.xpHero}>
-                <View style={[styles.xpIcon, { backgroundColor: hexToRgba(ide.gold, 0.2) }]}>
-                  <Ionicons name="flash" size={22} color={ide.gold} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[type.caption, { color: ide.gold, fontWeight: "800" }]}>LEVEL {level}</Text>
-                  <Text style={[type.sheetTitle, { color: native.label }]}>{xp} XP</Text>
-                </View>
-                <Text style={[type.caption, { color: ide.gold, fontWeight: "800" }]}>{xpInLevel}/100</Text>
-              </View>
-              <View style={[styles.xpTrack, { backgroundColor: native.fill }]}>
-                <View style={[styles.xpFill, { width: `${xpInLevel}%`, backgroundColor: ide.gold }]} />
-              </View>
-              <Text style={[type.caption, { color: native.secondaryLabel, marginTop: 8 }]}>
-                Progress to Lv {level + 1}
-              </Text>
-              <Pressable
-                onPress={() => {
-                  setAiExpanded(false)
-                  setPanel("ready")
-                  router.push("/module/codebench-more" as never)
-                }}
-                style={[styles.primaryBtn, { backgroundColor: tokens.accent }]}
-              >
-                <Ionicons name="bar-chart-outline" size={16} color="#FFFFFF" />
-                <Text style={styles.primaryBtnText}>Analytics & progress</Text>
-              </Pressable>
+              {xpBody}
             </View>
           ) : null}
 
-          {busy && panel !== "tutor" && panel !== "walkthrough" ? (
+          {busy && panel !== "tutor" && panel !== "walkthrough" && !aiPanelFullscreen ? (
             <View style={styles.thinkingHost}>
               <CoraThinkingIndicator context="codebench" hideBrand />
             </View>
@@ -1002,11 +1042,75 @@ export function CodebenchIdeScreen() {
         />
       ) : null}
 
-      {/* Native bottom sheet — one continuous surface to the home indicator */}
+      {panel === "walkthrough" && aiExpanded ? (
+        <CodebenchWalkthroughPanel
+          steps={walkthroughSteps}
+          sourceCode={walkthroughCode || code}
+          index={walkthroughIndex}
+          onIndexChange={setWalkthroughIndex}
+          fullscreen
+          loading={busy && walkthroughSteps.length === 0}
+          onCollapse={collapseAiPanel}
+          onClose={closeAiPanel}
+        />
+      ) : null}
+
+      {aiPanelFullscreen && panel === "result" ? (
+        <CodebenchAiFullscreenShell
+          title={resultTitle}
+          onCollapse={collapseAiPanel}
+          onClose={closeAiPanel}
+        >
+          <MarkdownContentWebView markdown={resultBody} embedded />
+        </CodebenchAiFullscreenShell>
+      ) : null}
+
+      {aiPanelFullscreen && panel === "practice" ? (
+        <CodebenchAiFullscreenShell
+          title="Practice problem"
+          onCollapse={collapseAiPanel}
+          onClose={closeAiPanel}
+          footer={
+            <Pressable
+              onPress={() => void submitPractice()}
+              disabled={busy}
+              style={[styles.primaryBtn, { backgroundColor: tokens.accent, marginHorizontal: 0 }]}
+            >
+              <Text style={styles.primaryBtnText}>{busy ? "Submitting…" : "Submit practice"}</Text>
+            </Pressable>
+          }
+        >
+          <MarkdownContentWebView markdown={practiceProblem} embedded />
+        </CodebenchAiFullscreenShell>
+      ) : null}
+
+      {aiPanelFullscreen && panel === "evaluate" && currentEval ? (
+        <CodebenchAiFullscreenShell
+          title={`Evaluate ${evalIndex + 1}/${evalQuestions.length}`}
+          onCollapse={collapseAiPanel}
+          onClose={closeAiPanel}
+          footer={evaluateFooter}
+        >
+          {evaluateBody}
+        </CodebenchAiFullscreenShell>
+      ) : null}
+
+      {aiPanelFullscreen && panel === "xp" ? (
+        <CodebenchAiFullscreenShell
+          title="Your progress"
+          onCollapse={collapseAiPanel}
+          onClose={closeAiPanel}
+        >
+          {xpBody}
+        </CodebenchAiFullscreenShell>
+      ) : null}
+
+      {/* Native bottom sheet — scrollable list + fixed cancel above home indicator */}
       <GlassBottomSheetModal
         visible={sheet != null}
         onClose={() => setSheet(null)}
-        maxHeight="78%"
+        maxHeight="92%"
+        scrollable={false}
       >
         <View
           style={[
@@ -1014,7 +1118,7 @@ export function CodebenchIdeScreen() {
             {
               backgroundColor: native.secondaryGrouped,
               borderColor: native.separator,
-              paddingBottom: Math.max(insets.bottom, 12),
+              paddingBottom: Math.max(insets.bottom, 16),
             },
           ]}
         >
@@ -1030,7 +1134,13 @@ export function CodebenchIdeScreen() {
                   : "Submit toward a classroom assignment or practice"}
           </Text>
 
-          <View style={styles.sheetList}>
+          <ScrollView
+            style={styles.sheetScroll}
+            contentContainerStyle={styles.sheetScrollContent}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
+            <View style={styles.sheetList}>
             {sheet === "cora-tool" ? (
               <CoraToolPickerList>
                 {CORA_TOOLS.map((tool, index) => (
@@ -1187,6 +1297,7 @@ export function CodebenchIdeScreen() {
               </>
             ) : null}
           </View>
+          </ScrollView>
 
           <Pressable
             onPress={() => setSheet(null)}
@@ -1330,6 +1441,8 @@ const styles = StyleSheet.create({
     zIndex: 40,
     maxHeight: "100%",
     minHeight: "100%",
+    flex: 1,
+    flexDirection: "column",
     borderTopLeftRadius: 0,
     borderTopRightRadius: 0,
     borderTopWidth: 0,
@@ -1337,6 +1450,7 @@ const styles = StyleSheet.create({
   },
   aiPanelWalkthrough: {
     flex: 1,
+    minHeight: 0,
   },
   aiPanelTutor: {
     flex: 1,
@@ -1348,6 +1462,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingTop: 12,
     paddingBottom: 8,
+    flexShrink: 0,
   },
   aiHeadActions: { flexDirection: "row", alignItems: "center", gap: 4 },
   aiHeadTutor: {
@@ -1381,7 +1496,6 @@ const styles = StyleSheet.create({
   walkthroughHost: {
     flex: 1,
     minHeight: 0,
-    paddingBottom: 4,
   },
   walkthroughBtn: {
     flexDirection: "row",
@@ -1454,6 +1568,9 @@ const styles = StyleSheet.create({
     paddingTop: 4,
     alignItems: "center",
   },
+  evalActionsFullscreen: {
+    paddingHorizontal: 0,
+  },
   xpHero: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 10 },
   xpIcon: {
     width: 44,
@@ -1483,6 +1600,14 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: 16,
     paddingTop: 8,
+    flexShrink: 1,
+  },
+  sheetScroll: {
+    flexGrow: 0,
+    flexShrink: 1,
+  },
+  sheetScrollContent: {
+    flexGrow: 0,
   },
   sheetList: {
     borderRadius: 14,

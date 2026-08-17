@@ -1,0 +1,17 @@
+appId: com.coursecollab.app
+---
+- tapOn: "QA16P"
+- extendedWaitUntil:
+    visible: "Manage project"
+    timeout: 12000
+- scrollUntilVisible:
+    element: "Delete project"
+    direction: DOWN
+    timeout: 15000
+    visibilityPercentage: 40
+- tapOn: "Delete project"
+- extendedWaitUntil:
+    visible: "Delete project?"
+    timeout: 8000
+- tapOn: "Delete"
+- waitForAnimationToEnd

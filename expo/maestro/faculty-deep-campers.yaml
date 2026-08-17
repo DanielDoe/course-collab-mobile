@@ -1,0 +1,171 @@
+appId: com.coursecollab.app
+---
+- tapOn:
+    text: "Close menu"
+    optional: true
+- tapOn:
+    text: "Close account menu"
+    optional: true
+- runFlow:
+    when:
+      notVisible: "Search campers…|Campers tab"
+    commands:
+      - tapOn:
+          id: "open-navigation-menu"
+      - waitForAnimationToEnd
+      - extendedWaitUntil:
+          visible: "Campers"
+          timeout: 15000
+      - tapOn: "Campers"
+      - tapOn:
+          text: "Close menu"
+          optional: true
+      - waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Search campers…|No campers yet|Add summer camper|84 campers"
+    timeout: 60000
+- takeScreenshot: campers-landing
+
+# Tabs on summer camp hub (use "… tab" a11y — page title may match tab label)
+- tapOn: "Programs tab"
+- extendedWaitUntil:
+    visible: "Search programs…|No summer programs"
+    timeout: 15000
+- takeScreenshot: campers-tab-programs
+- tapOn: "Tracks tab"
+- extendedWaitUntil:
+    visible: "Search training tracks…|No training tracks"
+    timeout: 15000
+- takeScreenshot: campers-tab-tracks
+- tapOn: "Campers tab"
+- extendedWaitUntil:
+    visible: "Search campers…"
+    timeout: 15000
+
+# Search dock
+- tapOn: "Search campers…"
+- inputText: "zzz-no-match-qa"
+- hideKeyboard
+- takeScreenshot: campers-search-empty
+- tapOn:
+    text: "Clear search"
+    optional: true
+- tapOn: "Search campers…"
+- eraseText
+- inputText: "a"
+- hideKeyboard
+- takeScreenshot: campers-search-match
+
+# Open live camper rows (read-only profile)
+- tapOn:
+    text: ".*enrollment.*"
+    index: 0
+    optional: true
+- extendedWaitUntil:
+    visible: "Camper profile|Done|Close|Student profile"
+    timeout: 15000
+    optional: true
+- takeScreenshot: campers-row-1
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn:
+    text: "Close"
+    optional: true
+- tapOn:
+    text: ".*enrollment.*"
+    index: 1
+    optional: true
+- extendedWaitUntil:
+    visible: "Camper profile|Done|Close|Student profile"
+    timeout: 15000
+    optional: true
+- takeScreenshot: campers-row-2
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn:
+    text: "Close"
+    optional: true
+
+# QA create — validation then success
+- tapOn:
+    text: "Clear search"
+    optional: true
+- hideKeyboard
+- tapOn: "Add summer camper"
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Add camper|Create camper account"
+    timeout: 15000
+- tapOn: "Full name"
+- inputText: "QQA99 Camper"
+- tapOn: "Add camper"
+- tapOn: "Email"
+- inputText: "qqa99.camper.run816b@uh.edu"
+- tapOn: "Add camper"
+- tapOn: "School / affiliation"
+- inputText: "QQA Summer School"
+- tapOn: "Add camper"
+- tapOn: "Summer student"
+- tapOn: "Camper"
+- swipe:
+    direction: UP
+- tapOn: "Create camper account"
+- extendedWaitUntil:
+    visible: "Camper approved|Camper request submitted|OK|Could not|already"
+    timeout: 45000
+- takeScreenshot: campers-created
+- tapOn: "OK"
+- tapOn:
+    text: "Done"
+    optional: true
+
+# Find QA camper
+- tapOn: "Search campers…"
+- eraseText
+- inputText: "QA99"
+- hideKeyboard
+- takeScreenshot: campers-qa-search
+- tapOn:
+    text: ".*QA99.*"
+    optional: true
+- extendedWaitUntil:
+    visible: "Camper profile|Done|QA99"
+    timeout: 15000
+    optional: true
+- takeScreenshot: campers-qa-profile
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn:
+    text: "Close"
+    optional: true
+
+# Inbox tab — review requests (cancel destructive on live)
+- tapOn: "Inbox tab"
+- extendedWaitUntil:
+    visible: "Search requests…|No camper requests"
+    timeout: 15000
+- swipe:
+    direction: UP
+- takeScreenshot: campers-inbox
+- tapOn:
+    text: "Approve all pending"
+    optional: true
+- tapOn:
+    text: "Cancel"
+    optional: true
+- tapOn:
+    text: ".*pending.*"
+    index: 0
+    optional: true
+- tapOn:
+    text: "Decline"
+    optional: true
+- tapOn:
+    text: "Cancel"
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true

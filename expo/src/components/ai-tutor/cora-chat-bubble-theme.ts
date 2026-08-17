@@ -1,3 +1,5 @@
+import { StyleSheet } from "react-native"
+
 type NativeColors = {
   label: string
   secondaryLabel?: string
@@ -117,11 +119,11 @@ export function getThemedCoraChatBubblePalette(tokens: {
     },
     assistant: {
       background: assistantBackground,
-      border: darkenHex(assistantBackground, 0.12),
+      border: isDark ? "rgba(255,255,255,0.16)" : "rgba(0,0,0,0.1)",
       text: "#FFFFFF",
     },
     userBorderWidth: 0,
-    assistantBorderWidth: 0,
+    assistantBorderWidth: StyleSheet.hairlineWidth,
     userRadius: 22,
     assistantRadius: 12,
     assistantShadow: false,

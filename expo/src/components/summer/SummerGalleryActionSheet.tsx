@@ -1,5 +1,5 @@
 import { useMemo, type ReactNode } from "react"
-import { Modal, ScrollView, StyleSheet, Text, View } from "react-native"
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import type { SummerGalleryAward, SummerGalleryEntry, SummerGalleryLeaderboardEntry } from "../../lib/summer-camp-api"
@@ -26,9 +26,11 @@ type Props = {
   visible: boolean
   selection: GallerySelection | null
   onClose: () => void
+  onVote?: (entryId: number) => void
+  voting?: boolean
 }
 
-export function SummerGalleryActionSheet({ visible, selection, onClose }: Props) {
+export function SummerGalleryActionSheet({ visible, selection, onClose, onVote, voting }: Props) {
   const collabSheetStyles = useCollabSheetStyles()
   const insets = useSafeAreaInsets()
   const native = useThemedNative()
@@ -61,12 +63,27 @@ export function SummerGalleryActionSheet({ visible, selection, onClose }: Props)
               <FacultySheetMetricRow icon="person-outline" label="Camper" value={entry.student_name} />
             ) : null}
             {entry.training_title ? (
-              <FacultySheetMetricRow icon="school-outline" label="Training" value={entry.training_title} isLast />
+              <FacultySheetMetricRow icon="school-outline" label="Training" value={entry.training_title} />
+            ) : null}
+            {typeof entry.votes === "number" ? (
+              <FacultySheetMetricRow icon="heart-outline" label="Votes" value={String(entry.votes)} isLast={!onVote} />
             ) : (
-              <FacultySheetMetricRow icon="images-outline" label="Gallery ID" value={`#${entry.id}`} isLast />
+              <FacultySheetMetricRow icon="images-outline" label="Gallery ID" value={`#${entry.id}`} isLast={!onVote} />
             )}
           </FacultySheetGroupedList>
         </FacultySheetSection>
+        {onVote ? (
+          <Pressable
+            style={[styles.voteBtn, { backgroundColor: entry.has_voted ? native.fill : tokens.accent, borderColor: native.separator }]}
+            disabled={entry.has_voted || voting}
+            onPress={() => onVote(entry.id)}
+          >
+            <Ionicons name={entry.has_voted ? "heart" : "heart-outline"} size={16} color={entry.has_voted ? native.secondaryLabel : "#ffffff"} />
+            <Text style={[type.caption, { color: entry.has_voted ? native.secondaryLabel : "#ffffff", fontWeight: "700" }]}>
+              {voting ? "Submitting vote…" : entry.has_voted ? "You voted for this project" : "Vote for People's Choice"}
+            </Text>
+          </Pressable>
+        ) : null}
         <InfoBanner styles={styles} native={native} tokens={tokens} type={type} />
       </GallerySheetShell>
     )
@@ -223,5 +240,16 @@ function createStyles(
       flexShrink: 0,
     },
     infoCopy: { flex: 1, gap: 4 },
+    voteBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+      marginTop: 4,
+      paddingVertical: 12,
+      paddingHorizontal: 14,
+      borderRadius: 999,
+      borderWidth: StyleSheet.hairlineWidth,
+    },
   })
 }

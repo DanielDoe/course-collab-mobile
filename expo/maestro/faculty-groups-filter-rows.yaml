@@ -1,0 +1,15 @@
+appId: com.coursecollab.app
+---
+- tapOn: "ECE2202"
+- takeScreenshot: groups-filter-ece
+- tapOn: "Open filters"
+- tapOn: "All sections"
+- takeScreenshot: groups-filter-all
+
+- tapOn: "Trash"
+- takeScreenshot: groups-trash-list
+- tapOn: "C++"
+- extendedWaitUntil:
+    visible: "Manage group|Restore group|Delete group"
+    timeout: 12000
+- takeScreenshot: groups-detail-cpp

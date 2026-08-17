@@ -61,6 +61,7 @@ export function FacultyLecturesScreen() {
 
   const load = useCallback(async () => {
     if (!scope) return
+    setError("")
     setLectures(await instructorApi.getLectures(scope))
   }, [scope])
 
@@ -90,6 +91,8 @@ export function FacultyLecturesScreen() {
     setRefreshing(true)
     try {
       await load()
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not refresh lectures.")
     } finally {
       setRefreshing(false)
     }
@@ -216,6 +219,8 @@ export function FacultyLecturesScreen() {
                 key={lecture.id}
                 style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
                 onPress={() => setSelected(lecture)}
+                accessibilityRole="button"
+                accessibilityLabel={lecture.title}
               >
                 <View style={styles.cardTop}>
                   <SolidListThumbTile thumb={weekThumb} size="compact">

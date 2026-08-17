@@ -1,0 +1,36 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Close menu"
+- waitForAnimationToEnd
+- tapOn: "Open navigation menu"
+- waitForAnimationToEnd
+- scrollUntilVisible:
+    element: "Dashboard"
+    direction: UP
+    timeout: 15000
+    visibilityPercentage: 50
+- tapOn: "Dashboard"
+- tapOn:
+    text: "Close menu"
+    optional: true
+- extendedWaitUntil:
+    visible: "Instructor"
+    timeout: 20000
+- swipe:
+    start: 50%, 80%
+    end: 50%, 20%
+    duration: 500
+- swipe:
+    start: 50%, 80%
+    end: 50%, 20%
+    duration: 500
+- scrollUntilVisible:
+    element: "Announcements"
+    direction: UP
+    timeout: 10000
+    visibilityPercentage: 80
+- tapOn: "Announcements"
+- extendedWaitUntil:
+    visible: "Announcements|New announcement|No announcements"
+    timeout: 25000
+- takeScreenshot: dest-announcements

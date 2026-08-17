@@ -10,3 +10,13 @@ export * from "./transaction-plans"
 export * from "./activity-store"
 export * from "./confirm-action"
 export * from "./local-proposals"
+export * from "./proposal-message"
+export {
+  classifyCoraTaskDomain,
+  classifyCoraTaskComplexity,
+  buildCoraDomainHint,
+  type CoraTaskDomain,
+  type CoraTaskComplexity,
+  type CoraRoutingMeta,
+} from "./ai/task-classifier"
+export * from "./models"

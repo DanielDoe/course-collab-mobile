@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react"
 import { StyleSheet, View } from "react-native"
-import { usePathname } from "expo-router"
+import { useLocalSearchParams, usePathname } from "expo-router"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import {
   GlassBottomSearchDock,
@@ -28,7 +28,7 @@ function shouldHideSearchDock(pathname: string): boolean {
   if (pathname.startsWith("/settings")) return true
   if (pathname.startsWith("/assessment/")) return true
   if (pathname.startsWith("/(auth)/") || pathname.startsWith("/auth/")) return true
-  if (pathname === "/login" || pathname === "/signing-in" || pathname === "/appearance-setup") return true
+  if (pathname === "/login" || pathname === "/signing-in" || pathname === "/appearance-setup" || pathname === "/change-password") return true
   if (pathname.startsWith("/collaboration/")) return true
   if (pathname.startsWith("/notes/")) return true
   if (pathname.startsWith("/flashcards/")) return true
@@ -59,17 +59,35 @@ export function ModuleSearchDockProvider({
 }) {
   const insets = useSafeAreaInsets()
   const pathname = usePathname()
-  const hideDock = suppressDock || shouldHideSearchDock(pathname)
+  const params = useLocalSearchParams<{ id?: string | string[] }>()
+  const moduleId = typeof params.id === "string" ? params.id : Array.isArray(params.id) ? params.id[0] : ""
+  const dockScope = `${pathname}:${moduleId}`
+  const [sheetSuppressIds, setSheetSuppressIds] = useState<Set<string>>(new Set())
+  const hideDock = suppressDock || shouldHideSearchDock(pathname) || sheetSuppressIds.size > 0
   const [entries, setEntries] = useState<Map<string, ModuleSearchDockEntry>>(new Map())
 
   useEffect(() => {
-    setEntries(new Map())
-  }, [pathname])
+    // Drop leaked sheet suppress from the previous module. Do not wipe
+    // registrations here — that races the child register effect and hides the dock.
+    setSheetSuppressIds(new Set())
+  }, [dockScope])
 
   const register = useCallback((id: string, entry: ModuleSearchDockEntry | null) => {
     setEntries((prev) => {
       const next = new Map(prev)
       if (entry) next.set(id, entry)
+      else next.delete(id)
+      return next
+    })
+  }, [])
+
+  const setSheetSuppress = useCallback((id: string, active: boolean) => {
+    setSheetSuppressIds((prev) => {
+      const has = prev.has(id)
+      if (active && has) return prev
+      if (!active && !has) return prev
+      const next = new Set(prev)
+      if (active) next.add(id)
       else next.delete(id)
       return next
     })
@@ -83,8 +101,8 @@ export function ModuleSearchDockProvider({
   const bottomInset = hideDock ? 0 : computeBottomInset(activeEntry, insets.bottom)
 
   const value = useMemo(
-    () => ({ register, bottomInset }),
-    [register, bottomInset],
+    () => ({ register, bottomInset, setSheetSuppress }),
+    [register, bottomInset, setSheetSuppress],
   )
 
   return (
@@ -92,7 +110,7 @@ export function ModuleSearchDockProvider({
       <View style={styles.providerRoot}>
         {children}
         {activeEntry && !hideDock ? (
-          <GlassBottomSearchDock>
+          <GlassBottomSearchDock key={dockScope}>
             {activeEntry.kind === "student" ? (
               <StudentSearchToolbarInner {...activeEntry.props} embedded />
             ) : activeEntry.kind === "faculty-toolbar" ? (

@@ -1,0 +1,10 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Clear search"
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Classroom Points"
+    direction: DOWN
+    timeout: 20000
+- tapOn: "Classroom Points"
+- waitForAnimationToEnd

@@ -31,8 +31,25 @@ import {
   recordCoraSuccess,
 } from "../../../lib/cora-rbac"
 import { CoraBrand } from "../../cora/CoraBrand"
+import { CoraActionCard } from "../../cora/CoraActionCard"
 import { ComposerSendButton } from "../../theme/ComposerSendButton"
 import { SolidListThumbTile } from "../../theme/SolidListThumbTile"
+import {
+  confirmFacultyCoraAction,
+  executeLocalCoraProposal,
+  isLocalCoraProposal,
+  isProposalConfirmable,
+  markProposalConfirming,
+  markProposalError,
+  markProposalResult,
+  removeProposal,
+  type CoraActionProposal,
+} from "../../../lib/cora"
+import { mapFacultyOrAdminChatResponse } from "../../../lib/cora/scope/types"
+import { submitCoraScopeFeedback } from "../../../lib/cora/scope/feedback-api"
+import { CoraScopeFeedbackBar } from "../../cora/CoraScopeFeedbackBar"
+import * as Haptics from "expo-haptics"
+import type { FacultySession } from "../../../lib/session"
 
 type Props = {
   scope: InstructorScope
@@ -45,7 +62,7 @@ type Props = {
 
 type AssistantMessage = ChatMessage & {
   actions?: FacultyCoraChatAction[]
-  proposals?: import("../../../lib/cora/types").CoraActionProposal[]
+  proposals?: CoraActionProposal[]
 }
 
 function nextChatMessageId(): string {
@@ -72,6 +89,7 @@ export function FacultyCoraChatView({
   const [sending, setSending] = useState(false)
   const [actionKey, setActionKey] = useState<string | null>(null)
   const scrollRef = useRef<ScrollView>(null)
+  const scopeRetryRef = useRef<{ confirm: boolean; context: string | null } | null>(null)
   const capability = capabilityId ? facultyCoraCapability(capabilityId) : null
   const capabilityAccent = capabilityId ? facultyCoraCapabilityAccent(capabilityId) : null
   const chatAccent = capabilityAccent?.accent ?? FACULTY_CORA_COLOR.ai
@@ -178,8 +196,59 @@ export function FacultyCoraChatView({
     [onClose, router, scope, session],
   )
 
-  const send = useCallback(async () => {
-    const text = input.trim()
+  const confirmProposal = useCallback(
+    async (messageId: string, proposal: CoraActionProposal) => {
+      const current = messages.find((m) => m.id === messageId)
+      if (!isProposalConfirmable(current, proposal.actionId)) return
+      setMessages((prev) => {
+        const next = markProposalConfirming(prev, messageId, proposal.actionId) as AssistantMessage[]
+        onMessagesChange?.(next)
+        return next
+      })
+      try {
+        const result = isLocalCoraProposal(proposal)
+          ? await executeLocalCoraProposal(proposal, { role: "faculty", scope })
+          : await confirmFacultyCoraAction(scope, proposal)
+
+        setMessages((prev) => {
+          const next = markProposalResult(prev, messageId, proposal.actionId, result) as AssistantMessage[]
+          onMessagesChange?.(next)
+          return next
+        })
+
+        if (result.success) {
+          void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+        } else {
+          AppAlert.alert("Could not complete", result.message || result.error || "Action failed.")
+        }
+      } catch (err) {
+        setMessages((prev) => {
+          const next = markProposalError(prev, messageId, proposal.actionId) as AssistantMessage[]
+          onMessagesChange?.(next)
+          return next
+        })
+        AppAlert.alert(
+          "Could not complete",
+          err instanceof Error ? err.message : "Action failed.",
+        )
+      }
+    },
+    [messages, onMessagesChange, scope],
+  )
+
+  const cancelProposal = useCallback(
+    (messageId: string, proposalId: string) => {
+      setMessages((prev) => {
+        const next = removeProposal(prev, messageId, proposalId) as AssistantMessage[]
+        onMessagesChange?.(next)
+        return next
+      })
+    },
+    [onMessagesChange],
+  )
+
+  const send = useCallback(async (overrideText?: string) => {
+    const text = (overrideText ?? input).trim()
     if (!text || sending || !session) return
     setInput("")
     const userMsg: ChatMessage = { id: nextChatMessageId(), role: "user", content: text }
@@ -217,11 +286,66 @@ export function FacultyCoraChatView({
           message: text,
           capabilityId,
           conversationHistory: messages,
+          confirmScopeRelated: scopeRetryRef.current?.confirm,
+          declaredAcademicContext: scopeRetryRef.current?.context ?? null,
         },
         { prepared },
       )
+      scopeRetryRef.current = null
 
-      if (res.rbacBlocked || res.restricted) {
+      const outcome = mapFacultyOrAdminChatResponse(
+        res as unknown as Record<string, unknown>,
+        text,
+      )
+
+      if (outcome.kind === "scope_redirect") {
+        updateMessages([
+          ...draft,
+          {
+            id: nextChatMessageId(),
+            role: "assistant",
+            content: outcome.text,
+            scopeFeedback: outcome.offerFeedback
+              ? { eventId: outcome.eventId, originalMessage: outcome.originalUserMessage }
+              : null,
+          },
+        ])
+        return
+      }
+
+      if (outcome.kind === "permission_deny" || res.rbacBlocked) {
+        recordCoraError(prepared, text)
+        updateMessages([
+          ...draft,
+          {
+            id: nextChatMessageId(),
+            role: "assistant",
+            content:
+              outcome.kind === "permission_deny"
+                ? outcome.text
+                : res.blockReason ??
+                  "That request is outside Cora's teaching permissions for your account.",
+            permissionDeny: true,
+          },
+        ])
+        return
+      }
+
+      if (outcome.kind === "integrity_block") {
+        updateMessages([
+          ...draft,
+          {
+            id: nextChatMessageId(),
+            role: "assistant",
+            content: outcome.text,
+            integrityBlock: true,
+          },
+        ])
+        return
+      }
+
+      // Legacy: restricted without scopeRedirect = permission-style
+      if (res.restricted && !res.scopeRedirect) {
         recordCoraError(prepared, text)
         updateMessages([
           ...draft,
@@ -231,6 +355,7 @@ export function FacultyCoraChatView({
             content:
               res.blockReason ??
               "That request is outside Cora's teaching permissions for your account.",
+            permissionDeny: true,
           },
         ])
         return
@@ -245,9 +370,11 @@ export function FacultyCoraChatView({
           content: res.reply,
           actions: res.offline ? [] : (res.actions ?? []),
           proposals: res.proposals ?? [],
+          coraPublicMode: res.publicMode,
+          coraProfile: res.profile,
+          ui: res.ui,
         },
       ])
-      // Note: CoraActionCard rendering lives in FacultyCoraImmersiveChat (primary faculty surface).
     } catch (err) {
       if (prepared) recordCoraError(prepared, text)
       const fallback =
@@ -311,6 +438,60 @@ export function FacultyCoraChatView({
                   {message.content}
                 </Text>
               </View>
+              {!isUser && message.scopeFeedback ? (
+                <CoraScopeFeedbackBar
+                  feedback={message.scopeFeedback}
+                  promptLabel="Was this actually related to your teaching work?"
+                  onRelated={(note) => {
+                    void (async () => {
+                      const facultySession = session as FacultySession | null
+                      if (!facultySession) return
+                      try {
+                        const result = await submitCoraScopeFeedback({
+                          role: "instructor",
+                          session: facultySession,
+                          related: true,
+                          eventId: message.scopeFeedback?.eventId,
+                          note,
+                        })
+                        updateMessages(
+                          messages.map((m) =>
+                            m.id === message.id ? { ...m, scopeFeedback: null } : m,
+                          ),
+                        )
+                        if (result.allowRetry && message.scopeFeedback) {
+                          scopeRetryRef.current = { confirm: true, context: note }
+                          void send(message.scopeFeedback.originalMessage)
+                        }
+                      } catch {
+                        AppAlert.alert("Could not send feedback", "Try again in a moment.")
+                      }
+                    })()
+                  }}
+                  onNotRelated={() => {
+                    void (async () => {
+                      const facultySession = session as FacultySession | null
+                      if (facultySession && message.scopeFeedback) {
+                        try {
+                          await submitCoraScopeFeedback({
+                            role: "instructor",
+                            session: facultySession,
+                            related: false,
+                            eventId: message.scopeFeedback.eventId,
+                          })
+                        } catch {
+                          /* ignore */
+                        }
+                      }
+                      updateMessages(
+                        messages.map((m) =>
+                          m.id === message.id ? { ...m, scopeFeedback: null } : m,
+                        ),
+                      )
+                    })()
+                  }}
+                />
+              ) : null}
               {!isUser && message.actions?.length ? (
                 <View style={styles.actionRow}>
                   {message.actions.map((action) => (
@@ -341,6 +522,23 @@ export function FacultyCoraChatView({
                   ))}
                 </View>
               ) : null}
+              {!isUser && message.proposals?.length
+                ? message.proposals.map((proposal) => (
+                    <CoraActionCard
+                      key={proposal.actionId}
+                      proposal={proposal}
+                      status={message.proposalStatusById?.[proposal.actionId] ?? "idle"}
+                      result={message.proposalResultById?.[proposal.actionId] ?? null}
+                      resultMessage={message.proposalResultById?.[proposal.actionId]?.message}
+                      onConfirm={() => void confirmProposal(message.id, proposal)}
+                      onCancel={() => cancelProposal(message.id, proposal.actionId)}
+                      onOpen={(route) => {
+                        onClose?.()
+                        router.push(route as never)
+                      }}
+                    />
+                  ))
+                : null}
             </View>
           )
         })}
@@ -407,7 +605,7 @@ const styles = StyleSheet.create({
     padding: 14,
     borderRadius: 14,
   },
-  messageBlock: { gap: 8, maxWidth: "100%" },
+  messageBlock: { gap: 8, maxWidth: "100%", marginBottom: 10 },
   bubble: {
     maxWidth: "92%",
     borderRadius: 16,

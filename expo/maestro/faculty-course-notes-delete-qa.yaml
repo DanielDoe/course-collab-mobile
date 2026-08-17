@@ -1,0 +1,9 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Delete QA16N"
+- tapOn: "Delete"
+- tapOn: "Deleted"
+- tapOn: "Permanently delete QA16N|Permanently delete note"
+- tapOn: "Delete forever"
+- takeScreenshot: notes-qa-purged
+- tapOn: "All"

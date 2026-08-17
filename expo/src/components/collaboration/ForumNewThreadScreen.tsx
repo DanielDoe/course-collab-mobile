@@ -7,7 +7,6 @@ import { useModuleScrollContentPadding } from "../../context/ChromeInsetContext"
 import { useSession } from "../../context/SessionProvider"
 import { ApiError } from "../../lib/student-api"
 import type { StudentSession } from "../../lib/session"
-import { NATIVE } from "../../constants/faculty-native-theme"
 import { useThemedStudentNative } from "../../lib/themed-module-theme"
 import { NativeSwitch } from "../NativeSwitch"
 import { collaborationApi } from "../../lib/collaboration-api"
@@ -72,7 +71,7 @@ export function ForumNewThreadScreen() {
         <CollabScreenTitle title="New thread" subtitle="Ask the class a question" />
         <Text style={[styles.label, { color: theme.primaryDark }]}>Title</Text>
         <TextInput
-          style={[styles.input, { backgroundColor: SN.secondaryGrouped, borderColor: SN.separator }]}
+          style={[styles.input, { backgroundColor: SN.secondaryGrouped, borderColor: SN.separator, color: SN.label }]}
           value={title}
           onChangeText={setTitle}
           placeholder="What's your question?"
@@ -81,7 +80,7 @@ export function ForumNewThreadScreen() {
 
         <Text style={[styles.label, { color: theme.primaryDark }]}>Description</Text>
         <TextInput
-          style={[styles.input, styles.textArea, { backgroundColor: SN.secondaryGrouped, borderColor: SN.separator }]}
+          style={[styles.input, styles.textArea, { backgroundColor: SN.secondaryGrouped, borderColor: SN.separator, color: SN.label }]}
           value={description}
           onChangeText={setDescription}
           placeholder="Explain the problem, what you've tried…"
@@ -103,7 +102,7 @@ export function ForumNewThreadScreen() {
 
         <Text style={[styles.label, { color: theme.primaryDark }]}>Tags (comma-separated)</Text>
         <TextInput
-          style={[styles.input, { backgroundColor: SN.secondaryGrouped, borderColor: SN.separator }]}
+          style={[styles.input, { backgroundColor: SN.secondaryGrouped, borderColor: SN.separator, color: SN.label }]}
           value={tagsText}
           onChangeText={setTagsText}
           placeholder="homework, arrays, debugging"
@@ -117,7 +116,7 @@ export function ForumNewThreadScreen() {
             { backgroundColor: SN.secondaryGrouped, borderColor: SN.separator },
           ]}
         >
-          <Text style={styles.switchLabel}>Post anonymously</Text>
+          <Text style={[styles.switchLabel, { color: SN.label }]}>Post anonymously</Text>
           <NativeSwitch value={isAnonymous} onValueChange={setIsAnonymous} />
         </View>
 
@@ -149,8 +148,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    fontSize: 15,
-    color: NATIVE.label},
+    fontSize: 15},
   textArea: { minHeight: 120 },
   codeArea: { minHeight: 100, fontFamily: "Menlo", fontSize: 13, backgroundColor: "#0f172a", color: "#e2e8f0" },
   switchRow: {
@@ -161,7 +159,7 @@ const styles = StyleSheet.create({
     padding: 14,
     borderWidth: 1,
     marginTop: 8},
-  switchLabel: { fontSize: 14, fontWeight: "600", color: NATIVE.label },
+  switchLabel: { fontSize: 14, fontWeight: "600" },
   submitBtn: {
     flexDirection: "row",
     alignItems: "center",

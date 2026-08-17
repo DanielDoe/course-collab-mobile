@@ -1,0 +1,194 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Student Directory"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Student Directory"
+- extendedWaitUntil:
+    visible: "Directory|Students"
+    timeout: 45000
+- tapOn:
+    text: "Search students…"
+    optional: true
+- inputText: "daniel"
+- hideKeyboard
+- tapOn:
+    text: ".*Daniel.*"
+    index: 0
+    optional: true
+- swipe:
+    direction: UP
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn:
+    text: "Go back"
+    optional: true
+- back
+- takeScreenshot: fac-directory
+
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Campers"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Campers"
+- extendedWaitUntil:
+    visible: "Campers|Camp"
+    timeout: 30000
+- swipe:
+    direction: UP
+- takeScreenshot: fac-campers
+
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Office Hours"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Office Hours"
+- extendedWaitUntil:
+    visible: "Office Hours"
+    timeout: 30000
+- swipe:
+    direction: UP
+- tapOn:
+    text: "Close office hours actions"
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn:
+    text: "Cancel"
+    optional: true
+- takeScreenshot: fac-office
+
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Recommendation Letters"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Recommendation Letters"
+- extendedWaitUntil:
+    visible: "Recommendation"
+    timeout: 30000
+- swipe:
+    direction: UP
+- tapOn:
+    text: "Decline"
+    optional: true
+- tapOn:
+    text: "Reason (optional)"
+    optional: true
+- inputText: "QA reason"
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn:
+    text: "Cancel"
+    optional: true
+- takeScreenshot: fac-recs
+
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Trade Center"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Trade Center"
+- extendedWaitUntil:
+    visible: "Trade"
+    timeout: 30000
+- swipe:
+    direction: UP
+- takeScreenshot: fac-trade
+
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Notifications"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Notifications"
+- extendedWaitUntil:
+    visible: "Notifications"
+    timeout: 30000
+- swipe:
+    direction: UP
+- takeScreenshot: fac-notifs
+
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Messages"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Messages"
+- extendedWaitUntil:
+    visible: "Messages"
+    timeout: 45000
+- tapOn:
+    text: "Search messages…"
+    optional: true
+- inputText: "hello"
+- hideKeyboard
+- tapOn:
+    text: "New message"
+    optional: true
+- tapOn:
+    text: "Compose"
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn:
+    text: "Cancel"
+    optional: true
+- takeScreenshot: fac-messages
+
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Course Discussions"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Course Discussions"
+- extendedWaitUntil:
+    visible: "Discussions|Forum"
+    timeout: 30000
+- tapOn:
+    text: "Search threads…"
+    optional: true
+- inputText: "help"
+- hideKeyboard
+- tapOn:
+    text: "Start new thread"
+    optional: true
+- tapOn:
+    text: "Title"
+    optional: true
+- inputText: "QA thread"
+- tapOn:
+    text: "Start a discussion with your class…"
+    optional: true
+- inputText: "QA body"
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn:
+    text: "Cancel"
+    optional: true
+- swipe:
+    direction: UP
+- takeScreenshot: fac-discussions
+
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Student Support"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Student Support"
+- extendedWaitUntil:
+    visible: "Support"
+    timeout: 30000
+- swipe:
+    direction: UP
+- takeScreenshot: fac-support

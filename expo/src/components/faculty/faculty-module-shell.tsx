@@ -1,6 +1,6 @@
 import { createContext, type ReactNode, useContext } from "react"
 import {
-  Modal,
+  Keyboard,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -30,7 +30,7 @@ import { HorizontalScrollWithHints } from "../theme/HorizontalScrollWithHints"
 import { useModuleTheme } from "../../lib/themed-module-shell"
 import { useGlassChromeActive } from "../theme/GlassSurface"
 import { GlassFilterOptionRow, GlassMenuList } from "../theme/GlassActionSheetMenu"
-import { FacultySheetChrome, FacultySheetContainer } from "./faculty-collab-sheet-ui"
+import { FacultySheetChrome, FacultySheetModal } from "./faculty-collab-sheet-ui"
 import { CleanPillTabBar } from "../theme/CleanPillTabs"
 import { FACULTY_COLLAB_COLOR } from "../../lib/faculty-collab-theme"
 import { semanticSoft } from "../../lib/themed-module-theme"
@@ -276,7 +276,7 @@ export function FacultyFilterBar({
         ]}
         onPress={onOpenFilter}
         accessibilityRole="button"
-        accessibilityLabel="Open filter"
+        accessibilityLabel="Open filters"
       >
         <Ionicons
           name="funnel-outline"
@@ -334,33 +334,41 @@ export function FacultyFilterSheet({
   const type = useNativeType()
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <FacultySheetContainer style={shellStyles.filterSheet}>
-        <FacultySheetChrome topInset={insets.top} title={title} onClose={onClose} />
-        {subtitle ? (
-          <Text style={[type.secondary, shellStyles.filterSheetSub, { color: native.secondaryLabel }]}>
-            {subtitle}
-          </Text>
-        ) : null}
-        <ScrollView
-          contentContainerStyle={[shellStyles.filterSheetList, { paddingBottom: insets.bottom + 24 }]}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
+    <FacultySheetModal
+      visible={visible}
+      onRequestClose={onClose}
+      containerStyle={shellStyles.filterSheet}
+    >
+      <FacultySheetChrome topInset={insets.top} title={title} onClose={onClose} />
+      {subtitle ? (
+        <Text
+          style={[type.secondary, shellStyles.filterSheetSub, { color: native.secondaryLabel }]}
+          accessible={false}
         >
-          <GlassMenuList>
-            {options.map((opt, index) => (
-              <GlassFilterOptionRow
-                key={opt.value}
-                label={opt.label}
-                active={value === opt.value}
-                onPress={() => onSelect(opt.value)}
-                showSeparator={index < options.length - 1}
-              />
-            ))}
-          </GlassMenuList>
-        </ScrollView>
-      </FacultySheetContainer>
-    </Modal>
+          {subtitle}
+        </Text>
+      ) : null}
+      <ScrollView
+        contentContainerStyle={[shellStyles.filterSheetList, { paddingBottom: insets.bottom + 24 }]}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <GlassMenuList>
+          {options.map((opt, index) => (
+            <GlassFilterOptionRow
+              key={opt.value}
+              label={opt.label}
+              active={value === opt.value}
+              onPress={() => {
+                onSelect(opt.value)
+                onClose()
+              }}
+              showSeparator={index < options.length - 1}
+            />
+          ))}
+        </GlassMenuList>
+      </ScrollView>
+    </FacultySheetModal>
   )
 }
 
@@ -428,11 +436,13 @@ export function FacultySignatureTabBar<T extends string>({
         key={item.id}
         style={({ pressed }) => [
           shellStyles.signatureTab,
+          !scrollable && shellStyles.signatureTabFlex,
           active && { borderBottomColor: accent },
           pressed && { opacity: NATIVE.pressedOpacity },
         ]}
         onPress={() => onChange(item.id)}
         accessibilityRole="tab"
+        accessibilityLabel={`${item.label} tab`}
         accessibilityState={{ selected: active }}
       >
         {item.icon ? (
@@ -646,10 +656,25 @@ export function FacultyModuleSearchInner({
         value={value}
         onChangeText={onChange}
         placeholder={placeholder}
+        accessibilityLabel={placeholder}
         placeholderTextColor={native.tertiaryLabel}
         autoCapitalize="none"
         autoCorrect={false}
+        keyboardType="ascii-capable"
       />
+      {value.length > 0 ? (
+        <Pressable
+          onPress={() => {
+            onChange("")
+            Keyboard.dismiss()
+          }}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Clear search"
+        >
+          <Ionicons name="close-circle" size={18} color={native.tertiaryLabel} />
+        </Pressable>
+      ) : null}
     </View>
   )
 }
@@ -870,11 +895,28 @@ export function FacultySearchToolbarInner({
             value={value}
             onChangeText={onChange}
             placeholder={placeholder}
+            accessibilityLabel={placeholder}
+            accessibilityRole="search"
+            testID="module-search"
             placeholderTextColor={native.tertiaryLabel}
             autoCapitalize="none"
             autoCorrect={false}
+            keyboardType="ascii-capable"
             selectionColor={facultyAccent}
           />
+          {value.length > 0 ? (
+            <Pressable
+              onPress={() => {
+                onChange("")
+                Keyboard.dismiss()
+              }}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Clear search"
+            >
+              <Ionicons name="close-circle" size={18} color={native.tertiaryLabel} />
+            </Pressable>
+          ) : null}
         </>
       ) : null}
       {showFilter && onOpenFilter ? (
@@ -943,40 +985,48 @@ export function FacultyGroupedFilterSheet({
   const type = useNativeType()
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <FacultySheetContainer style={shellStyles.filterSheet}>
-        <FacultySheetChrome topInset={insets.top} title={title} onClose={onClose} />
-        {subtitle ? (
-          <Text style={[type.secondary, shellStyles.filterSheetSub, { color: native.secondaryLabel }]}>
-            {subtitle}
-          </Text>
-        ) : null}
-        <ScrollView
-          contentContainerStyle={[shellStyles.groupedFilterList, { paddingBottom: insets.bottom + 24 }]}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
+    <FacultySheetModal
+      visible={visible}
+      onRequestClose={onClose}
+      containerStyle={shellStyles.filterSheet}
+    >
+      <FacultySheetChrome topInset={insets.top} title={title} onClose={onClose} />
+      {subtitle ? (
+        <Text
+          style={[type.secondary, shellStyles.filterSheetSub, { color: native.secondaryLabel }]}
+          accessible={false}
         >
-          {groups.map((group) => (
-            <View key={group.id} style={shellStyles.filterGroup}>
-              <Text style={[type.sectionHeader, shellStyles.filterGroupTitle, { color: native.secondaryLabel }]}>
-                {group.title}
-              </Text>
-              <GlassMenuList>
-                {group.options.map((opt, index) => (
-                  <GlassFilterOptionRow
-                    key={`${group.id}-${opt.value}`}
-                    label={opt.label}
-                    active={group.value === opt.value}
-                    onPress={() => onSelect(group.id, opt.value)}
-                    showSeparator={index < group.options.length - 1}
-                  />
-                ))}
-              </GlassMenuList>
-            </View>
-          ))}
-        </ScrollView>
-      </FacultySheetContainer>
-    </Modal>
+          {subtitle}
+        </Text>
+      ) : null}
+      <ScrollView
+        contentContainerStyle={[shellStyles.groupedFilterList, { paddingBottom: insets.bottom + 24 }]}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        {groups.map((group) => (
+          <View key={group.id} style={shellStyles.filterGroup}>
+            <Text style={[type.sectionHeader, shellStyles.filterGroupTitle, { color: native.secondaryLabel }]}>
+              {group.title}
+            </Text>
+            <GlassMenuList>
+              {group.options.map((opt, index) => (
+                <GlassFilterOptionRow
+                  key={`${group.id}-${opt.value}`}
+                  label={opt.label}
+                  active={group.value === opt.value}
+                  onPress={() => {
+                    onSelect(group.id, opt.value)
+                    onClose()
+                  }}
+                  showSeparator={index < group.options.length - 1}
+                />
+              ))}
+            </GlassMenuList>
+          </View>
+        ))}
+      </ScrollView>
+    </FacultySheetModal>
   )
 }
 
@@ -1149,6 +1199,12 @@ const shellStyles = StyleSheet.create({
     borderBottomWidth: 2,
     borderBottomColor: "transparent",
     marginBottom: -StyleSheet.hairlineWidth,
+  },
+  signatureTabFlex: {
+    flex: 1,
+    justifyContent: "center",
+    paddingHorizontal: 4,
+    minWidth: 0,
   },
   signatureTabLabel: {
     fontSize: 14,

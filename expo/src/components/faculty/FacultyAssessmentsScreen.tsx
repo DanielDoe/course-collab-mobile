@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
-import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Ionicons } from "@/components/icons/AppIcon"
 import { AppAlert } from '../../lib/app-alert'
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { ApiError } from "../../lib/api"
@@ -64,6 +65,7 @@ export function FacultyAssessmentsScreen({assessmentType,
   const [segment, setSegment] = useState<AssessmentModuleSegment>(initialSegment)
   const [openIssueCount, setOpenIssueCount] = useState(0)
   const [deletedCount, setDeletedCount] = useState(0)
+  const [error, setError] = useState("")
 
   useEffect(() => {
     setSegment(initialSegment)
@@ -73,25 +75,33 @@ export function FacultyAssessmentsScreen({assessmentType,
     if (!ready || !scope?.courseId) return
     void consumeFacultyCoraPending(scope.instructorId, scope.courseId, "quiz_create").then((pending) => {
       if (pending?.kind === "quiz_create") {
+        const matchingType =
+          pending.assessmentType == null || pending.assessmentType === assessmentType
+        if (!matchingType) return
         setCreateInitialTitle(pending.title)
         setCreateInitialDescription(pending.description)
         setCreateOpen(true)
       }
     })
-  }, [ready, scope?.courseId, scope?.instructorId])
+  }, [ready, scope?.courseId, scope?.instructorId, assessmentType])
 
   const load = useCallback(async () => {
     if (!scope) return
-    const [items, sessionData, openIssues, deletedItems] = await Promise.all([
-      instructorApi.getQuizzes(scope, type),
-      instructorApi.getSessions(scope),
-      instructorApi.getIssues(scope, "open", type),
-      instructorApi.getDeletedAssessments(scope, type),
-    ])
-    setQuizzes(items)
-    setSessions(sessionData.sessions ?? [])
-    setOpenIssueCount(openIssues.length)
-    setDeletedCount(deletedItems.length)
+    setError("")
+    try {
+      const [items, sessionData, openIssues, deletedItems] = await Promise.all([
+        instructorApi.getQuizzes(scope, type),
+        instructorApi.getSessions(scope),
+        instructorApi.getIssues(scope, "open", type),
+        instructorApi.getDeletedAssessments(scope, type),
+      ])
+      setQuizzes(items)
+      setSessions(sessionData.sessions ?? [])
+      setOpenIssueCount(openIssues.length)
+      setDeletedCount(deletedItems.length)
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not load assessments.")
+    }
   }, [scope, type])
 
   useEffect(() => {
@@ -102,6 +112,14 @@ export function FacultyAssessmentsScreen({assessmentType,
     setLoading(true)
     load().finally(() => setLoading(false))
   }, [ready, load])
+
+  const previousSegment = useRef(segment)
+  useEffect(() => {
+    const previous = previousSegment.current
+    previousSegment.current = segment
+    if (!ready || previous === segment || segment !== "manage") return
+    void load()
+  }, [segment, ready, load])
 
   useEffect(() => {
     if (!selected) return
@@ -114,6 +132,8 @@ export function FacultyAssessmentsScreen({assessmentType,
     setRefreshing(true)
     try {
       await load()
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not refresh assessments.")
     } finally {
       setRefreshing(false)
     }
@@ -130,6 +150,7 @@ export function FacultyAssessmentsScreen({assessmentType,
       await load()
     } catch (err) {
       AppAlert.alert("Could not update access", err instanceof ApiError ? err.message : "Try again.")
+      setError(err instanceof ApiError ? err.message : "Could not update access.")
     } finally {
       setTogglingKey(null)
     }

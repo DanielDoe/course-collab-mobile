@@ -12,7 +12,8 @@ import { Ionicons } from "@/components/icons/AppIcon"
 import { useRouter } from "expo-router"
 import { useModuleContentTopPadding, useModuleScrollContentPadding } from "../../context/ChromeInsetContext"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
-import { NATIVE } from "../../constants/faculty-native-theme"
+import { MODERN, NATIVE } from "../../constants/faculty-native-theme"
+import { useKpiGridCardStyle } from "../../lib/responsive-layout"
 import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
 import { semanticSoft, useNativeType, useThemedStudentNative } from "../../lib/themed-module-theme"
 import { StudentThemedLocked } from "../student/student-themed-hero"
@@ -29,6 +30,7 @@ import {
   type DailyChallenge,
 } from "../../lib/codebench-api"
 import type { StudentSession } from "../../lib/session"
+import { AppErrorScreen } from "../errors/AppErrorScreen"
 import { CommSectionFooter } from "../faculty/faculty-communication-ui"
 import { FacultyEmptyState } from "../faculty/faculty-shared"
 import { ModuleListRow, ModuleSection } from "../modules/ModuleScreen"
@@ -89,6 +91,7 @@ export function AnalyticsMoreScreen({ initialTab = "overview" }: Props) {
     analysis,
     learningPlan,
     hasCodeSample,
+    error,
     onRefresh,
   } = useCodebenchProgress(session, { enabled: !isLocked })
 
@@ -101,6 +104,15 @@ export function AnalyticsMoreScreen({ initialTab = "overview" }: Props) {
     const id = Number(session.databaseId)
     return leaderboard.find((e) => e.student_id === id)?.rank ?? null
   }, [leaderboard, session])
+
+  const pageScrollStyle = useMemo(
+    () => ({
+      paddingBottom: scrollPad.paddingBottom,
+      gap: 12 as const,
+      flexGrow: 1,
+    }),
+    [scrollPad.paddingBottom],
+  )
 
   const xp = xpLevel(totalXp)
   const proficiency = analysis?.proficiencyScore ?? 0
@@ -138,15 +150,6 @@ export function AnalyticsMoreScreen({ initialTab = "overview" }: Props) {
     label: tab.shortLabel,
     icon: tab.icon,
   }))
-
-  const pageScrollStyle = useMemo(
-    () => ({
-      paddingBottom: scrollPad.paddingBottom,
-      gap: 12 as const,
-      flexGrow: 1,
-    }),
-    [scrollPad.paddingBottom],
-  )
 
   const summarySection = !loading ? (
     <ProgressSummarySection
@@ -203,39 +206,48 @@ export function AnalyticsMoreScreen({ initialTab = "overview" }: Props) {
   return (
     <View style={[styles.root, { backgroundColor: native.groupedBackground }]}>
       <View style={{ paddingTop: scrollPad.paddingTop ?? NATIVE.pagePadding }} />
-      <PillSwipeTabs
-        options={navTabs}
-        value={activeTab}
-        onChange={setActiveTab}
-        pagePaddingHorizontal={NATIVE.pagePadding}
-        pages={[
-          renderPageScroll(
-            <ProfilePanel
-              analysis={analysis}
-              analysisLoading={analysisLoading}
-              hasCodeSample={hasCodeSample}
-              onOpenIde={() => openIde()}
-            />,
-          ),
-          renderPageScroll(
-            <AnalyticsPanel
-              analysis={analysis}
-              learningPlan={learningPlan}
-              loading={analysisLoading}
-              hasCodeSample={hasCodeSample}
-              onOpenIde={() => openIde("evaluate")}
-            />,
-          ),
-          renderPageScroll(
-            <>
-              <ChallengePanel challenge={dailyChallenge} onOpenIde={() => openIde("practice")} />
-              <BadgesPanel badges={badges} badgeDetails={badgeDetails} />
-              <LeaderboardPanel leaderboard={leaderboard} session={session} myRank={myRank} />
-              <StreakPanel streak={streak} onOpenIde={() => openIde()} />
-            </>,
-          ),
-        ]}
-      />
+      {error && !loading ? (
+        <AppErrorScreen
+          error={new Error(error)}
+          feature="CodeBench analytics"
+          onRetry={() => void onRefresh()}
+          style={styles.errorPage}
+        />
+      ) : (
+        <PillSwipeTabs
+          options={navTabs}
+          value={activeTab}
+          onChange={setActiveTab}
+          pagePaddingHorizontal={NATIVE.pagePadding}
+          pages={[
+            renderPageScroll(
+              <ProfilePanel
+                analysis={analysis}
+                analysisLoading={analysisLoading}
+                hasCodeSample={hasCodeSample}
+                onOpenIde={() => openIde()}
+              />,
+            ),
+            renderPageScroll(
+              <AnalyticsPanel
+                analysis={analysis}
+                learningPlan={learningPlan}
+                loading={analysisLoading}
+                hasCodeSample={hasCodeSample}
+                onOpenIde={() => openIde("evaluate")}
+              />,
+            ),
+            renderPageScroll(
+              <>
+                <ChallengePanel challenge={dailyChallenge} onOpenIde={() => openIde("practice")} />
+                <BadgesPanel badges={badges} badgeDetails={badgeDetails} />
+                <LeaderboardPanel leaderboard={leaderboard} session={session} myRank={myRank} />
+                <StreakPanel streak={streak} onOpenIde={() => openIde()} />
+              </>,
+            ),
+          ]}
+        />
+      )}
     </View>
   )
 }
@@ -302,7 +314,7 @@ function ProgressSummarySection({
       <View style={styles.summaryRow}>
         <SummaryStat id="streak" label="Streak" value={`${streakDays}d`} />
         <SummaryStat id="badges" label="Badges" value={String(badgeCount)} />
-        <SummaryStat id="subs" label="Subs" value={String(submissionCount)} />
+        <SummaryStat id="subs" label="Submissions" value={String(submissionCount)} />
         <SummaryStat id="rank" label="Rank" value={myRank ? `#${myRank}` : "—"} />
       </View>
     </ModuleSection>
@@ -319,18 +331,25 @@ function SummaryStat({
   value: string
 }) {
   const type = useNativeType()
+  const cardLayout = useKpiGridCardStyle()
   const kpi = ANALYTICS_SUMMARY_KPI[id]
   const surface = codebenchKpiSurface(kpi.accent)
 
   return (
-    <View style={[styles.summaryStat, { backgroundColor: surface.background, borderColor: surface.border }]}>
+    <View
+      style={[styles.summaryStat, cardLayout, { backgroundColor: surface.background, borderColor: surface.border }]}
+      accessibilityRole="text"
+      accessibilityLabel={`${label}, ${value}`}
+    >
+      <View style={styles.summaryCopy}>
+        <Text style={[type.caption, styles.summaryLabel, { color: surface.label }]} numberOfLines={1}>
+          {label}
+        </Text>
+        <Text style={[type.bodyEmphasis, styles.summaryValue, { color: surface.value }]} numberOfLines={1}>
+          {value}
+        </Text>
+      </View>
       <SolidListThumbTile thumb={surface.iconThumb} icon={kpi.icon} size="compact" style={styles.summaryIconTile} />
-      <Text style={[type.bodyEmphasis, styles.summaryValue, { color: surface.value }]} numberOfLines={1}>
-        {value}
-      </Text>
-      <Text style={[type.footnote, styles.summaryLabel, { color: surface.label }]} numberOfLines={1}>
-        {label}
-      </Text>
     </View>
   )
 }
@@ -941,6 +960,7 @@ const styles = StyleSheet.create({
     paddingVertical: 48,
   },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
+  errorPage: { flex: 1, paddingHorizontal: NATIVE.pagePadding },
   loadingBox: { alignItems: "center", gap: 10, paddingVertical: 24 },
   summaryHeader: {
     paddingHorizontal: 14,
@@ -975,34 +995,45 @@ const styles = StyleSheet.create({
   summarySpinner: { alignSelf: "flex-start" },
   summaryRow: {
     flexDirection: "row",
-    paddingHorizontal: 10,
-    paddingBottom: 14,
-    gap: 6,
+    flexWrap: "wrap",
+    paddingHorizontal: 12,
+    paddingBottom: 16,
+    gap: 10,
   },
   summaryStat: {
-    flex: 1,
-    alignItems: "center",
-    gap: 4,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 10,
     minWidth: 0,
-    borderRadius: 14,
+    minHeight: 88,
+    borderRadius: 16,
     borderWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: 6,
-    paddingTop: 10,
-    paddingBottom: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
     overflow: "hidden",
   },
+  summaryCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 6,
+  },
   summaryIconTile: {
-    width: 32,
-    height: 32,
-    borderRadius: NATIVE.iconTileRadius,
+    width: MODERN.metricIconSize,
+    height: MODERN.metricIconSize,
+    borderRadius: MODERN.metricIconRadius,
+    flexShrink: 0,
   },
   summaryValue: {
-    fontSize: 17,
+    fontSize: 26,
     fontWeight: "700",
-    letterSpacing: -0.2,
+    letterSpacing: -0.4,
+    lineHeight: 30,
   },
   summaryLabel: {
-    textAlign: "center",
+    fontSize: 13,
+    fontWeight: "600",
+    lineHeight: 16,
   },
   panelPad: {
     paddingHorizontal: 14,

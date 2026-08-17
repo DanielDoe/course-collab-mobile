@@ -30,13 +30,19 @@ import {
   useChromeTopInset,
   useModuleScrollContentPadding,
 } from "../../context/ChromeInsetContext"
+import { useRouter } from "expo-router"
+import { hasFacultyNavAccess } from "../../constants/faculty-nav"
+import { useFacultyShell } from "../../context/FacultyShellContext"
 import { useFacultyScope } from "../../hooks/useFacultyScope"
 import { FACULTY_ADMIN_COLOR } from "../../lib/faculty-admin-theme"
+import { getFacultyNavUpgradePrompt } from "../../lib/faculty-membership-tier"
+import type { FacultyMembershipTier } from "../../types/dashboard"
 import { solidListThumbFixed } from "../../lib/solid-list-thumb"
 import { semanticSoft, useNativeType } from "../../lib/themed-module-theme"
 import { useModuleTheme } from "../../lib/themed-module-shell"
 import { NativeSwitch } from "../NativeSwitch"
 import { FacultyEmptyState } from "./faculty-shared"
+import { AdminOptionPickerModal } from "./admin/admin-option-picker"
 
 /**
  * Shared faculty administration UI — grouped canvas, inset lists, save footer.
@@ -74,6 +80,49 @@ export function FacultyAdminCourseGate({ children }: { children: ReactNode }) {
           title="Select a Course"
           body="Choose a course from the drawer to manage settings for this module."
         />
+      </View>
+    )
+  }
+
+  return <>{children}</>
+}
+
+export function FacultyAdminTierGate({
+  minTier,
+  featureLabel,
+  children,
+}: {
+  minTier: FacultyMembershipTier
+  featureLabel: string
+  children: ReactNode
+}) {
+  const router = useRouter()
+  const { membershipTier, membershipTierLoaded } = useFacultyShell()
+  const scrollPad = useModuleScrollContentPadding(32)
+  const { styles: moduleStyles } = useModuleTheme()
+  const adminStyles = useAdminStyles()
+
+  if (!membershipTierLoaded) {
+    return (
+      <View style={[moduleStyles.root, { flex: 1, justifyContent: "center", alignItems: "center" }, scrollPad]}>
+        <ActivityIndicator size="large" color={FACULTY_ADMIN_COLOR.link} />
+      </View>
+    )
+  }
+
+  if (!hasFacultyNavAccess(membershipTier, minTier)) {
+    const prompt = getFacultyNavUpgradePrompt({ id: featureLabel, label: featureLabel, minTier }, membershipTier)
+    return (
+      <View style={[moduleStyles.root, adminStyles.screenRoot, scrollPad]}>
+        <FacultyEmptyState icon="lock-closed-outline" title={prompt.title} body={prompt.message} />
+        <Pressable
+          style={({ pressed }) => [adminStyles.saveBtn, pressed && { opacity: NATIVE.pressedOpacity }]}
+          onPress={() => router.push("/membership" as never)}
+          accessibilityRole="button"
+          accessibilityLabel={`Upgrade to ${minTier}`}
+        >
+          <Text style={adminStyles.saveBtnText}>Upgrade to {minTier}</Text>
+        </Pressable>
       </View>
     )
   }
@@ -216,12 +265,14 @@ export function FacultyAdminToggleRow({
   onChange,
   disabled,
   isLast,
+  activeTrackColor,
 }: RowProps & {
   label: string
   subtitle?: string
   value: boolean
   disabled?: boolean
   onChange: (next: boolean) => void
+  activeTrackColor?: string
 }) {
   const adminStyles = useAdminStyles()
 
@@ -235,7 +286,12 @@ export function FacultyAdminToggleRow({
           </Text>
         ) : null}
       </View>
-      <NativeSwitch value={value} disabled={disabled} onValueChange={onChange} />
+      <NativeSwitch
+        value={value}
+        disabled={disabled}
+        onValueChange={onChange}
+        activeTrackColor={activeTrackColor}
+      />
     </View>
   )
 }
@@ -260,20 +316,24 @@ export function FacultyAdminNumberField({
   const { tokens } = adminStyles
 
   return (
-    <View style={[adminStyles.fieldRow, !isLast && adminStyles.rowBorder]}>
-      <Text style={adminStyles.fieldLabel}>{label}</Text>
-      <View style={adminStyles.numberInputWrap}>
+    <View style={[adminStyles.row, !isLast && adminStyles.rowBorder]}>
+      <Text style={[adminStyles.rowLabel, adminStyles.numberRowLabel]} numberOfLines={2}>
+        {label}
+      </Text>
+      <View style={adminStyles.numberTrailing}>
         <TextInput
-          style={adminStyles.numberInput}
+          style={adminStyles.numberInputInline}
           value={value}
           onChangeText={onChangeText}
           onBlur={onBlur}
-          keyboardType="numeric"
+          keyboardType="decimal-pad"
           placeholder={placeholder}
+          accessibilityLabel={label}
           placeholderTextColor={adminStyles.placeholderColor}
           keyboardAppearance={tokens.isDark ? "dark" : "light"}
+          textAlign="right"
         />
-        {suffix ? <Text style={adminStyles.inputSuffix}>{suffix}</Text> : null}
+        {suffix ? <Text style={adminStyles.inputSuffixInline}>{suffix}</Text> : null}
       </View>
     </View>
   )
@@ -308,6 +368,50 @@ export function FacultyAdminTextField({
         placeholder={placeholder}
         placeholderTextColor={adminStyles.placeholderColor}
         keyboardAppearance={tokens.isDark ? "dark" : "light"}
+      />
+    </View>
+  )
+}
+
+export function FacultyAdminChoiceField({
+  label,
+  value,
+  options,
+  onChange,
+  disabled,
+  isLast,
+}: RowProps & {
+  label: string
+  value: string
+  options: { value: string; label: string }[]
+  onChange: (value: string) => void
+  disabled?: boolean
+}) {
+  const [open, setOpen] = useState(false)
+  const merged =
+    value && !options.some((option) => option.value === value)
+      ? [...options, { value, label: value }]
+      : options
+  const valueLabel = merged.find((option) => option.value === value)?.label ?? (value || "Select")
+
+  return (
+    <View>
+      <FacultyAdminSelectRow
+        label={label}
+        valueLabel={valueLabel}
+        onPress={() => {
+          if (!disabled) setOpen(true)
+        }}
+        disabled={disabled}
+        isLast={isLast}
+      />
+      <AdminOptionPickerModal
+        visible={open}
+        title={label}
+        options={merged}
+        value={value || merged[0]?.value || ""}
+        onSelect={onChange}
+        onClose={() => setOpen(false)}
       />
     </View>
   )
@@ -594,6 +698,17 @@ function createAdminStyles(
         alignItems: "center",
         gap: 8,
       },
+      numberRowLabel: {
+        flex: 1,
+        paddingRight: 8,
+      },
+      numberTrailing: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "flex-end",
+        gap: 6,
+        flexShrink: 0,
+      },
       numberInput: {
         flex: 1,
         ...type.bodyEmphasis,
@@ -608,9 +723,29 @@ function createAdminStyles(
         borderColor: tokens.border,
         maxWidth: 120,
       },
+      numberInputInline: {
+        minWidth: 56,
+        maxWidth: 72,
+        ...type.bodyEmphasis,
+        fontSize: 17,
+        color: native.label,
+        paddingVertical: Platform.OS === "ios" ? 4 : 2,
+        paddingHorizontal: 8,
+        borderRadius: 8,
+        fontVariant: ["tabular-nums"],
+        backgroundColor: native.fill,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: native.separator,
+      },
       inputSuffix: {
         ...type.callout,
         fontWeight: "600",
+      },
+      inputSuffixInline: {
+        ...type.callout,
+        fontWeight: "600",
+        color: native.secondaryLabel,
+        minWidth: 28,
       },
       textInput: {
         ...type.body,

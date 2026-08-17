@@ -61,6 +61,10 @@ import {
   MobbinPillSegmentControl,
   type MobbinPillSegmentOption,
 } from "../theme/MobbinPillSegmentControl"
+import { useCoraBalance } from "../../hooks/useCoraBalance"
+import { CoraUsagePanel } from "../cora/CoraUsagePanel"
+import { CoraCreditPacksPanel } from "../cora/CoraCreditPacksPanel"
+import { CoraCreditBalanceBadge } from "../cora/CoraCreditBalanceBadge"
 
 const TIER_ORDER: FacultyMembershipTier[] = ["Enterprise", "Pro", "Free"]
 const CARD_RADIUS = 20
@@ -416,16 +420,7 @@ export function FacultyMembershipScreen() {
       AppAlert.alert("Already included", `${plan.name} perks are already part of your current plan.`)
       return
     }
-    const price = formatFacultyPlanPriceLabel(facultyPlanPriceCents(plan, billingCadence), billingCadence)
-    const access = formatFacultyCadenceAccessLabel(billingCadence)
-    AppAlert.alert(
-      `Upgrade to ${plan.name}`,
-      `${plan.name} is ${price} (${access}). Continue to secure checkout?`,
-      [
-        { text: "Not now", style: "cancel" },
-        { text: "Continue", onPress: () => openFacultyMembershipCheckout(router, plan.id, billingCadence) },
-      ],
-    )
+    openFacultyMembershipCheckout(router, plan.id, billingCadence)
   }
 
   const currentPlan = useMemo(
@@ -439,12 +434,28 @@ export function FacultyMembershipScreen() {
       : billingCadence
   const currentPriceCents = facultyPlanPriceCents(currentPlan, activeCadence)
   const hasPaidMembership = membershipTier === "Pro" || membershipTier === "Enterprise"
+  const {
+    balance: coraBalance,
+    activity: coraActivity,
+    activityPage: coraActivityPage,
+    activityTotalPages: coraActivityTotalPages,
+    activityTotal: coraActivityTotal,
+    activityLoadingPage: coraActivityLoadingPage,
+    goToActivityPage: goToCoraActivityPage,
+    loading: coraLoading,
+    error: coraError,
+    refresh: refreshCora,
+  } = useCoraBalance({ role: "instructor", session, enabled: Boolean(session) })
 
   if (!session) return null
 
   return (
     <View style={[styles.screenRoot, { backgroundColor: native.groupedBackground }]}>
-      <NotetakerScreenHeader title="Instructor Plans" fallbackHref="/dashboard" />
+      <NotetakerScreenHeader
+        title="Membership & Plans"
+        fallbackHref="/dashboard"
+        rightSlot={<CoraCreditBalanceBadge balance={coraBalance} />}
+      />
       <ModuleScreen
         loading={loading}
         error={error}
@@ -452,7 +463,9 @@ export function FacultyMembershipScreen() {
         disableTopInsetAdjustment
         onRefresh={() => {
           setRefreshing(true)
-          load().finally(() => setRefreshing(false))
+          void Promise.all([load(), refreshCora({ force: true, includeActivity: true })]).finally(() =>
+            setRefreshing(false),
+          )
         }}
       >
         <CurrentPlanCard
@@ -464,6 +477,26 @@ export function FacultyMembershipScreen() {
           onBilling={() => router.push("/membership/manage" as never)}
           tokens={tokens}
         />
+
+        <View style={{ marginBottom: 16 }}>
+          <CoraUsagePanel
+            balance={coraBalance}
+            activity={coraActivity}
+            loading={coraLoading}
+            error={coraError}
+            onRefresh={() => void refreshCora({ force: true, includeActivity: true })}
+            activityPage={coraActivityPage}
+            activityTotalPages={coraActivityTotalPages}
+            activityTotal={coraActivityTotal}
+            activityLoadingPage={coraActivityLoadingPage}
+            onActivityPageChange={(page) => void goToCoraActivityPage(page)}
+          />
+          <CoraCreditPacksPanel
+            audience="instructor"
+            session={session}
+            onPurchased={() => void refreshCora({ force: true, includeActivity: true })}
+          />
+        </View>
 
         <View style={styles.cadenceSection}>
           <Text style={[styles.sectionLabel, { color: native.secondaryLabel, marginBottom: 10 }]}>

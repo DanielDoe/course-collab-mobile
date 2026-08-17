@@ -1,0 +1,7 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Open navigation menu"
+- tapOn: "Academic Terms"
+- extendedWaitUntil:
+    visible: "Search terms…"
+    timeout: 20000

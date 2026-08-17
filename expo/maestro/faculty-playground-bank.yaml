@@ -1,0 +1,20 @@
+appId: com.coursecollab.app
+---
+- tapOn:
+    text: "Question bank"
+    optional: true
+- tapOn:
+    text: "Search topics…"
+    optional: true
+- inputText: "zzz"
+- tapOn: "Manage Playground"
+- extendedWaitUntil:
+    visible: "No matches|No matching topics"
+    timeout: 8000
+- takeScreenshot: playground-bank-empty
+- tapOn: "Clear search"
+- tapOn: "AC Power"
+- extendedWaitUntil:
+    visible: "Search questions in this topic…|Select all|Create session|No questions"
+    timeout: 15000
+- takeScreenshot: playground-bank-ac

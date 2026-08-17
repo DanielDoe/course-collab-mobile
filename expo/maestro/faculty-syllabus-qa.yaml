@@ -1,0 +1,25 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Search syllabus sections…"
+- inputText: "QA"
+- tapOn: "search"
+- takeScreenshot: syllabus-search-qa
+- tapOn:
+    text: ".*QA Syllabus.*"
+    optional: true
+- tapOn:
+    text: "Additional Section"
+    optional: true
+- tapOn:
+    text: ".*Delete section.*"
+    optional: true
+- tapOn:
+    text: "Delete"
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn:
+    text: "Clear search"
+    optional: true
+- takeScreenshot: syllabus-final

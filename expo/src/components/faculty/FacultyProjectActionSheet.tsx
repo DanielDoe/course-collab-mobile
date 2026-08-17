@@ -283,6 +283,7 @@ export function FacultyProjectActionSheet({
                     setTitle(v)
                     setDirty(true)
                   }}
+                  accessibilityLabel="Title"
                 />
               </FacultySheetField>
               <FacultySheetField label="Summary">
@@ -372,7 +373,13 @@ export function FacultyProjectActionSheet({
             {error ? <Text style={collabSheetStyles.errorText}>{error}</Text> : null}
 
             <FacultySheetSection label="Management" tone={SHEET_SECTION.danger}>
-              <Pressable style={collabSheetStyles.actionRow} disabled={acting} onPress={() => setConfirmDelete(true)}>
+              <Pressable
+                style={collabSheetStyles.actionRow}
+                disabled={acting}
+                onPress={() => setConfirmDelete(true)}
+                accessibilityRole="button"
+                accessibilityLabel="Delete project"
+              >
                 <View style={collabSheetStyles.actionIcon}>
                   <Ionicons name="trash-outline" size={18} color="#dc2626" />
                 </View>
@@ -418,10 +425,19 @@ export function FacultyProjectActionSheet({
                   setRejectOpen(false)
                   setRejectReason("")
                   setError("")
-                }}>
+                }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Cancel"
+                >
                   <Text style={[rejectOverlayStyles.cancelText, { color: native.label }]}>Cancel</Text>
                 </Pressable>
-                <Pressable style={rejectOverlayStyles.confirm} disabled={saving} onPress={() => void submitReject()}>
+                <Pressable
+                  style={rejectOverlayStyles.confirm}
+                  disabled={saving}
+                  onPress={() => void submitReject()}
+                  accessibilityRole="button"
+                  accessibilityLabel="Reject"
+                >
                   {saving ? <ActivityIndicator color={BRAND.white} /> : <Text style={rejectOverlayStyles.confirmText}>Reject</Text>}
                 </Pressable>
               </View>

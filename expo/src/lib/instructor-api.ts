@@ -1,4 +1,5 @@
 import { API_BASE_URL } from "../constants"
+import { extractApiErrorMessage } from "./api-error-message"
 import { ApiError } from "./api"
 import { reportMobileApiError } from "./system-log-client"
 import type { AssessmentAttemptResults } from "./assessment-results-api"
@@ -12,6 +13,7 @@ import type {
   StudentIndividualReportPayload,
   StudentReportSearchHit} from "./instructor-reports-utils"
 import { normalizeSavedReport } from "./instructor-reports-utils"
+import { assertProductionHttpsUrl, createApiAbortSignal, noteApiFailure } from "./http"
 
 export type InstructorCourse = {
   id: number
@@ -22,6 +24,8 @@ export type InstructorCourse = {
   staff_role?: string
   is_active_term?: boolean
   term_label?: string | null
+  academic_term_id?: number | null
+  description?: string | null
 }
 
 export type InstructorProfile = {
@@ -45,6 +49,8 @@ export type InstructorDashboardStats = {
 
 export type InstructorRecentActivity = {
   id: string
+  attempt_id?: number
+  type?: string
   title: string
   message: string
   student_name?: string
@@ -53,6 +59,7 @@ export type InstructorRecentActivity = {
   score?: number
   assessment_type?: string
   created_at?: string
+  timestamp?: string
 }
 
 export type InstructorReportMeta = {
@@ -1332,7 +1339,39 @@ export type TradeCenterTradeLog = {
   pointRequests?: TradeCenterRequestRow[]
 }
 
-export type TradeCenterRolloverTrade = Record<string, unknown>
+export type TradeCenterRolloverTrade = {
+  id: number
+  studentId?: number
+  student_id?: number
+  studentName?: string
+  student_name?: string
+  full_name?: string
+  studentNumber?: string
+  student_number?: string
+  section?: string
+  membershipTier?: string
+  membership_tier?: string
+  quizId?: number
+  quiz_id?: number
+  quizTitle?: string
+  quiz_title?: string
+  assessmentType?: string
+  assessment_type?: string
+  sourceCategory?: string | null
+  source_category?: string | null
+  sourceLabel?: string
+  source_label?: string
+  pointsTraded?: number
+  points_traded?: number
+  points?: number
+  hours?: number
+  appliedAt?: string | null
+  applied_at?: string | null
+  expiresAt?: string | null
+  expires_at?: string | null
+  isActive?: boolean
+  is_active?: boolean
+}
 
 export type TradeCenterRolloverResponse = {
   trades: TradeCenterRolloverTrade[]
@@ -1436,6 +1475,7 @@ async function instructorRequest<T>(
   init?: RequestInit & { requireAuthHeader?: boolean },
 ): Promise<T> {
   const url = `${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`
+  assertProductionHttpsUrl(url)
   const headers: Record<string, string> = {
     Accept: "application/json",
     "Content-Type": "application/json",
@@ -1449,7 +1489,11 @@ async function instructorRequest<T>(
   }
 
   const { requireAuthHeader: _, ...fetchInit } = init ?? {}
-  const response = await fetch(url, { ...fetchInit, headers })
+  const response = await fetch(url, {
+    ...fetchInit,
+    headers,
+    signal: createApiAbortSignal(undefined, fetchInit.signal ?? undefined),
+  })
   let body: unknown = null
   const text = await response.text()
   if (text) {
@@ -1461,20 +1505,20 @@ async function instructorRequest<T>(
   }
 
   if (!response.ok) {
-    const message =
-      typeof body === "object" &&
-      body !== null &&
-      "error" in body &&
-      typeof (body as { error: unknown }).error === "string"
-        ? (body as { error: string }).error
-        : `Request failed (${response.status})`
-    reportMobileApiError({
-      path,
-      method: init?.method,
-      status: response.status,
-      message,
-      body,
-    })
+    noteApiFailure(path, response.status)
+    const message = extractApiErrorMessage(body, response.status, path)
+    const isExpectedMobilePaymentGap =
+      (response.status === 404 || response.status === 503) &&
+      path.includes("mobile-payment")
+    if (!isExpectedMobilePaymentGap) {
+      reportMobileApiError({
+        path,
+        method: init?.method,
+        status: response.status,
+        message,
+        body,
+      })
+    }
     throw new ApiError(message, response.status, body)
   }
 
@@ -1483,6 +1527,7 @@ async function instructorRequest<T>(
 
 export type InstructorDashboardCharts = {
   submissionsOverTime: { date: string; label: string; count: number }[]
+  submissionsOverTimeExtended?: { date: string; label: string; count: number }[]
   assessmentBreakdown: { name: string; value: number; type?: string }[]
   scoreTrend: { week: string; avgScore: number; attempts: number }[]
 }
@@ -1503,15 +1548,32 @@ export const instructorApi = {
   getCourses: (instructorId: number) =>
     instructorRequest<{
       courses: Array<InstructorCourse & { course_id?: number }>
+      offerings?: Array<InstructorCourse & { course_id?: number; academic_term_id?: number | null }>
       activeTerm?: { id: number; label: string } | null
       actorRole?: string
-    }>("/api/instructor/courses", { instructorId }    ).then((r) => ({
+    }>("/api/instructor/courses", { instructorId }).then((r) => ({
       ...r,
       courses: (r.courses ?? [])
         .map((c) => ({
           ...c,
-          id: Number(c.id ?? c.course_id ?? 0)}))
-        .filter((c) => Number.isFinite(c.id) && c.id > 0)})),
+          id: Number(c.id ?? c.course_id ?? 0),
+        }))
+        .filter((c) => Number.isFinite(c.id) && c.id > 0),
+      offerings: (r.offerings ?? r.courses ?? [])
+        .map((c) => ({
+          ...c,
+          id: Number(c.id ?? c.course_id ?? 0),
+          course_id: Number(c.course_id ?? c.id ?? 0),
+        }))
+        .filter((c) => Number.isFinite(c.id) && c.id > 0),
+    })),
+
+  removeCourseFromTerm: (instructorId: number, termId: number, courseId: number) =>
+    instructorRequest<{ success?: boolean }>(
+      `/api/instructor/academic-terms/${termId}/courses/${courseId}`,
+      { instructorId },
+      { method: "DELETE" },
+    ),
 
   getDashboardStats: (scope: Scope) =>
     instructorRequest<{ stats: Record<string, unknown> }>(
@@ -1615,10 +1677,11 @@ export const instructorApi = {
     }>(`/api/instructor/anti-cheat-reports${suffix}`, scope)
   },
 
-  getObservabilityLogs: (scope: Scope, params?: ReportDateRange & { limit?: number }) => {
+  getObservabilityLogs: (scope: Scope, params?: ReportDateRange & { limit?: number; userId?: number }) => {
     const q = new URLSearchParams()
     if (params?.startDate) q.set("startDate", params.startDate)
     if (params?.endDate) q.set("endDate", params.endDate)
+    if (params?.userId != null) q.set("userId", String(params.userId))
     q.set("limit", String(params?.limit ?? 200))
     return instructorRequest<{
       logs: Record<string, unknown>[]
@@ -1627,9 +1690,10 @@ export const instructorApi = {
     }>(`/api/observability/logs?${q.toString()}`, scope)
   },
 
-  getProgressReviews: (scope: Scope, params?: { reviewPeriod?: string }) => {
+  getProgressReviews: (scope: Scope, params?: { reviewPeriod?: string; asOfDate?: string }) => {
     const q = new URLSearchParams()
     if (params?.reviewPeriod) q.set("reviewPeriod", params.reviewPeriod)
+    if (params?.asOfDate?.trim()) q.set("asOfDate", params.asOfDate.trim().slice(0, 10))
     const suffix = q.toString() ? `?${q.toString()}` : ""
     return instructorRequest<InstructorProgressReviewsResponse>(
       `/api/instructor/progress-reviews${suffix}`,
@@ -1638,6 +1702,32 @@ export const instructorApi = {
       ...r,
       reviews: r.reviews ?? []}))
   },
+
+  getProgressReviewById: (scope: Scope, reviewId: number) =>
+    instructorRequest<{
+      success?: boolean
+      review?: {
+        id: number
+        reviewPeriod: string
+        asOfDate?: string | null
+        sections?: ProgressReview["sections"]
+        progressData?: ProgressReview["progressData"]
+        contentMarkdown?: string | null
+        createdAt?: string
+      }
+    }>(`/api/instructor/progress-reviews?reviewId=${reviewId}`, scope).then((r) => {
+      const rev = r.review
+      if (!rev) return null
+      return {
+        id: rev.id,
+        reviewPeriod: rev.reviewPeriod,
+        asOfDate: rev.asOfDate ?? null,
+        sections: rev.sections ?? null,
+        contentMarkdown: rev.contentMarkdown ?? null,
+        progressData: rev.progressData ?? null,
+        createdAt: rev.createdAt,
+      } satisfies ProgressReview
+    }),
 
   runProgressReviewBatch: (scope: Scope, payload: ProgressReviewBatchPayload) =>
     instructorRequest<{ success?: boolean; result: ProgressReviewBatchResult; error?: string }>(
@@ -1663,6 +1753,11 @@ export const instructorApi = {
       title: string
       content: string
       pinned?: boolean
+      type?: string
+      priority?: string
+      target_session?: string
+      expires_at?: string | null
+      attachments?: InstructorAnnouncementAttachment[]
     },
   ) =>
     instructorRequest<{ announcement: Record<string, unknown> }>("/api/announcements", scope, {
@@ -1671,6 +1766,11 @@ export const instructorApi = {
         title: payload.title,
         content: payload.content,
         pinned: payload.pinned ?? false,
+        type: payload.type ?? "info",
+        priority: payload.priority ?? (payload.pinned ? "high" : "medium"),
+        target_session: payload.target_session ?? "all",
+        expires_at: payload.expires_at ?? null,
+        attachments: payload.attachments ?? [],
         course_id: scope.courseId})}).then((r) => normalizeInstructorAnnouncement(r.announcement)),
 
   getAnnouncementById: (scope: Scope, id: number) =>
@@ -1686,6 +1786,11 @@ export const instructorApi = {
       title: string
       content: string
       pinned: boolean
+      type: string
+      priority: string
+      target_session: string
+      expires_at: string | null
+      attachments: InstructorAnnouncementAttachment[]
     }>,
   ) =>
     instructorRequest<{ announcement: Record<string, unknown> }>(`/api/announcements/${id}`, scope, {
@@ -1695,6 +1800,41 @@ export const instructorApi = {
   deleteAnnouncement: (scope: Scope, id: number) =>
     instructorRequest<{ message: string }>(`/api/announcements/${id}`, scope, {
       method: "DELETE"}),
+
+  uploadAnnouncementAttachment: async (
+    scope: Scope,
+    file: { uri: string; name: string; type: string },
+  ): Promise<InstructorAnnouncementAttachment> => {
+    const url = `${API_BASE_URL}/api/announcements/upload`
+    const form = new FormData()
+    form.append("file", { uri: file.uri, name: file.name, type: file.type } as unknown as Blob)
+    const headers: Record<string, string> = {
+      Accept: "application/json",
+      "x-instructor-id": String(scope.instructorId),
+    }
+    if (scope.courseId != null) headers["x-course-id"] = String(scope.courseId)
+    const response = await fetch(url, { method: "POST", headers, body: form })
+    const text = await response.text()
+    let body: unknown = null
+    if (text) {
+      try {
+        body = JSON.parse(text)
+      } catch {
+        body = { error: text }
+      }
+    }
+    if (!response.ok) {
+      const message =
+        typeof body === "object" &&
+        body !== null &&
+        "error" in body &&
+        typeof (body as { error: unknown }).error === "string"
+          ? (body as { error: string }).error
+          : `Upload failed (${response.status})`
+      throw new ApiError(message, response.status, body)
+    }
+    return body as InstructorAnnouncementAttachment
+  },
 
   getNotifications: (instructorId: number, limit = 50) =>
     instructorRequest<{ notifications: InstructorNotification[]; unread_count: number }>(
@@ -1780,6 +1920,11 @@ export const instructorApi = {
   },
 
   getClassroomPointAssignment: async (scope: Scope, assignmentId: number) => {
+    const byId = await instructorRequest<{ submission?: ClassroomPointAssignment }>(
+      `/api/classroom-points/submissions/${assignmentId}`,
+      scope,
+    ).catch(() => null)
+    if (byId?.submission) return byId.submission
     const rows = await instructorApi.getClassroomPointAssignments(scope)
     return rows.find((row) => row.id === assignmentId) ?? null
   },
@@ -1796,9 +1941,8 @@ export const instructorApi = {
   ) =>
     instructorRequest<{ success: boolean }>("/api/classroom-points", scope, {
       method: "POST",
-      body: JSON.stringify({
-        ...payload,
-        awardedBy: scope.instructorId})}),
+      body: JSON.stringify(payload),
+    }),
 
   createClassroomPointAssignment: (scope: Scope, payload: CreateClassroomPointAssignmentPayload) =>
     instructorRequest<{ success: boolean; submission?: ClassroomPointAssignment }>(
@@ -2081,7 +2225,7 @@ export const instructorApi = {
     },
   ) =>
     instructorRequest<{ success: boolean; request?: OfficeHourRequest }>(
-      "/api/student/office-hours",
+      "/api/instructor/office-hours",
       scope,
       {
         method: "POST",
@@ -2105,7 +2249,7 @@ export const instructorApi = {
       studentRequestDescription?: string
     },
   ) =>
-    instructorRequest<{ id: number }>("/api/student/recommendations", scope, {
+    instructorRequest<{ id: number }>("/api/instructor/recommendations", scope, {
       method: "POST",
       body: JSON.stringify({
         studentId: payload.studentId,
@@ -2115,46 +2259,31 @@ export const instructorApi = {
         deadline: payload.deadline,
         studentRequestDescription: payload.studentRequestDescription})}),
 
-  createSummerCamperAccount: (payload: {
-    fullName: string
-    email: string
-    school: string
-    password: string
-    programRole?: "summer_camper" | "summer_student"
-  }) => {
-    const url = `${API_BASE_URL}/api/summer-camp/request-account`
-    return fetch(url, {
-      method: "POST",
-      headers: { Accept: "application/json", "Content-Type": "application/json" },
-      body: JSON.stringify({
-        fullName: payload.fullName,
-        email: payload.email,
-        school: payload.school,
-        password: payload.password,
-        confirmPassword: payload.password,
-        programRole: payload.programRole ?? "summer_camper"})}).then(async (response) => {
-      const text = await response.text()
-      let body: unknown = null
-      if (text) {
-        try {
-          body = JSON.parse(text)
-        } catch {
-          body = { error: text }
-        }
-      }
-      if (!response.ok) {
-        const message =
-          typeof body === "object" &&
-          body !== null &&
-          "error" in body &&
-          typeof (body as { error: unknown }).error === "string"
-            ? (body as { error: string }).error
-            : `Request failed (${response.status})`
-        throw new ApiError(message, response.status, body)
-      }
-      return body as { success: boolean; autoApproved?: boolean; message?: string }
-    })
-  },
+  createSummerCamperAccount: (
+    scope: Scope,
+    payload: {
+      fullName: string
+      email: string
+      school: string
+      password: string
+      programRole?: "summer_camper" | "summer_student"
+    },
+  ) =>
+    instructorRequest<{ success: boolean; autoApproved?: boolean; message?: string }>(
+      "/api/instructor/summer-camp/campers",
+      scope,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          action: "create_account",
+          fullName: payload.fullName,
+          email: payload.email,
+          school: payload.school,
+          password: payload.password,
+          programRole: payload.programRole ?? "summer_camper",
+        }),
+      },
+    ),
 
   getAttemptOverrides: (scope: Scope, quizId: number) =>
     instructorRequest<{ overrides: InstructorAttemptOverride[] }>(
@@ -2284,6 +2413,7 @@ export const instructorApi = {
   updateAttendanceRecord: (scope: Scope, recordId: number, status: string) =>
     instructorRequest<{ success: boolean }>("/api/attendance/records", scope, {
       method: "PUT",
+      requireAuthHeader: true,
       body: JSON.stringify({ recordId, status })}),
 
   toggleAttendanceSessionCancelled: (scope: Scope, sessionId: number, isCancelled: boolean) =>
@@ -2562,6 +2692,7 @@ export const instructorApi = {
       title: string
       week: number
       description: string
+      objectives: string[]
       is_published: boolean
       allow_download: boolean
       session_access: Record<string, boolean>
@@ -2657,7 +2788,8 @@ export const instructorApi = {
 
   deleteLecture: (scope: Scope, lectureId: number) =>
     instructorRequest<{ success?: boolean }>(`/api/instructor/lectures?id=${lectureId}`, scope, {
-      method: "DELETE"}),
+      method: "DELETE",
+    }),
 
   getPracticeTopics: (scope: Scope, session = "ALL") =>
     instructorRequest<{
@@ -2738,6 +2870,7 @@ export const instructorApi = {
       )
       return {
         ...r,
+        fromQuestionBank: false,
         questions: (r.questions ?? []).map((q) =>
           normalizePracticeTopicQuestion(q as unknown as Record<string, unknown>),
         )}
@@ -2764,6 +2897,7 @@ export const instructorApi = {
       return {
         topic,
         session,
+        fromQuestionBank: true,
         questions,
         totalCount: questions.length,
         availableCount: questions.length,
@@ -2974,6 +3108,12 @@ export const instructorApi = {
       method: "PATCH",
       body: JSON.stringify(payload)}),
 
+  deleteSummerCamp: (scope: Scope, campId: number) =>
+    instructorRequest<{ success?: boolean; deletedCamp?: number }>("/api/instructor/summer-camp/camps", scope, {
+      method: "DELETE",
+      body: JSON.stringify({ camp_id: campId }),
+    }),
+
   getSummerCampTrainings: (scope: Scope) =>
     instructorRequest<{ trainings: SummerCampTraining[] }>(
       "/api/instructor/summer-camp/trainings",
@@ -2998,6 +3138,13 @@ export const instructorApi = {
       "/api/instructor/summer-camp/trainings",
       scope,
       { method: "PATCH", body: JSON.stringify(payload) },
+    ),
+
+  deleteSummerCampTraining: (scope: Scope, trainingId: number) =>
+    instructorRequest<{ success?: boolean; deletedTraining?: number }>(
+      "/api/instructor/summer-camp/trainings",
+      scope,
+      { method: "DELETE", body: JSON.stringify({ training_id: trainingId }) },
     ),
 
   getAssessmentResults: (
@@ -3059,35 +3206,16 @@ export const instructorApi = {
       body: JSON.stringify({}),
     }),
 
-  recalculateAssessmentScore: (attemptId: number, quizId: number) => {
-    const url = `${API_BASE_URL}/api/student/finalize-quiz`
-    return fetch(url, {
-      method: "POST",
-      headers: { Accept: "application/json", "Content-Type": "application/json" },
-      body: JSON.stringify({ attemptId, quizId }),
-    }).then(async (response) => {
-      const text = await response.text()
-      let body: unknown = null
-      if (text) {
-        try {
-          body = JSON.parse(text)
-        } catch {
-          body = { error: text }
-        }
-      }
-      if (!response.ok) {
-        const message =
-          typeof body === "object" &&
-          body !== null &&
-          "error" in body &&
-          typeof (body as { error: unknown }).error === "string"
-            ? (body as { error: string }).error
-            : `Request failed (${response.status})`
-        throw new ApiError(message, response.status, body)
-      }
-      return body as { success?: boolean; score?: number; percentage?: number }
-    })
-  },
+  recalculateAssessmentScore: (scope: Scope, attemptId: number, quizId: number) =>
+    instructorRequest<{ success?: boolean; score?: number; percentage?: number }>(
+      `/api/instructor/results/${attemptId}/recalculate`,
+      scope,
+      {
+        requireAuthHeader: true,
+        method: "POST",
+        body: JSON.stringify({ quizId }),
+      },
+    ),
 
   bulkReevaluateAssessmentAttempt: (
     scope: Scope,
@@ -3100,25 +3228,6 @@ export const instructorApi = {
       headers: { "x-bulk-reevaluate": "1" },
       body: JSON.stringify({ attemptId, mode }),
     }),
-
-  /** Student progress review content for instructor viewing. */
-  getStudentProgressReview: (
-    scope: Scope,
-    studentDatabaseId: number,
-    reviewPeriod?: string,
-    asOfDate?: string | null,
-  ) => {
-    const q = new URLSearchParams({ studentId: String(studentDatabaseId) })
-    if (reviewPeriod) q.set("reviewPeriod", reviewPeriod)
-    if (asOfDate) q.set("asOfDate", asOfDate)
-    return instructorRequest<{ success?: boolean; review: ProgressReview | null }>(
-      `/api/student/progress-review?${q.toString()}`,
-      scope,
-      {
-        requireAuthHeader: true,
-        headers: { "x-student-id": String(studentDatabaseId) }},
-    ).then((r) => r.review ?? null)
-  },
 
   getForumThreads: (scope: Scope, params?: { search?: string; sortBy?: "recent" | "popular" }) => {
     const q = new URLSearchParams()
@@ -3175,7 +3284,7 @@ export const instructorApi = {
     instructorRequest<{ success: boolean; message?: string }>(
       `/api/instructor/password-resets/${requestId}/reject`,
       scope,
-      { method: "POST", body: JSON.stringify({ reason: reason?.trim() || undefined }) },
+      { method: "POST", body: JSON.stringify({ notes: reason?.trim() || undefined }) },
     ),
 
   getAccountRequests: (scope: Scope, status?: string) => {
@@ -3197,7 +3306,10 @@ export const instructorApi = {
     instructorRequest<{ success: boolean; message?: string }>(
       `/api/instructor/account-requests/${requestId}/reject`,
       scope,
-      { method: "POST", body: JSON.stringify({ reason: reason?.trim() || undefined }) },
+      {
+        method: "POST",
+        body: JSON.stringify({ reason: reason?.trim() || "No reason provided" }),
+      },
     ),
 
   getRecommendationGuestAccountRequests: (scope: Scope) =>
@@ -3278,6 +3390,20 @@ export const instructorApi = {
       { method: "POST", body: JSON.stringify({ action: "approve", request_id: requestId }) },
     ),
 
+  rejectSummerCampRequest: (scope: Scope, requestId: number, reason?: string) =>
+    instructorRequest<{ success?: boolean; message?: string }>(
+      "/api/instructor/summer-camp/campers",
+      scope,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          action: "reject",
+          request_id: requestId,
+          reason: reason?.trim() || undefined,
+        }),
+      },
+    ),
+
   approveAllSummerCampRequests: (scope: Scope) =>
     instructorRequest<{ success?: boolean; approvedCount?: number; failedCount?: number }>(
       "/api/instructor/summer-camp/campers",
@@ -3290,13 +3416,13 @@ export const instructorApi = {
 
   getTradeCenterPointRequests: (scope: Scope) =>
     instructorRequest<{ requests: Array<Record<string, unknown>> }>(
-      "/api/trade-center/point-requests?role=instructor",
+      "/api/trade-center/point-requests?role=instructor&includeReviewed=true",
       scope,
     ).then((r) => r.requests ?? []),
 
   getTradeCenterDonationRequests: (scope: Scope) =>
     instructorRequest<{ requests: Array<Record<string, unknown>> }>(
-      "/api/trade-center/donation-requests?role=instructor",
+      "/api/trade-center/donation-requests?role=instructor&includeReviewed=true",
       scope,
     ).then((r) => r.requests ?? []),
 
@@ -3340,7 +3466,7 @@ export const instructorApi = {
     instructorRequest<{ success: boolean; message?: string }>(
       `/api/trade-center/donation-requests/${requestId}/approve`,
       scope,
-      { method: "POST", body: JSON.stringify({ instructorId: scope.instructorId }) },
+      { method: "POST", body: JSON.stringify({}) },
     ),
 
   rejectTradeCenterDonation: (scope: Scope, requestId: number, reason?: string) =>
@@ -3350,7 +3476,6 @@ export const instructorApi = {
       {
         method: "POST",
         body: JSON.stringify({
-          instructorId: scope.instructorId,
           reason: reason ?? "Rejected by instructor",
         }),
       },
@@ -3360,7 +3485,7 @@ export const instructorApi = {
     instructorRequest<{ success: boolean; message?: string }>(
       `/api/trade-center/point-requests/${requestId}/approve-instructor`,
       scope,
-      { method: "POST", body: JSON.stringify({ instructorId: scope.instructorId }) },
+      { method: "POST", body: JSON.stringify({}) },
     ),
 
   rejectTradeCenterPointRequest: (scope: Scope, requestId: number, reason?: string) =>
@@ -3370,7 +3495,6 @@ export const instructorApi = {
       {
         method: "POST",
         body: JSON.stringify({
-          instructorId: scope.instructorId,
           reason: reason ?? "Rejected by instructor",
         }),
       },
@@ -3783,6 +3907,86 @@ export const instructorApi = {
     instructorRequest<import("./faculty-membership-billing-api").FacultyMembershipPurchasesResponse>(
       `/api/instructor/purchases?instructorId=${encodeURIComponent(String(instructorId))}`,
       { instructorId },
+    ),
+
+  upgradeMembership: (
+    instructorId: number,
+    options: {
+      tier: import("../types/dashboard").FacultyMembershipTier
+      billingCadence?: "semester" | "annual"
+      mobileReturn?: boolean
+    },
+  ) =>
+    instructorRequest<import("./membership-checkout-api").MembershipUpgradeResponse>(
+      "/api/instructor/membership/upgrade",
+      { instructorId },
+      {
+        method: "POST",
+        body: JSON.stringify({
+          instructorId,
+          tier: options.tier,
+          billingCadence: options.billingCadence ?? "semester",
+          redirectCheckout: true,
+          mobileReturn: options.mobileReturn ?? true,
+        }),
+      },
+    ),
+
+  syncMembershipStripe: (instructorId: number, sessionId?: string) =>
+    instructorRequest<import("./membership-checkout-api").MembershipSyncResponse>(
+      "/api/instructor/membership/sync-stripe",
+      { instructorId },
+      {
+        method: "POST",
+        body: JSON.stringify({
+          instructorId,
+          ...(sessionId ? { sessionId } : {}),
+        }),
+      },
+    ),
+
+  prepareMembershipPaymentSheet: (
+    instructorId: number,
+    options: {
+      tier: import("../types/dashboard").FacultyMembershipTier
+      billingCadence?: "semester" | "annual"
+    },
+  ) =>
+    instructorRequest<import("./membership-payment-api").MobilePaymentSheetResponse>(
+      "/api/instructor/membership/mobile-payment-sheet",
+      { instructorId },
+      {
+        method: "POST",
+        body: JSON.stringify({
+          instructorId,
+          tier: options.tier,
+          billingCadence: options.billingCadence ?? "semester",
+        }),
+      },
+    ),
+
+  createMembershipPaymentIntent: (
+    instructorId: number,
+    options: {
+      tier: import("../types/dashboard").FacultyMembershipTier
+      billingCadence?: "semester" | "annual"
+      paymentMethodId: string
+      shouldSavePaymentMethod: boolean
+    },
+  ) =>
+    instructorRequest<import("./membership-payment-api").MobilePaymentIntentResponse>(
+      "/api/instructor/membership/mobile-payment-intent",
+      { instructorId },
+      {
+        method: "POST",
+        body: JSON.stringify({
+          instructorId,
+          tier: options.tier,
+          billingCadence: options.billingCadence ?? "semester",
+          paymentMethodId: options.paymentMethodId,
+          shouldSavePaymentMethod: options.shouldSavePaymentMethod,
+        }),
+      },
     ),
 }
 

@@ -29,6 +29,7 @@ import {
   FacultySheetStatRow
 } from "./faculty-collab-sheet-ui"
 import { SHEET_SECTION } from "./faculty-sheet-semantics"
+import { FacultySummerCampDatePicker } from "./FacultySummerCampDatePicker"
 
 type Scope = { instructorId: number; courseId: number }
 
@@ -294,12 +295,10 @@ export function FacultyRecommendationCreateModal({
             </FacultySheetField>
 
             <FacultySheetField label="Deadline">
-              <TextInput
-                style={collabSheetStyles.fieldInput}
+              <FacultySummerCampDatePicker
                 value={deadline}
-                onChangeText={setDeadline}
-                placeholder="YYYY-MM-DD"
-                autoCapitalize="none"
+                onChange={setDeadline}
+                accessibilityLabel="Deadline"
               />
             </FacultySheetField>
 

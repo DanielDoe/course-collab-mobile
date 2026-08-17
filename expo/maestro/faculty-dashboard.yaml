@@ -1,0 +1,35 @@
+appId: com.coursecollab.app
+---
+- tapOn:
+    text: "Close menu"
+    optional: true
+- tapOn:
+    text: "Close account menu"
+    optional: true
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Dashboard"
+    direction: UP
+    timeout: 12000
+- tapOn: "Dashboard"
+- tapOn:
+    text: "Close menu"
+    optional: true
+- extendedWaitUntil:
+    visible: "Instructor|Loading course dashboard|Select a Course"
+    timeout: 30000
+- takeScreenshot: dash-top
+
+# Scroll through page content
+- swipe:
+    direction: UP
+- takeScreenshot: dash-charts
+- swipe:
+    direction: UP
+- takeScreenshot: dash-snapshot
+- swipe:
+    direction: UP
+- takeScreenshot: dash-actions
+- swipe:
+    direction: UP
+- takeScreenshot: dash-activity

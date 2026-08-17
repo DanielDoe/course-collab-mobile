@@ -1,0 +1,155 @@
+appId: com.coursecollab.app
+---
+- tapOn:
+    text: "Close menu"
+    optional: true
+- tapOn:
+    id: "open-navigation-menu"
+- waitForAnimationToEnd
+- scrollUntilVisible:
+    element: "Student Directory"
+    direction: DOWN
+    timeout: 30000
+- tapOn: "Student Directory"
+- tapOn:
+    text: "Close menu"
+    optional: true
+- extendedWaitUntil:
+    visible: "Students|Search name|No students"
+    timeout: 45000
+- takeScreenshot: directory-landing
+
+# Students tab — search + filter
+- tapOn: "Students tab"
+- tapOn: "Search name, ID, email, section…"
+- inputText: "zzz-no-match"
+- hideKeyboard
+- takeScreenshot: directory-search-empty
+- tapOn:
+    text: "Clear search"
+    optional: true
+- tapOn: "Search name, ID, email, section…"
+- inputText: "daniel"
+- hideKeyboard
+- takeScreenshot: directory-search-match
+
+# Section filter
+- tapOn: "Open filters"
+- extendedWaitUntil:
+    visible: "Filter by section|All sections"
+    timeout: 10000
+- takeScreenshot: directory-filter
+- tapOn:
+    text: "All sections"
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true
+
+# Open two live student rows (read-only)
+- tapOn:
+    text: ".*Daniel.*"
+    index: 0
+    optional: true
+- extendedWaitUntil:
+    visible: "Student profile|Award points|Done"
+    timeout: 15000
+    optional: true
+- takeScreenshot: directory-student-1
+- tapOn:
+    text: "Award points"
+    optional: true
+- tapOn:
+    text: "Cancel"
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn:
+    text: "Close"
+    optional: true
+- tapOn:
+    text: ".*"
+    index: 1
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true
+
+# QA add student
+- tapOn: "Add student"
+- extendedWaitUntil:
+    visible: "Add student|Student ID|Import"
+    timeout: 15000
+- takeScreenshot: directory-add-empty
+- tapOn: "Add to roster"
+- takeScreenshot: directory-add-validation
+- tapOn: "Student ID"
+- inputText: "QA99DIR"
+- tapOn: "Add student"
+- tapOn: "Full name"
+- inputText: "QA99 Directory Student"
+- tapOn: "Add student"
+- tapOn: "Email"
+- inputText: "qa99.dir@uh.edu"
+- tapOn: "Add student"
+- tapOn: "Add to roster"
+- extendedWaitUntil:
+    visible: "Student saved|OK|QA99"
+    timeout: 30000
+    optional: true
+- takeScreenshot: directory-qa-added
+- tapOn: "OK"
+- tapOn:
+    text: "Done"
+    optional: true
+
+# Find QA student
+- tapOn: "Search name, ID, email, section…"
+- eraseText
+- inputText: "QA99DIR"
+- hideKeyboard
+- tapOn:
+    text: ".*QA99.*"
+    optional: true
+- takeScreenshot: directory-qa-row
+
+# Resets tab
+- tapOn: "Resets tab"
+- extendedWaitUntil:
+    visible: "Search password reset|No password resets"
+    timeout: 15000
+- takeScreenshot: directory-resets
+- tapOn:
+    text: ".*"
+    index: 0
+    optional: true
+- tapOn:
+    text: "Reject"
+    optional: true
+- tapOn:
+    text: "Cancel"
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true
+
+# Requests tab
+- tapOn: "Requests tab"
+- extendedWaitUntil:
+    visible: "Search account requests|No account requests"
+    timeout: 15000
+- takeScreenshot: directory-requests
+- tapOn:
+    text: ".*"
+    index: 0
+    optional: true
+- tapOn:
+    text: "Decline"
+    optional: true
+- tapOn:
+    text: "Cancel"
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true

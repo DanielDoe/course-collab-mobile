@@ -1,6 +1,7 @@
 import { Platform } from "react-native"
 import { API_BASE_URL } from "../../constants"
 import type { AppSession } from "../session"
+import { abortTimeout } from "../abort-timeout"
 import { getExpoPushToken, getStoredPushToken } from "./notification-service"
 
 type RegisterResult = {
@@ -24,7 +25,7 @@ async function requestJson(
         ...headers,
       },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(12_000),
+      signal: abortTimeout(12_000),
     })
     return res.ok
   } catch {

@@ -1,0 +1,7 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Announcements"
+- waitForAnimationToEnd
+- tapOn: "Open filters"
+- waitForAnimationToEnd
+- takeScreenshot: announcements-filters

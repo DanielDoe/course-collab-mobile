@@ -1,0 +1,4 @@
+appId: com.coursecollab.app
+---
+- tapOn: "All final exams"
+- waitForAnimationToEnd

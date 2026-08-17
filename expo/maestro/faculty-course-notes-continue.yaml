@@ -1,0 +1,29 @@
+appId: com.coursecollab.app
+---
+- extendedWaitUntil:
+    visible: "Search course notes…|Create note"
+    timeout: 15000
+- tapOn: "Search course notes…"
+- inputText: "zzzqnofind"
+- tapOn: "Course Notes"
+- takeScreenshot: course-notes-search-empty
+- tapOn: "Search course notes…"
+- eraseText
+- tapOn:
+    text: "Clear search"
+    optional: true
+- tapOn: "Search course notes…"
+- inputText: "Nodal"
+- tapOn: "Course Notes"
+- takeScreenshot: course-notes-search-match
+- tapOn: "Search course notes…"
+- eraseText
+- tapOn:
+    text: "Clear search"
+    optional: true
+- tapOn: "Course Notes"
+- tapOn: "[sample-ui] Lab safety reminders, Draft"
+- extendedWaitUntil:
+    visible: "Edit note|New note|Cancel"
+    timeout: 15000
+- takeScreenshot: course-notes-edit-first

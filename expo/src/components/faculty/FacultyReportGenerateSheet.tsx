@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import {
   ActivityIndicator,
   Modal,
@@ -9,11 +9,14 @@ import {
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { ApiError } from "../../lib/api"
+import { AppAlert } from "../../lib/app-alert"
 import { instructorApi } from "../../lib/instructor-api"
 import {
   getReportTemplate,
   type ReportDateRange,
-  type ReportTemplateConfig} from "../../lib/instructor-reports-utils"
+  type ReportTemplateConfig,
+  type SavedInstructorReport,
+} from "../../lib/instructor-reports-utils"
 import { useModuleTheme } from "../../lib/themed-module-shell"
 import { FACULTY_SHEET_COLOR } from "../../lib/faculty-sheet-theme"
 import {
@@ -25,11 +28,12 @@ import {
   FacultySheetHero,
   FacultySheetOutlineButton,
   FacultySheetSection,
-  FacultySheetSubmitButton,
-  FacultySheetTextInput
+  FacultySheetSubmitButton
 } from "./faculty-collab-sheet-ui"
+import { FacultySummerCampDatePicker } from "./FacultySummerCampDatePicker"
 import { SHEET_SECTION } from "./faculty-sheet-semantics"
 import { FacultyStatusPill } from "./faculty-shared"
+import { useSuppressModuleSearchDock } from "../../context/ModuleSearchDockContext"
 
 type Scope = { instructorId: number; courseId: number }
 
@@ -39,7 +43,7 @@ type Props = {
   template: ReportTemplateConfig | null
   dateRange: ReportDateRange
   onClose: () => void
-  onComplete: (savedReportId?: number) => void
+  onComplete: (report: SavedInstructorReport, synced: boolean) => void
 }
 
 function useReportGenerateStyles() {
@@ -63,6 +67,7 @@ export function FacultyReportGenerateSheet({
   dateRange,
   onClose,
   onComplete}: Props) {
+  useSuppressModuleSearchDock(visible)
   const collabSheetStyles = useCollabSheetStyles()
   const { native, tokens } = useModuleTheme()
   const styles = useReportGenerateStyles()
@@ -71,6 +76,13 @@ export function FacultyReportGenerateSheet({
   const [endDate, setEndDate] = useState(dateRange.endDate ?? "")
   const [running, setRunning] = useState(false)
   const [error, setError] = useState("")
+
+  useEffect(() => {
+    if (!visible) return
+    setStartDate(dateRange.startDate ?? "")
+    setEndDate(dateRange.endDate ?? "")
+    setError("")
+  }, [visible, dateRange.startDate, dateRange.endDate])
 
   if (!visible || !template) return null
 
@@ -116,19 +128,52 @@ export function FacultyReportGenerateSheet({
         metadata = generated.metadata ?? {}
       }
 
-      const saveRes = await instructorApi.saveInstructorReport(scope, {
-        reportType: template.id,
-        title: `${template.label} (${data.length} records)`,
+      const title = `${template.label} (${data.length} records)`
+      const generatedAt = new Date().toISOString()
+      let report: SavedInstructorReport = {
+        id: -Date.now(),
+        type: template.id,
+        title,
         data,
         metadata,
         filters: { type: template.id, ...filters },
-      })
-
-      if (!saveRes.success) {
-        throw new ApiError(saveRes.error ?? "Could not save report", 400)
+        generatedAt,
+        createdAt: generatedAt,
       }
 
-      onComplete(saveRes.reportId)
+      try {
+        const saveRes = await instructorApi.saveInstructorReport(scope, {
+          reportType: template.id,
+          title,
+          data,
+          metadata,
+          filters: { type: template.id, ...filters },
+        })
+        if (saveRes.success && saveRes.reportId != null) {
+          report = {
+            ...report,
+            id: saveRes.reportId,
+            createdAt: saveRes.createdAt ?? generatedAt,
+          }
+          AppAlert.alert(
+            "Report saved",
+            `${template.label} (${data.length} record${data.length === 1 ? "" : "s"}) is now in Generated reports.`,
+          )
+          onComplete(report, true)
+        } else {
+          AppAlert.alert(
+            "Export ready",
+            `${template.label} was generated on this device. Cloud save is unavailable right now — you can still export PDF or CSV from Generated reports.`,
+          )
+          onComplete(report, false)
+        }
+      } catch {
+        AppAlert.alert(
+          "Export ready",
+          `${template.label} was generated on this device. Cloud save is unavailable right now — you can still export PDF or CSV from Generated reports.`,
+        )
+        onComplete(report, false)
+      }
       onClose()
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not generate report.")
@@ -167,21 +212,17 @@ export function FacultyReportGenerateSheet({
 
           <FacultySheetSection label="Date range" tone={SHEET_SECTION.edit}>
             <FacultySheetField label="Start date">
-              <FacultySheetTextInput
+              <FacultySummerCampDatePicker
                 value={startDate}
-                onChangeText={setStartDate}
-                placeholder="YYYY-MM-DD (optional)"
-                autoCapitalize="none"
-                autoCorrect={false}
+                onChange={setStartDate}
+                accessibilityLabel="Start date"
               />
             </FacultySheetField>
             <FacultySheetField label="End date">
-              <FacultySheetTextInput
+              <FacultySummerCampDatePicker
                 value={endDate}
-                onChangeText={setEndDate}
-                placeholder="YYYY-MM-DD (optional)"
-                autoCapitalize="none"
-                autoCorrect={false}
+                onChange={setEndDate}
+                accessibilityLabel="End date"
               />
             </FacultySheetField>
           </FacultySheetSection>
@@ -208,7 +249,7 @@ export function FacultyReportGenerateSheet({
           <View style={styles.hintRow}>
             <Ionicons name="information-circle-outline" size={16} color={native.tertiaryLabel} />
             <Text style={styles.hintText}>
-              CSV export is available after saving from the Generated tab. PDF export remains on web.
+              Date presets on the main screen pre-fill this range. After saving, open the report from Generated to search rows and export PDF or CSV.
             </Text>
           </View>
         </ScrollView>

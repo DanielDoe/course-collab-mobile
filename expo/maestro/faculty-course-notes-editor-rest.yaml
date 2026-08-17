@@ -1,0 +1,23 @@
+appId: com.coursecollab.app
+---
+- extendedWaitUntil:
+    visible: "Edit note"
+    timeout: 8000
+- tapOn: "Ruled"
+- tapOn: "Plain"
+- tapOn: "Dotted"
+- tapOn: "Grid"
+- tapOn: "Ruled"
+- swipe:
+    direction: UP
+- takeScreenshot: course-notes-handwritten-scrolled
+- tapOn:
+    text: "Add page"
+    optional: true
+- tapOn: "Typed"
+- swipe:
+    direction: UP
+- tapOn: "Delete note"
+- takeScreenshot: course-notes-delete-editor-confirm
+- tapOn: "Cancel"
+- tapOn: "Cancel"

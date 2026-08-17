@@ -1,0 +1,33 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Open navigation menu"
+- waitForAnimationToEnd
+- scrollUntilVisible:
+    element: "Office Hours"
+    direction: DOWN
+    timeout: 12000
+    visibilityPercentage: 50
+- tapOn: "Office Hours"
+- tapOn:
+    text: "Close menu"
+    optional: true
+- extendedWaitUntil:
+    visible: "Office Hours|No office|Hours"
+    timeout: 25000
+- takeScreenshot: dest-office
+
+- tapOn: "Open navigation menu"
+- waitForAnimationToEnd
+- scrollUntilVisible:
+    element: "Manage Playground"
+    direction: DOWN
+    timeout: 12000
+    visibilityPercentage: 50
+- tapOn: "Manage Playground"
+- tapOn:
+    text: "Close menu"
+    optional: true
+- extendedWaitUntil:
+    visible: "Playground|Session|Question bank|Create session"
+    timeout: 25000
+- takeScreenshot: dest-playground

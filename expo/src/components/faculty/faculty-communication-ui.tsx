@@ -148,7 +148,9 @@ export function CommListRow({
   iconColor,
   iconSoft,
   title,
+  titleLines = 2,
   subtitle,
+  subtitleLines = 2,
   meta,
   badge,
   onPress,
@@ -161,7 +163,9 @@ export function CommListRow({
   iconColor?: string
   iconSoft?: string
   title: string
+  titleLines?: number
   subtitle?: string
+  subtitleLines?: number
   meta?: string
   badge?: string | number
   onPress?: () => void
@@ -207,12 +211,12 @@ export function CommListRow({
       <View style={styles.rowCopy}>
         <Text
           style={[type.body, destructive && { color: COMM_SYSTEM.red.color }]}
-          numberOfLines={2}
+          numberOfLines={titleLines}
         >
           {title}
         </Text>
         {subtitle ? (
-          <Text style={[type.caption, styles.rowSubtitle]} numberOfLines={2}>
+          <Text style={[type.caption, styles.rowSubtitle]} numberOfLines={subtitleLines}>
             {subtitle}
           </Text>
         ) : null}
@@ -234,6 +238,7 @@ export function CommListRow({
       onPress={onPress}
       style={({ pressed }) => [pressed && styles.rowPressed]}
       accessibilityRole="button"
+      accessibilityLabel={subtitle ? `${title}. ${subtitle}` : title}
     >
       {content}
     </Pressable>

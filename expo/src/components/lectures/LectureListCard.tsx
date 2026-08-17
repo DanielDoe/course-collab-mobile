@@ -10,6 +10,7 @@ import { SolidListThumbTile } from "../theme/SolidListThumbTile"
 import {
   clampProgress,
   lectureStatusLabel,
+  lectureTitleIncludesCourse,
   resolveLectureCardKind,
   type LectureCardKind,
 } from "./lecture-list-utils"
@@ -66,9 +67,11 @@ export function LectureListCard({ lecture, courseLabel, index, onPress }: Props)
         <Text style={[type.bodyEmphasis, styles.title, { color: native.label }]} numberOfLines={2}>
           {lecture.title}
         </Text>
-        <Text style={[type.caption, styles.course, { color: native.secondaryLabel }]} numberOfLines={1}>
-          {courseLabel}
-        </Text>
+        {lectureTitleIncludesCourse(lecture.title, courseLabel) ? null : (
+          <Text style={[type.caption, styles.course, { color: native.secondaryLabel }]} numberOfLines={1}>
+            {courseLabel}
+          </Text>
+        )}
 
         <View style={styles.statusRow}>
           <View style={styles.statusMain}>

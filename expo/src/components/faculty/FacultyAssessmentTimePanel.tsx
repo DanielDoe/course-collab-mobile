@@ -5,11 +5,11 @@ import type { QuizEditorDraft, QuizQuestionDraft } from "../../lib/faculty-quiz-
 import { instructorApi, type InstructorQuestionTimeSetting } from "../../lib/instructor-api"
 import { FACULTY_ASSESSMENT_COLOR } from "../../lib/faculty-assessment-theme"
 import { useModuleTheme } from "../../lib/themed-module-shell"
-import { FacultySheetTextInput } from "./faculty-collab-sheet-ui"
+import { NativeSelect } from "../NativeSelect"
+import { secondsSelectOptions } from "./FacultyNativePickers"
 import {
   EditorNotice,
-  EditorSectionCard,
-  EditorTextField} from "./FacultyAssessmentEditorUi"
+  EditorSectionCard} from "./FacultyAssessmentEditorUi"
 
 type Scope = { instructorId: number; courseId: number }
 
@@ -106,14 +106,12 @@ export function FacultyAssessmentTimePanel({
         title="Assessment default"
         subtitle="Used when a question has no time override"
       >
-        <EditorTextField
-          label="Default time per question (seconds)"
+        <NativeSelect
+          label="Default time per question"
+          placeholder="1 minute"
           value={String(draft.time_per_question)}
-          onChangeText={(v) => {
-            const n = Number(v)
-            onPatchDraft({ time_per_question: Number.isFinite(n) ? Math.max(10, n) : 60 })
-          }}
-          keyboardType="numeric"
+          options={secondsSelectOptions(draft.time_per_question)}
+          onChange={(v) => onPatchDraft({ time_per_question: Math.max(10, Number(v) || 60) })}
         />
       </EditorSectionCard>
 
@@ -158,17 +156,21 @@ export function FacultyAssessmentTimePanel({
                   {courseDefault != null ? ` · course ${courseDefault}s` : ""}
                 </Text>
               </View>
-              <FacultySheetTextInput
-                style={styles.timeInput}
-                value={question.time_limit != null ? String(question.time_limit) : ""}
-                onChangeText={(v) => {
-                  const n = Number(v)
-                  onPatchQuestion(index, {
-                    time_limit: v.trim() && Number.isFinite(n) ? Math.max(10, n) : null})
-                }}
-                placeholder="—"
-                keyboardType="numeric"
-              />
+              <View style={{ width: 148 }}>
+                <NativeSelect
+                  placeholder="Default"
+                  value={question.time_limit != null ? String(question.time_limit) : ""}
+                  options={[
+                    { value: "", label: "Default" },
+                    ...secondsSelectOptions(question.time_limit),
+                  ]}
+                  onChange={(v) =>
+                    onPatchQuestion(index, {
+                      time_limit: v ? Math.max(10, Number(v) || 60) : null,
+                    })
+                  }
+                />
+              </View>
             </View>
           )
         })}

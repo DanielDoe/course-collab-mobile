@@ -108,6 +108,7 @@ export const STUDENT_NAV_GROUPS: StudentNavGroup[] = [
       { id: "syllabus", label: "Syllabus", route: "/module/syllabus", icon: "document-outline" },
       { id: "calendar", label: "Calendar", route: "/module/calendar", icon: "calendar-number-outline" },
       { id: "office-hours", label: "Office Hours", route: "/module/office-hours", icon: "time-outline" },
+      { id: "schedule-adjustment", label: "Schedule Adjustment", route: "/module/schedule-adjustment", icon: "calendar-outline" },
       { id: "course-policies", label: "Policies", route: "/module/course-policies", icon: "shield-outline" },
       { id: "course-evaluation", label: "Course Evaluation", route: "/module/course-evaluation", icon: "clipboard-outline" },
       { id: "recommendations", label: "Recommendation Letters", route: "/module/recommendations", icon: "create-outline" },

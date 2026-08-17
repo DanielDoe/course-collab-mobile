@@ -1,0 +1,7 @@
+appId: com.coursecollab.app
+---
+- tapOn: "P31"
+- extendedWaitUntil:
+    visible: "Leaderboard|Controls|Questions"
+    timeout: 12000
+- takeScreenshot: playground-p31

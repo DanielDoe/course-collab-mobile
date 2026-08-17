@@ -1,0 +1,8 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<testsuites>
+  <testsuite name="Test Suite" device="iPhone 17 Pro - iOS 26.0 - 4158A022-1067-455E-BF03-10CA5D80D946" tests="1" failures="1" time="23.0">
+    <testcase id="faculty-practice-preview-retry" name="faculty-practice-preview-retry" classname="faculty-practice-preview-retry" file="expo/maestro/faculty-practice-preview-retry.yaml" time="23.0" status="ERROR">
+      <failure>Assertion is false: "Question preview|Could not load|Try again|Edit question|Duplicate" is visible</failure>
+    </testcase>
+  </testsuite>
+</testsuites>

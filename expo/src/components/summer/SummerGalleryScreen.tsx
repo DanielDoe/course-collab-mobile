@@ -1,5 +1,7 @@
 import { useCallback, useMemo, useState } from "react"
 import { Text, View } from "react-native"
+import { AppAlert } from "../../lib/app-alert"
+import { ApiError } from "../../lib/api"
 import {
   summerCampApi,
   type SummerGalleryAward,
@@ -22,7 +24,7 @@ import {
 import { SummerGalleryActionSheet } from "./SummerGalleryActionSheet"
 import { SummerGalleryAwardCard, SummerGalleryLeaderboardCard } from "./SummerGalleryAwardCard"
 import { SummerGalleryListCard } from "./SummerGalleryListCard"
-import { useSummerLoader } from "./summer-module-hooks"
+import { useSummerLoader, useSummerStudentId } from "./summer-module-hooks"
 
 const TAB_OPTIONS = [
   { id: "projects" as const, label: "Showcase", icon: "images-outline" as const },
@@ -68,9 +70,28 @@ export function SummerGalleryScreen() {
   const [tab, setTab] = useState<SummerGalleryTab>("projects")
   const [search, setSearch] = useState("")
   const [selection, setSelection] = useState<GallerySelection | null>(null)
+  const studentId = useSummerStudentId()
+  const [votingId, setVotingId] = useState<number | null>(null)
 
   const fetchGallery = useCallback((studentId: string) => summerCampApi.getGallery(studentId), [])
   const { data, loading, refreshing, error, refresh } = useSummerLoader(fetchGallery)
+
+  const handleVote = useCallback(
+    async (entryId: number) => {
+      if (!studentId) return
+      setVotingId(entryId)
+      try {
+        await summerCampApi.voteGalleryEntry(studentId, entryId)
+        await refresh()
+        AppAlert.alert("Vote recorded", "Thanks for supporting a camp showcase project.")
+      } catch (err) {
+        AppAlert.alert("Could not vote", err instanceof ApiError ? err.message : "Try again in a moment.")
+      } finally {
+        setVotingId(null)
+      }
+    },
+    [refresh, studentId],
+  )
 
   const entries = useMemo(
     () =>
@@ -203,6 +224,8 @@ export function SummerGalleryScreen() {
         visible={selection != null}
         selection={selection}
         onClose={() => setSelection(null)}
+        onVote={selection?.kind === "project" ? (entryId) => void handleVote(entryId) : undefined}
+        voting={votingId != null}
       />
     </ModuleScreen>
   )

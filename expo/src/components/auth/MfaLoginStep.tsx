@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import {
-  ActivityIndicator,
-  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -12,13 +10,10 @@ import {
   View,
 } from "react-native"
 import * as Clipboard from "expo-clipboard"
-import { Ionicons } from "@/components/icons/AppIcon"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { BRAND } from "../../constants"
 import { hexToRgba } from "../../constants/app-themes"
-import { NATIVE, nativeType } from "../../constants/faculty-native-theme"
 import { mfaApi, mfaErrorMessage } from "../../lib/mfa-api"
-import { copyToClipboard } from "../../lib/copy-to-clipboard"
 import type { MfaLoginState } from "../../lib/mfa-types"
 import type { UniversityRecord } from "../../lib/api"
 import { LoginInlineError } from "../login/LoginCard"
@@ -38,7 +33,6 @@ type Props = {
   onBack: () => void
 }
 
-const AUTH_APPS = "Google Authenticator, Authy, or 1Password"
 /** MFA keeps CourseCollab brand accent — not the active university appearance theme. */
 const MFA_ACCENT = BRAND.purple
 const MFA_ACCENT_SOFT = hexToRgba(BRAND.purple, 0.12)
@@ -218,9 +212,12 @@ function MfaLayout({
   return <View style={styles.embeddedWrap}>{inner}</View>
 }
 
+/**
+ * Login MFA gate — only shown when the user already enabled MFA in Settings.
+ * Does not force authenticator enrollment at sign-in.
+ */
 export function MfaLoginStep({
   state,
-  portalLabel = "CourseCollab",
   university = null,
   backLabel = "Back to sign in",
   showChrome = true,
@@ -229,42 +226,14 @@ export function MfaLoginStep({
 }: Props) {
   const { LOGIN, loginType } = useLoginTheme()
 
-  const [enroll, setEnroll] = useState<{
-    qrDataUrl: string
-    manualKey: string
-    accountName: string
-    issuer: string
-  } | null>(null)
   const [code, setCode] = useState("")
   const [recoveryCode, setRecoveryCode] = useState("")
   const [useRecovery, setUseRecovery] = useState(false)
-  const [preparingQr, setPreparingQr] = useState(false)
   const [authenticating, setAuthenticating] = useState(false)
   const [error, setError] = useState("")
-  const [recoveryCodes, setRecoveryCodes] = useState<string[] | null>(null)
-  const [copied, setCopied] = useState<"key" | "codes" | null>(null)
-  const [showManualKey, setShowManualKey] = useState(false)
   const submitLock = useRef(false)
   const completedRef = useRef(false)
   const lastSubmittedCodeRef = useRef<string | null>(null)
-  const pendingLoginPayload = useRef<Record<string, unknown> | null>(null)
-
-  const loadEnrollment = useCallback(async () => {
-    setPreparingQr(true)
-    setError("")
-    try {
-      const data = await mfaApi.enrollStart(state.challengeToken)
-      setEnroll(data)
-    } catch (err) {
-      setError(mfaErrorMessage(err, "Setup failed"))
-    } finally {
-      setPreparingQr(false)
-    }
-  }, [state.challengeToken])
-
-  useEffect(() => {
-    if (state.requiresSetup) void loadEnrollment()
-  }, [state.requiresSetup, loadEnrollment])
 
   const submitVerify = useCallback(async () => {
     if (submitLock.current || completedRef.current) return
@@ -291,31 +260,6 @@ export function MfaLoginStep({
     }
   }, [code, onComplete, recoveryCode, state.challengeToken, useRecovery])
 
-  const submitEnroll = useCallback(async () => {
-    if (submitLock.current || completedRef.current) return
-    submitLock.current = true
-    setAuthenticating(true)
-    setError("")
-    lastSubmittedCodeRef.current = `enroll:${code}`
-    try {
-      const data = await mfaApi.enrollConfirm(state.challengeToken, code)
-      if (Array.isArray(data.recoveryCodes) && data.recoveryCodes.length > 0) {
-        pendingLoginPayload.current = data
-        setRecoveryCodes(data.recoveryCodes as string[])
-      } else {
-        await onComplete(data)
-        completedRef.current = true
-      }
-    } catch (err) {
-      lastSubmittedCodeRef.current = null
-      setCode("")
-      setError(mfaErrorMessage(err, "Setup failed"))
-    } finally {
-      submitLock.current = false
-      setAuthenticating(false)
-    }
-  }, [code, onComplete, state.challengeToken])
-
   const runSubmit = useCallback(() => {
     if (useRecovery) {
       if (!recoveryCode.trim()) return
@@ -323,189 +267,36 @@ export function MfaLoginStep({
       return
     }
     if (code.length !== 6) return
-    void (state.requiresSetup ? submitEnroll() : submitVerify())
-  }, [code.length, recoveryCode, state.requiresSetup, submitEnroll, submitVerify, useRecovery])
+    void submitVerify()
+  }, [code.length, recoveryCode, submitVerify, useRecovery])
 
   useEffect(() => {
     if (useRecovery || authenticating || submitLock.current || completedRef.current) return
     if (code.length !== 6) return
-    if (state.requiresSetup && !enroll) return
-    const submittedKey = useRecovery ? `recovery:${recoveryCode.trim()}` : `totp:${code}`
+    const submittedKey = `totp:${code}`
     if (lastSubmittedCodeRef.current === submittedKey) return
     runSubmit()
-  }, [authenticating, code, enroll, recoveryCode, runSubmit, state.requiresSetup, useRecovery])
+  }, [authenticating, code, runSubmit, useRecovery])
 
-  const copyText = async (text: string, kind: "key" | "codes") => {
-    const ok = await copyToClipboard(text)
-    if (ok) {
-      setCopied(kind)
-      setTimeout(() => setCopied(null), 2000)
-    }
-  }
-
-  const finishAfterRecoveryCodes = () => {
-    const payload = pendingLoginPayload.current
-    pendingLoginPayload.current = null
-    if (!payload || completedRef.current) return
-    completedRef.current = true
-    void Promise.resolve(onComplete(payload)).catch((err) => {
-      completedRef.current = false
-      setRecoveryCodes(null)
-      setError(mfaErrorMessage(err, "Sign in failed after saving backup codes."))
-    })
-  }
-
-  const title = state.requiresSetup ? "Set Up Authenticator" : "Two-Factor Code"
-  const subtitle = state.requiresSetup
-    ? `${portalLabel} requires an authenticator app to protect student records.`
-    : "Enter the 6-digit code from your authenticator app."
-  const showFieldLabel = state.requiresSetup
-
-  if (recoveryCodes) {
-    const recoveryBody = (
-      <View style={styles.stack}>
-        <View style={[styles.codesGroup, { backgroundColor: LOGIN.grouped, borderColor: LOGIN.separator }]}>
-          {recoveryCodes.map((entry, index) => (
-            <View
-              key={entry}
-              style={[
-                styles.codeRow,
-                index < recoveryCodes.length - 1 && {
-                  borderBottomWidth: StyleSheet.hairlineWidth,
-                  borderBottomColor: LOGIN.separator,
-                },
-              ]}
-            >
-              <Text style={[styles.codeRowText, { color: LOGIN.label }]} selectable>
-                {entry}
-              </Text>
-            </View>
-          ))}
-        </View>
-
-        <Pressable
-          onPress={() => void copyText(recoveryCodes.join("\n"), "codes")}
-          style={({ pressed }) => [styles.textAction, pressed && styles.pressed]}
-          accessibilityRole="button"
-        >
-          <Text style={[loginType.link, { color: BRAND.purpleLight }]}>
-            {copied === "codes" ? "Copied" : "Copy All Codes"}
-          </Text>
-        </Pressable>
-
-        <LoginButton label="Continue" onPress={finishAfterRecoveryCodes} />
-      </View>
-    )
-
-    if (!showChrome) {
-      return (
-        <MfaLayout
-          showChrome={false}
-          title="Save Backup Codes"
-          subtitle="Each code works once. Store them somewhere safe before continuing."
-          university={university}
-          backLabel={backLabel}
-          onBack={onBack}
-        >
-          {recoveryBody}
-        </MfaLayout>
-      )
-    }
-
+  if (state.requiresSetup) {
     return (
       <MfaLayout
-        showChrome
-        title="Save Backup Codes"
-        subtitle="Each code works once. Store them somewhere safe before continuing."
+        showChrome={showChrome}
+        title="Authenticator Not Configured"
+        subtitle="Two-factor setup belongs in Settings → Password & security. Sign-in will not force enrollment."
         university={university}
         backLabel={backLabel}
         onBack={onBack}
       >
-        {recoveryBody}
+        <LoginInlineError message="Turn MFA on from Settings after password sign-in, or contact support if this account is stuck." />
       </MfaLayout>
     )
   }
 
   const formBody = (
     <View style={styles.form}>
-      {state.requiresSetup ? (
-        <View style={styles.setupSection}>
-          {preparingQr && !enroll ? (
-            <View style={styles.loadingInline}>
-              <ActivityIndicator color={MFA_ACCENT} />
-              <Text style={[loginType.info, { color: LOGIN.secondaryLabel }]}>Preparing QR code…</Text>
-            </View>
-          ) : null}
-
-          {enroll ? (
-            <View style={styles.enrollBlock}>
-              <Text style={[nativeType.sectionHeader, styles.sectionLabel, { color: LOGIN.secondaryLabel }]}>
-                Scan QR Code
-              </Text>
-              <View style={styles.qrBlock}>
-                <Image
-                  source={{ uri: enroll.qrDataUrl }}
-                  style={styles.qrImage}
-                  accessibilityLabel="Scan with authenticator app"
-                />
-                <Text style={[loginType.info, styles.qrHint, { color: LOGIN.secondaryLabel }]}>
-                  Add a new account in {AUTH_APPS}, then scan this code.
-                </Text>
-                <Pressable
-                  onPress={() => setShowManualKey((value) => !value)}
-                  style={({ pressed }) => [styles.textActionInline, pressed && styles.pressed]}
-                  accessibilityRole="button"
-                >
-                  <Text style={[loginType.link, { color: BRAND.purpleLight }]}>
-                    {showManualKey ? "Hide Setup Key" : "Enter Setup Key Instead"}
-                  </Text>
-                </Pressable>
-              </View>
-
-              {showManualKey ? (
-                <View style={[styles.manualKeyGroup, { borderColor: LOGIN.separator }]}>
-                  <Text style={[loginType.info, { color: LOGIN.secondaryLabel }]}>
-                    Account: <Text style={{ color: LOGIN.label }}>{enroll.accountName}</Text>
-                  </Text>
-                  <View style={styles.manualKeyRow}>
-                    <Text selectable style={[styles.manualKey, { color: LOGIN.label }]}>
-                      {enroll.manualKey}
-                    </Text>
-                    <Pressable
-                      onPress={() => void copyText(enroll.manualKey, "key")}
-                      hitSlop={8}
-                      accessibilityRole="button"
-                      accessibilityLabel="Copy setup key"
-                    >
-                      <Ionicons
-                        name={copied === "key" ? "checkmark" : "copy-outline"}
-                        size={20}
-                        color={MFA_ACCENT}
-                      />
-                    </Pressable>
-                  </View>
-                </View>
-              ) : null}
-
-              <View style={[styles.sectionDividerRow, { marginTop: 4 }]}>
-                <View style={[styles.sectionDividerLine, { backgroundColor: LOGIN.separator }]} />
-                <Text style={[loginType.info, styles.sectionDividerLabel, { color: LOGIN.secondaryLabel }]}>
-                  Enter the 6-digit code
-                </Text>
-                <View style={[styles.sectionDividerLine, { backgroundColor: LOGIN.separator }]} />
-              </View>
-            </View>
-          ) : null}
-        </View>
-      ) : null}
-
       {!useRecovery ? (
         <View style={styles.codeSection}>
-          {showFieldLabel ? (
-            <Text style={[loginType.fieldLabel, styles.codeLabel, { color: LOGIN.secondaryLabel }]}>
-              Authentication code
-            </Text>
-          ) : null}
           <OtpCodeField
             value={code}
             disabled={authenticating}
@@ -541,38 +332,40 @@ export function MfaLoginStep({
       {error ? <LoginInlineError message={error} /> : null}
 
       {useRecovery ? (
-        <LoginButton label="Verify & Sign In" onPress={runSubmit} disabled={!recoveryCode.trim() || authenticating} />
+        <LoginButton
+          label="Verify & Sign In"
+          onPress={runSubmit}
+          disabled={!recoveryCode.trim() || authenticating}
+        />
       ) : null}
 
-      {!state.requiresSetup ? (
-        <View style={styles.footerSection}>
-          <Pressable
-            onPress={() => {
-              setUseRecovery((value) => !value)
-              setError("")
-              setCode("")
-            }}
-            style={({ pressed }) => [styles.footerAction, pressed && styles.pressed]}
-            accessibilityRole="button"
-          >
-            <Text style={[loginType.link, styles.footerLink, { color: BRAND.purpleLight }]}>
-              {useRecovery ? "Use Authenticator Code" : "Use a Backup Recovery Code"}
-            </Text>
-          </Pressable>
-
-          <Text style={[loginType.info, styles.trustFootnote, { color: LOGIN.secondaryLabel }]}>
-            Trust duration can be changed in Settings → Password & security.
+      <View style={styles.footerSection}>
+        <Pressable
+          onPress={() => {
+            setUseRecovery((value) => !value)
+            setError("")
+            setCode("")
+          }}
+          style={({ pressed }) => [styles.footerAction, pressed && styles.pressed]}
+          accessibilityRole="button"
+        >
+          <Text style={[loginType.link, styles.footerLink, { color: BRAND.purpleLight }]}>
+            {useRecovery ? "Use Authenticator Code" : "Use a Backup Recovery Code"}
           </Text>
-        </View>
-      ) : null}
+        </Pressable>
+
+        <Text style={[loginType.info, styles.trustFootnote, { color: LOGIN.secondaryLabel }]}>
+          Trust duration can be changed in Settings → Password & security.
+        </Text>
+      </View>
     </View>
   )
 
   return (
     <MfaLayout
       showChrome={showChrome}
-      title={title}
-      subtitle={subtitle}
+      title="Two-Factor Code"
+      subtitle="Enter the 6-digit code from your authenticator app."
       university={university}
       backLabel={backLabel}
       onBack={onBack}
@@ -608,15 +401,12 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   form: { gap: 20, alignSelf: "stretch" },
-  setupSection: { gap: 16, alignSelf: "stretch" },
-  stack: { gap: 16, alignSelf: "stretch" },
   pressed: { opacity: Platform.OS === "ios" ? 0.55 : 0.88 },
   codeSection: {
     gap: 10,
     alignSelf: "stretch",
     alignItems: "center",
   },
-  codeLabel: { alignSelf: "stretch", textAlign: "center" },
   codeHint: { textAlign: "center" },
   footerSection: {
     alignItems: "center",
@@ -668,56 +458,5 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     fontVariant: ["tabular-nums"],
   },
-  enrollBlock: { gap: 12, alignSelf: "stretch" },
-  sectionLabel: { textTransform: "none", textAlign: "center" },
-  sectionDividerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    alignSelf: "stretch",
-  },
-  sectionDividerLine: { flex: 1, height: StyleSheet.hairlineWidth },
-  sectionDividerLabel: { fontSize: 12, fontWeight: "500" },
-  qrBlock: { alignItems: "center", gap: 10, alignSelf: "stretch" },
-  qrImage: {
-    width: 168,
-    height: 168,
-    borderRadius: 12,
-    backgroundColor: "#ffffff",
-  },
-  qrHint: { textAlign: "center", lineHeight: 18 },
-  textActionInline: { paddingVertical: 2, alignSelf: "center" },
-  textAction: { alignSelf: "center", paddingVertical: 2 },
-  manualKeyGroup: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    paddingTop: 10,
-    gap: 8,
-  },
-  manualKeyRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  manualKey: {
-    flex: 1,
-    fontFamily: Platform.select({ ios: "Menlo", android: "monospace", default: "monospace" }),
-    fontSize: 13,
-    lineHeight: 18,
-  },
   trustFootnote: { lineHeight: 18, textAlign: "center", maxWidth: 280 },
-  loadingInline: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    alignSelf: "flex-start",
-  },
-  codesGroup: {
-    borderRadius: NATIVE.sectionRadius,
-    borderWidth: StyleSheet.hairlineWidth,
-    overflow: "hidden",
-  },
-  codeRow: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  codeRowText: {
-    fontFamily: Platform.select({ ios: "Menlo", android: "monospace", default: "monospace" }),
-    fontSize: 15,
-  },
 })

@@ -27,12 +27,13 @@ import { useModuleTheme } from "../../lib/themed-module-shell"
 import { NATIVE } from "../../constants/faculty-native-theme"
 import { FacultyEmptyState, FacultyStatusPill } from "./faculty-shared"
 import { FacultySearchToolbar } from "./faculty-module-shell"
-import { FacultyQuestionBankPreviewModal } from "./FacultyQuestionBankPreviewModal"
+import { FacultyQuestionBankDetailContent } from "./FacultyQuestionBankDetailContent"
 import { SolidListThumbTile } from "../theme/SolidListThumbTile"
 import {
   FacultySheetContainer,
   useCollabSheetStyles,
   FacultySheetChrome,
+  FacultySheetConfirm,
   FacultySheetErrorBanner
 } from "./faculty-collab-sheet-ui"
 
@@ -69,7 +70,8 @@ export function FacultyPracticeTopicQuestionsModal({
   const [error, setError] = useState("")
   const [search, setSearch] = useState("")
   const [previewQuestion, setPreviewQuestion] = useState<InstructorBankQuestion | null>(null)
-  const [previewLoading, setPreviewLoading] = useState(false)
+  const [confirmBulk, setConfirmBulk] = useState<"hide" | "show" | null>(null)
+  const [fromQuestionBank, setFromQuestionBank] = useState(false)
 
   const load = useCallback(async () => {
     if (!scope || !topic) return
@@ -78,9 +80,14 @@ export function FacultyPracticeTopicQuestionsModal({
     try {
       const res = await instructorApi.getPracticeTopicQuestions(scope, topic.name, session)
       setQuestions(res.questions)
+      setFromQuestionBank(Boolean(res.fromQuestionBank))
+      if (res.fromQuestionBank) {
+        setError("Question hide/show is not available on this course yet. You can still preview questions.")
+      }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not load questions.")
       setQuestions([])
+      setFromQuestionBank(false)
     } finally {
       setLoading(false)
     }
@@ -89,6 +96,7 @@ export function FacultyPracticeTopicQuestionsModal({
   useEffect(() => {
     if (!visible || !scope || !topic) return
     setSearch("")
+    setConfirmBulk(null)
     void load()
   }, [visible, scope, topic, session, load])
 
@@ -108,7 +116,7 @@ export function FacultyPracticeTopicQuestionsModal({
     filtered.length > 0 && filtered.every((q) => q.isAvailable)
 
   async function runMutation(action: () => Promise<unknown>) {
-    if (!scope) return
+    if (!scope || fromQuestionBank) return
     onActingChange(true)
     setError("")
     try {
@@ -154,25 +162,53 @@ export function FacultyPracticeTopicQuestionsModal({
     )
   }
 
+  function toPreviewQuestion(question: PracticeTopicQuestion): InstructorBankQuestion {
+    return {
+      id: question.id,
+      question_text: question.questionText,
+      question_type: question.questionType ?? "",
+      difficulty: question.difficulty ?? "",
+      topic: question.topic ?? null,
+      hint: question.hint,
+      options: question.options,
+      option_count: question.optionCount ?? question.options?.length,
+    }
+  }
+
   async function openPreview(question: PracticeTopicQuestion) {
+    setPreviewQuestion(toPreviewQuestion(question))
     if (!scope) return
-    setPreviewLoading(true)
     try {
       const full = await instructorApi.getQuestionBankQuestion(scope, question.id)
-      setPreviewQuestion(full)
+      if (full) setPreviewQuestion(full)
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not load question preview.")
-    } finally {
-      setPreviewLoading(false)
+      if (!question.questionText) {
+        setError(err instanceof ApiError ? err.message : "Could not load question preview.")
+      }
     }
   }
 
   if (!topic) return null
 
   return (
-    <>
       <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
         <FacultySheetContainer>
+          {previewQuestion ? (
+            <>
+              <FacultySheetChrome
+                topInset={insets.top}
+                title="Question preview"
+                onClose={() => setPreviewQuestion(null)}
+              />
+              <ScrollView
+                contentContainerStyle={[collabSheetStyles.scroll, { paddingBottom: insets.bottom + 24 }]}
+                showsVerticalScrollIndicator={false}
+              >
+                <FacultyQuestionBankDetailContent question={previewQuestion} />
+              </ScrollView>
+            </>
+          ) : (
+            <>
           <FacultySheetChrome
             topInset={insets.top}
             title={topic.name}
@@ -219,7 +255,12 @@ export function FacultyPracticeTopicQuestionsModal({
                 <Text style={[type.caption, { fontWeight: "700", color: native.secondaryLabel }]}>
                   {filtered.filter((q) => q.isAvailable).length} visible in list
                 </Text>
-                <Pressable onPress={() => void setAllVisible(!allVisibleAvailable)} disabled={acting}>
+                <Pressable
+                  onPress={() => setConfirmBulk(allVisibleAvailable ? "hide" : "show")}
+                  disabled={acting || fromQuestionBank}
+                  accessibilityRole="button"
+                  accessibilityLabel={allVisibleAvailable ? "Hide all shown" : "Show all shown"}
+                >
                   <Text style={[type.bodyEmphasis, { color: FACULTY_PRACTICE_COLOR.link }]}>
                     {allVisibleAvailable ? "Hide all shown" : "Show all shown"}
                   </Text>
@@ -283,8 +324,11 @@ export function FacultyPracticeTopicQuestionsModal({
                             </View>
                             <NativeSwitch
                               value={question.isAvailable}
-                              disabled={acting}
+                              disabled={acting || fromQuestionBank}
                               activeTrackColor={FACULTY_PRACTICE_COLOR.link}
+                              accessibilityLabel={
+                                question.isAvailable ? "Question available to students" : "Question hidden from students"
+                              }
                               onValueChange={(enabled) => void toggleQuestion(question, enabled)}
                             />
                           </View>
@@ -308,7 +352,8 @@ export function FacultyPracticeTopicQuestionsModal({
                       <Pressable
                         style={styles.previewBtn}
                         onPress={() => void openPreview(question)}
-                        disabled={previewLoading}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Preview question ${index + 1}`}
                       >
                         <Ionicons name="eye-outline" size={16} color={FACULTY_PRACTICE_COLOR.link} />
                         <Text style={[type.caption, styles.previewLabel, { color: FACULTY_PRACTICE_COLOR.link }]}>
@@ -321,11 +366,28 @@ export function FacultyPracticeTopicQuestionsModal({
               </View>
             )}
           </ScrollView>
+            {confirmBulk ? (
+              <FacultySheetConfirm
+                title={confirmBulk === "hide" ? "Hide all questions?" : "Show all questions?"}
+                body={
+                  confirmBulk === "hide"
+                    ? `Hidden questions will not appear in student practice for “${topic.name}”.`
+                    : `All listed questions will be available in student practice for “${topic.name}”.`
+                }
+                confirmLabel={confirmBulk === "hide" ? "Hide all" : "Show all"}
+                danger={confirmBulk === "hide"}
+                onCancel={() => setConfirmBulk(null)}
+                onConfirm={() => {
+                  const next = confirmBulk === "show"
+                  setConfirmBulk(null)
+                  void setAllVisible(next)
+                }}
+              />
+            ) : null}
+            </>
+          )}
         </FacultySheetContainer>
       </Modal>
-
-      <FacultyQuestionBankPreviewModal question={previewQuestion} onClose={() => setPreviewQuestion(null)} />
-    </>
   )
 }
 

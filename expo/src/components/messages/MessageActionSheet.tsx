@@ -28,6 +28,8 @@ import { useAppThemeTokens, useShellChrome, useThemedNative } from "../../contex
 import { extractLastEmoji, normalizeReactionEmoji } from "../../lib/emoji-utils"
 import { useNativeType } from "../../lib/themed-module-theme"
 import type { ThreadMessage } from "../../lib/messages-api"
+import { canEditMessage, canUnsendMessage } from "../../lib/message-lifecycle"
+import { parseCourseImportFromMessage } from "../../lib/message-course-import"
 import { formatMessageWhen, stripMessageHtml } from "../../lib/messages-html"
 import { copyText } from "../../lib/copy-text"
 import { GlassSheetBackground } from "../theme/GlassSurface"
@@ -68,7 +70,9 @@ type Props = {
   onReplyWithQuote: () => void
   onForward: () => void
   onMarkUnread: () => void
-  onDelete?: () => void
+  onEdit?: (message: ThreadMessage) => void
+  onUnsend?: (message: ThreadMessage) => void
+  onDelete?: (message: ThreadMessage) => void
 }
 
 function AnimatedEmojiButton({
@@ -227,6 +231,8 @@ export function MessageActionSheet({
   onReplyWithQuote,
   onForward,
   onMarkUnread,
+  onEdit,
+  onUnsend,
   onDelete,
 }: Props) {
   const insets = useSafeAreaInsets()
@@ -290,7 +296,33 @@ export function MessageActionSheet({
   }, [customEmojiOpen, focusEmojiInput])
 
   const plainBody = message ? stripMessageHtml(message.body) || message.body.trim() : ""
-  const canDelete = Boolean(message?.isMine && onDelete)
+  const canEdit = Boolean(
+    message &&
+      onEdit &&
+      !message.unsent &&
+      !parseCourseImportFromMessage(message.body) &&
+      canEditMessage({
+        createdAt: message.createdAt,
+        isMine: message.isMine,
+        unsent: message.unsent,
+        hasAttachments: message.attachments.length > 0,
+        canEdit: message.canEdit,
+      }),
+  )
+  const canUnsend = Boolean(
+    message &&
+      onUnsend &&
+      !message.unsent &&
+      !parseCourseImportFromMessage(message.body) &&
+      canUnsendMessage({
+        createdAt: message.createdAt,
+        isMine: message.isMine,
+        unsent: message.unsent,
+        hasAttachments: message.attachments.length > 0,
+        canUnsend: message.canUnsend,
+      }),
+  )
+  const canDelete = Boolean(message && onDelete && (!message.isMine || !canUnsend))
 
   async function handleCopy() {
     if (!plainBody) return
@@ -318,9 +350,25 @@ export function MessageActionSheet({
     onMarkUnread()
   }
 
-  function handleDelete() {
+  function handleEdit() {
+    if (!message) return
+    const target = message
     onClose()
-    onDelete?.()
+    onEdit?.(target)
+  }
+
+  function handleUnsend() {
+    if (!message) return
+    const target = message
+    onClose()
+    onUnsend?.(target)
+  }
+
+  function handleDelete() {
+    if (!message) return
+    const target = message
+    onClose()
+    onDelete?.(target)
   }
 
   function openCustomEmojiPicker() {
@@ -466,6 +514,18 @@ export function MessageActionSheet({
             showSeparator
           />
           <GlassMenuRow icon="arrow-redo-outline" label="Forward" onPress={handleForward} showSeparator />
+          {canEdit ? (
+            <GlassMenuRow icon="create-outline" label="Edit" onPress={handleEdit} showSeparator />
+          ) : null}
+          {canUnsend ? (
+            <GlassMenuRow
+              icon="arrow-undo-outline"
+              label="Undo Send"
+              onPress={handleUnsend}
+              destructive
+              showSeparator
+            />
+          ) : null}
           <GlassMenuRow
             icon="mail-unread-outline"
             label="Mark as unread"

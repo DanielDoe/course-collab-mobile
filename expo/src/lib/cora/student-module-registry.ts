@@ -153,7 +153,7 @@ export const STUDENT_CORA_MODULE_REGISTRY: Record<StudentCoraModuleId, StudentCo
       confirmationRequired: ["create"],
       route: "/module/ai-notetaker",
       minTier: "Explorer",
-      toolHints: ["propose_personal_note", "propose_personal_flashcards", "create_study_plan"],
+      toolHints: ["propose_personal_note", "propose_personal_flashcards", "propose_study_plan"],
     },
     practice: {
       module: "practice",
@@ -164,7 +164,7 @@ export const STUDENT_CORA_MODULE_REGISTRY: Record<StudentCoraModuleId, StudentCo
       denied: ["reveal_protected_question_bank", "reveal_exam_content"],
       confirmationRequired: ["start"],
       route: "/module/practice",
-      toolHints: ["create_practice_quiz", "search_platform"],
+      toolHints: ["propose_practice_quiz", "search_platform"],
     },
     "ai-tutor": {
       module: "ai-tutor",
@@ -211,7 +211,7 @@ export const STUDENT_CORA_MODULE_REGISTRY: Record<StudentCoraModuleId, StudentCo
       denied: ["answer_active_protected_assessment", "reveal_answer_keys"],
       confirmationRequired: ["start"],
       route: "/module/quizzes",
-      toolHints: ["get_assessments"],
+      toolHints: ["get_assessments", "get_assessment_integrity", "review_released_attempt"],
     },
     homework: {
       module: "homework",
@@ -222,7 +222,7 @@ export const STUDENT_CORA_MODULE_REGISTRY: Record<StudentCoraModuleId, StudentCo
       denied: ["answer_active_protected_assessment", "reveal_answer_keys"],
       confirmationRequired: ["start"],
       route: "/module/homework",
-      toolHints: ["get_assessments"],
+      toolHints: ["get_assessments", "get_assessment_integrity", "review_released_attempt"],
     },
     "mid-semester-exams": {
       module: "mid-semester-exams",
@@ -230,10 +230,10 @@ export const STUDENT_CORA_MODULE_REGISTRY: Record<StudentCoraModuleId, StudentCo
       label: "Mid-Semester",
       resourceClass: "assessment",
       allowed: ["read", "explain", "navigate"],
-      denied: ["solve_during_protected_exam", "retrieve_answers_during_exam"],
+      denied: ["solve_during_protected_exam", "retrieve_answers_during_exam", "start"],
       confirmationRequired: [],
       route: "/module/mid-semester-exams",
-      toolHints: ["get_assessments"],
+      toolHints: ["get_assessments", "get_assessment_integrity"],
     },
     "final-exams": {
       module: "final-exams",
@@ -244,7 +244,7 @@ export const STUDENT_CORA_MODULE_REGISTRY: Record<StudentCoraModuleId, StudentCo
       denied: ["solve_during_protected_exam", "retrieve_answers_during_exam"],
       confirmationRequired: [],
       route: "/module/final-exams",
-      toolHints: ["get_assessments"],
+      toolHints: ["get_assessments", "get_assessment_integrity"],
     },
     grades: {
       module: "grades",
@@ -266,7 +266,13 @@ export const STUDENT_CORA_MODULE_REGISTRY: Record<StudentCoraModuleId, StudentCo
       denied: ["retrieve_unreleased_solutions"],
       confirmationRequired: [],
       route: "/module/quiz-history",
-      toolHints: ["get_assessments", "propose_personal_flashcards", "create_practice_quiz"],
+      toolHints: [
+        "get_assessments",
+        "get_assessment_integrity",
+        "review_released_attempt",
+        "propose_personal_flashcards",
+        "propose_practice_quiz",
+      ],
     },
     forum: {
       module: "forum",
@@ -376,7 +382,7 @@ export const STUDENT_CORA_MODULE_REGISTRY: Record<StudentCoraModuleId, StudentCo
       denied: ["read_unpublished_instructor_only_reviews"],
       confirmationRequired: [],
       route: "/module/progress-review",
-      toolHints: ["get_student_summary", "create_study_plan"],
+      toolHints: ["get_student_summary", "propose_study_plan"],
     },
     syllabus: {
       module: "syllabus",
@@ -398,7 +404,7 @@ export const STUDENT_CORA_MODULE_REGISTRY: Record<StudentCoraModuleId, StudentCo
       denied: ["modify_official_course_events"],
       confirmationRequired: ["create", "update", "delete"],
       route: "/module/calendar",
-      toolHints: ["get_calendar_events", "create_study_plan"],
+      toolHints: ["get_calendar_events", "propose_calendar_study_sessions", "propose_study_plan"],
     },
     "office-hours": {
       module: "office-hours",

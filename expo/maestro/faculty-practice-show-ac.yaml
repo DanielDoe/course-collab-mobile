@@ -1,0 +1,16 @@
+appId: com.coursecollab.app
+---
+- tapOn: "AC Power, Hidden"
+- extendedWaitUntil:
+    visible: "Topic settings"
+    timeout: 12000
+- tapOn: "Topic settings"
+- waitForAnimationToEnd
+- tapOn: "Available to students"
+- extendedWaitUntil:
+    visible: "Available"
+    timeout: 20000
+- tapOn: "Done"
+- extendedWaitUntil:
+    visible: "AC Power, Available"
+    timeout: 20000

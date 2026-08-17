@@ -113,10 +113,9 @@ function StudentDashboard({ session }: { session: import("../../src/lib/session"
     } finally {
       setChartsLoading(false)
     }
-  }, [session])
+  }, [session.databaseId, session.id, session.section])
 
   useEffect(() => {
-    setLoading(true)
     setChartsLoading(true)
     loadDashboard().finally(() => setLoading(false))
   }, [loadDashboard])
@@ -157,16 +156,9 @@ function StudentDashboard({ session }: { session: import("../../src/lib/session"
           name={session.name}
           roleLabel="Student"
           badge={session.courseCode ?? undefined}
-          subtitle={
-            session.section &&
-            session.section.replace(/\s/g, "").toLowerCase() !==
-              (session.courseCode ?? "").replace(/\s/g, "").toLowerCase()
-              ? `Section ${session.section}`
-              : undefined
-          }
         />
 
-        {loading || !stats ? (
+        {!stats ? (
           <View style={styles.loadingBox}>
             <ActivityIndicator size="large" color={native.tint} />
             <Text style={[type.caption, { color: native.secondaryLabel }]}>Loading your dashboard…</Text>

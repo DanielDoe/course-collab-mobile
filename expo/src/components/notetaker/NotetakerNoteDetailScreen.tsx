@@ -15,6 +15,7 @@ import {
 import { ModuleListRow, ModuleScreen, ModuleSection, ModuleSectionHeader } from "../modules/ModuleScreen"
 import { MarkdownNotePreview } from "../notes/MarkdownNotePreview"
 import { FacultySheetChrome, FacultySheetContainer } from "../faculty/faculty-collab-sheet-ui"
+import { FacultySummerCampDatePicker } from "../faculty/FacultySummerCampDatePicker"
 import { NotetakerScreenHeader } from "./NotetakerScreenHeader"
 import { NotetakerSaveFlash } from "./NotetakerSaveFlash"
 import { NotetakerChatPanel } from "./NotetakerChatPanel"
@@ -198,7 +199,7 @@ export function NotetakerNoteDetailScreen() {
 
     const normalizedDate = normalizeLectureDate(lectureDate)
     if (lectureDate.trim() && !normalizedDate) {
-      AppAlert.alert("Invalid date", "Use YYYY-MM-DD for the lecture date, or leave it blank.")
+      AppAlert.alert("Invalid date", "Pick a valid lecture date, or leave it blank.")
       return false
     }
 
@@ -572,13 +573,10 @@ export function NotetakerNoteDetailScreen() {
             </View>
             <View style={[styles.fieldBlock, styles.fieldBlockLast]}>
               <Text style={[type.caption, styles.fieldLabel]}>Date</Text>
-              <TextInput
+              <FacultySummerCampDatePicker
                 value={lectureDate}
-                onChangeText={setLectureDate}
-                placeholder="YYYY-MM-DD"
-                placeholderTextColor={native.tertiaryLabel}
-                style={[styles.fieldInput, type.body, { color: native.label, borderColor: native.separator }]}
-                autoCapitalize="none"
+                onChange={setLectureDate}
+                accessibilityLabel="Lecture date"
               />
             </View>
           </CommGroupedList>

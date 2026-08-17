@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react"
-import { ActivityIndicator, Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
 import { AppAlert } from '../../lib/app-alert'
 import { ScrollView } from "react-native-gesture-handler"
 import { Ionicons } from "@/components/icons/AppIcon"
@@ -32,6 +32,8 @@ import {
   type TradeCenterBalanceKey,
 } from "../../lib/trade-center-theme"
 import { SolidListThumbTile } from "../theme/SolidListThumbTile"
+import { NativeSelect } from "../NativeSelect"
+import { TRADE_CAP_OPTIONS, withCurrentOption } from "../faculty/FacultyNativePickers"
 import { solidListThumbFixed } from "../../lib/solid-list-thumb"
 
 function useStudentSession(): StudentSession | null {
@@ -407,9 +409,12 @@ export function TradeCenterScreen() {
           statKey="lifetimeEc"
           label="Lifetime EC"
           value={engagementCredits}
-          cap={maxTradedEc > 0 ? maxTradedEc : undefined}
-          capLabel="trade limit"
         />
+        {maxTradedEc > 0 ? (
+          <Text style={[type.caption, { color: native.secondaryLabel }]}>
+            Point trades cap at {maxTradedEc} EC. Lifetime total also includes evaluations and other awards.
+          </Text>
+        ) : null}
         <View style={[styles.totalRow, { borderTopColor: native.separator }]}>
           <Text style={[type.secondary, styles.totalLabel]}>EC available to earn</Text>
           <Text style={[type.bodyEmphasis, styles.totalValue, { color: theme.primary }]}>
@@ -470,13 +475,11 @@ export function TradeCenterScreen() {
               {pointsPerEc} activity points = 1 EC. You have {Math.round(tradable)} tradable points
               {engagementCredits > 0 ? ` · ${engagementCredits} EC earned` : ""}.
             </Text>
-            <TextInput
-              style={[styles.field, { borderColor: native.separator, color: native.label }]}
-              value={tradeAmount}
-              onChangeText={setTradeAmount}
+            <NativeSelect
               placeholder="Points to trade"
-              placeholderTextColor={native.tertiaryLabel}
-              keyboardType="number-pad"
+              value={tradeAmount}
+              options={withCurrentOption(TRADE_CAP_OPTIONS, tradeAmount, `${tradeAmount} pts`)}
+              onChange={setTradeAmount}
             />
             <ActionButton
               variant="trade"
@@ -501,13 +504,11 @@ export function TradeCenterScreen() {
             <Text style={[type.secondary, styles.actionHint]}>
               Minimum donation: {config.min_donation_points ?? 100} points. Helps classmates who need support.
             </Text>
-            <TextInput
-              style={[styles.field, { borderColor: native.separator, color: native.label }]}
-              value={donateAmount}
-              onChangeText={setDonateAmount}
+            <NativeSelect
               placeholder="Points to donate"
-              placeholderTextColor={native.tertiaryLabel}
-              keyboardType="number-pad"
+              value={donateAmount}
+              options={withCurrentOption(TRADE_CAP_OPTIONS, donateAmount, `${donateAmount} pts`)}
+              onChange={setDonateAmount}
             />
             <ActionButton
               variant="donate"

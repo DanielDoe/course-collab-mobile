@@ -1,0 +1,28 @@
+appId: com.coursecollab.app
+---
+# Back to Quick Actions / View All
+- swipe:
+    direction: DOWN
+- swipe:
+    direction: DOWN
+- takeScreenshot: dash-actions-retry
+
+- scrollUntilVisible:
+    element: "Approve Points"
+    direction: DOWN
+    timeout: 8000
+- takeScreenshot: dash-quick-actions
+
+- tapOn: "Approve Points"
+- extendedWaitUntil:
+    visible: "Classroom Points|Approve|Pending|No pending"
+    timeout: 20000
+- takeScreenshot: dest-points
+- tapOn: "Open navigation menu"
+- tapOn: "Dashboard"
+- tapOn:
+    text: "Close menu"
+    optional: true
+- extendedWaitUntil:
+    visible: "Instructor|Quick Actions|Approve Points"
+    timeout: 20000

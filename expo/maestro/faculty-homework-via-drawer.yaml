@@ -1,0 +1,14 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Manage Homework"
+    direction: DOWN
+    timeout: 12000
+- tapOn: "Manage Homework"
+- tapOn:
+    text: "Close menu"
+    optional: true
+- extendedWaitUntil:
+    visible: "Manage Homework|All homework|Search homework|Create homework"
+    timeout: 25000

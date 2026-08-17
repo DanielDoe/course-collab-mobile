@@ -1,0 +1,8 @@
+appId: com.coursecollab.app
+---
+- tapOn:
+    text: "OK"
+    optional: true
+- tapOn: "Delete QA Flashcards Deck 16"
+- tapOn: "Delete"
+- takeScreenshot: flashcards-delete-retry2

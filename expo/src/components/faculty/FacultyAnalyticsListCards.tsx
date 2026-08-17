@@ -4,7 +4,7 @@ import { NATIVE } from "../../constants/faculty-native-theme"
 import { useThemedNative } from "../../context/AppearanceProvider"
 import { useNativeType } from "../../lib/themed-module-theme"
 import { assessmentTypeLabel } from "../../lib/faculty-assessment-utils"
-import { buildAtRiskRows } from "../../lib/faculty-analytics-utils"
+import type { AtRiskStudentRow } from "../../lib/faculty-analytics-utils"
 import { reportPerformanceColor } from "../../lib/assessment-report-theme"
 import {
   formatFacultyRelativeTime,
@@ -66,7 +66,13 @@ export function FacultyRecentActivityKpiRow({ total, submitted, inProgress }: { 
   )
 }
 
-export function FacultyRecentActivityCard({ item }: { item: InstructorRecentActivity }) {
+export function FacultyRecentActivityCard({
+  item,
+  onPress,
+}: {
+  item: InstructorRecentActivity
+  onPress: () => void
+}) {
   const native = useThemedNative()
   const type = useNativeType()
   const thumb = facultyActivityThumb(item.status, item.id)
@@ -98,8 +104,11 @@ export function FacultyRecentActivityCard({ item }: { item: InstructorRecentActi
           <Text style={[type.caption, styles.message, { color: native.secondaryLabel }]} numberOfLines={2}>
             {item.message}
           </Text>
-        ) : undefined
+        ) : (
+          <Text style={[type.caption, styles.link, { color: FACULTY_ACTIVITY_COLOR.link }]}>View actions</Text>
+        )
       }
+      onPress={onPress}
     />
   )
 }
@@ -174,7 +183,14 @@ export function FacultyStudentProgressCard({
   )
 }
 
-export function FacultyAtRiskCard({ row }: { row: ReturnType<typeof buildAtRiskRows>[number] }) {
+export function FacultyAtRiskCard({
+  row,
+  onPress,
+}: {
+  row: AtRiskStudentRow
+  onPress: () => void
+}) {
+  const type = useNativeType()
   const thumb = facultyAtRiskThumb(row.id)
 
   return (
@@ -189,6 +205,10 @@ export function FacultyAtRiskCard({ row }: { row: ReturnType<typeof buildAtRiskR
         color: row.tone === "danger" ? FACULTY_STUDENT_PROGRESS_COLOR.atRisk : FACULTY_STUDENT_PROGRESS_COLOR.warning,
         icon: row.tone === "danger" ? "alert-circle-outline" : "warning-outline",
       }}
+      footer={
+        <Text style={[type.caption, styles.link, { color: FACULTY_STUDENT_PROGRESS_COLOR.link }]}>View actions</Text>
+      }
+      onPress={onPress}
     />
   )
 }

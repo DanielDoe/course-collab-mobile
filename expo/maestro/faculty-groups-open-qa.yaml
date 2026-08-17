@@ -1,0 +1,11 @@
+appId: com.coursecollab.app
+---
+- tapOn: "OK"
+- tapOn: "All"
+- tapOn: "Search groups, leaders…"
+- eraseText
+- inputText: "QA16G"
+- extendedWaitUntil:
+    visible: "QA16G"
+    timeout: 10000
+- tapOn: "QA16G"

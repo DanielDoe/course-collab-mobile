@@ -31,6 +31,14 @@ export async function setCachedMembershipTier(
   }
 }
 
+export async function clearCachedMembershipTier(studentDatabaseId: string): Promise<void> {
+  try {
+    await SecureStore.deleteItemAsync(cacheKey(studentDatabaseId))
+  } catch {
+    /* non-fatal */
+  }
+}
+
 /** Persist tier from login / refresh so the shell can hydrate before network calls finish. */
 export async function primeMembershipTierCache(
   studentDatabaseId: string,

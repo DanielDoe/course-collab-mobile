@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react"
-import { ActivityIndicator, Modal, Pressable, ScrollView, Text, View } from "react-native";
+import { useEffect, useMemo, useRef, useState } from "react"
+import { ActivityIndicator, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { AppAlert } from '../../lib/app-alert'
+import { AppAlertHost } from "../../context/AppAlertProvider"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { ApiError } from "../../lib/api"
@@ -20,6 +21,7 @@ import {
   useCollabSheetStyles,
 
 } from "./faculty-collab-sheet-ui"
+import { useSuppressModuleSearchDock } from "../../context/ModuleSearchDockContext"
 import { SHEET_SECTION } from "./faculty-sheet-semantics"
 
 type Scope = { instructorId: number; courseId: number }
@@ -44,6 +46,7 @@ function leaderSessionCode(student: InstructorStudent): string {
 }
 
 export function FacultyGroupCreateModal({ visible, scope, onClose, onCreated }: Props) {
+  useSuppressModuleSearchDock(visible)
   const collabSheetStyles = useCollabSheetStyles()
   const native = useThemedNative()
   const tokens = useAppThemeTokens()
@@ -58,6 +61,7 @@ export function FacultyGroupCreateModal({ visible, scope, onClose, onCreated }: 
   const [selectedMembers, setSelectedMembers] = useState<number[]>([])
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState("")
+  const nameInputRef = useRef<TextInput>(null)
 
   const leader = students.find((student) => student.id === leaderId)
   const leaderSession = leader ? leaderSessionCode(leader) : ""
@@ -85,6 +89,10 @@ export function FacultyGroupCreateModal({ visible, scope, onClose, onCreated }: 
   useEffect(() => {
     setSelectedMembers([])
     setMemberSearch("")
+    if (leaderId != null) {
+      const timer = setTimeout(() => nameInputRef.current?.focus(), 80)
+      return () => clearTimeout(timer)
+    }
   }, [leaderId])
 
   const filteredLeaders = useMemo(() => {
@@ -156,9 +164,15 @@ export function FacultyGroupCreateModal({ visible, scope, onClose, onCreated }: 
         name: name.trim(),
         initialMembers: selectedMembers,
       })
-      AppAlert.alert("Group created", `Group "${name.trim()}" was created for ${leader.full_name}.`)
-      onCreated()
-      onClose()
+      AppAlert.alert("Group created", `Group "${name.trim()}" was created for ${leader.full_name}.`, [
+        {
+          text: "OK",
+          onPress: () => {
+            onCreated()
+            onClose()
+          },
+        },
+      ])
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not create group.")
     } finally {
@@ -186,6 +200,9 @@ export function FacultyGroupCreateModal({ visible, scope, onClose, onCreated }: 
                 value={studentSearch}
                 onChangeText={setStudentSearch}
                 placeholder="Search by name or ID…"
+                accessibilityLabel="Search roster"
+                keyboardType="ascii-capable"
+                testID="group-leader-search"
               />
             </FacultySheetField>
             {loadingStudents ? (
@@ -207,6 +224,8 @@ export function FacultyGroupCreateModal({ visible, scope, onClose, onCreated }: 
                         },
                       ]}
                       onPress={() => setLeaderId(student.id)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Leader ${student.full_name}`}
                     >
                       <View style={collabSheetStyles.memberAvatar}>
                         <Text style={collabSheetStyles.memberAvatarText}>{studentInitials(student.full_name)}</Text>
@@ -230,7 +249,18 @@ export function FacultyGroupCreateModal({ visible, scope, onClose, onCreated }: 
 
           <FacultySheetSection label="Group details" tone={SHEET_SECTION.edit}>
             <FacultySheetField label="Group name">
-              <FacultySheetTextInput value={name} onChangeText={setName} placeholder="Team name" />
+              <FacultySheetTextInput
+                ref={nameInputRef}
+                value={name}
+                onChangeText={setName}
+                placeholder="Team name"
+                accessibilityLabel="Group name"
+                autoCorrect={false}
+                autoCapitalize="none"
+                spellCheck={false}
+                keyboardType="ascii-capable"
+                testID="group-name"
+              />
             </FacultySheetField>
             {leader ? (
               <Text style={[collabSheetStyles.emptyText, { fontStyle: "normal", color: native.secondaryLabel }]}>
@@ -246,6 +276,7 @@ export function FacultyGroupCreateModal({ visible, scope, onClose, onCreated }: 
                   value={memberSearch}
                   onChangeText={setMemberSearch}
                   placeholder="Optional — same section only"
+                  accessibilityLabel="Search classmates"
                 />
               </FacultySheetField>
               {memberCandidates.length === 0 ? (
@@ -265,6 +296,8 @@ export function FacultyGroupCreateModal({ visible, scope, onClose, onCreated }: 
                           },
                         ]}
                         onPress={() => toggleMember(student.id)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`${active ? "Remove" : "Add"} ${student.full_name}`}
                       >
                         <View style={collabSheetStyles.memberAvatar}>
                           <Text style={collabSheetStyles.memberAvatarText}>{studentInitials(student.full_name)}</Text>
@@ -293,12 +326,15 @@ export function FacultyGroupCreateModal({ visible, scope, onClose, onCreated }: 
 
           <FacultySheetSubmitButton
             label="Create group"
+            accessibilityLabel="Submit create group"
+            testID="group-create-submit"
             onPress={() => void submit()}
             disabled={submitting || !leaderId || !name.trim()}
             loading={submitting}
           />
         </ScrollView>
       </FacultySheetContainer>
+      <AppAlertHost />
     </Modal>
   )
 }

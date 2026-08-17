@@ -31,6 +31,14 @@ export async function setCachedFacultyMembershipTier(
   }
 }
 
+export async function clearCachedFacultyMembershipTier(instructorId: number): Promise<void> {
+  try {
+    await SecureStore.deleteItemAsync(cacheKey(instructorId))
+  } catch {
+    /* non-fatal */
+  }
+}
+
 export async function primeFacultyMembershipTierCache(
   instructorId: number,
   tier: string | null | undefined,

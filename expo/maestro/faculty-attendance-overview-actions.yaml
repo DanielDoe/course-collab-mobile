@@ -1,0 +1,11 @@
+appId: com.coursecollab.app
+---
+- tapOn:
+    text: "Take roll.*"
+- waitForAnimationToEnd
+- tapOn: "Overview"
+- tapOn: "Meetings"
+- waitForAnimationToEnd
+- tapOn: "Overview"
+- tapOn: "View attendance log"
+- waitForAnimationToEnd

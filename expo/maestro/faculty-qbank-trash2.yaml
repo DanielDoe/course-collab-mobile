@@ -1,0 +1,14 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Question Bank"
+- waitForAnimationToEnd
+- tapOn: "QA16QB blank test"
+- waitForAnimationToEnd
+- scrollUntilVisible:
+    element: "Move to trash"
+    direction: DOWN
+    timeout: 8000
+- tapOn: "Move to trash"
+- waitForAnimationToEnd
+- tapOn: "Move to trash"
+- waitForAnimationToEnd

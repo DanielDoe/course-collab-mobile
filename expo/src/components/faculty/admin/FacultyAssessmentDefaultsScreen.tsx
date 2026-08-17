@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Pressable, StyleSheet, Text } from "react-native"
+import { Ionicons } from "@/components/icons/AppIcon"
 import {
   DEFAULT_ASSESSMENT_POLICY,
   type AiEvaluationModeDefault,
@@ -10,10 +11,11 @@ import {
 import { instructorAdminApi } from "../../../lib/instructor-admin-api"
 import { useFacultyScope } from "../../../hooks/useFacultyScope"
 import { NATIVE } from "../../../constants/faculty-native-theme"
+import { FACULTY_ADMIN_COLOR } from "../../../lib/faculty-admin-theme"
 import { FacultyModuleTabBar } from "../faculty-module-shell"
 import {
   FacultyAdminCourseGate,
-  FacultyAdminNumberField,
+  FacultyAdminChoiceField,
   FacultyAdminScreen,
   FacultyAdminSection,
   FacultyAdminSelectRow,
@@ -22,6 +24,13 @@ import {
   useAdminSaveState,
   useAdminStyles} from "../faculty-admin-ui"
 import { AdminOptionPickerModal, type AdminOption } from "./admin-option-picker"
+import {
+  CONFIDENCE_THRESHOLD_OPTIONS,
+  GEO_RADIUS_OPTIONS,
+  RETAKE_LIMIT_OPTIONS,
+  STRIKE_COUNT_OPTIONS,
+  secondsSelectOptions,
+} from "../FacultyNativePickers"
 
 type PolicyTab = "timing" | "sections" | "retakes" | "integrity" | "access_ai"
 
@@ -73,7 +82,7 @@ function parseFloatField(text: string, fallback: number) {
 
 export function FacultyAssessmentDefaultsScreen() {
   const { scope, ready } = useFacultyScope()
-  const { dirty, saving, error, successMessage, markDirty, resetDirty, runSave } = useAdminSaveState()
+  const { dirty, saving, error, successMessage, markDirty, resetDirty, runSave, setError } = useAdminSaveState()
 
   const [tab, setTab] = useState<PolicyTab>("timing")
   const [loading, setLoading] = useState(true)
@@ -97,8 +106,12 @@ export function FacultyAssessmentDefaultsScreen() {
       return
     }
     setLoading(true)
-    load().finally(() => setLoading(false))
-  }, [ready, load])
+    load()
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : "Could not load assessment defaults.")
+      })
+      .finally(() => setLoading(false))
+  }, [ready, load, setError])
 
   function updatePolicy(next: AssessmentPolicy) {
     setPolicy(next)
@@ -143,21 +156,24 @@ export function FacultyAssessmentDefaultsScreen() {
     AI_MODE_OPTIONS.find((o) => o.value === mode)?.label ?? mode
 
   const adminStyles = useAdminStyles()
-  const { native, tokens, type } = adminStyles
+  const { native, type } = adminStyles
   const styles = useMemo(
     () =>
       StyleSheet.create({
-        resetBtn: {
-          paddingHorizontal: 14,
-          paddingVertical: 14,
-          borderRadius: NATIVE.sectionRadius,
-          borderWidth: StyleSheet.hairlineWidth,
-          borderColor: native.separator,
+        resetRow: {
+          flexDirection: "row",
+          alignItems: "center",
           justifyContent: "center",
-          minHeight: 48,
+          gap: 8,
+          minHeight: NATIVE.rowMinHeight,
+          paddingHorizontal: 14,
+          paddingVertical: 12,
           backgroundColor: native.secondaryGrouped,
         },
-        resetBtnText: { ...type.callout, fontWeight: "600", color: native.secondaryLabel },
+        resetRowText: {
+          ...type.bodyEmphasis,
+          color: FACULTY_ADMIN_COLOR.link,
+        },
       }),
     [native, type],
   )
@@ -173,41 +189,36 @@ export function FacultyAssessmentDefaultsScreen() {
         successMessage={successMessage}
         onSave={handleSave}
         onRefresh={() => void handleRefresh()}
-        footerExtra={
-          <Pressable style={styles.resetBtn} onPress={handleReset} accessibilityRole="button">
-            <Text style={styles.resetBtnText}>Reset to Defaults</Text>
-          </Pressable>
-        }
       >
         <FacultyModuleTabBar tabs={TABS} tab={tab} onChange={setTab} scrollable />
 
         {tab === "timing" ? (
           <FacultyAdminSection title="Question Timers" footer="Defaults when an assessment has no explicit timer.">
-            <FacultyAdminNumberField
+            <FacultyAdminChoiceField
               label="Time per Question"
               value={strNum(policy.timer.time_per_question_default)}
-              suffix="sec"
-              onChangeText={(text) =>
+              options={secondsSelectOptions(policy.timer.time_per_question_default)}
+              onChange={(text) =>
                 updatePolicy({
                   ...policy,
                   timer: { ...policy.timer, time_per_question_default: parseIntField(text, policy.timer.time_per_question_default) }})
               }
             />
-            <FacultyAdminNumberField
+            <FacultyAdminChoiceField
               label="MCQ Seconds"
               value={strNum(policy.timer.objective_mcq_seconds)}
-              suffix="sec"
-              onChangeText={(text) =>
+              options={secondsSelectOptions(policy.timer.objective_mcq_seconds)}
+              onChange={(text) =>
                 updatePolicy({
                   ...policy,
                   timer: { ...policy.timer, objective_mcq_seconds: parseIntField(text, policy.timer.objective_mcq_seconds) }})
               }
             />
-            <FacultyAdminNumberField
+            <FacultyAdminChoiceField
               label="True / False Seconds"
               value={strNum(policy.timer.objective_true_false_seconds)}
-              suffix="sec"
-              onChangeText={(text) =>
+              options={secondsSelectOptions(policy.timer.objective_true_false_seconds)}
+              onChange={(text) =>
                 updatePolicy({
                   ...policy,
                   timer: {
@@ -215,11 +226,11 @@ export function FacultyAssessmentDefaultsScreen() {
                     objective_true_false_seconds: parseIntField(text, policy.timer.objective_true_false_seconds)}})
               }
             />
-            <FacultyAdminNumberField
+            <FacultyAdminChoiceField
               label="Select All Seconds"
               value={strNum(policy.timer.objective_select_all_seconds)}
-              suffix="sec"
-              onChangeText={(text) =>
+              options={secondsSelectOptions(policy.timer.objective_select_all_seconds)}
+              onChange={(text) =>
                 updatePolicy({
                   ...policy,
                   timer: {
@@ -227,11 +238,11 @@ export function FacultyAssessmentDefaultsScreen() {
                     objective_select_all_seconds: parseIntField(text, policy.timer.objective_select_all_seconds)}})
               }
             />
-            <FacultyAdminNumberField
+            <FacultyAdminChoiceField
               label="Hybrid Circuit Pooled"
               value={strNum(policy.timer.hybrid_circuit_section_pooled_seconds)}
-              suffix="sec"
-              onChangeText={(text) =>
+              options={secondsSelectOptions(policy.timer.hybrid_circuit_section_pooled_seconds)}
+              onChange={(text) =>
                 updatePolicy({
                   ...policy,
                   timer: {
@@ -242,11 +253,11 @@ export function FacultyAssessmentDefaultsScreen() {
                     )}})
               }
             />
-            <FacultyAdminNumberField
+            <FacultyAdminChoiceField
               label="Circuit Only per Question"
               value={strNum(policy.timer.circuit_only_seconds_per_question)}
-              suffix="sec"
-              onChangeText={(text) =>
+              options={secondsSelectOptions(policy.timer.circuit_only_seconds_per_question)}
+              onChange={(text) =>
                 updatePolicy({
                   ...policy,
                   timer: {
@@ -316,10 +327,11 @@ export function FacultyAssessmentDefaultsScreen() {
                 updatePolicy({ ...policy, retakes: { ...policy.retakes, retake_enabled_default: next } })
               }
             />
-            <FacultyAdminNumberField
+            <FacultyAdminChoiceField
               label="Retake Limit"
               value={strNum(policy.retakes.retake_limit_default)}
-              onChangeText={(text) =>
+              options={RETAKE_LIMIT_OPTIONS}
+              onChange={(text) =>
                 updatePolicy({
                   ...policy,
                   retakes: { ...policy.retakes, retake_limit_default: parseIntField(text, policy.retakes.retake_limit_default) }})
@@ -381,10 +393,11 @@ export function FacultyAssessmentDefaultsScreen() {
                 updatePolicy({ ...policy, anti_cheat: { ...policy.anti_cheat, track_tab_switches_default: next } })
               }
             />
-            <FacultyAdminNumberField
+            <FacultyAdminChoiceField
               label="Max Tab Switches"
               value={strNum(policy.anti_cheat.max_tab_switches_default)}
-              onChangeText={(text) =>
+              options={STRIKE_COUNT_OPTIONS}
+              onChange={(text) =>
                 updatePolicy({
                   ...policy,
                   anti_cheat: {
@@ -422,10 +435,11 @@ export function FacultyAssessmentDefaultsScreen() {
                 updatePolicy({ ...policy, anti_cheat: { ...policy.anti_cheat, track_gemini_window_default: next } })
               }
             />
-            <FacultyAdminNumberField
+            <FacultyAdminChoiceField
               label="Max Gemini Strikes"
               value={strNum(policy.anti_cheat.max_gemini_strikes_default)}
-              onChangeText={(text) =>
+              options={STRIKE_COUNT_OPTIONS}
+              onChange={(text) =>
                 updatePolicy({
                   ...policy,
                   anti_cheat: {
@@ -469,11 +483,11 @@ export function FacultyAssessmentDefaultsScreen() {
                   updatePolicy({ ...policy, access: { ...policy.access, geo_required_default: next } })
                 }
               />
-              <FacultyAdminNumberField
+              <FacultyAdminChoiceField
                 label="Geo Radius"
                 value={strNum(policy.access.geo_radius_meters_default)}
-                suffix="m"
-                onChangeText={(text) =>
+                options={GEO_RADIUS_OPTIONS}
+                onChange={(text) =>
                   updatePolicy({
                     ...policy,
                     access: {
@@ -504,10 +518,11 @@ export function FacultyAssessmentDefaultsScreen() {
                   updatePolicy({ ...policy, ai: { ...policy.ai, ai_enable_opus_fallback_default: next } })
                 }
               />
-              <FacultyAdminNumberField
+              <FacultyAdminChoiceField
                 label="Opus Confidence Threshold"
                 value={String(policy.ai.ai_opus_confidence_threshold_default)}
-                onChangeText={(text) =>
+                options={CONFIDENCE_THRESHOLD_OPTIONS}
+                onChange={(text) =>
                   updatePolicy({
                     ...policy,
                     ai: {
@@ -531,6 +546,21 @@ export function FacultyAssessmentDefaultsScreen() {
             </FacultyAdminSection>
           </>
         ) : null}
+
+        <FacultyAdminSection
+          title="Restore Defaults"
+          footer="Resets every tab to platform defaults. Tap Save Changes to persist."
+        >
+          <Pressable
+            style={({ pressed }) => [styles.resetRow, pressed && { opacity: NATIVE.pressedOpacity }]}
+            onPress={handleReset}
+            accessibilityRole="button"
+            accessibilityLabel="Reset to defaults"
+          >
+            <Ionicons name="refresh-outline" size={18} color={FACULTY_ADMIN_COLOR.link} />
+            <Text style={styles.resetRowText}>Reset to Defaults</Text>
+          </Pressable>
+        </FacultyAdminSection>
       </FacultyAdminScreen>
 
       {picker?.kind === "timer_mode" ? (

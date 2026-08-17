@@ -1,0 +1,17 @@
+appId: com.coursecollab.app
+---
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn: "Open filters"
+- extendedWaitUntil:
+    visible: "Filter announcements"
+    timeout: 8000
+- tapOn: "Pinned / high priority · 84"
+- takeScreenshot: announcements-pinned-list
+- tapOn: "Open filters"
+- tapOn: "Active · 88"
+- takeScreenshot: announcements-active-list
+- tapOn: "Open filters"
+- tapOn: "All announcements"
+- takeScreenshot: announcements-all-list

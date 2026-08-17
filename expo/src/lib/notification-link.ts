@@ -1,8 +1,22 @@
+import { isAllowedDeepLinkHost } from "./trusted-origins"
+
 /** Map web notification links to native Expo Router paths. */
 export function resolveNotificationLink(link: string | null | undefined): string | null {
   if (!link) return null
+  if (/^(javascript|data|file|blob|vbsscript):/i.test(link)) return null
 
-  const [pathname, search = ""] = link.split("?")
+  let normalized = link
+  if (/^https?:\/\//i.test(link)) {
+    try {
+      const url = new URL(link)
+      if (!isAllowedDeepLinkHost(url.hostname)) return null
+      normalized = `${url.pathname}${url.search}`
+    } catch {
+      return null
+    }
+  }
+
+  const [pathname, search = ""] = normalized.split("?")
   const path = pathname.replace(/\/$/, "") || "/"
   const params = search ? new URLSearchParams(search) : null
 
@@ -60,7 +74,25 @@ export function resolveNotificationLink(link: string | null | undefined): string
     return threadId ? `/messages/${threadId}` : "/module/messages"
   }
   if (path.startsWith("/guest/recommendations")) {
-    return tailFromPath(path, "/guest/recommendations", "/module/recommendations")
+    const rest = path.slice("/guest/recommendations".length).replace(/^\//, "")
+    const detailId = rest.split("/")[0]
+    if (detailId && /^\d+$/.test(detailId)) {
+      return `/recommendation/${detailId}`
+    }
+    const requestId = params?.get("request")
+    if (requestId && /^\d+$/.test(requestId)) {
+      return `/recommendation/${requestId}`
+    }
+    return "/module/recommendations"
+  }
+  if (path.startsWith("/guest/cora") || path.includes("/guest/cora-career")) {
+    if (path.includes("credit") && path.includes("checkout")) return "/guest/cora-credits/checkout"
+    if (path.includes("credit")) return "/module/cora-credits"
+    if (path.includes("checkout") || path.includes("upgrade")) return "/guest/cora-career/checkout"
+    return "/module/cora-assistant"
+  }
+  if (path.startsWith("/guest/home") || path === "/guest") {
+    return "/dashboard"
   }
 
   if (path.includes("/summer-camp/messages")) {
@@ -140,6 +172,9 @@ function mapStudentDashboardSegment(segment: string, tail: string[], search: str
   if (segment === "office-hours") {
     return "/module/office-hours"
   }
+  if (segment === "schedule-adjustment") {
+    return tail.length ? `/schedule-adjustment/${tail[0]}` : "/module/schedule-adjustment"
+  }
   if (segment === "calendar") {
     return "/module/calendar"
   }
@@ -208,6 +243,7 @@ function mapFacultyPath(path: string, search: string): string | null {
   if (lower.includes("recommendations")) return "/module/recommendations"
   if (lower.includes("progress-review")) return "/module/progress-reviews"
   if (lower.includes("office-hours")) return "/module/office-hours"
+  if (lower.includes("schedule-adjustment")) return "/module/schedule-adjustment"
   if (lower.includes("results/")) {
     const attemptId = path.split("/").pop()
     return attemptId ? `/module/quizzes?segment=results&attempt=${attemptId}${search ? `&${search.replace(/^\?/, "")}` : ""}` : "/module/quizzes"
@@ -218,12 +254,25 @@ function mapFacultyPath(path: string, search: string): string | null {
 
 function mapSummerCampPath(path: string): string | null {
   const lower = path.toLowerCase()
+  const moduleMatch = lower.match(/\/summer-camp\/training\/(\d+)\/module\/(\d+)/)
+  if (moduleMatch) {
+    return `/summer/training/${moduleMatch[1]}/module/${moduleMatch[2]}`
+  }
+  const trainingMatch = lower.match(/\/summer-camp\/training\/(\d+)/)
+  if (trainingMatch) {
+    return `/summer/training/${trainingMatch[1]}`
+  }
   if (lower.includes("/messages")) return "/module/messages"
   if (lower.includes("/projects")) return "/module/projects"
   if (lower.includes("/checkpoints")) return "/module/checkpoints"
   if (lower.includes("/discussions")) return "/module/discussions"
   if (lower.includes("/roadmap")) return "/module/roadmap"
   if (lower.includes("/browse")) return "/module/browse-trainings"
+  if (lower.includes("/gallery")) return "/module/gallery"
+  if (lower.includes("/graduation")) return "/module/graduation"
+  if (lower.includes("/leaderboard")) return "/module/leaderboard"
+  if (lower.includes("/achievements")) return "/module/achievements"
+  if (lower.includes("/resources")) return "/module/resources"
   if (lower.includes("/trainings")) return "/module/my-trainings"
   return "/module/my-trainings"
 }
@@ -258,6 +307,7 @@ const V2_MODULE_MAP: Record<string, string> = {
   announcements: "announcements",
   calendar: "calendar",
   "office-hours": "office-hours",
+  "schedule-adjustment": "schedule-adjustment",
   recommendations: "recommendations",
   help: "help-center",
   notifications: "announcements",
@@ -288,6 +338,7 @@ export type NotificationModule =
   | "classroom-points"
   | "calendar"
   | "office-hours"
+  | "schedule-adjustment"
   | "recommendations"
   | "progress-review"
   | "course-evaluation"
@@ -347,6 +398,7 @@ export function notificationTypeToModules(type: unknown, link?: string | null): 
   if (normalized === "forum") modules.add("forum")
   if (normalized === "code_submission" || linkLower.includes("classroom-points")) modules.add("classroom-points")
   if (normalized === "office_hours" || linkLower.includes("office-hours")) modules.add("office-hours")
+  if (linkLower.includes("schedule-adjustment")) modules.add("schedule-adjustment")
   if (normalized.includes("recommendation")) modules.add("recommendations")
   if (normalized.includes("progress_review") || linkLower.includes("progress-review")) modules.add("progress-review")
   if (

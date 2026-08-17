@@ -1,0 +1,35 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Search questions…"
+- inputText: "zzz"
+- tapOn:
+    text: "AC Power"
+    optional: true
+- extendedWaitUntil:
+    visible: "No matches"
+    timeout: 8000
+- takeScreenshot: practice-q-empty
+- tapOn: "Clear search"
+- tapOn: "Search questions…"
+- inputText: "sinusoidal"
+- tapOn:
+    text: "AC Power"
+    optional: true
+- extendedWaitUntil:
+    visible: "Preview question"
+    timeout: 8000
+- takeScreenshot: practice-q-match
+- tapOn: "Preview question"
+- extendedWaitUntil:
+    visible: "Question preview"
+    timeout: 15000
+- takeScreenshot: practice-q-preview
+- tapOn: "Done"
+- extendedWaitUntil:
+    visible: "Topic settings"
+    timeout: 8000
+- tapOn: "Topic settings"
+- extendedWaitUntil:
+    visible: "Practice topic|Questions per day|Available to students"
+    timeout: 10000
+- takeScreenshot: practice-topic-settings

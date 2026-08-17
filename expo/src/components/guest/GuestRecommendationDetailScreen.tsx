@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { AppAlert } from '../../lib/app-alert'
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useLocalSearchParams } from "expo-router"
@@ -30,6 +30,7 @@ import {
   guestCanRespondToInfo,
   guestCanSubmitLetter,
   guestCanSubmitQuestionnaire,
+  guestDeliveryStatusLabel,
 } from "../../lib/guest-recommendation-utils"
 import {
   buildRecommendationPdfSource,
@@ -52,6 +53,8 @@ import {
 import { useThemedNative } from "../../context/AppearanceProvider"
 import { useNativeType } from "../../lib/themed-module-theme"
 import { GuestLetterPdfSheet } from "./GuestLetterPdfSheet"
+import { GuestRecommendationBriefPanel } from "./GuestRecommendationBriefPanel"
+import { NotetakerScreenHeader } from "../notetaker/NotetakerScreenHeader"
 import { useChromeScrollPadding } from "../../context/ChromeInsetContext"
 
 type WorkspaceTab = "overview" | "questionnaire" | "letter"
@@ -142,7 +145,10 @@ export function GuestRecommendationDetailScreen() {
   const pipelineTone = getRecommendationPipelineTone(status, journey.step)
   const statTones = getRecommendationStatTones(status, journey.step)
   const hasPdf = hasRecommendationLetterPdf(bundle?.files, req)
-  const pdfSource = guestSession && hasPdf ? buildRecommendationPdfSource(guestSession, requestId) : null
+  const deliveryMode = req?.delivery_mode ?? null
+  const deliveryNotice = guestDeliveryStatusLabel(deliveryMode, status)
+  const canDownload = guestCanDownload(status, deliveryMode)
+  const pdfSource = guestSession && hasPdf && canDownload ? buildRecommendationPdfSource(guestSession, requestId) : null
   const allowAi = Boolean((bundle?.settings as { allow_ai_generation?: boolean } | null)?.allow_ai_generation)
 
   async function runPatch(action: string, body: Record<string, unknown> = {}) {
@@ -233,6 +239,7 @@ export function GuestRecommendationDetailScreen() {
 
   return (
     <>
+      <NotetakerScreenHeader title="Letter workspace" fallbackHref="/module/recommendations" />
       <KeyboardAvoidingView
         style={{ flex: 1, backgroundColor: native.groupedBackground }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -297,7 +304,29 @@ export function GuestRecommendationDetailScreen() {
         <FacultySheetNotice message="Revisions requested — update your letter and submit it again for instructor review." />
       ) : null}
 
-      {guestCanDownload(status) && pdfSource ? (
+      {req.rejection_reason?.trim() ? (
+        <FacultySheetNotice message={`Request declined: ${String(req.rejection_reason).trim()}`} />
+      ) : null}
+
+      {(bundle?.attachments?.length ?? 0) > 0 ? (
+        <FacultySheetSection label="Supporting documents">
+          {(bundle?.attachments ?? []).map((attachment) => (
+            <FacultySheetActionRow
+              key={attachment.id}
+              icon="attach-outline"
+              label={attachment.file_name ?? "Attachment"}
+              subtitle={attachment.file_type ?? "Tap to open"}
+              onPress={() => {
+                if (attachment.file_url) void Linking.openURL(attachment.file_url)
+              }}
+            />
+          ))}
+        </FacultySheetSection>
+      ) : null}
+
+      {deliveryNotice ? <FacultySheetNotice message={deliveryNotice} /> : null}
+
+      {guestCanDownload(status, deliveryMode) && pdfSource ? (
         <FacultySheetSection label="Final PDF">
           <FacultySheetActionRow
             icon="document-text-outline"
@@ -321,6 +350,8 @@ export function GuestRecommendationDetailScreen() {
 
       {tab === "overview" ? (
         <>
+          <GuestRecommendationBriefPanel requestId={requestId} />
+
           <FacultySheetSection label="Request summary">
             <Text style={[type.secondary, styles.summaryText]}>
               {req.student_request_description?.trim() || "No additional description provided."}
@@ -512,7 +543,10 @@ export function GuestRecommendationDetailScreen() {
           pdfSource={pdfSource}
           title={`${recommendationPurposeLabel(req.purpose)} letter`}
           onClose={() => setPdfPreviewOpen(false)}
-          onDownloaded={() => void load()}
+          onDownloaded={() => {
+            if (!guestSession || status !== "finalized") return
+            void guestApi.patchRecommendation(guestSession, requestId, "mark_downloaded").then(() => load())
+          }}
         />
       ) : null}
     </>

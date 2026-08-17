@@ -1,0 +1,17 @@
+appId: com.coursecollab.app
+---
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Manage Projects"
+    direction: DOWN
+    timeout: 12000
+- tapOn: "Manage Projects"
+- tapOn:
+    text: "Close menu"
+    optional: true
+- extendedWaitUntil:
+    visible: "Search projects, groups…|Overview|Manage Projects"
+    timeout: 20000

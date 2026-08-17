@@ -1,0 +1,18 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Flashcards"
+- tapOn:
+    text: "Clear search"
+    optional: true
+- tapOn:
+    text: "Search flashcard decks…"
+    optional: true
+- eraseText
+- tapOn: "Flashcards"
+- tapOn:
+    text: "Clear search"
+    optional: true
+- extendedWaitUntil:
+    visible: "AC Analysis Essentials, Published|First-Order & Op-Amp Review, Published|No flashcard decks"
+    timeout: 12000
+- takeScreenshot: flashcards-list-cleared

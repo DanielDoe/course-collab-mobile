@@ -7,7 +7,7 @@ export type PortalMeta = {
   id: MobileLoginPortal
   label: string
   shortLabel: string
-  icon: "school-outline" | "person-outline" | "sunny-outline" | "people-outline"
+  icon: "school-outline" | "person-outline" | "briefcase-outline" | "sunny-outline" | "people-outline"
   accent: string
   headline: string
   description: string
@@ -17,7 +17,13 @@ export type PortalDisplayMeta = {
   id: LoginPortal
   label: string
   shortLabel: string
-  icon: "school-outline" | "person-outline" | "sunny-outline" | "people-outline" | "shield-outline"
+  icon:
+    | "school-outline"
+    | "person-outline"
+    | "briefcase-outline"
+    | "sunny-outline"
+    | "people-outline"
+    | "shield-outline"
   accent: string
   headline: string
   description: string
@@ -36,12 +42,12 @@ export const MOBILE_LOGIN_PORTALS: PortalMeta[] = [
   },
   {
     id: "guest",
-    label: "Guest",
-    shortLabel: "Guest",
-    icon: "person-outline",
+    label: "Career Member",
+    shortLabel: "Career",
+    icon: "briefcase-outline",
     accent: "#7a4eba",
-    headline: "Guest access",
-    description: "Recommendation letters and other guest workflows.",
+    headline: "Career Member sign in",
+    description: "Résumé AI, cover letters, applications, and recommendation letters.",
   },
   {
     id: "summer",
@@ -50,7 +56,7 @@ export const MOBILE_LOGIN_PORTALS: PortalMeta[] = [
     icon: "sunny-outline",
     accent: "#eaaa00",
     headline: "Summer Camp",
-    description: "Sign in with your camper welcome email and password.",
+    description: "Coming soon — training tracks, projects, and camp sign-in.",
   },
   {
     id: "faculty",

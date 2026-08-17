@@ -1,0 +1,27 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Topics"
+- extendedWaitUntil:
+    visible: "AC Power"
+    timeout: 12000
+- tapOn:
+    text: "AC Power, Available"
+    optional: true
+- tapOn:
+    text: "AC Power"
+    optional: true
+- extendedWaitUntil:
+    visible: "Topic settings"
+    timeout: 12000
+- tapOn: "Hide all shown"
+- extendedWaitUntil:
+    visible: "Hide all questions?"
+    timeout: 8000
+- tapOn: "Cancel"
+- tapOn: "Topic settings"
+- waitForAnimationToEnd
+- tapOn: "Questions per day"
+- eraseText
+- inputText: "12"
+- tapOn: "Practice topic"
+- tapOn: "Done"

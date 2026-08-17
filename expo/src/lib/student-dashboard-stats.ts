@@ -299,7 +299,10 @@ export async function fetchStudentDashboardBundle(
 
   return {
     stats: buildStatsFromRaw(raw),
-    trend: buildGradeTrendSeries(gradeTotal, raw.quizHistory, raw.homeworkHistory),
+    trend: buildGradeTrendSeries(gradeTotal, raw.quizHistory, raw.homeworkHistory, {
+      quiz: quizYou,
+      homework: hwYou,
+    }),
     comparison: buildPerformanceComparison(quizYou, quizClass, hwYou, hwClass, attYou),
     insights: buildPerformanceInsights({
       quizAvg,

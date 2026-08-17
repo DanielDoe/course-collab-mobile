@@ -33,6 +33,7 @@ import { useNativeType } from "../../lib/themed-module-theme"
 import { useGuestModuleTheme } from "./guest-shared"
 import { GuestLetterRequestCard } from "./GuestLetterRequestCard"
 import { GuestLetterSearchBar } from "./GuestLetterSearchBar"
+import { FacultySummerCampDatePicker } from "../faculty/FacultySummerCampDatePicker"
 import {
   countGuestLettersByFilter,
   filterGuestLetters,
@@ -44,7 +45,7 @@ type Tab = "requests" | "new"
 
 export function GuestRecommendationsScreen() {
   const router = useRouter()
-  const params = useLocalSearchParams<{ tab?: string }>()
+  const params = useLocalSearchParams<{ tab?: string; request?: string }>()
   const { session } = useSession()
   const guestSession = session?.portal === "guest" ? (session as GuestSession) : null
   const theme = useGuestModuleTheme()
@@ -56,6 +57,10 @@ export function GuestRecommendationsScreen() {
   const [rawSessions, setRawSessions] = useState<Array<{ id: number; code?: string; description?: string }>>([])
   const [rawInstructors, setRawInstructors] = useState<Array<{ id: number; name?: string; username?: string }>>([])
   const [purpose, setPurpose] = useState("scholarship")
+  const [purposeOther, setPurposeOther] = useState("")
+  const [recipientName, setRecipientName] = useState("")
+  const [recipientOrganization, setRecipientOrganization] = useState("")
+  const [recipientAddress, setRecipientAddress] = useState("")
   const [courseId, setCourseId] = useState<number | null>(null)
   const [instructorId, setInstructorId] = useState<number | null>(null)
   const [deadline, setDeadline] = useState("")
@@ -108,6 +113,13 @@ export function GuestRecommendationsScreen() {
     if (params.tab === "new") setTab("new")
   }, [params.tab])
 
+  useEffect(() => {
+    const requestId = params.request
+    if (requestId && /^\d+$/.test(String(requestId))) {
+      router.push(`/recommendation/${requestId}` as never)
+    }
+  }, [params.request, router])
+
   const filterCounts = useMemo(() => countGuestLettersByFilter(requests), [requests])
 
   const filterOptions = useMemo(
@@ -131,16 +143,29 @@ export function GuestRecommendationsScreen() {
       setError("Select a course and instructor.")
       return
     }
+    if (purpose === "other" && purposeOther.trim().length < 2) {
+      setError('When purpose is "Other", add a short phrase describing the letter.')
+      return
+    }
     setSubmitting(true)
     setMessage("")
     setError("")
     try {
+      const hasRecipient =
+        recipientName.trim().length > 0 ||
+        recipientOrganization.trim().length > 0 ||
+        recipientAddress.trim().length > 0
       const created = await guestApi.createRecommendation(guestSession, {
         courseId,
         instructorId,
         purpose,
         deadline: deadline.trim() || undefined,
         studentRequestDescription: description.trim() || undefined,
+        purposeOtherDetail: purpose === "other" ? purposeOther.trim().slice(0, 500) : undefined,
+        recipientName: recipientName.trim() || undefined,
+        recipientOrganization: recipientOrganization.trim() || undefined,
+        recipientAddress: hasRecipient ? recipientAddress.trim().slice(0, 2000) || undefined : undefined,
+        letterIsSpecific: hasRecipient,
       })
       setDescription("")
       setDeadline("")
@@ -234,6 +259,51 @@ export function GuestRecommendationsScreen() {
           </View>
         </ModuleSection>
 
+        {purpose === "other" ? (
+          <ModuleSection>
+            <Text style={[type.sectionHeader, styles.fieldLabel, { color: native.secondaryLabel }]}>
+              Purpose details
+            </Text>
+            <TextInput
+              style={[styles.input, { borderColor: native.separator, color: native.label, backgroundColor: native.fill }]}
+              placeholder='e.g. "Fulbright recommendation"'
+              placeholderTextColor={native.tertiaryLabel}
+              value={purposeOther}
+              onChangeText={setPurposeOther}
+            />
+          </ModuleSection>
+        ) : null}
+
+        <ModuleSection>
+          <Text style={[type.sectionHeader, styles.fieldLabel, { color: native.secondaryLabel }]}>
+            Recipient (optional)
+          </Text>
+          <View style={styles.inputStack}>
+            <TextInput
+              style={[styles.input, { borderColor: native.separator, color: native.label, backgroundColor: native.fill }]}
+              placeholder="Recipient name"
+              placeholderTextColor={native.tertiaryLabel}
+              value={recipientName}
+              onChangeText={setRecipientName}
+            />
+            <TextInput
+              style={[styles.input, { borderColor: native.separator, color: native.label, backgroundColor: native.fill }]}
+              placeholder="Organization"
+              placeholderTextColor={native.tertiaryLabel}
+              value={recipientOrganization}
+              onChangeText={setRecipientOrganization}
+            />
+            <TextInput
+              style={[styles.input, styles.textArea, { borderColor: native.separator, color: native.label, backgroundColor: native.fill }]}
+              placeholder="Mailing address (if letter is addressed to someone specific)"
+              placeholderTextColor={native.tertiaryLabel}
+              value={recipientAddress}
+              onChangeText={setRecipientAddress}
+              multiline
+            />
+          </View>
+        </ModuleSection>
+
         <ModuleSection>
           <NativeSelect
             label="Course"
@@ -264,13 +334,10 @@ export function GuestRecommendationsScreen() {
 
         <ModuleSection>
           <Text style={[type.sectionHeader, styles.fieldLabel, { color: native.secondaryLabel }]}>Deadline</Text>
-          <TextInput
-            style={[styles.input, { borderColor: native.separator, color: native.label, backgroundColor: native.fill }]}
-            placeholder="YYYY-MM-DD (optional)"
-            placeholderTextColor={native.tertiaryLabel}
+          <FacultySummerCampDatePicker
             value={deadline}
-            onChangeText={setDeadline}
-            autoCapitalize="none"
+            onChange={setDeadline}
+            accessibilityLabel="Deadline"
           />
         </ModuleSection>
 
@@ -333,7 +400,8 @@ export function GuestRecommendationsScreen() {
 }
 
 const styles = StyleSheet.create({
-  fieldLabel: { marginBottom: 8 },
+  fieldLabel: { marginBottom: 10 },
+  inputStack: { gap: 12 },
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   chip: {
     paddingHorizontal: 10,

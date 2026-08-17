@@ -71,7 +71,7 @@ export function FacultyAnnouncementCard({ item, index, onPress }: Props) {
       <SolidListThumbTile thumb={solidThumb} icon="megaphone-outline" />
 
       <View style={styles.copy}>
-        <Text style={[type.bodyEmphasis, styles.title, { color: native.label }]} numberOfLines={2}>
+        <Text style={[type.bodyEmphasis, styles.title, { color: native.label }]} numberOfLines={3}>
           {item.title}
         </Text>
 

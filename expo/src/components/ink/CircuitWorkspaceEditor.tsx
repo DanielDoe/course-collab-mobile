@@ -52,6 +52,9 @@ export function CircuitWorkspaceEditor({ workspace, onChange, disabled, darkPape
               <Pressable
                 key={page.id}
                 onPress={() => !disabled && onChange(setActivePageIndex(workspace, index))}
+                accessibilityRole="button"
+                accessibilityLabel={`Page ${index + 1}`}
+                accessibilityState={{ selected: active }}
                 style={[
                   styles.pageChip,
                   {
@@ -75,6 +78,7 @@ export function CircuitWorkspaceEditor({ workspace, onChange, disabled, darkPape
           <Pressable
             onPress={() => onChange(addWorkspacePage(workspace))}
             style={[styles.pageAction, { backgroundColor: native.fill }]}
+            accessibilityRole="button"
             accessibilityLabel="Add page"
           >
             <Ionicons name="add" size={20} color={tokens.accent} />
@@ -85,6 +89,7 @@ export function CircuitWorkspaceEditor({ workspace, onChange, disabled, darkPape
           <Pressable
             onPress={() => onChange(deleteWorkspacePage(workspace, workspace.activePageIndex))}
             style={[styles.pageAction, { backgroundColor: native.fill }]}
+            accessibilityRole="button"
             accessibilityLabel="Delete page"
           >
             <Ionicons name="trash-outline" size={18} color={tokens.danger} />

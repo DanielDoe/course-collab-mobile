@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -26,10 +27,12 @@ import {
   buildFacultyScoreTrendChartHtml,
   buildFacultySubmissionsChartHtml,
   hasBreakdownChartData,
+  hasAnySubmissionsChartData,
   hasScoreTrendChartData,
-  hasSubmissionsChartData} from "./faculty-chart-html"
+  resolveSubmissionsChartSeries} from "./faculty-chart-html"
 import { FacultyChartCard, ChartLegendItem } from "./FacultyChartCard"
 import { FacultyKpiGrid } from "./FacultyKpiGrid"
+import { activityBelongsToCourse } from "../../lib/faculty-assessment-utils"
 import { FacultyEmptyState, FacultyListRow, FacultySectionCard, NativeCountBadge } from "./faculty-shared"
 import { DashboardWelcomeCard } from "../dashboard/DashboardWelcomeCard"
 import { consumeFacultyDashboardBootstrap } from "../../lib/app-bootstrap-cache"
@@ -116,9 +119,18 @@ export function FacultyDashboardScreen() {
 
   useNotificationModuleRefresh("dashboard", handleRefresh)
 
+  const courseActivity = useMemo(
+    () => activity.filter((item) => activityBelongsToCourse(item, course?.course_code)),
+    [activity, course?.course_code],
+  )
+
+  const submissionsChart = useMemo(
+    () => (charts ? resolveSubmissionsChartSeries(charts) : null),
+    [charts],
+  )
   const submissionsHtml = useMemo(
-    () => (charts ? buildFacultySubmissionsChartHtml(charts.submissionsOverTime, chartWidth) : ""),
-    [charts, chartWidth],
+    () => (submissionsChart ? buildFacultySubmissionsChartHtml(submissionsChart.data, chartWidth) : ""),
+    [submissionsChart, chartWidth],
   )
   const breakdownHtml = useMemo(
     () => (charts ? buildFacultyBreakdownChartHtml(charts.assessmentBreakdown, chartWidth) : ""),
@@ -165,7 +177,6 @@ export function FacultyDashboardScreen() {
         roleLabel="Instructor"
         roleIcon="school-outline"
         badge={course?.course_code ?? undefined}
-        subtitle={course?.course_title ?? undefined}
       />
 
       {loading ? (
@@ -200,10 +211,10 @@ export function FacultyDashboardScreen() {
           <FacultyKpiGrid stats={stats} />
 
           <FacultyChartCard
-            title="Submissions (Last 7 Days)"
+            title={submissionsChart?.title ?? "Submissions (Last 7 Days)"}
             html={submissionsHtml}
             loading={chartsLoading}
-            empty={!charts || !hasSubmissionsChartData(charts.submissionsOverTime)}
+            empty={!hasAnySubmissionsChartData(charts)}
             emptyMessage="No submissions yet"
           />
           <FacultyChartCard
@@ -273,26 +284,32 @@ export function FacultyDashboardScreen() {
             title="Recent Activity"
             icon="time-outline"
             action={
-              activity.length > 0 ? (
-                <Pressable onPress={() => router.push("/module/recent-activity" as never)}>
+              courseActivity.length > 0 ? (
+                <Pressable
+                  onPress={() => router.push("/module/recent-activity" as never)}
+                  accessibilityRole="button"
+                  accessibilityLabel="View all recent activity"
+                  hitSlop={8}
+                >
                   <Text style={styles.viewAll}>View All</Text>
                 </Pressable>
               ) : null
             }
           >
-            {activity.length === 0 ? (
+            {courseActivity.length === 0 ? (
               <FacultyEmptyState
                 icon="pulse-outline"
                 title="No Recent Submissions"
                 body="Student assessment activity will appear here."
               />
             ) : (
-              activity.map((item) => (
+              courseActivity.map((item) => (
                 <FacultyListRow
                   key={item.id}
                   title={item.title}
                   subtitle={item.message}
                   meta={item.created_at ? formatFacultyRelativeTime(item.created_at) : undefined}
+                  onPress={() => router.push("/module/recent-activity" as never)}
                 />
               ))
             )}
@@ -327,6 +344,10 @@ function ActionChip({
     <Pressable
       style={({ pressed }) => [styles.chip, { backgroundColor: native.secondaryGrouped }, pressed && { opacity: NATIVE.pressedOpacity }]}
       onPress={onPress}
+      accessible
+      accessibilityRole="button"
+      accessibilityLabel={count && count > 0 ? `${label}, ${count}` : label}
+      android_ripple={Platform.OS === "android" ? { color: "rgba(0,0,0,0.08)" } : undefined}
     >
       <Text style={[type.body, styles.chipText, { color: native.label }]}>{label}</Text>
       {count && count > 0 ? <NativeCountBadge count={count} variant="compact" /> : null}
@@ -369,7 +390,8 @@ const styles = StyleSheet.create({
     gap: 6,
     borderRadius: 8,
     paddingHorizontal: 12,
-    paddingVertical: 8},
+    paddingVertical: 8,
+    minHeight: 44},
   chipText: { fontSize: 14, fontWeight: "500", color: NATIVE.label },
   viewAll: { fontSize: 15, fontWeight: "400", color: NATIVE.tint },
   primaryBtn: {

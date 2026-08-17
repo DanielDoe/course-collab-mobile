@@ -1,19 +1,33 @@
 import { useEffect, useMemo, useState } from "react"
 import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { AppAlert } from '../../lib/app-alert'
+import { AppAlertHost } from "../../context/AppAlertProvider"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { announcementContentForEditor, announcementContentForSave } from "../../lib/announcement-content"
-import type { InstructorAnnouncement } from "../../lib/instructor-api"
+import type { InstructorAnnouncement, InstructorAnnouncementAttachment } from "../../lib/instructor-api"
 import { summarizeAnnouncement } from "../../lib/announcement-summary"
 import { useModuleTheme } from "../../lib/themed-module-shell"
 import { FACULTY_ANNOUNCEMENT_COLOR } from "../../lib/faculty-announcement-theme"
 import { useSheetPlaceholderColor } from "./faculty-collab-sheet-ui"
+import { useSuppressModuleSearchDock } from "../../context/ModuleSearchDockContext"
+import { NativeSelect } from "../NativeSelect"
+import { FacultySummerCampDatePicker } from "./FacultySummerCampDatePicker"
+import {
+  ANNOUNCEMENT_PRIORITY_OPTIONS,
+  ANNOUNCEMENT_TYPE_OPTIONS,
+} from "../../lib/faculty-announcement-utils"
+import * as DocumentPicker from "expo-document-picker"
 
 export type ComposerDraft = {
   title: string
   content: string
   pinned: boolean
+  type: string
+  priority: string
+  target_session: string
+  expires_at: string
+  attachments: InstructorAnnouncementAttachment[]
 }
 
 type Props = {
@@ -22,6 +36,8 @@ type Props = {
   initialDraft?: ComposerDraft | null
   courseCode?: string
   submitting: boolean
+  sessionOptions?: Array<{ value: string; label: string }>
+  onUploadAttachment?: (file: { uri: string; name: string; type: string }) => Promise<InstructorAnnouncementAttachment>
   onClose: () => void
   onSubmit: (draft: ComposerDraft) => void
 }
@@ -29,19 +45,29 @@ type Props = {
 const EMPTY_DRAFT: ComposerDraft = {
   title: "",
   content: "",
-  pinned: false}
+  pinned: false,
+  type: "info",
+  priority: "medium",
+  target_session: "all",
+  expires_at: "",
+  attachments: [],
+}
 
 export function FacultyAnnouncementComposer({visible,
   editing,
   initialDraft,
   courseCode,
   submitting,
+  sessionOptions = [],
+  onUploadAttachment,
   onClose,
   onSubmit}: Props) {
+  useSuppressModuleSearchDock(visible)
   const { native, tokens, type, styles: moduleStyles } = useModuleTheme()
   const placeholderColor = useSheetPlaceholderColor()
   const insets = useSafeAreaInsets()
   const [draft, setDraft] = useState<ComposerDraft>(EMPTY_DRAFT)
+  const [uploading, setUploading] = useState(false)
 
   const [originalContent, setOriginalContent] = useState("")
 
@@ -52,7 +78,13 @@ export function FacultyAnnouncementComposer({visible,
       setDraft({
         title: editing.title,
         content: announcementContentForEditor(editing.content ?? ""),
-        pinned: editing.pinned ?? false})
+        pinned: editing.pinned ?? false,
+        type: editing.type ?? "info",
+        priority: editing.priority ?? (editing.pinned ? "high" : "medium"),
+        target_session: editing.target_session ?? "all",
+        expires_at: editing.expires_at?.slice(0, 10) ?? "",
+        attachments: editing.attachments ?? [],
+      })
       return
     }
     setOriginalContent("")
@@ -102,12 +134,21 @@ export function FacultyAnnouncementComposer({visible,
             },
           ]}
         >
-          <Pressable style={styles.headerBtn} onPress={handleClose} hitSlop={8}>
+          <Pressable
+            style={styles.headerBtn}
+            onPress={handleClose}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Cancel"
+          >
             <Text style={[type.body, { color: native.secondaryLabel, fontWeight: "600" }]}>Cancel</Text>
           </Pressable>
           <View style={styles.headerCenter}>
-            <Text style={[type.bodyEmphasis, { fontSize: 16, color: native.label }]}>
-              {editing ? "Edit" : "New announcement"}
+            <Text
+              style={[type.bodyEmphasis, { fontSize: 16, color: native.label }]}
+              accessibilityRole="header"
+            >
+              {editing ? "Edit announcement" : "New announcement"}
             </Text>
             {courseCode ? (
               <Text style={[type.caption, { color: tokens.warning, fontWeight: "600" }]}>{courseCode}</Text>
@@ -121,6 +162,8 @@ export function FacultyAnnouncementComposer({visible,
             ]}
             onPress={() => onSubmit(draft)}
             disabled={!canSubmit}
+            accessibilityRole="button"
+            accessibilityLabel={editing ? "Save" : "Publish"}
           >
             {submitting ? (
               <ActivityIndicator size="small" color={FACULTY_ANNOUNCEMENT_COLOR.actionInk} />
@@ -132,10 +175,12 @@ export function FacultyAnnouncementComposer({visible,
 
         <ScrollView
           contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + 24 }]}
-          keyboardShouldPersistTaps="handled"
+          keyboardShouldPersistTaps="always"
           showsVerticalScrollIndicator={false}
         >
-          <Text style={type.caption}>Title</Text>
+          <Text style={type.caption} accessible={false}>
+            Title
+          </Text>
           <TextInput
             style={[
               styles.input,
@@ -149,9 +194,17 @@ export function FacultyAnnouncementComposer({visible,
             placeholderTextColor={placeholderColor}
             value={draft.title}
             onChangeText={(title) => setDraft((prev) => ({ ...prev, title }))}
+            accessibilityLabel="Title"
+            autoCorrect={false}
+            autoCapitalize="none"
+            spellCheck={false}
+            keyboardType="ascii-capable"
+            testID="announcement-title"
           />
 
-          <Text style={type.caption}>Message</Text>
+          <Text style={type.caption} accessible={false}>
+            Message
+          </Text>
           <TextInput
             style={[
               styles.input,
@@ -168,6 +221,12 @@ export function FacultyAnnouncementComposer({visible,
             onChangeText={(content) => setDraft((prev) => ({ ...prev, content }))}
             multiline
             textAlignVertical="top"
+            autoCorrect={false}
+            autoCapitalize="none"
+            spellCheck={false}
+            keyboardType="ascii-capable"
+            testID="announcement-message"
+            accessibilityLabel="Message"
           />
 
           <View
@@ -197,12 +256,46 @@ export function FacultyAnnouncementComposer({visible,
             </View>
           </View>
 
+          <Text style={type.caption} accessible={false}>Type</Text>
+          <NativeSelect
+            placeholder="Type"
+            value={draft.type}
+            options={ANNOUNCEMENT_TYPE_OPTIONS.map((option) => ({ value: option.id, label: option.label }))}
+            onChange={(type) => setDraft((prev) => ({ ...prev, type }))}
+          />
+          <Text style={type.caption} accessible={false}>Priority</Text>
+          <NativeSelect
+            placeholder="Priority"
+            value={draft.priority}
+            options={ANNOUNCEMENT_PRIORITY_OPTIONS.map((option) => ({ value: option.id, label: option.label }))}
+            onChange={(priority) => setDraft((prev) => ({ ...prev, priority }))}
+          />
+          <Text style={type.caption} accessible={false}>Audience</Text>
+          <NativeSelect
+            placeholder="Audience"
+            value={draft.target_session}
+            options={[
+              { value: "all", label: "Course-wide" },
+              ...sessionOptions.filter((option) => option.value && option.value !== "all"),
+            ]}
+            onChange={(target_session) => setDraft((prev) => ({ ...prev, target_session }))}
+          />
+          <Text style={type.caption} accessible={false}>Expires</Text>
+          <FacultySummerCampDatePicker
+            value={draft.expires_at}
+            onChange={(expires_at) => setDraft((prev) => ({ ...prev, expires_at }))}
+            accessibilityLabel="Expiration date"
+          />
+
           <Pressable
             style={[
               styles.pinRow,
               { backgroundColor: native.secondaryGrouped, borderColor: tokens.border },
             ]}
             onPress={() => setDraft((prev) => ({ ...prev, pinned: !prev.pinned }))}
+            accessibilityRole="button"
+            accessibilityState={{ selected: draft.pinned }}
+            accessibilityLabel="Pin to top of student feed"
           >
             <Ionicons
               name={draft.pinned ? "pin" : "pin-outline"}
@@ -212,11 +305,69 @@ export function FacultyAnnouncementComposer({visible,
             <Text style={[type.bodyEmphasis, { color: native.label }]}>Pin to top of student feed</Text>
           </Pressable>
 
+          <Text style={type.caption} accessible={false}>Attachments</Text>
+          {draft.attachments.map((file) => (
+            <View
+              key={file.url}
+              style={[styles.pinRow, { backgroundColor: native.secondaryGrouped, borderColor: tokens.border }]}
+            >
+              <Ionicons name="attach-outline" size={18} color={native.secondaryLabel} />
+              <Text style={[type.body, { color: native.label, flex: 1 }]} numberOfLines={1}>
+                {file.name}
+              </Text>
+              <Pressable
+                onPress={() =>
+                  setDraft((prev) => ({
+                    ...prev,
+                    attachments: prev.attachments.filter((item) => item.url !== file.url),
+                  }))
+                }
+                accessibilityRole="button"
+                accessibilityLabel={`Remove ${file.name}`}
+              >
+                <Ionicons name="close-circle-outline" size={20} color={tokens.danger} />
+              </Pressable>
+            </View>
+          ))}
+          <Pressable
+            style={[styles.pinRow, { backgroundColor: native.secondaryGrouped, borderColor: tokens.border }]}
+            disabled={uploading || !onUploadAttachment}
+            onPress={() => {
+              void (async () => {
+                if (!onUploadAttachment) return
+                const picked = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true })
+                if (picked.canceled || !picked.assets?.[0]) return
+                const asset = picked.assets[0]
+                setUploading(true)
+                try {
+                  const uploaded = await onUploadAttachment({
+                    uri: asset.uri,
+                    name: asset.name ?? "attachment",
+                    type: asset.mimeType ?? "application/octet-stream",
+                  })
+                  setDraft((prev) => ({ ...prev, attachments: [...prev.attachments, uploaded] }))
+                } catch (err) {
+                  AppAlert.alert("Upload failed", err instanceof Error ? err.message : "Try again.")
+                } finally {
+                  setUploading(false)
+                }
+              })()
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Add attachment"
+          >
+            <Ionicons name="cloud-upload-outline" size={18} color={FACULTY_ANNOUNCEMENT_COLOR.action} />
+            <Text style={[type.bodyEmphasis, { color: native.label }]}>
+              {uploading ? "Uploading…" : "Add attachment"}
+            </Text>
+          </Pressable>
+
           <Text style={[type.caption, { color: native.secondaryLabel, marginTop: 8 }]}>
             Students see plain text in the app. Rich formatting support is coming soon.
           </Text>
         </ScrollView>
       </KeyboardAvoidingView>
+      <AppAlertHost />
     </Modal>
   )
 }
@@ -242,7 +393,7 @@ const styles = StyleSheet.create({
   publishBtnDisabled: { opacity: 0.45 },
   body: { padding: 16, gap: 10 },
   input: {
-    borderRadius: 999,
+    borderRadius: 12,
     borderWidth: 1,
     paddingHorizontal: 14,
     paddingVertical: 12,

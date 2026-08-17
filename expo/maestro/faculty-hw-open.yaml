@@ -1,0 +1,27 @@
+appId: com.coursecollab.app
+---
+- tapOn:
+    text: "Open debugger to view warnings."
+    optional: true
+- tapOn:
+    text: "x"
+    optional: true
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Assessments"
+    direction: DOWN
+    timeout: 12000
+- tapOn:
+    text: "Assessments"
+    optional: true
+- scrollUntilVisible:
+    element: "Manage Homework"
+    direction: DOWN
+    timeout: 12000
+- tapOn: "Manage Homework"
+- tapOn:
+    text: "Close menu"
+    optional: true
+- extendedWaitUntil:
+    visible: "Manage Homework|All homework|Search homework|No homework yet|Create homework"
+    timeout: 25000

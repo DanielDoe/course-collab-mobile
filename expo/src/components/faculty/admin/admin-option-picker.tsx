@@ -1,8 +1,8 @@
-import { Modal, ScrollView } from "react-native"
+import { ScrollView } from "react-native"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { FACULTY_ADMIN_COLOR } from "../../../lib/faculty-admin-theme"
 import { GlassFilterOptionRow, GlassMenuList } from "../../theme/GlassActionSheetMenu"
-import { FacultySheetChrome, FacultySheetContainer } from "../faculty-collab-sheet-ui"
+import { FacultySheetChrome, FacultySheetContainer, FacultySheetModal } from "../faculty-collab-sheet-ui"
 
 export type AdminOption<T extends string> = { value: T; label: string }
 
@@ -26,11 +26,17 @@ export function AdminOptionPickerModal<T extends string>({
   const insets = useSafeAreaInsets()
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <FacultySheetContainer style={{ flex: 1, paddingHorizontal: 16 }}>
-        <FacultySheetChrome topInset={insets.top} title={title} onClose={onClose} accentColor={FACULTY_ADMIN_COLOR.link} />
+    <FacultySheetModal visible={visible} onRequestClose={onClose}>
+      <FacultySheetContainer style={{ flex: 1 }}>
+        <FacultySheetChrome
+          topInset={0}
+          title={title}
+          onClose={onClose}
+          accentColor={FACULTY_ADMIN_COLOR.link}
+          pageSheet
+        />
         <ScrollView
-          contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: insets.bottom + 24 }}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
@@ -50,6 +56,6 @@ export function AdminOptionPickerModal<T extends string>({
           </GlassMenuList>
         </ScrollView>
       </FacultySheetContainer>
-    </Modal>
+    </FacultySheetModal>
   )
 }

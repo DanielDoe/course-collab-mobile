@@ -9,6 +9,7 @@ import {
   persistRememberedFacultyCredentials,
   readRememberedFacultyCredentials,
 } from "../../lib/remembered-faculty-auth"
+import { stashPendingLoginPassword } from "../../lib/pending-login-password"
 import { useSession } from "../../context/SessionProvider"
 import { MfaLoginStep } from "../auth/MfaLoginStep"
 import { ErrorBanner, LoginFieldGroup } from "./LoginCard"
@@ -45,10 +46,18 @@ export function StaffLoginPanel({ onBack }: Props) {
     }
   }, [])
 
-  async function finishStaffLogin(data: Record<string, unknown>) {
+  async function finishStaffLogin(data: Record<string, unknown>, loginPassword?: string) {
     const normalized = parseMfaCompletePayload(data) ?? data
     const instructor = (normalized.faculty ?? normalized.instructor) as
-      | { id: number; username: string; name?: string; email?: string; role?: string }
+      | {
+          id: number
+          username: string
+          name?: string
+          email?: string
+          role?: string
+          requiresPasswordChange?: boolean
+          hasChangedPassword?: boolean
+        }
       | undefined
     if (!instructor) throw new ApiError("Login failed", 500)
 
@@ -67,6 +76,13 @@ export function StaffLoginPanel({ onBack }: Props) {
       rememberMe,
     })
 
+    const requiresPasswordChange = Boolean(
+      instructor.requiresPasswordChange || instructor.hasChangedPassword === false,
+    )
+    if (requiresPasswordChange && loginPassword) {
+      stashPendingLoginPassword(loginPassword)
+    }
+
     await signIn({
       portal: "faculty",
       id: Number(instructor.id),
@@ -75,6 +91,7 @@ export function StaffLoginPanel({ onBack }: Props) {
       email: instructor.email,
       role: instructor.role,
       authIdentifier: authId || instructor.username,
+      requiresPasswordChange,
     })
   }
 
@@ -93,7 +110,7 @@ export function StaffLoginPanel({ onBack }: Props) {
         setMfaState(mfa)
         return
       }
-      await finishStaffLogin(data)
+      await finishStaffLogin(data, password)
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Login failed. Please try again.")
     } finally {
@@ -108,7 +125,7 @@ export function StaffLoginPanel({ onBack }: Props) {
         backLabel="Back to login"
         state={mfaState}
         portalLabel="CourseCollab Faculty"
-        onComplete={(payload) => finishStaffLogin(payload)}
+        onComplete={(payload) => finishStaffLogin(payload, password)}
         onBack={() => {
           setMfaState(null)
           setError("")

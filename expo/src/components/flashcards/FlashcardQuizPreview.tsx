@@ -89,6 +89,8 @@ export function FlashcardQuizPreview({ cards, activeCardId, onActiveCardIdChange
         <Pressable
           onPress={() => setIndex(activeIndex - 1)}
           disabled={activeIndex <= 0}
+          accessibilityRole="button"
+          accessibilityLabel="Previous quiz card"
           style={[styles.navBtn, { opacity: activeIndex <= 0 ? 0.35 : 1 }]}
         >
           <Ionicons name="chevron-back" size={20} color={accent} />
@@ -99,6 +101,8 @@ export function FlashcardQuizPreview({ cards, activeCardId, onActiveCardIdChange
         <Pressable
           onPress={() => setIndex(activeIndex + 1)}
           disabled={activeIndex >= cards.length - 1}
+          accessibilityRole="button"
+          accessibilityLabel="Next quiz card"
           style={[styles.navBtn, { opacity: activeIndex >= cards.length - 1 ? 0.35 : 1 }]}
         >
           <Ionicons name="chevron-forward" size={20} color={accent} />
@@ -117,5 +121,10 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   nav: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  navBtn: { padding: 8 },
+  navBtn: {
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
+  },
 })

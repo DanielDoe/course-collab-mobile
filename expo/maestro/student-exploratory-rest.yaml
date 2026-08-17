@@ -1,0 +1,162 @@
+appId: com.coursecollab.app
+---
+- openLink: coursecollab://dev-student-login
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 90000
+- openLink: coursecollab:///module/forum
+- extendedWaitUntil:
+    visible: "Forum Hub|Forum|Discussions"
+    timeout: 30000
+- tapOn:
+    text: "Search threads…"
+    optional: true
+- inputText: "circuit"
+- hideKeyboard
+- takeScreenshot: exploratory-forum
+- openLink: coursecollab:///module/messages
+- extendedWaitUntil:
+    visible: "Messages"
+    timeout: 30000
+- tapOn: "Search conversations…"
+- inputText: "Behlool"
+- hideKeyboard
+- tapOn:
+    point: "92%,92%"
+    optional: true
+- tapOn:
+    text: "Cancel"
+    optional: true
+- tapOn:
+    text: "Close"
+    optional: true
+- takeScreenshot: exploratory-messages
+- openLink: coursecollab:///module/groups
+- extendedWaitUntil:
+    visible: "Groups"
+    timeout: 30000
+- tapOn:
+    text: "Search groups…"
+    optional: true
+- inputText: "team"
+- hideKeyboard
+- takeScreenshot: exploratory-groups
+- openLink: coursecollab:///module/projects
+- extendedWaitUntil:
+    visible: "Projects"
+    timeout: 30000
+- tapOn:
+    text: "Search projects…"
+    optional: true
+- inputText: "final"
+- hideKeyboard
+- takeScreenshot: exploratory-projects
+- openLink: coursecollab:///module/playground
+- extendedWaitUntil:
+    visible: "Playground"
+    timeout: 30000
+- takeScreenshot: exploratory-playground
+- openLink: coursecollab:///module/classroom-points
+- extendedWaitUntil:
+    visible: "Classroom Points"
+    timeout: 30000
+- takeScreenshot: exploratory-points
+- openLink: coursecollab:///module/attendance
+- extendedWaitUntil:
+    visible: "Attendance"
+    timeout: 30000
+- takeScreenshot: exploratory-attendance
+- openLink: coursecollab:///module/trade-center
+- extendedWaitUntil:
+    visible: "Trade Center"
+    timeout: 30000
+- takeScreenshot: exploratory-trade
+- openLink: coursecollab:///announcements
+- extendedWaitUntil:
+    visible: "Announcements"
+    timeout: 30000
+- tapOn:
+    text: "Search title, summary, instructor…"
+    optional: true
+- inputText: "exam"
+- hideKeyboard
+- takeScreenshot: exploratory-announcements
+- openLink: coursecollab:///module/progress-review
+- extendedWaitUntil:
+    visible: "Progress Review"
+    timeout: 30000
+- takeScreenshot: exploratory-progress
+- openLink: coursecollab:///module/syllabus
+- extendedWaitUntil:
+    visible: "Syllabus"
+    timeout: 30000
+- tapOn:
+    text: "Search policies, dates, materials…"
+    optional: true
+- inputText: "late"
+- hideKeyboard
+- takeScreenshot: exploratory-syllabus
+- openLink: coursecollab:///module/calendar
+- extendedWaitUntil:
+    visible: "Calendar"
+    timeout: 30000
+- takeScreenshot: exploratory-calendar
+- openLink: coursecollab:///module/office-hours
+- extendedWaitUntil:
+    visible: "Office Hours"
+    timeout: 30000
+- takeScreenshot: exploratory-office
+- openLink: coursecollab:///module/course-policies
+- extendedWaitUntil:
+    visible: "Policies"
+    timeout: 30000
+- takeScreenshot: exploratory-policies
+- openLink: coursecollab:///module/course-evaluation
+- extendedWaitUntil:
+    visible: "Course Evaluation"
+    timeout: 30000
+- takeScreenshot: exploratory-eval
+- openLink: coursecollab:///module/recommendations
+- extendedWaitUntil:
+    visible: "Recommendation"
+    timeout: 30000
+- takeScreenshot: exploratory-recs
+- openLink: coursecollab:///settings
+- extendedWaitUntil:
+    visible: "Settings"
+    timeout: 20000
+- tapOn:
+    text: "Appearance"
+    optional: true
+- back
+- takeScreenshot: exploratory-settings
+- openLink: coursecollab:///membership
+- extendedWaitUntil:
+    visible: "Membership|View Plans|Plans"
+    timeout: 30000
+- takeScreenshot: exploratory-plans
+- openLink: coursecollab:///module/help-center
+- extendedWaitUntil:
+    visible: "Help Center"
+    timeout: 20000
+- tapOn:
+    text: "Search help articles…"
+    optional: true
+- inputText: "quiz"
+- hideKeyboard
+- takeScreenshot: exploratory-help
+- openLink: coursecollab:///module/submit-ticket
+- extendedWaitUntil:
+    visible: "Submit Ticket"
+    timeout: 20000
+- takeScreenshot: exploratory-ticket
+- openLink: coursecollab:///module/report-bug
+- extendedWaitUntil:
+    visible: "Report Bug"
+    timeout: 20000
+- takeScreenshot: exploratory-bug
+- openLink: coursecollab:///module/feature-requests
+- extendedWaitUntil:
+    visible: "Feature Requests"
+    timeout: 20000
+- takeScreenshot: exploratory-features

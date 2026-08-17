@@ -1,0 +1,354 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Manage Results"
+    direction: DOWN
+    timeout: 12000
+- tapOn: "Manage Results"
+- extendedWaitUntil:
+    visible: "Results|Trailblazer|View plans|Not now"
+    timeout: 30000
+- tapOn:
+    text: "Not now"
+    optional: true
+- tapOn:
+    text: "Search student, assessment, section…"
+    optional: true
+- inputText: "daniel"
+- hideKeyboard
+- swipe:
+    direction: UP
+- takeScreenshot: fac-results
+
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Student Progress"
+    direction: DOWN
+    timeout: 12000
+- tapOn: "Student Progress"
+- extendedWaitUntil:
+    visible: "Progress|Trailblazer|View plans|Not now"
+    timeout: 30000
+- tapOn:
+    text: "Not now"
+    optional: true
+- swipe:
+    direction: UP
+- takeScreenshot: fac-progress
+
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Manage Reports"
+    direction: DOWN
+    timeout: 12000
+- tapOn: "Manage Reports"
+- extendedWaitUntil:
+    visible: "Reports|Trailblazer|View plans|Not now"
+    timeout: 30000
+- tapOn:
+    text: "Not now"
+    optional: true
+- swipe:
+    direction: UP
+- takeScreenshot: fac-reports
+
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Progress Reviews"
+    direction: DOWN
+    timeout: 12000
+- tapOn: "Progress Reviews"
+- extendedWaitUntil:
+    visible: "Reviews|Trailblazer|View plans|Not now"
+    timeout: 30000
+- tapOn:
+    text: "Not now"
+    optional: true
+- swipe:
+    direction: UP
+- takeScreenshot: fac-reviews
+
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Recent Activity"
+    direction: DOWN
+    timeout: 12000
+- tapOn: "Recent Activity"
+- extendedWaitUntil:
+    visible: "Activity"
+    timeout: 30000
+- tapOn:
+    text: "Search student or assessment…"
+    optional: true
+- inputText: "quiz"
+- hideKeyboard
+- swipe:
+    direction: UP
+- takeScreenshot: fac-activity
+
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Course Settings"
+    direction: DOWN
+    timeout: 12000
+- tapOn: "Course Settings"
+- extendedWaitUntil:
+    visible: "Course Settings|Settings"
+    timeout: 30000
+- swipe:
+    direction: UP
+- takeScreenshot: fac-course-settings
+
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Assessment Governance"
+    direction: DOWN
+    timeout: 12000
+- tapOn: "Assessment Governance"
+- extendedWaitUntil:
+    visible: "Governance|Assessment"
+    timeout: 30000
+- swipe:
+    direction: UP
+- takeScreenshot: fac-governance
+
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Assessment Defaults"
+    direction: DOWN
+    timeout: 12000
+- tapOn: "Assessment Defaults"
+- extendedWaitUntil:
+    visible: "Defaults|Assessment"
+    timeout: 30000
+- swipe:
+    direction: UP
+- takeScreenshot: fac-defaults
+
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "My Courses"
+    direction: DOWN
+    timeout: 12000
+- tapOn: "My Courses"
+- extendedWaitUntil:
+    visible: "My Courses|Courses"
+    timeout: 30000
+- swipe:
+    direction: UP
+- takeScreenshot: fac-mycourses
+
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Grading Policies"
+    direction: DOWN
+    timeout: 12000
+- tapOn: "Grading Policies"
+- extendedWaitUntil:
+    visible: "Grading"
+    timeout: 30000
+- swipe:
+    direction: UP
+- takeScreenshot: fac-grading
+
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Attendance Policies"
+    direction: DOWN
+    timeout: 12000
+- tapOn: "Attendance Policies"
+- extendedWaitUntil:
+    visible: "Attendance"
+    timeout: 30000
+- swipe:
+    direction: UP
+- takeScreenshot: fac-att-policies
+
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Classroom Points Rules"
+    direction: DOWN
+    timeout: 12000
+- tapOn: "Classroom Points Rules"
+- extendedWaitUntil:
+    visible: "Points|Rules"
+    timeout: 30000
+- swipe:
+    direction: UP
+- takeScreenshot: fac-points-rules
+
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Playground Rules"
+    direction: DOWN
+    timeout: 12000
+- tapOn: "Playground Rules"
+- extendedWaitUntil:
+    visible: "Playground|Rules"
+    timeout: 30000
+- swipe:
+    direction: UP
+- takeScreenshot: fac-play-rules
+
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "AI Assistant Settings"
+    direction: DOWN
+    timeout: 12000
+- tapOn: "AI Assistant Settings"
+- extendedWaitUntil:
+    visible: "Assistant|Trailblazer|View plans|Not now"
+    timeout: 30000
+- tapOn:
+    text: "Not now"
+    optional: true
+- swipe:
+    direction: UP
+- takeScreenshot: fac-ai-settings
+
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Team & Project Policies"
+    direction: DOWN
+    timeout: 12000
+- tapOn: "Team & Project Policies"
+- extendedWaitUntil:
+    visible: "Team|Project|Policies"
+    timeout: 30000
+- swipe:
+    direction: UP
+- takeScreenshot: fac-team-policies
+
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Submission Issues"
+    direction: DOWN
+    timeout: 12000
+- tapOn: "Submission Issues"
+- extendedWaitUntil:
+    visible: "Issues|Submission"
+    timeout: 30000
+- tapOn:
+    text: "Search student, assessment, issue…"
+    optional: true
+- inputText: "late"
+- hideKeyboard
+- swipe:
+    direction: UP
+- takeScreenshot: fac-issues
+
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Teaching Assistants"
+    direction: DOWN
+    timeout: 12000
+- tapOn: "Teaching Assistants"
+- extendedWaitUntil:
+    visible: "Assistants|Trailblazer|View plans|Not now|Enterprise"
+    timeout: 30000
+- tapOn:
+    text: "Not now"
+    optional: true
+- takeScreenshot: fac-tas
+
+- tapOn: "Open navigation menu"
+- tapOn: "Cora Copilot"
+- extendedWaitUntil:
+    visible: "Cora|Copilot"
+    timeout: 45000
+- tapOn:
+    text: "Ask Cora…"
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true
+- takeScreenshot: fac-cora
+
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Profile & Settings"
+    direction: DOWN
+    timeout: 12000
+- tapOn: "Profile & Settings"
+- extendedWaitUntil:
+    visible: "Settings|Profile"
+    timeout: 30000
+- swipe:
+    direction: UP
+- tapOn:
+    text: "Appearance"
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn:
+    text: "Go back"
+    optional: true
+- back
+- takeScreenshot: fac-settings
+
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "View Plans"
+    direction: DOWN
+    timeout: 12000
+- tapOn: "View Plans"
+- extendedWaitUntil:
+    visible: "Membership|Plans|Trailblazer"
+    timeout: 30000
+- swipe:
+    direction: UP
+- takeScreenshot: fac-membership
+
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Help Center"
+    direction: DOWN
+    timeout: 12000
+- tapOn: "Help Center"
+- extendedWaitUntil:
+    visible: "Help"
+    timeout: 30000
+- swipe:
+    direction: UP
+- takeScreenshot: fac-help
+
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Report Bug"
+    direction: DOWN
+    timeout: 12000
+- tapOn: "Report Bug"
+- extendedWaitUntil:
+    visible: "Report"
+    timeout: 20000
+- tapOn:
+    text: "Submit bug report"
+    optional: true
+- tapOn:
+    text: "OK"
+    optional: true
+- takeScreenshot: fac-bug
+
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Submit Ticket"
+    direction: DOWN
+    timeout: 12000
+- tapOn: "Submit Ticket"
+- extendedWaitUntil:
+    visible: "Ticket"
+    timeout: 20000
+- takeScreenshot: fac-ticket
+
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Feature Requests"
+    direction: DOWN
+    timeout: 12000
+- tapOn: "Feature Requests"
+- extendedWaitUntil:
+    visible: "Feature"
+    timeout: 20000
+- takeScreenshot: fac-features

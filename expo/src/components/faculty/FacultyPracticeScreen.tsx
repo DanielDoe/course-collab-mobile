@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   ActivityIndicator,
   Pressable,
@@ -50,11 +50,11 @@ import { FacultyPracticeTopicQuestionsModal } from "./FacultyPracticeTopicQuesti
 
 type Tab = "topics" | "students" | "analytics" | "activity"
 
-const TABS: Array<{ id: Tab; label: string; icon: keyof typeof Ionicons.glyphMap }> = [
-  { id: "topics", label: "Topics", icon: "book-outline" },
-  { id: "students", label: "Students", icon: "people-outline" },
-  { id: "analytics", label: "Analytics", icon: "stats-chart-outline" },
-  { id: "activity", label: "Activity", icon: "pulse-outline" },
+const TABS: Array<{ id: Tab; label: string }> = [
+  { id: "topics", label: "Topics" },
+  { id: "students", label: "Students" },
+  { id: "analytics", label: "Stats" },
+  { id: "activity", label: "Activity" },
 ]
 
 function topicAvailability(topic: PracticeTopic, session: string) {
@@ -73,7 +73,7 @@ function formatWhen(iso: string): string {
 
 export function FacultyPracticeScreen() {
   const insets = useSafeAreaInsets()
-  const { listScrollPad } = useFacultyStickyHeaderScrollLayout()
+  const { listScrollPad } = useFacultyStickyHeaderScrollLayout({ extraBottom: 88 })
   const { tokens, styles } = useModuleTheme()
   const { scope, ready, session } = useFacultyScope()
   const { courses, openCoursePicker } = useFacultyShell()
@@ -105,6 +105,7 @@ export function FacultyPracticeScreen() {
   const [topicQuestionsTopic, setTopicQuestionsTopic] = useState<PracticeTopic | null>(null)
   const [selectedStudent, setSelectedStudent] = useState<PracticeStudentProgress | null>(null)
   const [reportStudent, setReportStudent] = useState<PracticeStudentProgress | null>(null)
+  const listRef = useRef<ScrollView>(null)
 
   const uniqueSessions = useMemo(
     () => sessions.filter((session, index, list) => list.findIndex((row) => row.code === session.code) === index),
@@ -123,8 +124,8 @@ export function FacultyPracticeScreen() {
     if (!scope) return
     setError("")
     const [studentRows, analyticsData, sessionsRes] = await Promise.all([
-      instructorApi.getPracticeStudentProgress(scope).catch(() => []),
-      instructorApi.getPracticeAnalytics(scope).catch(() => ({})),
+      instructorApi.getPracticeStudentProgress(scope),
+      instructorApi.getPracticeAnalytics(scope),
       instructorApi.getSessions(scope).catch(() => ({ sessions: [] as InstructorSession[] })),
     ])
     setStudents(studentRows)
@@ -153,7 +154,9 @@ export function FacultyPracticeScreen() {
 
   useEffect(() => {
     if (!ready || !scope) return
-    loadTopics().catch(() => {})
+    loadTopics().catch((err) =>
+      setError(err instanceof ApiError ? err.message : "Could not load practice topics."),
+    )
   }, [ready, scope, topicSession, loadTopics])
 
   const topicNames = useMemo(() => topics.map((t) => t.name), [topics])
@@ -187,23 +190,31 @@ export function FacultyPracticeScreen() {
 
   const topicScopeLabel = sessionFilterDisplayLabel(uniqueSessions, topicSession)
 
+  useEffect(() => {
+    listRef.current?.scrollTo({ y: 0, animated: false })
+  }, [search, tab, topicSession, studentSession, studentTopic])
+
   async function handleRefresh() {
     setRefreshing(true)
     try {
       await load()
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not refresh practice data.")
     } finally {
       setRefreshing(false)
     }
   }
 
-  async function runAction(action: () => Promise<unknown>) {
+  async function runAction(action: () => Promise<unknown>): Promise<boolean> {
     setActing(true)
     setError("")
     try {
       await action()
       await load()
+      return true
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Action failed.")
+      return false
     } finally {
       setActing(false)
     }
@@ -245,6 +256,8 @@ export function FacultyPracticeScreen() {
             <Pressable
               style={[localStyles.chooseCourseBtn, { backgroundColor: FACULTY_PRACTICE_COLOR.action }]}
               onPress={openCoursePicker}
+              accessibilityRole="button"
+              accessibilityLabel="Choose course"
             >
               <Text style={localStyles.chooseCourseBtnText}>Choose course</Text>
             </Pressable>
@@ -257,7 +270,7 @@ export function FacultyPracticeScreen() {
   return (
     <View style={styles.root}>
       <FacultyModuleStickyHeader>
-        <FacultyModuleTabBar tabs={TABS} tab={tab} onChange={setTab} scrollable />
+        <FacultyModuleTabBar tabs={TABS} tab={tab} onChange={setTab} scrollable={false} />
 
         {tab === "topics" ? (
           <FacultySearchToolbar
@@ -292,6 +305,7 @@ export function FacultyPracticeScreen() {
       </FacultyModuleStickyHeader>
 
       <ScrollView
+        ref={listRef}
         style={styles.scroll}
         contentContainerStyle={[styles.content, listScrollPad]}
         refreshControl={
@@ -321,7 +335,15 @@ export function FacultyPracticeScreen() {
               body={bankMessage || "This course does not use the shared practice bank."}
             />
           ) : filteredTopics.length === 0 ? (
-            <FacultyEmptyState icon="library-outline" title="No topics" body="No practice topics found for this scope." />
+            <FacultyEmptyState
+              icon={search.trim() ? "search-outline" : "library-outline"}
+              title={search.trim() ? "No matches" : "No topics"}
+              body={
+                search.trim()
+                  ? "Try a different search or reset your filters."
+                  : "No practice topics found for this scope."
+              }
+            />
           ) : (
             <View style={localStyles.list}>
               {filteredTopics.map((topic) => {
@@ -339,6 +361,7 @@ export function FacultyPracticeScreen() {
                         tone={avail?.is_available ? "success" : "neutral"}
                       />
                     }
+                    accessibilityLabel={`${topic.name}, ${avail?.is_available ? "Available" : "Hidden"}`}
                     onPress={() => setTopicQuestionsTopic(topic)}
                   />
                 )
@@ -348,9 +371,13 @@ export function FacultyPracticeScreen() {
         ) : tab === "students" ? (
           filteredStudents.length === 0 ? (
             <FacultyEmptyState
-              icon="people-outline"
-              title="No student progress"
-              body="Student practice activity will appear here."
+              icon={search.trim() ? "search-outline" : "people-outline"}
+              title={search.trim() ? "No matches" : "No student progress"}
+              body={
+                search.trim()
+                  ? "Try a different search or reset your filters."
+                  : "Student practice activity will appear here."
+              }
             />
           ) : (
             <View style={localStyles.list}>
@@ -367,10 +394,13 @@ export function FacultyPracticeScreen() {
                       </Text>
                     }
                     title={name}
-                    subtitle={`${practiceStudentAttempts(student)} attempts · ${Math.round(practiceStudentScore(student))}% avg${
+                    subtitle={`${practiceStudentAttempts(student)} attempt${
+                      practiceStudentAttempts(student) === 1 ? "" : "s"
+                    } · ${Math.round(practiceStudentScore(student))}% avg${
                       student.student_section ? ` · ${student.student_section}` : ""
                     }`}
                     meta={student.last_practiced ? `Last ${formatWhen(student.last_practiced)}` : undefined}
+                    accessibilityLabel={`${name}, ${practiceStudentAttempts(student)} attempts, ${Math.round(practiceStudentScore(student))} percent average`}
                     onPress={() => setSelectedStudent(student)}
                   />
                 )
@@ -474,7 +504,7 @@ export function FacultyPracticeScreen() {
           }
         }}
         onToggle={(topic, enabled) =>
-          void runAction(() => {
+          runAction(() => {
             const avail = topicAvailability(topic, topicSession)
             return instructorApi.togglePracticeTopic(scope!, {
               topicName: topic.name,
@@ -567,7 +597,7 @@ function AnalyticsTab({
           ]}
         >
           <View style={localStyles.barHead}>
-            <Text style={[type.bodyEmphasis, localStyles.barLabel, { color: native.label }]} numberOfLines={1}>
+            <Text style={[type.bodyEmphasis, localStyles.barLabel, { color: native.label }]} numberOfLines={2}>
               {row.topic}
             </Text>
             <Text style={[type.caption, localStyles.barValue, { color: native.secondaryLabel }]}>

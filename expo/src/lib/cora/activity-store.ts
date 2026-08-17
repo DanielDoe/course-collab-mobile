@@ -4,6 +4,10 @@ import type { CoraActivityEntry, CoraConfirmActionResult, CoraProposalTool } fro
 const ACTIVITY_KEY = "cora_action_activity_v1"
 const MAX_ENTRIES = 100
 
+export async function clearCoraActivity(): Promise<void> {
+  await SecureStore.deleteItemAsync(ACTIVITY_KEY)
+}
+
 export async function loadCoraActivity(): Promise<CoraActivityEntry[]> {
   try {
     const raw = await SecureStore.getItemAsync(ACTIVITY_KEY)
@@ -53,12 +57,31 @@ export function activityToolLabel(tool: CoraProposalTool): string {
       return "Published announcement"
     case "questionBank.createQuestions":
       return "Created questions"
+    case "assessment.createFromBank":
+      return "Created assessment"
+    case "message.send":
+      return "Sent message"
     case "personalFlashcards.createDeck":
       return "Created flashcard deck"
     case "personalNotes.create":
       return "Saved note"
+    case "personalCalendar.createEvents":
     case "calendar.createStudySessions":
-      return "Created study sessions"
+      return "Created calendar events"
+    case "personalPracticeQuiz.create":
+      return "Created practice quiz"
+    case "personalStudyPlan.create":
+      return "Created study plan"
+    case "syllabus.saveSection":
+      return "Saved syllabus section"
+    case "syllabus.publishSection":
+      return "Published syllabus section"
+    case "lecture.createShell":
+      return "Created lecture"
+    case "account.passwordReset.approve":
+      return "Approved password reset"
+    case "account.passwordReset.reject":
+      return "Rejected password reset"
     default:
       return "Cora action"
   }

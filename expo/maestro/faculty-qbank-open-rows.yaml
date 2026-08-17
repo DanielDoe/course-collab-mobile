@@ -1,0 +1,11 @@
+appId: com.coursecollab.app
+---
+- tapOn:
+    text: "A single-phase AC load.*"
+- waitForAnimationToEnd
+- tapOn: "Done"
+- waitForAnimationToEnd
+- tapOn:
+    text: "True or False: A lagging power factor.*"
+- waitForAnimationToEnd
+- tapOn: "Done"

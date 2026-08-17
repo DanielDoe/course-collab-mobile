@@ -1,0 +1,55 @@
+appId: com.coursecollab.app
+---
+- tapOn:
+    text: "Clear search"
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true
+- takeScreenshot: syllabus-list-cleared
+- swipe:
+    direction: UP
+- takeScreenshot: syllabus-list-scrolled
+- tapOn: "Course Overview, Required"
+- extendedWaitUntil:
+    visible: "Syllabus section|Quick edit|Full editor"
+    timeout: 10000
+- swipe:
+    direction: UP
+- takeScreenshot: syllabus-overview-sheet
+- tapOn: "Shown to students"
+- takeScreenshot: syllabus-overview-hidden
+- tapOn: "Hidden from students"
+- tapOn:
+    text: ".*Full editor.*"
+- takeScreenshot: syllabus-overview-editor
+- tapOn: "Done"
+- tapOn:
+    text: "Done"
+    optional: true
+
+- tapOn: "General Course Information, Required"
+- swipe:
+    direction: UP
+- takeScreenshot: syllabus-general-sheet
+- tapOn: "Done"
+
+- tapOn: "Add syllabus section"
+- tapOn: "Section title"
+- eraseText
+- inputText: "QA Syllabus Section"
+- hideKeyboard
+- tapOn: "Save"
+- swipe:
+    direction: UP
+- tapOn: "QA Syllabus Section"
+- swipe:
+    direction: UP
+- tapOn:
+    text: ".*Delete section.*"
+- takeScreenshot: syllabus-delete-confirm
+- tapOn: "Delete"
+- tapOn:
+    text: "Done"
+    optional: true
+- takeScreenshot: syllabus-final

@@ -27,14 +27,20 @@ export type StudentSession = BaseSession & {
   universityId?: number
   universityName?: string
   universityShortName?: string
+  /** First-login gate: must set a new password before dashboard. */
+  requiresPasswordChange?: boolean
 }
 
-/** Platform guest (recommendation letters, etc.). */
+/** Platform guest (recommendation letters, Cora Career, etc.). */
 export type GuestSession = BaseSession & {
   portal: "guest"
   id: string
   name: string
   databaseId: string
+  /** Guest email when returned from login/profile — used for checkout + MFA trust. */
+  email?: string
+  /** Identifier typed at login — used for MFA device trust lookup. */
+  authIdentifier?: string
   guestAccessPurpose: "recommendation_letter" | "other"
 }
 
@@ -57,6 +63,8 @@ export type FacultySession = BaseSession & {
   role?: string
   /** Username or email typed at login — used for MFA device trust lookup. */
   authIdentifier?: string
+  /** First-login gate: must set a new password before dashboard. */
+  requiresPasswordChange?: boolean
 }
 
 export type AdminSession = BaseSession & {

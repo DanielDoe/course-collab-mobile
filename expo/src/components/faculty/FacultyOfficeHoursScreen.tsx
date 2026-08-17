@@ -8,7 +8,7 @@ import { instructorApi, type OfficeHourRequest, type RegularOfficeHourSlot } fro
 import { useFacultyScope } from "../../hooks/useFacultyScope"
 import { useFacultyShell } from "../../context/FacultyShellContext"
 import { useNotificationModuleRefresh } from "../../lib/notifications/notification-events"
-import { NATIVE } from "../../constants/faculty-native-theme"
+import { NATIVE, SYSTEM } from "../../constants/faculty-native-theme"
 import { FacultyEmptyState } from "./faculty-shared"
 import { FacultyOfficeHourCreateModal } from "./FacultyOfficeHourCreateModal"
 import { FacultyOfficeHoursActionSheet } from "./FacultyOfficeHoursActionSheet"
@@ -58,9 +58,11 @@ export function FacultyOfficeHoursScreen() {
   const [actionSheetOpen, setActionSheetOpen] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
   const [regularHoursOpen, setRegularHoursOpen] = useState(false)
+  const [error, setError] = useState("")
 
   const load = useCallback(async () => {
     if (!scope) return
+    setError("")
     setRequests(await instructorApi.getOfficeHours(scope))
   }, [scope])
 
@@ -80,16 +82,20 @@ export function FacultyOfficeHoursScreen() {
     }
     setLoading(true)
     setLoadingSchedule(true)
-    Promise.all([load(), loadRegularHours()]).finally(() => {
-      setLoading(false)
-      setLoadingSchedule(false)
-    })
+    Promise.all([load(), loadRegularHours()])
+      .catch((err) => setError(err instanceof ApiError ? err.message : "Could not load office hours."))
+      .finally(() => {
+        setLoading(false)
+        setLoadingSchedule(false)
+      })
   }, [ready, load, loadRegularHours])
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true)
     try {
       await Promise.all([load(), loadRegularHours(), refreshFacultyData?.(undefined, { force: true })])
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not refresh office hours.")
     } finally {
       setRefreshing(false)
     }
@@ -192,6 +198,11 @@ export function FacultyOfficeHoursScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
+        {error ? (
+          <View style={styles.errorBox}>
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        ) : null}
         {tab === "schedule" ? (
           loadingSchedule ? (
             <View style={styles.loadingBox}>
@@ -257,7 +268,20 @@ export function FacultyOfficeHoursScreen() {
                     key={request.id}
                     request={request}
                     onPress={() => openDetail(request)}
-                    onDecline={() => void updateStatus(request, "declined")}
+                    onDecline={() => {
+                      AppAlert.alert(
+                        "Decline this request?",
+                        "The student will see the declined status.",
+                        [
+                          { text: "Cancel", style: "cancel" },
+                          {
+                            text: "Decline",
+                            style: "destructive",
+                            onPress: () => void updateStatus(request, "declined"),
+                          },
+                        ],
+                      )
+                    }}
                   />
                 ))}
               </View>
@@ -390,6 +414,12 @@ const styles = StyleSheet.create({
   content: { padding: NATIVE.pagePadding, gap: 14 },
   center: { flex: 1, justifyContent: "center", padding: 24},
   loadingBox: { paddingVertical: 48, alignItems: "center" },
+  errorBox: {
+    backgroundColor: SYSTEM.red.soft,
+    borderRadius: NATIVE.sectionRadius,
+    padding: 12,
+  },
+  errorText: { color: SYSTEM.red.color, fontSize: 14, lineHeight: 20 },
   requestList: { gap: 12 },
   scheduleList: { gap: 12 },
   editAllBtn: {

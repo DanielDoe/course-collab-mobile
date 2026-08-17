@@ -61,7 +61,7 @@ const CAPABILITY_ICON_SIZE = 30
 const CAPABILITY_ICON_MARGIN = 2
 const CAPABILITY_TITLE_LINE_HEIGHT = 22
 const CAPABILITY_TAGLINE_LINE_HEIGHT = 18
-const CAPABILITY_TAGLINE_LINES = 2
+const CAPABILITY_TAGLINE_LINES = 3
 const CAPABILITY_TAGLINE_BLOCK_HEIGHT = CAPABILITY_TAGLINE_LINE_HEIGHT * CAPABILITY_TAGLINE_LINES
 const CAPABILITY_CARD_HEIGHT =
   CAPABILITY_CARD_PADDING * 2 +
@@ -104,6 +104,7 @@ function CapabilityCard({
           opacity: pressed ? NATIVE.pressedOpacity : 1,
         },
       ]}
+      accessibilityRole="button"
       accessibilityLabel={`${capability.label}: ${capability.tagline}`}
     >
       <SolidListThumbTile thumb={accent.thumb} icon={capability.icon} size="compact" style={localStyles.capIconTile} />
@@ -331,6 +332,12 @@ export function FacultyCoraScreen() {
         ) : null}
 
         {contextReady ? (
+      <View
+        style={localStyles.flex}
+        pointerEvents={chatOpen ? "none" : "auto"}
+        accessibilityElementsHidden={chatOpen}
+        importantForAccessibility={chatOpen ? "no-hide-descendants" : "auto"}
+      >
       <ScrollView
         style={localStyles.flex}
         contentContainerStyle={[
@@ -391,6 +398,7 @@ export function FacultyCoraScreen() {
                         key={insight.id}
                         title={insight.title}
                         subtitle={insight.body}
+                        subtitleLines={3}
                         icon={
                           insight.severity === "warning"
                             ? "alert-circle-outline"
@@ -455,9 +463,7 @@ export function FacultyCoraScreen() {
           </CommSectionFooter>
         </CoraHubEnter>
       </ScrollView>
-        ) : null}
 
-      {contextReady ? (
       <Pressable
         onPress={() => openChat("assistant", undefined, { resume: true })}
         style={[
@@ -472,9 +478,10 @@ export function FacultyCoraScreen() {
       >
         <Ionicons name="chatbubbles-outline" size={24} color={coraAction.ink} />
       </Pressable>
-      ) : null}
 
-      {contextReady ? <FacultyCoraExitDock onExit={goBack} /> : null}
+      <FacultyCoraExitDock onExit={goBack} />
+      </View>
+        ) : null}
 
       {contextReady ? (
       <FacultyCoraCapabilitySheet

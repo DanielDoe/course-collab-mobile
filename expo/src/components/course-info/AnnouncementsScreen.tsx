@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useRouter } from "expo-router"
-import { ModuleScreen, ModuleSection } from "../modules/ModuleScreen"
+import { ModuleScreen, ModuleSection, ModuleShowMoreRow } from "../modules/ModuleScreen"
 import { useSession } from "../../context/SessionProvider"
 import { ApiError, type Announcement } from "../../lib/student-api"
 import type { StudentSession } from "../../lib/session"
@@ -43,6 +43,9 @@ function formatRelativeDate(value?: string): string {
   if (days < 7) return `${days}d ago`
   return formatListDate(value) ?? ""
 }
+
+/** ModuleScreen renders inside a plain ScrollView — page the list instead of mounting every row. */
+const PAGE_SIZE = 20
 
 const FILTER_OPTIONS: Array<{
   id: AnnouncementFilter
@@ -136,6 +139,7 @@ export function AnnouncementsScreen() {
   const [filter, setFilter] = useState<AnnouncementFilter>("all")
   const [sort, setSort] = useState<AnnouncementSort>("smart")
   const [filterSheetOpen, setFilterSheetOpen] = useState(false)
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
 
   const load = useCallback(async () => {
     if (!session) return
@@ -167,6 +171,12 @@ export function AnnouncementsScreen() {
     () => applyAnnouncementListQuery(announcements, { search, filter, sort }),
     [announcements, search, filter, sort],
   )
+
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE)
+  }, [search, filter, sort])
+
+  const visible = useMemo(() => filtered.slice(0, visibleCount), [filtered, visibleCount])
 
   const hasActiveQuery = Boolean(search.trim()) || filter !== "all" || sort !== "smart"
   const filtersActive = filter !== "all" || sort !== "smart"
@@ -254,12 +264,12 @@ export function AnnouncementsScreen() {
         />
       ) : (
         <ModuleSection>
-          {filtered.map((item, index) => (
+          {visible.map((item, index) => (
             <AnnouncementListCard
               key={item.id}
               item={item}
               index={index}
-              last={index === filtered.length - 1}
+              last={index === visible.length - 1}
               onPress={() =>
                 router.push({
                   pathname: "/announcements/[id]",
@@ -268,6 +278,10 @@ export function AnnouncementsScreen() {
               }
             />
           ))}
+          <ModuleShowMoreRow
+            remaining={filtered.length - visible.length}
+            onPress={() => setVisibleCount((prev) => prev + PAGE_SIZE)}
+          />
         </ModuleSection>
       )}
     </ModuleScreen>

@@ -61,6 +61,8 @@ const CAPABILITY_CARD_GAP = 8
 const CAPABILITY_ICON_SIZE = 30
 const CAPABILITY_ICON_MARGIN = 2
 const CAPABILITY_TITLE_LINE_HEIGHT = 22
+const CAPABILITY_TITLE_LINES = 2
+const CAPABILITY_TITLE_BLOCK_HEIGHT = CAPABILITY_TITLE_LINE_HEIGHT * CAPABILITY_TITLE_LINES
 const CAPABILITY_TAGLINE_LINE_HEIGHT = 18
 const CAPABILITY_TAGLINE_LINES = 2
 const CAPABILITY_TAGLINE_BLOCK_HEIGHT = CAPABILITY_TAGLINE_LINE_HEIGHT * CAPABILITY_TAGLINE_LINES
@@ -69,7 +71,7 @@ const CAPABILITY_CARD_HEIGHT =
   CAPABILITY_ICON_SIZE +
   CAPABILITY_ICON_MARGIN +
   CAPABILITY_CARD_GAP +
-  CAPABILITY_TITLE_LINE_HEIGHT +
+  CAPABILITY_TITLE_BLOCK_HEIGHT +
   CAPABILITY_CARD_GAP +
   CAPABILITY_TAGLINE_BLOCK_HEIGHT
 
@@ -114,7 +116,7 @@ function CapabilityCard({
       <View style={styles.capTitleSlot}>
         <Text
           style={[type.bodyEmphasis, styles.capTitleText, { color: native.label }]}
-          numberOfLines={1}
+          numberOfLines={2}
         >
           {capability.label}
         </Text>
@@ -238,6 +240,8 @@ function TodayRecommendationsPager({
 type Props = {
   session: StudentSession
   creditsLabel: string
+  creditsSubtitle?: string
+  onCreditsPress?: () => void
   recommendations: AiTutorRecommendation[]
   loading: boolean
   refreshing: boolean
@@ -260,6 +264,8 @@ type Props = {
 export function StudentCoraHubView({
   session,
   creditsLabel,
+  creditsSubtitle = "Monthly Cora Credits",
+  onCreditsPress,
   recommendations,
   loading,
   refreshing,
@@ -374,13 +380,19 @@ export function StudentCoraHubView({
           </CoraHubEnter>
 
           <CoraHubEnter enabled={animateCards} index={nextCardEnterIndex()} reduceMotion={reduceMotion}>
-            <View style={[styles.noticeBox, materialStyle, { backgroundColor: cardBg }]}>
+            <Pressable
+              onPress={onCreditsPress}
+              style={[styles.noticeBox, materialStyle, { backgroundColor: cardBg }]}
+            >
               <SolidListThumbTile thumb={CORA_HOME_CREDITS_THUMB} icon="sparkles-outline" size="compact" />
               <View style={styles.creditsCopy}>
                 <Text style={[type.bodyEmphasis, { color: native.label }]}>{creditsLabel}</Text>
-                <Text style={[type.caption, { color: native.secondaryLabel }]}>Weekly message allowance</Text>
+                <Text style={[type.caption, { color: native.secondaryLabel }]}>{creditsSubtitle}</Text>
               </View>
-            </View>
+              {onCreditsPress ? (
+                <Ionicons name="chevron-forward" size={16} color={native.tertiaryLabel} />
+              ) : null}
+            </Pressable>
           </CoraHubEnter>
 
           {loading ? (
@@ -558,8 +570,8 @@ const styles = StyleSheet.create({
     marginBottom: CAPABILITY_ICON_MARGIN,
   },
   capTitleSlot: {
-    minHeight: CAPABILITY_TITLE_LINE_HEIGHT,
-    justifyContent: "center",
+    minHeight: CAPABILITY_TITLE_BLOCK_HEIGHT,
+    justifyContent: "flex-start",
   },
   capTitleText: {
     lineHeight: CAPABILITY_TITLE_LINE_HEIGHT,

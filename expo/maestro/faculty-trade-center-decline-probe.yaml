@@ -1,0 +1,56 @@
+appId: com.coursecollab.app
+---
+- runFlow: faculty-deep-students-setup.yaml
+- tapOn:
+    id: "open-navigation-menu"
+- waitForAnimationToEnd
+- scrollUntilVisible:
+    element: "Trade Center"
+    direction: DOWN
+    timeout: 30000
+- tapOn: "Trade Center"
+- tapOn:
+    text: "Close menu"
+    optional: true
+- extendedWaitUntil:
+    visible: "Overview|Donations tab|Trade center actions"
+    timeout: 45000
+- tapOn: "Donations tab"
+- extendedWaitUntil:
+    visible: "QA Donor One|QA Donor Two|Filter donation"
+    timeout: 20000
+- takeScreenshot: decline-probe-list
+- tapOn: "QA Donor One"
+- extendedWaitUntil:
+    visible: "Donation request|Approve|Decline|Request details"
+    timeout: 15000
+- takeScreenshot: decline-probe-sheet
+- tapOn: "Decline"
+- extendedWaitUntil:
+    visible: "Decline request\\?|Reason \\(optional\\)|Cancel"
+    timeout: 10000
+- takeScreenshot: decline-probe-overlay
+- tapOn: "Reason (optional)"
+- inputText: "Simulator decline probe"
+- hideKeyboard
+- tapOn: "Decline"
+- extendedWaitUntil:
+    visible: "Declined|Rejected|QA Donor"
+    timeout: 15000
+- takeScreenshot: decline-probe-after
+- tapOn:
+    text: "OK"
+    optional: true
+- tapOn: "QA Donor Two"
+- extendedWaitUntil:
+    visible: "Donation request|Decline"
+    timeout: 15000
+- tapOn: "Decline"
+- extendedWaitUntil:
+    visible: "Decline request\\?|Cancel"
+    timeout: 10000
+- tapOn: "Decline"
+- extendedWaitUntil:
+    visible: "Declined|Rejected|QA Donor"
+    timeout: 15000
+- takeScreenshot: decline-probe-second

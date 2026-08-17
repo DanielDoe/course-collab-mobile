@@ -233,9 +233,20 @@ export function blendHexTowardWhite(hex: string, weight: number): string {
 
 function buildNavTokens(palette: ThemePalette) {
   const { accent, isDark, selected, tint } = palette
-  /** Side nav active rows — themed tint, never heavy brand accent on pale wash. */
-  const activeFg = isDark ? blendHexTowardWhite(accent, 0.1) : blendHexTowardWhite(accent, 0.34)
-  const activeBg = isDark ? selected : tint || selected
+  /**
+   * Side nav active rows — soft wash + readable label.
+   * Dark themes often set `selected` to a solid near-accent block (e.g. Carbon #312E81);
+   * pairing that with an accent-colored label washes out the text. Prefer a translucent
+   * accent wash and a lightened label so selection stays visible without killing contrast.
+   */
+  if (isDark) {
+    const selectedIsSoftWash = selected.trimStart().startsWith("rgba")
+    const activeBg = selectedIsSoftWash ? selected : hexToRgba(accent, 0.18)
+    const activeFg = blendHexTowardWhite(accent, 0.58)
+    return { activeFg, activeBg }
+  }
+  const activeFg = blendHexTowardWhite(accent, 0.34)
+  const activeBg = tint || selected
   return { activeFg, activeBg }
 }
 

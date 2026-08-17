@@ -1,0 +1,42 @@
+appId: com.coursecollab.app
+---
+# Drawer auto-scrolls to the active admin item. Flick the list back to Course.
+- swipe:
+    start: 22%, 30%
+    end: 22%, 88%
+- swipe:
+    start: 22%, 30%
+    end: 22%, 88%
+- swipe:
+    start: 22%, 30%
+    end: 22%, 88%
+- swipe:
+    start: 22%, 30%
+    end: 22%, 88%
+- swipe:
+    start: 22%, 30%
+    end: 22%, 88%
+- swipe:
+    start: 22%, 30%
+    end: 22%, 88%
+- swipe:
+    start: 22%, 30%
+    end: 22%, 88%
+- swipe:
+    start: 22%, 30%
+    end: 22%, 88%
+- swipe:
+    start: 22%, 30%
+    end: 22%, 88%
+- swipe:
+    start: 22%, 30%
+    end: 22%, 88%
+- takeScreenshot: groups-drawer-top
+- tapOn: "Manage Groups"
+- tapOn:
+    text: "Close menu"
+    optional: true
+- extendedWaitUntil:
+    visible: "Search groups, leaders…|No groups|Create group or project"
+    timeout: 30000
+- takeScreenshot: groups-page

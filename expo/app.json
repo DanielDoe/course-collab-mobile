@@ -14,17 +14,28 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.coursecollab.app",
+      "buildNumber": "1",
       "icon": "./assets/CourseCollab.icon",
       "backgroundColor": "#F2F2F7",
+      "associatedDomains": [
+        "applinks:coursecollab.vercel.app",
+        "applinks:course-collab.com",
+        "applinks:www.course-collab.com"
+      ],
       "infoPlist": {
         "UIUserInterfaceStyle": "Automatic",
+        "LSMinimumSystemVersion": "15.1",
         "NSCalendarsUsageDescription": "CourseCollab adds your class schedule to Apple Calendar and sends class reminders.",
         "NSCalendarsFullAccessUsageDescription": "CourseCollab adds your class schedule to Apple Calendar and sends class reminders.",
-        "NSRemindersUsageDescription": "CourseCollab can remind you before class starts.",
-        "NSRemindersFullAccessUsageDescription": "CourseCollab can remind you before class starts.",
         "NSUserNotificationsUsageDescription": "CourseCollab sends class reminders, quiz deadlines, announcements, and course messages.",
         "NSSpeechRecognitionUsageDescription": "CourseCollab uses speech recognition for live captions in AI Notetaker and voice dictation in Cora.",
         "NSMicrophoneUsageDescription": "CourseCollab needs microphone access for lecture recording in AI Notetaker and voice dictation in Cora.",
+        "NSCameraUsageDescription": "CourseCollab uses the camera when you choose to capture and upload coursework or profile content.",
+        "NSPhotoLibraryUsageDescription": "CourseCollab needs photo access when you choose to upload coursework or profile content.",
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": false,
+          "NSAllowsLocalNetworking": false
+        },
         "UIBackgroundModes": ["remote-notification"]
       }
     },
@@ -34,6 +45,7 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.coursecollab.app",
+      "versionCode": 1,
       "permissions": [
         "POST_NOTIFICATIONS",
         "READ_CALENDAR",
@@ -43,8 +55,7 @@
     },
     "extra": {
       "appUrl": "https://coursecollab.vercel.app",
-      "localApiUrl": "http://127.0.0.1:3000",
-      "lanApiUrl": "http://10.32.182.122:3000"
+      "environment": "production"
     },
     "plugins": [
       "expo-router",
@@ -69,8 +80,7 @@
       [
         "expo-calendar",
         {
-          "calendarPermission": "CourseCollab adds your recurring class schedule to Apple Calendar.",
-          "remindersPermission": "CourseCollab can remind you before each class."
+          "calendarPermission": "CourseCollab adds your recurring class schedule to Apple Calendar."
         }
       ],
       [
@@ -82,7 +92,14 @@
       ],
       "expo-speech-recognition",
       "expo-audio",
-      "expo-system-ui"
+      "expo-system-ui",
+      [
+        "@stripe/stripe-react-native",
+        {
+          "merchantIdentifier": "merchant.com.coursecollab.app",
+          "enableGooglePay": true
+        }
+      ]
     ]
   }
 }

@@ -41,6 +41,8 @@ export function filterProgressReviews(
   )
 }
 
+export type AtRiskKind = "attendance_flag" | "chronic_absence" | "low_practice"
+
 export type AtRiskStudentRow = {
   id: string
   name: string
@@ -48,6 +50,18 @@ export type AtRiskStudentRow = {
   reason: string
   detail?: string
   tone: "warning" | "danger"
+  kind: AtRiskKind
+  studentDbId?: number
+  practiceStudent?: PracticeStudentProgress
+  attendance?: AttendanceStudentSummary
+}
+
+export function atRiskSignalsForStudent(
+  rows: AtRiskStudentRow[],
+  selected: AtRiskStudentRow | null,
+): AtRiskStudentRow[] {
+  if (!selected) return []
+  return rows.filter((row) => row.id === selected.id)
 }
 
 export function buildAtRiskRows(
@@ -59,7 +73,8 @@ export function buildAtRiskRows(
   const seen = new Set<string>()
 
   for (const student of attendanceFlagged ?? []) {
-    const key = String(student.student_id ?? student.id ?? student.full_name)
+    const dbId = Number(student.id)
+    const key = Number.isFinite(dbId) ? String(dbId) : String(student.student_id ?? student.full_name)
     if (seen.has(key)) continue
     seen.add(key)
     rows.push({
@@ -70,11 +85,16 @@ export function buildAtRiskRows(
         student.attendance_percentage != null
           ? `${Math.round(student.attendance_percentage)}% attendance`
           : undefined,
-      tone: "danger"})
+      tone: "danger",
+      kind: "attendance_flag",
+      studentDbId: Number.isFinite(dbId) ? dbId : undefined,
+      attendance: student,
+    })
   }
 
   for (const student of attendanceChronic ?? []) {
-    const key = String(student.student_id ?? student.id ?? student.full_name)
+    const dbId = Number(student.id)
+    const key = Number.isFinite(dbId) ? String(dbId) : String(student.student_id ?? student.full_name)
     if (seen.has(key)) continue
     seen.add(key)
     rows.push({
@@ -82,11 +102,16 @@ export function buildAtRiskRows(
       name: student.full_name ?? "Student",
       reason: "Chronic absence",
       detail: student.absent_count != null ? `${student.absent_count} absences` : undefined,
-      tone: "danger"})
+      tone: "danger",
+      kind: "chronic_absence",
+      studentDbId: Number.isFinite(dbId) ? dbId : undefined,
+      attendance: student,
+    })
   }
 
   for (const student of lowPractice) {
-    const key = String(student.student_id)
+    const dbId = Number(student.student_id)
+    const key = Number.isFinite(dbId) ? String(dbId) : String(student.student_name ?? student.full_name ?? "unknown")
     if (seen.has(key)) continue
     seen.add(key)
     const score = student.avg_score ?? 0
@@ -96,7 +121,11 @@ export function buildAtRiskRows(
       section: student.student_section ?? student.session,
       reason: "Low practice score",
       detail: `${Math.round(score)}% average · ${student.total_attempts ?? 0} attempts`,
-      tone: "warning"})
+      tone: "warning",
+      kind: "low_practice",
+      studentDbId: Number.isFinite(dbId) ? dbId : undefined,
+      practiceStudent: student,
+    })
   }
 
   return rows.sort((a, b) => a.name.localeCompare(b.name))
@@ -108,4 +137,39 @@ export function filterAtRiskRows(rows: AtRiskStudentRow[], query: string): AtRis
   return rows.filter((row) =>
     [row.name, row.section, row.reason, row.detail].filter(Boolean).join(" ").toLowerCase().includes(q),
   )
+}
+
+export type PracticeScoreBand = {
+  label: string
+  count: number
+}
+
+/** Bucket enrolled students by practice hub average score — unique to Student Progress. */
+export function buildPracticeScoreDistribution(students: PracticeStudentProgress[]): PracticeScoreBand[] {
+  const buckets = [
+    { label: "No practice", count: 0 },
+    { label: "<60%", count: 0 },
+    { label: "60–69%", count: 0 },
+    { label: "70–79%", count: 0 },
+    { label: "80%+", count: 0 },
+  ]
+
+  for (const student of students) {
+    const attempts = student.total_attempts ?? 0
+    if (attempts <= 0) {
+      buckets[0].count += 1
+      continue
+    }
+    const score = student.avg_score ?? 0
+    if (score < 60) buckets[1].count += 1
+    else if (score < 70) buckets[2].count += 1
+    else if (score < 80) buckets[3].count += 1
+    else buckets[4].count += 1
+  }
+
+  return buckets
+}
+
+export function hasPracticeScoreDistributionData(bands: PracticeScoreBand[]): boolean {
+  return bands.some((band) => band.count > 0)
 }

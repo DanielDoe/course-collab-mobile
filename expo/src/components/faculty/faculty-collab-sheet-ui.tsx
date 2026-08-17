@@ -1,17 +1,21 @@
 import {
   ActivityIndicator,
+  Keyboard,
+  Modal,
   Platform,
   Pressable,
   StyleSheet,
   Text,
   TextInput,
   View,
+  type ModalProps,
   type StyleProp,
   type TextInputProps,
   type ViewStyle,
 } from "react-native"
 import { Ionicons } from "@/components/icons/AppIcon"
-import { Children, cloneElement, Fragment, isValidElement, useMemo, type ReactElement, type ReactNode } from "react"
+import { Children, cloneElement, forwardRef, Fragment, isValidElement, useEffect, useMemo, type ReactElement, type ReactNode } from "react"
+import { useSuppressModuleSearchDock } from "../../context/ModuleSearchDockContext"
 import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
 import { BRAND } from "../../constants"
 import { MODERN, NATIVE, nativeType } from "../../constants/faculty-native-theme"
@@ -19,8 +23,7 @@ import { FacultyStatusPill } from "./faculty-shared"
 import { NativeSwitch } from "../NativeSwitch"
 import { useFacultySheetTones, useSheetSurface } from "../../lib/themed-sheet-tones"
 import { useNativeType, semanticSoft } from "../../lib/themed-module-theme"
-import { hexToRgba } from "../../constants/app-themes"
-import type { AppThemeTokens } from "../../constants/app-themes"
+import { hexToRgba, type AppThemeTokens } from "../../constants/app-themes"
 import { AppButton } from "../theme/AppButton"
 import { FACULTY_SHEET_COLOR } from "../../lib/faculty-sheet-theme"
 import { facultySheetSolidAccent, FACULTY_SHEET_SOLID } from "../../lib/faculty-sheet-accents"
@@ -31,7 +34,7 @@ import { SolidListThumbTile } from "../theme/SolidListThumbTile"
 export type { FacultySheetTone } from "../../lib/themed-sheet-tones"
 import type { FacultySheetTone } from "../../lib/themed-sheet-tones"
 import { useModuleTheme } from "../../lib/themed-module-shell"
-import { GlassSheetBackground, useGlassChromeActive } from "../theme/GlassSurface"
+import { GlassSheetBackground, useThemedGlassSheets } from "../theme/GlassSurface"
 import { GlassSheetHandle } from "../theme/GlassActionSheetMenu"
 import { AppErrorNotice } from "../errors/AppErrorNotice"
 
@@ -51,7 +54,8 @@ export type FacultySheetSurfaces = {
 export function useFacultySheetSurfaces(): FacultySheetSurfaces {
   const native = useThemedNative()
   const tokens = useAppThemeTokens()
-  const isGlass = useGlassChromeActive()
+  /** Sheet-only — do not reuse `useGlassChromeActive()` (nav headers are separate). */
+  const isGlass = useThemedGlassSheets()
 
   return useMemo(() => {
     if (!isGlass) {
@@ -65,14 +69,17 @@ export function useFacultySheetSurfaces(): FacultySheetSurfaces {
       }
     }
 
-    const line = tokens.isDark ? "rgba(255, 255, 255, 0.12)" : "rgba(0, 0, 0, 0.08)"
+    const line = tokens.glassBorder ?? tokens.border
+    const cardBg =
+      tokens.surfaceGlass ??
+      hexToRgba(native.secondaryGrouped, tokens.isDark ? 0.82 : 0.94)
     return {
       isGlass: true,
       rootBg: "transparent",
-      cardBg: tokens.isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(255, 255, 255, 0.55)",
+      cardBg,
       cardBorder: line,
-      groupedBg: tokens.isDark ? "rgba(255, 255, 255, 0.06)" : "rgba(255, 255, 255, 0.42)",
-      pressedBg: tokens.isDark ? "rgba(255, 255, 255, 0.12)" : "rgba(118, 118, 128, 0.16)",
+      groupedBg: hexToRgba(native.groupedBackground, tokens.isDark ? 0.55 : 0.72),
+      pressedBg: native.fill,
     }
   }, [isGlass, native, tokens])
 }
@@ -105,8 +112,47 @@ export function FacultySheetContainer({
   )
 }
 
+/** Page-sheet host that hides the module search dock so sheet fields receive IME. */
+export function FacultySheetModal({
+  visible,
+  onRequestClose,
+  children,
+  animationType = "slide",
+  presentationStyle = "pageSheet",
+  containerStyle,
+  menuSheet,
+}: {
+  visible: boolean
+  onRequestClose: () => void
+  children: ReactNode
+  animationType?: ModalProps["animationType"]
+  presentationStyle?: ModalProps["presentationStyle"]
+  containerStyle?: StyleProp<ViewStyle>
+  menuSheet?: boolean
+}) {
+  useSuppressModuleSearchDock(visible)
+  useEffect(() => {
+    if (visible) Keyboard.dismiss()
+  }, [visible])
+
+  return (
+    <Modal
+      visible={visible}
+      animationType={animationType}
+      presentationStyle={presentationStyle}
+      onRequestClose={onRequestClose}
+    >
+      {visible ? (
+        <FacultySheetContainer style={containerStyle} menuSheet={menuSheet}>
+          {children}
+        </FacultySheetContainer>
+      ) : null}
+    </Modal>
+  )
+}
+
 const sheetContainerStyles = StyleSheet.create({
-  flex: { flex: 1 },
+  flex: { flex: 1, position: "relative" },
 })
 
 /** @deprecated Use useFacultySheetTones() — static map is light-mode only. */
@@ -130,6 +176,8 @@ type ChromeProps = {
   rightSlot?: ReactNode
   /** Overrides theme accent for the Done action. */
   accentColor?: string
+  /** iOS pageSheet already provides a system grabber — skip custom handle and surface band. */
+  pageSheet?: boolean
 }
 
 /** pageSheet modals already sit below the status bar — cap top gutter to handle room only. */
@@ -138,37 +186,65 @@ export function facultySheetTopInset(rawInset: number): number {
   return Math.max(rawInset, 8)
 }
 
-export function FacultySheetChrome({ topInset, title, subtitle, onClose, rightSlot, accentColor }: ChromeProps) {
+export function FacultySheetChrome({
+  topInset,
+  title,
+  subtitle,
+  onClose,
+  rightSlot,
+  accentColor,
+  pageSheet = false,
+}: ChromeProps) {
   const tokens = useAppThemeTokens()
   const native = useThemedNative()
   const surfaces = useFacultySheetSurfaces()
-  const doneColor = accentColor ?? FACULTY_SHEET_COLOR.link
+  const doneColor = accentColor ?? native.tint
+  const showHandle = !pageSheet
 
   return (
     <View
       style={[
         chromeStyles.wrap,
+        pageSheet && chromeStyles.wrapPageSheet,
         {
-          paddingTop: facultySheetTopInset(topInset) + 6,
+          paddingTop: pageSheet ? 8 : facultySheetTopInset(topInset) + 6,
           borderBottomColor: surfaces.cardBorder,
-          backgroundColor: surfaces.isGlass ? "transparent" : tokens.surface,
+          backgroundColor: pageSheet
+            ? "transparent"
+            : surfaces.isGlass
+              ? "transparent"
+              : tokens.surface,
         },
       ]}
     >
-      {surfaces.isGlass ? (
-        <GlassSheetHandle />
-      ) : (
-        <View style={chromeStyles.handleWrap}>
-          <View style={[chromeStyles.handle, { backgroundColor: tokens.textMuted, opacity: 0.35 }]} />
-        </View>
-      )}
-      <View style={chromeStyles.titleRow}>
-        <Pressable onPress={onClose} hitSlop={8} accessibilityRole="button" accessibilityLabel="Done">
+      {showHandle ? (
+        surfaces.isGlass ? (
+          <GlassSheetHandle />
+        ) : (
+          <View style={chromeStyles.handleWrap}>
+            <View style={[chromeStyles.handle, { backgroundColor: tokens.textMuted, opacity: 0.35 }]} />
+          </View>
+        )
+      ) : null}
+      <View style={[chromeStyles.titleRow, pageSheet && chromeStyles.titleRowPageSheet]}>
+        <Pressable
+          onPress={onClose}
+          hitSlop={8}
+          style={chromeStyles.doneBtnWrap}
+          accessibilityRole="button"
+          accessibilityLabel="Done"
+        >
           <Text style={[chromeStyles.doneBtn, { color: doneColor }]} numberOfLines={1}>
             Done
           </Text>
         </Pressable>
-        <Text style={[chromeStyles.title, { color: native.label }]} numberOfLines={1} ellipsizeMode="tail">
+        <Text
+          style={[chromeStyles.title, { color: native.label }]}
+          numberOfLines={1}
+          ellipsizeMode="tail"
+          accessibilityRole="header"
+          onPress={() => Keyboard.dismiss()}
+        >
           {title}
         </Text>
         <View style={chromeStyles.side}>{rightSlot ?? null}</View>
@@ -548,7 +624,13 @@ export function FacultySheetSaveChip({ saving, onPress }: { saving?: boolean; on
   const sheet = useCollabSheetStyles()
 
   return (
-    <Pressable style={sheet.saveChip} disabled={saving} onPress={onPress}>
+    <Pressable
+      style={sheet.saveChip}
+      disabled={saving}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel="Save"
+    >
       {saving ? (
         <ActivityIndicator size="small" color="#ffffff" />
       ) : (
@@ -693,11 +775,15 @@ export function FacultySheetSubmitButton({
   onPress,
   disabled,
   loading,
+  testID,
+  accessibilityLabel,
 }: {
   label: string
   onPress: () => void
   disabled?: boolean
   loading?: boolean
+  testID?: string
+  accessibilityLabel?: string
 }) {
   const sheet = useCollabSheetStyles()
 
@@ -710,6 +796,10 @@ export function FacultySheetSubmitButton({
       ]}
       disabled={disabled || loading}
       onPress={onPress}
+      testID={testID ?? "faculty-sheet-submit"}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel ?? `Submit ${label}`}
+      accessibilityState={{ disabled: Boolean(disabled || loading), busy: Boolean(loading) }}
     >
       {loading ? (
         <ActivityIndicator color={FACULTY_SHEET_COLOR.actionInk} />
@@ -747,19 +837,30 @@ export function FacultySheetToggleRow({
   const surfaces = useFacultySheetSurfaces()
 
   return (
-    <View style={[toggleStyles.row, { backgroundColor: surfaces.cardBg, borderColor: surfaces.cardBorder }]}>
+    <Pressable
+      onPress={() => {
+        if (!disabled) onValueChange(!value)
+      }}
+      disabled={disabled}
+      accessibilityRole="switch"
+      accessibilityState={{ checked: value }}
+      accessibilityLabel={title}
+      style={[toggleStyles.row, { backgroundColor: surfaces.cardBg, borderColor: surfaces.cardBorder }]}
+    >
       {icon ? <Ionicons name={icon} size={18} color={native.secondaryLabel} /> : null}
-      <View style={toggleStyles.copy}>
+      <View style={toggleStyles.copy} pointerEvents="none">
         <Text style={[type.bodyEmphasis, { fontSize: 15 }]}>{title}</Text>
         {subtitle ? <Text style={type.caption}>{subtitle}</Text> : null}
       </View>
-      <NativeSwitch
-        value={value}
-        disabled={disabled}
-        onValueChange={onValueChange}
-        activeTrackColor={FACULTY_SHEET_COLOR.link}
-      />
-    </View>
+      <View pointerEvents="none" accessible={false}>
+        <NativeSwitch
+          value={value}
+          disabled={disabled}
+          onValueChange={onValueChange}
+          activeTrackColor={FACULTY_SHEET_COLOR.link}
+        />
+      </View>
+    </Pressable>
   )
 }
 
@@ -811,6 +912,8 @@ export function FacultySheetActionRow({
       ]}
       disabled={disabled || loading}
       onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={subtitle ? `${label}. ${subtitle}` : label}
     >
       <View style={[actionRowStyles.icon, { backgroundColor: colors.iconBg }]}>
         {loading ? (
@@ -822,7 +925,9 @@ export function FacultySheetActionRow({
       <View style={actionRowStyles.copy}>
         <Text style={[actionRowStyles.label, { color: colors.text }]}>{label}</Text>
         {subtitle ? (
-          <Text style={[actionRowStyles.subtitle, { color: native.secondaryLabel }]}>{subtitle}</Text>
+          <Text style={[actionRowStyles.subtitle, { color: native.secondaryLabel }]} numberOfLines={2}>
+            {subtitle}
+          </Text>
         ) : null}
       </View>
       <Ionicons name="chevron-forward" size={16} color={native.tertiaryLabel} />
@@ -872,6 +977,8 @@ export function FacultySheetWorkflow({
           style={[workflowStyles.approveBtn, { backgroundColor: FACULTY_SHEET_COLOR.action }]}
           disabled={acting}
           onPress={onApprove}
+          accessibilityRole="button"
+          accessibilityLabel={approveLabel}
         >
           {acting ? (
             <ActivityIndicator color="#ffffff" />
@@ -886,6 +993,8 @@ export function FacultySheetWorkflow({
           style={[workflowStyles.rejectBtn, { borderColor: `${tokens.danger}33`, backgroundColor: `${tokens.danger}10` }]}
           disabled={acting}
           onPress={onReject}
+          accessibilityRole="button"
+          accessibilityLabel={rejectLabel}
         >
           <Ionicons name="close-circle-outline" size={18} color={tokens.danger} />
           <Text style={[workflowStyles.rejectText, { color: tokens.danger }]}>{rejectLabel}</Text>
@@ -905,19 +1014,19 @@ export function FacultySheetField({
 
   return (
     <View style={fieldStyles.wrap}>
-      <Text style={type.caption}>{label}</Text>
+      <Text style={type.caption} accessible={false}>
+        {label}
+      </Text>
       {children}
     </View>
   )
 }
 
 /** Themed text field — always applies readable label color in dark mode. */
-export function FacultySheetTextInput({
-  style,
-  multiline,
-  placeholderTextColor,
-  ...props
-}: TextInputProps) {
+export const FacultySheetTextInput = forwardRef<TextInput, TextInputProps>(function FacultySheetTextInput(
+  { style, multiline, placeholderTextColor, onChangeText, onEndEditing, ...props },
+  ref,
+) {
   const sheet = useCollabSheetStyles()
   const native = useThemedNative()
   const tokens = useAppThemeTokens()
@@ -925,19 +1034,28 @@ export function FacultySheetTextInput({
 
   return (
     <TextInput
+      ref={ref}
       {...props}
       multiline={multiline}
+      blurOnSubmit={props.blurOnSubmit ?? !multiline}
       placeholderTextColor={placeholderTextColor ?? placeholder}
       keyboardAppearance={tokens.isDark ? "dark" : "light"}
+      onChangeText={onChangeText}
+      onEndEditing={(event) => {
+        onEndEditing?.(event)
+        const text = event.nativeEvent.text
+        if (onChangeText && typeof text === "string") onChangeText(text)
+      }}
       style={[
         sheet.fieldInput,
+        { minHeight: 44 },
         multiline ? sheet.textArea : null,
         style,
         { color: native.label },
       ]}
     />
   )
-}
+})
 
 export function FacultySheetConfirm({
   title,
@@ -963,18 +1081,88 @@ export function FacultySheetConfirm({
         <Text style={[type.sheetTitle, confirmStyles.title]}>{title}</Text>
         <Text style={[type.secondary, confirmStyles.body]}>{body}</Text>
         <View style={confirmStyles.actions}>
-          <Pressable style={[confirmStyles.cancel, { backgroundColor: native.fill }]} onPress={onCancel}>
+          <Pressable
+            style={[confirmStyles.cancel, { backgroundColor: native.fill }]}
+            onPress={onCancel}
+            accessibilityRole="button"
+            accessibilityLabel="Cancel"
+          >
             <Text style={[type.bodyEmphasis, { color: native.secondaryLabel }]}>Cancel</Text>
           </Pressable>
           <Pressable
             style={[confirmStyles.confirm, { backgroundColor: danger ? FACULTY_SHEET_COLOR.danger : FACULTY_SHEET_COLOR.action }]}
             onPress={onConfirm}
+            accessibilityRole="button"
+            accessibilityLabel={confirmLabel}
           >
             <Text style={confirmStyles.confirmText}>{confirmLabel}</Text>
           </Pressable>
         </View>
       </View>
     </View>
+  )
+}
+
+/** Centered acknowledgment dialog — matches confirm modal chrome with a success tone. */
+export function FacultySheetAcknowledge({
+  visible,
+  title,
+  body,
+  primaryLabel,
+  onPrimary,
+  secondaryLabel = "Done",
+  onSecondary,
+  icon = "checkmark-circle",
+}: {
+  visible: boolean
+  title: string
+  body: string
+  primaryLabel: string
+  onPrimary: () => void
+  secondaryLabel?: string
+  onSecondary: () => void
+  icon?: keyof typeof Ionicons.glyphMap
+}) {
+  const native = useThemedNative()
+  const tokens = useAppThemeTokens()
+  const type = useNativeType()
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onSecondary}>
+      <Pressable
+        style={[confirmStyles.overlay, { backgroundColor: tokens.isDark ? "rgba(0,0,0,0.55)" : "rgba(15,23,42,0.35)" }]}
+        onPress={onSecondary}
+      >
+        <Pressable
+          style={[confirmStyles.card, tokens.cardShadow, { backgroundColor: native.secondaryGrouped }]}
+          onPress={() => {}}
+        >
+          <View style={[confirmStyles.iconWrap, { backgroundColor: `${tokens.success}18` }]}>
+            <Ionicons name={icon} size={28} color={tokens.success} />
+          </View>
+          <Text style={[type.sheetTitle, confirmStyles.title, { textAlign: "center" }]}>{title}</Text>
+          <Text style={[type.secondary, confirmStyles.body, { textAlign: "center", fontWeight: "500" }]}>{body}</Text>
+          <View style={confirmStyles.actions}>
+            <Pressable
+              style={[confirmStyles.cancel, { backgroundColor: native.fill, borderColor: native.separator }]}
+              onPress={onSecondary}
+              accessibilityRole="button"
+              accessibilityLabel={secondaryLabel}
+            >
+              <Text style={[type.bodyEmphasis, { color: native.secondaryLabel }]}>{secondaryLabel}</Text>
+            </Pressable>
+            <Pressable
+              style={[confirmStyles.confirm, { backgroundColor: FACULTY_SHEET_COLOR.action }]}
+              onPress={onPrimary}
+              accessibilityRole="button"
+              accessibilityLabel={primaryLabel}
+            >
+              <Text style={confirmStyles.confirmText}>{primaryLabel}</Text>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
   )
 }
 
@@ -1161,13 +1349,28 @@ const chromeStyles = StyleSheet.create({
   wrap: {
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
+  wrapPageSheet: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
   handleWrap: { alignItems: "center", paddingBottom: 8 },
   handle: { width: 40, height: 4, borderRadius: 999, backgroundColor: "#cbd5e1" },
   titleRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingBottom: 12, gap: 8 },
+  titleRowPageSheet: {
+    minHeight: 44,
+    paddingBottom: 10,
+    paddingTop: 2,
+  },
+  doneBtnWrap: {
+    minWidth: 56,
+    justifyContent: "center",
+    alignSelf: "stretch",
+  },
   doneBtn: {
     ...nativeType.body,
+    fontSize: 17,
+    lineHeight: 22,
     color: NATIVE.tint,
-    minWidth: 56},
+  },
   saveBtn: {
     ...nativeType.bodyEmphasis,
     color: NATIVE.tint,
@@ -1361,13 +1564,23 @@ const confirmStyles = StyleSheet.create({
     backgroundColor: "rgba(15,23,42,0.45)",
     alignItems: "center",
     justifyContent: "center",
-    padding: 24},
+    padding: 24,
+    zIndex: 20,
+  },
   card: {
     width: "100%",
     maxWidth: 360,
     borderRadius: 18,
     padding: 18,
     gap: 12},
+  iconWrap: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    alignSelf: "center",
+  },
   title: {},
   body: { lineHeight: 21, fontWeight: "600" },
   actions: { flexDirection: "row", gap: 10 },

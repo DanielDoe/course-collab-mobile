@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { AppAlert } from '../../../lib/app-alert'
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native"
+import { AppAlert } from "../../../lib/app-alert"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import {
   instructorAdminApi,
@@ -12,10 +12,13 @@ import {
 import type { InstructorCourse } from "../../../lib/instructor-api"
 import { FACULTY_ADMIN_COLOR } from "../../../lib/faculty-admin-theme"
 import { facultyAdminTaThumb } from "../../../lib/faculty-admin-theme"
-import { FACULTY_NAV_GROUPS } from "../../../constants/faculty-nav"
 import { NATIVE } from "../../../constants/faculty-native-theme"
 import { semanticSoft } from "../../../lib/themed-module-theme"
 import { useModuleTheme } from "../../../lib/themed-module-shell"
+import {
+  formatTaPermissionLabel,
+  TA_PERMISSION_GROUPS,
+} from "../../../lib/ta-permission-labels"
 import { FacultyStatusPill } from "../faculty-shared"
 import { FacultyAdminToggleRow } from "../faculty-admin-ui"
 import {
@@ -47,10 +50,6 @@ export type FacultyTeachingAssistantSheetProps = {
   onSaved: () => void
 }
 
-const PERMISSION_LABELS: Record<string, string> = Object.fromEntries(
-  FACULTY_NAV_GROUPS.flatMap((group) => group.items.map((item) => [item.id, item.label])),
-)
-
 function taInitials(name: string) {
   return name
     .split(/\s+/)
@@ -58,15 +57,6 @@ function taInitials(name: string) {
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase() ?? "")
     .join("")
-}
-
-function formatPermissionLabel(key: string) {
-  return (
-    PERMISSION_LABELS[key] ??
-    key
-      .replace(/[_-]+/g, " ")
-      .replace(/\b\w/g, (char) => char.toUpperCase())
-  )
 }
 
 function formatLastLogin(value?: string | null) {
@@ -207,6 +197,20 @@ export function FacultyTeachingAssistantActionSheet({
     )
   }
 
+  async function handleReactivate() {
+    if (!initial) return
+    setSubmitting(true)
+    setError("")
+    try {
+      await instructorAdminApi.updateTeachingAssistant(instructorId, initial.id, { is_active: true })
+      onSaved()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not reactivate assistant.")
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   async function togglePermission(key: string, enabled: boolean) {
     if (!initial || !permCourseId) return
     setPermSaving(key)
@@ -232,12 +236,21 @@ export function FacultyTeachingAssistantActionSheet({
     }
   }
 
-  const permissionKeys = useMemo(() => {
-    if (!permissions) return [] as string[]
-    if (permissions.keys?.length) return permissions.keys
-    if (permissions.navAccess) return Object.keys(permissions.navAccess)
-    return Object.keys(permissions.effective ?? {})
+  const permissionKeySet = useMemo(() => {
+    const keys = permissions?.keys?.length
+      ? permissions.keys
+      : Object.keys(permissions?.effective ?? permissions?.defaults ?? {})
+    return new Set(keys)
   }, [permissions])
+
+  const groupedPermissions = useMemo(
+    () =>
+      TA_PERMISSION_GROUPS.map((group) => ({
+        ...group,
+        keys: group.keys.filter((key) => permissionKeySet.has(key)),
+      })).filter((group) => group.keys.length > 0),
+    [permissionKeySet],
+  )
 
   const assignedCourses = useMemo(
     () => courses.filter((course) => courseIds.includes(course.id)),
@@ -245,6 +258,12 @@ export function FacultyTeachingAssistantActionSheet({
   )
 
   const permCourse = courses.find((course) => course.id === permCourseId)
+
+  function permissionEnabled(key: string) {
+    if (typeof permissions?.effective?.[key] === "boolean") return permissions.effective[key]
+    if (typeof permissions?.defaults?.[key] === "boolean") return permissions.defaults[key]
+    return false
+  }
 
   return (
     <GlassBottomSheetModal
@@ -274,13 +293,18 @@ export function FacultyTeachingAssistantActionSheet({
           }
         />
 
-        <View style={[collabSheetStyles.scroll, styles.scrollBody]}>
+        <ScrollView
+          style={collabSheetStyles.scroll}
+          contentContainerStyle={styles.scrollBody}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
           {error ? <FacultySheetErrorBanner message={error} /> : null}
 
           {mode === "create" ? (
             <FacultySheetHero
               title="New teaching assistant"
-              subtitle="Create login credentials, assign courses, then fine-tune module access after saving."
+              subtitle="Create login credentials and assign courses. Configure module permissions after saving."
               icon="person-add-outline"
               thumbColor={FACULTY_ADMIN_COLOR.link}
             />
@@ -440,45 +464,64 @@ export function FacultyTeachingAssistantActionSheet({
                   <ActivityIndicator color={FACULTY_ADMIN_COLOR.link} />
                   <Text style={[type.caption, { color: native.secondaryLabel }]}>Loading permissions…</Text>
                 </View>
-              ) : !permCourseId ? null : permissionKeys.length === 0 ? (
+              ) : !permCourseId ? null : groupedPermissions.length === 0 ? (
                 <Text style={[type.secondary, { color: native.secondaryLabel, paddingVertical: 8 }]}>
                   No module permissions returned for this course.
                 </Text>
               ) : (
-                <FacultySheetGroupedList>
-                  {permissionKeys.map((key, index) => {
-                    const enabled =
-                      permissions?.navAccess?.[key] ?? permissions?.effective?.[key] ?? false
-                    return (
-                      <FacultyAdminToggleRow
-                        key={key}
-                        label={formatPermissionLabel(key)}
-                        subtitle="Allow access to this faculty module"
-                        value={Boolean(enabled)}
-                        disabled={permSaving === key}
-                        isLast={index === permissionKeys.length - 1}
-                        onChange={(next) => void togglePermission(key, next)}
-                      />
-                    )
-                  })}
-                </FacultySheetGroupedList>
+                groupedPermissions.map((group) => (
+                  <View key={group.title} style={styles.permGroup}>
+                    <Text style={[type.sectionHeader, styles.permGroupTitle, { color: native.secondaryLabel }]}>
+                      {group.title}
+                    </Text>
+                    <FacultySheetGroupedList>
+                      {group.keys.map((key, index) => (
+                        <FacultyAdminToggleRow
+                          key={key}
+                          label={formatTaPermissionLabel(key)}
+                          value={permissionEnabled(key)}
+                          disabled={permSaving === key}
+                          isLast={index === group.keys.length - 1}
+                          onChange={(next) => void togglePermission(key, next)}
+                        />
+                      ))}
+                    </FacultySheetGroupedList>
+                  </View>
+                ))
               )}
             </FacultySheetSection>
           ) : null}
 
           {mode === "edit" && initial ? (
-            <Pressable
-              style={[
-                styles.deactivateBtn,
-                { backgroundColor: semanticSoft(tokens.danger, tokens.isDark) },
-              ]}
-              onPress={handleDeactivate}
-              disabled={submitting}
-            >
-              <Text style={[type.bodyEmphasis, { color: tokens.danger }]}>Deactivate Assistant</Text>
-            </Pressable>
+            initial.is_active ? (
+              <Pressable
+                style={[
+                  styles.deactivateBtn,
+                  { backgroundColor: semanticSoft(tokens.danger, tokens.isDark) },
+                ]}
+                onPress={handleDeactivate}
+                disabled={submitting}
+              >
+                <Text style={[type.bodyEmphasis, { color: tokens.danger }]}>Deactivate Assistant</Text>
+              </Pressable>
+            ) : (
+              <Pressable
+                style={[
+                  styles.reactivateBtn,
+                  { backgroundColor: semanticSoft(tokens.success, tokens.isDark) },
+                ]}
+                onPress={() => void handleReactivate()}
+                disabled={submitting}
+              >
+                {submitting ? (
+                  <ActivityIndicator color={tokens.success} />
+                ) : (
+                  <Text style={[type.bodyEmphasis, { color: tokens.success }]}>Reactivate Assistant</Text>
+                )}
+              </Pressable>
+            )
           ) : null}
-        </View>
+        </ScrollView>
       </GlassSheetBackground>
     </GlassBottomSheetModal>
   )
@@ -505,6 +548,14 @@ const styles = StyleSheet.create({
   permCourseChipText: {
     fontWeight: "700",
   },
+  permGroup: {
+    gap: 6,
+    marginBottom: 12,
+  },
+  permGroupTitle: {
+    textTransform: "none",
+    paddingHorizontal: 2,
+  },
   permLoading: {
     flexDirection: "row",
     alignItems: "center",
@@ -514,6 +565,14 @@ const styles = StyleSheet.create({
   deactivateBtn: {
     marginTop: 4,
     alignItems: "center",
+    paddingVertical: 14,
+    borderRadius: NATIVE.sectionRadius,
+  },
+  reactivateBtn: {
+    marginTop: 4,
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 48,
     paddingVertical: 14,
     borderRadius: NATIVE.sectionRadius,
   },

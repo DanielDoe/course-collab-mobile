@@ -36,58 +36,62 @@ export function FacultyFlashcardDeckListCard({ deck, onPress, onDelete }: Props)
   const metaLine = facultyFlashcardDeckMetaLine(deck)
 
   return (
-    <Pressable
-      style={({ pressed }) => [
+    <View
+      style={[
         styles.card,
         tokens.cardShadow,
         {
           backgroundColor: native.secondaryGrouped,
           borderColor: tokens.border,
-          opacity: pressed ? NATIVE.pressedOpacity : 1,
         },
       ]}
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={`${deck.title || "Untitled deck"}, ${status.label}`}
     >
-      <SolidListThumbTile thumb={solidThumb} icon={thumbIcon(deck)} />
+      <Pressable
+        style={({ pressed }) => [styles.cardMain, { opacity: pressed ? NATIVE.pressedOpacity : 1 }]}
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel={`${deck.title || "Untitled deck"}, ${status.label}`}
+      >
+        <SolidListThumbTile thumb={solidThumb} icon={thumbIcon(deck)} />
 
-      <View style={styles.copy}>
-        <Text style={[type.bodyEmphasis, styles.title, { color: native.label }]} numberOfLines={2}>
-          {deck.title || "Untitled deck"}
-        </Text>
-        <Text style={[type.caption, styles.topic, { color: native.secondaryLabel }]} numberOfLines={1}>
-          {deck.topic?.trim() || "Course deck"}
-        </Text>
+        <View style={styles.copy}>
+          <Text style={[type.bodyEmphasis, styles.title, { color: native.label }]} numberOfLines={2}>
+            {deck.title || "Untitled deck"}
+          </Text>
+          <Text style={[type.caption, styles.topic, { color: native.secondaryLabel }]} numberOfLines={1}>
+            {deck.topic?.trim() || "Course deck"}
+          </Text>
 
-        <View style={styles.statusRow}>
-          <View style={styles.statusMain}>
-            <Ionicons
-              name={deck.isPublished ? "checkmark-circle" : "ellipse"}
-              size={deck.isPublished ? 14 : 8}
-              color={status.color}
-              style={deck.isPublished ? undefined : styles.statusDot}
-            />
-            <Text style={[type.footnote, styles.statusText, { color: status.color }]}>{status.label}</Text>
-            <Text style={[type.footnote, { color: native.tertiaryLabel }]}>• {metaLine}</Text>
-            {practiceHub ? (
-              <Text style={[type.footnote, styles.statusText, { color: FACULTY_FLASHCARD_COLOR.practiceHub }]}>
-                • {practiceHub}
-              </Text>
-            ) : null}
+          <View style={styles.statusRow}>
+            <View style={styles.statusMain}>
+              <Ionicons
+                name={deck.isPublished ? "checkmark-circle" : "ellipse"}
+                size={deck.isPublished ? 14 : 8}
+                color={status.color}
+                style={deck.isPublished ? undefined : styles.statusDot}
+              />
+              <Text style={[type.footnote, styles.statusText, { color: status.color }]}>{status.label}</Text>
+              <Text style={[type.footnote, { color: native.tertiaryLabel }]}>• {metaLine}</Text>
+              {practiceHub ? (
+                <Text style={[type.footnote, styles.statusText, { color: FACULTY_FLASHCARD_COLOR.practiceHub }]}>
+                  • {practiceHub}
+                </Text>
+              ) : null}
+            </View>
           </View>
         </View>
-      </View>
+      </Pressable>
 
       <Pressable
         onPress={onDelete}
         hitSlop={8}
-        accessibilityLabel={`Delete ${deck.title}`}
+        accessibilityRole="button"
+        accessibilityLabel={`Delete ${deck.title || "Untitled deck"}`}
         style={styles.deleteBtn}
       >
         <Ionicons name="trash-outline" size={18} color={tokens.danger} />
       </Pressable>
-    </Pressable>
+    </View>
   )
 }
 
@@ -101,6 +105,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 12,
     minHeight: 88,
+  },
+  cardMain: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    minWidth: 0,
   },
   copy: {
     flex: 1,
@@ -137,7 +148,10 @@ const styles = StyleSheet.create({
   },
   deleteBtn: {
     flexShrink: 0,
-    padding: 4,
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
     marginTop: 2,
   },
 })

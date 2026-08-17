@@ -1,0 +1,8 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Done"
+- tapOn: "Create group or project"
+- extendedWaitUntil:
+    visible: "Create group|Create project"
+    timeout: 10000
+- takeScreenshot: groups-create-menu

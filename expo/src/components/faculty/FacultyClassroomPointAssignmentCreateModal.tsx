@@ -23,6 +23,7 @@ import {
   FACULTY_SHEET_CHIP_RADIUS,
 } from "./faculty-collab-sheet-ui"
 import { SHEET_CLASSROOM_POINTS } from "./faculty-sheet-semantics"
+import { FacultyDateTimeField } from "./FacultyNativePickers"
 
 type Scope = { instructorId: number; courseId: number }
 
@@ -132,7 +133,7 @@ export function FacultyClassroomPointAssignmentCreateModal({
     if (!neverExpires) {
       dueAt = parseDueAtInput(dueAtLocal)
       if (!dueAt) {
-        AppAlert.alert("Invalid due date", "Use format YYYY-MM-DD HH:MM (24-hour).")
+        AppAlert.alert("Invalid due date", "Pick a valid date and time.")
         return
       }
     }
@@ -180,6 +181,11 @@ export function FacultyClassroomPointAssignmentCreateModal({
                 value={title}
                 onChangeText={setTitle}
                 placeholder="Assignment title…"
+                accessibilityLabel="Assignment title"
+                testID="assignment-title"
+                keyboardType="ascii-capable"
+                autoCorrect={false}
+                autoFocus
               />
             </FacultySheetField>
             <FacultySheetField label="Description">
@@ -188,6 +194,7 @@ export function FacultyClassroomPointAssignmentCreateModal({
                 value={description}
                 onChangeText={setDescription}
                 placeholder="Instructions for students…"
+                accessibilityLabel="Description"
                 multiline
                 textAlignVertical="top"
               />
@@ -242,15 +249,14 @@ export function FacultyClassroomPointAssignmentCreateModal({
             {!neverExpires ? (
               <>
                 <FacultySheetField label="Due date & time">
-                  <FacultySheetTextInput
+                  <FacultyDateTimeField
                     value={dueAtLocal}
-                    onChangeText={setDueAtLocal}
-                    placeholder="2026-07-25 23:59"
-                    autoCapitalize="none"
-                    autoCorrect={false}
+                    onChange={setDueAtLocal}
+                    dateLabel="Due date"
+                    timeLabel="Due time"
+                    joinStyle="space"
                   />
                 </FacultySheetField>
-                <Text style={collabSheetStyles.introText}>Use your local timezone (YYYY-MM-DD HH:MM).</Text>
               </>
             ) : null}
           </FacultySheetSection>

@@ -1,5 +1,6 @@
 import { useMemo } from "react"
-import { Modal, ScrollView, StyleSheet, Text, View } from "react-native"
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native"
+import { useRouter } from "expo-router"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import type { SummerCheckpoint } from "../../lib/summer-camp-api"
@@ -16,6 +17,7 @@ import {
   FacultySheetSection,
   useCollabSheetStyles,
 } from "../faculty/faculty-collab-sheet-ui"
+import { summerModuleRoute } from "./summer-training-routes"
 
 type CheckpointVariant = "pending" | "approved"
 
@@ -24,6 +26,7 @@ type Props = {
   checkpoint: SummerCheckpoint | null
   variant: CheckpointVariant
   onClose: () => void
+  onOpenModule?: (trainingId: number, moduleId: number) => void
 }
 
 function formatAcceptedTypes(types?: string[]): string {
@@ -57,7 +60,8 @@ function statusTone(variant: CheckpointVariant): "success" | "warning" {
   return variant === "approved" ? "success" : "warning"
 }
 
-export function SummerCheckpointActionSheet({ visible, checkpoint, variant, onClose }: Props) {
+export function SummerCheckpointActionSheet({ visible, checkpoint, variant, onClose, onOpenModule }: Props) {
+  const router = useRouter()
   const collabSheetStyles = useCollabSheetStyles()
   const insets = useSafeAreaInsets()
   const native = useThemedNative()
@@ -138,8 +142,22 @@ export function SummerCheckpointActionSheet({ visible, checkpoint, variant, onCl
               <View style={styles.infoCopy}>
                 <Text style={[type.bodyEmphasis, { color: native.label }]}>Submit from your project module</Text>
                 <Text style={[type.caption, { color: native.secondaryLabel }]}>
-                  Upload the required file when you reach this checkpoint in your camp project workflow.
+                  Open the module where this checkpoint lives to upload your file.
                 </Text>
+                <Pressable
+                  style={[styles.openModuleBtn, { backgroundColor: tokens.accent }]}
+                  onPress={() => {
+                    onClose()
+                    if (onOpenModule) {
+                      onOpenModule(checkpoint.training_id, checkpoint.module_id)
+                      return
+                    }
+                    router.push(summerModuleRoute(checkpoint.training_id, checkpoint.module_id) as never)
+                  }}
+                >
+                  <Ionicons name="open-outline" size={16} color="#ffffff" />
+                  <Text style={[type.caption, { color: "#ffffff", fontWeight: "700" }]}>Open module</Text>
+                </Pressable>
               </View>
             </View>
           ) : null}
@@ -181,5 +199,15 @@ function createStyles(
       flexShrink: 0,
     },
     infoCopy: { flex: 1, gap: 4 },
+    openModuleBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      alignSelf: "flex-start",
+      marginTop: 8,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 999,
+    },
   })
 }

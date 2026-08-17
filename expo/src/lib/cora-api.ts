@@ -289,25 +289,37 @@ export function normalizeImportedProblem(problem: CoraImportedProblem): CoraImpo
   }
 }
 
-function questionImportPath(session: StudentSession, params: Record<string, string>): string {
+function questionImportPath(
+  session: StudentSession,
+  params: Record<string, string>,
+  purpose: "cora" | "messages" = "cora",
+): string {
   const search = new URLSearchParams(params)
   if (session.courseId != null && Number.isFinite(session.courseId)) {
     search.set("courseId", String(session.courseId))
   }
+  if (purpose === "messages") search.set("purpose", "messages")
   return `/api/cora/question-import?${search.toString()}`
 }
 
-export async function getCoraQuestionImportSources(session: StudentSession) {
+export async function getCoraQuestionImportSources(
+  session: StudentSession,
+  purpose: "cora" | "messages" = "cora",
+) {
   return coraRequest<{ sources: CoraQuestionImportSource[] }>(
     session,
-    questionImportPath(session, { level: "sources" }),
+    questionImportPath(session, { level: "sources" }, purpose),
   )
 }
 
-export async function getCoraQuestionImportContainers(session: StudentSession, sourceKey: string) {
+export async function getCoraQuestionImportContainers(
+  session: StudentSession,
+  sourceKey: string,
+  purpose: "cora" | "messages" = "cora",
+) {
   return coraRequest<{ containers: CoraQuestionImportContainer[] }>(
     session,
-    questionImportPath(session, { level: "containers", sourceKey }),
+    questionImportPath(session, { level: "containers", sourceKey }, purpose),
   )
 }
 
@@ -315,6 +327,7 @@ export async function getCoraQuestionImportItems(
   session: StudentSession,
   sourceKey: string,
   containerId: string,
+  purpose: "cora" | "messages" = "cora",
 ) {
   return coraRequest<{ items: CoraQuestionImportItem[] }>(
     session,
@@ -322,17 +335,19 @@ export async function getCoraQuestionImportItems(
       level: "questions",
       sourceKey,
       containerId,
-    }),
+    }, purpose),
   )
 }
 
 export async function resolveCoraQuestionImport(
   session: StudentSession,
   item: CoraQuestionImportItem,
+  purpose: "cora" | "messages" = "cora",
 ): Promise<CoraImportedProblem> {
   const body: Record<string, unknown> = {
     source: item.source,
     bankQuestionId: item.bankQuestionId,
+    purpose,
   }
   if (session.courseId != null && Number.isFinite(session.courseId)) {
     body.courseId = session.courseId

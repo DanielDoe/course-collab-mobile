@@ -19,6 +19,7 @@ import { buildFacultyCoraReviewOfflineChatReply } from "./faculty-cora-review-of
 import { buildFacultyCoraAssistantOfflineChatReply } from "./faculty-cora-assistant-offline"
 import type { CoraAccessEnvelope } from "./cora-rbac"
 import type { PreparedCoraRequest } from "./cora-rbac/prepare-request"
+import { parseCoraChatMeta } from "./cora/models"
 
 export type FacultyCoraInsight = {
   id: string
@@ -52,6 +53,19 @@ export type FacultyCoraChatResponse = {
   offline?: boolean
   rbacBlocked?: boolean
   blockReason?: string
+  scopeRedirect?: boolean
+  scopeDecision?: string
+  scopeEventId?: number | null
+  offerScopeFeedback?: boolean
+  creditsCharged?: number
+  examBlocked?: boolean
+  assessmentIntegrity?: unknown
+  assessmentTitle?: string
+  clearanceDenied?: boolean
+  profile?: import("./cora/models").CoraModelProfile
+  publicMode?: import("./cora/models").CoraPublicModeLabel
+  ui?: import("./cora/models").CoraUiPayload
+  routing?: import("./cora/models").PublicCoraRoutingMeta
 }
 
 type FacultyCoraRequestOptions = {
@@ -164,20 +178,46 @@ export const facultyCoraApi = {
     payload: {
       message: string
       capabilityId?: FacultyCoraCapabilityId
+      threadId?: string | null
       conversationHistory?: ChatMessage[]
+      confirmScopeRelated?: boolean
+      declaredAcademicContext?: string | null
+      confirmExpensiveTask?: boolean
     },
     rbac?: FacultyCoraRequestOptions,
   ): Promise<FacultyCoraChatResponse> {
     try {
-      return await instructorCoraRequest<FacultyCoraChatResponse>(
+      const history = (payload.conversationHistory ?? []).slice(-8).map((m) => ({
+        role: m.role,
+        content: m.content,
+      }))
+      const raw = await instructorCoraRequest<FacultyCoraChatResponse>(
         "/api/instructor/cora/chat",
         scope,
         {
           method: "POST",
-          body: JSON.stringify(payload),
+          body: JSON.stringify({
+            message: payload.message,
+            capabilityId: payload.capabilityId,
+            ...(payload.threadId ? { threadId: payload.threadId } : {}),
+            conversationHistory: history,
+            ...(payload.confirmScopeRelated ? { confirmScopeRelated: true } : {}),
+            ...(payload.declaredAcademicContext
+              ? { declaredAcademicContext: payload.declaredAcademicContext }
+              : {}),
+            ...(payload.confirmExpensiveTask ? { confirmExpensiveTask: true } : {}),
+          }),
         },
         rbac,
       )
+      const meta = parseCoraChatMeta(raw as unknown as Record<string, unknown>)
+      return {
+        ...raw,
+        profile: meta.profile,
+        publicMode: meta.publicMode,
+        routing: meta.routing,
+        ...(meta.ui ? { ui: meta.ui } : {}),
+      }
     } catch (err) {
       if (err instanceof ApiError && isApiRouteMissingError(err.status, err.message)) {
         if (payload.capabilityId === "insights") {

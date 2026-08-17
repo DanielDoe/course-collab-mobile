@@ -1,0 +1,34 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Michael Ayivi"
+- extendedWaitUntil:
+    visible: "Practice progress"
+    timeout: 10000
+- takeScreenshot: practice-student-michael
+- scrollUntilVisible:
+    element:
+      text: ".*Reset all practice progress.*"
+    direction: DOWN
+    timeout: 12000
+- tapOn:
+    text: ".*Reset all practice progress.*"
+- extendedWaitUntil:
+    visible: "Reset progress?"
+    timeout: 8000
+- takeScreenshot: practice-reset-confirm
+- tapOn: "Cancel"
+- tapOn: "Done"
+- tapOn: "Stats"
+- extendedWaitUntil:
+    visible: "Topic performance|No analytics yet"
+    timeout: 10000
+- takeScreenshot: practice-stats
+- scroll
+- takeScreenshot: practice-stats-rest
+- tapOn: "Activity"
+- extendedWaitUntil:
+    visible: "No recent activity|correct"
+    timeout: 10000
+- takeScreenshot: practice-activity
+- scroll
+- takeScreenshot: practice-activity-rest

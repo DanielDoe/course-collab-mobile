@@ -1,0 +1,26 @@
+appId: com.coursecollab.app
+---
+- tapOn:
+    text: "Dismiss"
+    optional: true
+- tapOn: "Topics"
+- takeScreenshot: course-notes-topics-plural
+- tapOn: "Section, All sections"
+- takeScreenshot: course-notes-topics-picker-2
+- tapOn: "Close"
+- tapOn: "Config"
+- takeScreenshot: course-notes-config-pad
+- tapOn: "All"
+- tapOn: "Search course notes…"
+- eraseText
+- inputText: "zzzqnofind"
+- tapOn: "Course Notes"
+- takeScreenshot: course-notes-search-empty-copy
+- tapOn: "Search course notes…"
+- eraseText
+- tapOn:
+    text: "Clear search"
+    optional: true
+- tapOn: "Course Notes"
+- tapOn: "Deleted"
+- takeScreenshot: course-notes-deleted-empty

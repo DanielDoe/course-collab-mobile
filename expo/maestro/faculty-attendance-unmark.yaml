@@ -1,0 +1,5 @@
+appId: com.coursecollab.app
+---
+- tapOn: "OK"
+- tapOn: "Mark Beta Tester Late"
+- waitForAnimationToEnd

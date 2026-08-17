@@ -1,0 +1,34 @@
+appId: com.coursecollab.app
+---
+- tapOn:
+    text: "Back"
+    optional: true
+- tapOn:
+    text: "Dismiss student feed info"
+    optional: true
+- tapOn: "Search title, summary, section…"
+- inputText: "zzzqnofind"
+- tapOn: "Announcements"
+- takeScreenshot: announcements-search-empty
+- tapOn:
+    text: "Clear search and filters"
+    optional: true
+- tapOn:
+    text: "Clear"
+    optional: true
+- tapOn: "Search title, summary, section…"
+- eraseText
+- inputText: "grades"
+- tapOn: "Announcements"
+- takeScreenshot: announcements-search-match
+- tapOn:
+    text: "Clear search and filters"
+    optional: true
+- tapOn:
+    text: "Clear"
+    optional: true
+- tapOn: "Open filters"
+- extendedWaitUntil:
+    visible: "Filter announcements"
+    timeout: 8000
+- takeScreenshot: announcements-filters

@@ -1,0 +1,31 @@
+appId: com.coursecollab.app
+---
+- tapOn:
+    text: "Show previous tabs"
+    optional: true
+- tapOn: "Board"
+- tapOn: "Search projects, groups…"
+- eraseText
+- inputText: "zzz"
+- tapOn: "Manage Projects"
+- takeScreenshot: projects-board-no-matches
+- tapOn: "Clear search"
+- tapOn:
+    text: "Show more tabs"
+    optional: true
+- tapOn: "Slots"
+- tapOn:
+    text: "Open filters"
+    optional: true
+- extendedWaitUntil:
+    visible: "Filter presentations|All statuses|Scheduled|Slots"
+    timeout: 8000
+- takeScreenshot: projects-slot-filters
+- tapOn:
+    text: "Scheduled"
+    optional: true
+- tapOn:
+    text: "Open filters"
+    optional: true
+- tapOn: "All statuses"
+- tapOn: "Done"

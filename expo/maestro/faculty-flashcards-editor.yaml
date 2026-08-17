@@ -1,0 +1,48 @@
+appId: com.coursecollab.app
+---
+- extendedWaitUntil:
+    visible: "Edit deck|New deck"
+    timeout: 15000
+- tapOn: "Edit deck"
+- tapOn: "Topic, Transient Circuits"
+- extendedWaitUntil:
+    visible: "Close"
+    timeout: 8000
+- takeScreenshot: flashcards-topic-picker
+- tapOn: "Close"
+- tapOn: "Section, All sections"
+- extendedWaitUntil:
+    visible: "Close"
+    timeout: 8000
+- takeScreenshot: flashcards-section-picker
+- tapOn: "Close"
+- tapOn: "Published"
+- tapOn: "Published"
+- tapOn: "Show in Practice Hub"
+- tapOn: "Show in Practice Hub"
+- tapOn: "Quiz-check mode"
+- tapOn: "Quiz-check mode"
+- tapOn: "Show quiz preview"
+- takeScreenshot: flashcards-quiz-preview
+- tapOn:
+    text: "Hide quiz preview"
+    optional: true
+- tapOn: "Edit card, Time constant τ for RC circuit"
+- takeScreenshot: flashcards-card-edit
+- tapOn: "Cancel card edit"
+- tapOn: "Edit quiz distractors"
+- takeScreenshot: flashcards-distractors
+- tapOn:
+    text: "Edit quiz distractors"
+    optional: true
+- tapOn: "Delete card"
+- takeScreenshot: flashcards-delete-card-confirm
+- tapOn: "Cancel"
+- tapOn: "Delete deck"
+- takeScreenshot: flashcards-delete-deck-confirm
+- tapOn: "Cancel"
+- tapOn: "Cancel"
+- extendedWaitUntil:
+    visible: "Search flashcard decks…|Generate from question bank|Create deck"
+    timeout: 15000
+- takeScreenshot: flashcards-list-after-cancel

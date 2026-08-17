@@ -2,6 +2,8 @@ import { useEffect, useState } from "react"
 import {
   ActivityIndicator,
   Image,
+  Linking,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -9,11 +11,13 @@ import {
   TextInput,
   View,
 } from "react-native"
+import * as DocumentPicker from "expo-document-picker"
 import { Ionicons } from "@/components/icons/AppIcon"
+import { AppAlert } from "../../../lib/app-alert"
 import { API_BASE_URL } from "../../../constants"
 import { NATIVE } from "../../../constants/faculty-native-theme"
-import type { SummerModuleBlock, SummerModuleProgressRecord } from "../../../lib/summer-camp-api"
-import { isSummerBlockComplete } from "../../../lib/summer-module-viewer-utils"
+import type { SummerCheckpointSubmission, SummerModuleBlock, SummerModuleProgressRecord } from "../../../lib/summer-camp-api"
+import { getBlockSubmission, isSummerBlockComplete } from "../../../lib/summer-module-viewer-utils"
 import { useAppThemeTokens, useThemedNative } from "../../../context/AppearanceProvider"
 import { useNativeType, semanticSoft } from "../../../lib/themed-module-theme"
 import { MarkdownContentWebView } from "../../course-info/MarkdownContentWebView"
@@ -27,7 +31,9 @@ type SaveProgress = (
 type Props = {
   block: SummerModuleBlock
   progress: SummerModuleProgressRecord[]
+  submissions?: SummerCheckpointSubmission[]
   onSaveProgress: SaveProgress
+  onSubmitCheckpoint?: (file: { uri: string; name: string; mime: string }) => Promise<void>
   saving: boolean
   onAutoComplete?: () => void
 }
@@ -53,15 +59,17 @@ function asNumberArray(value: unknown): number[] {
 export function SummerModuleBlockRenderer({
   block,
   progress,
+  submissions = [],
   onSaveProgress,
+  onSubmitCheckpoint,
   saving,
   onAutoComplete,
 }: Props) {
-  const complete = isSummerBlockComplete(block, progress)
+  const complete = isSummerBlockComplete(block, progress, submissions)
 
   useEffect(() => {
     if (complete || !onAutoComplete) return
-    if (["hero", "callout", "text", "video", "image_gallery", "faculty_cards", "mission_objectives"].includes(block.block_type)) {
+    if (["hero", "callout", "text", "video", "image_gallery", "faculty_cards", "mission_objectives", "code"].includes(block.block_type)) {
       onAutoComplete()
     }
   }, [block.block_type, complete, onAutoComplete])
@@ -137,6 +145,27 @@ export function SummerModuleBlockRenderer({
           complete={complete}
           saving={saving}
           onSaveProgress={onSaveProgress}
+        />
+      )
+    case "step":
+      return (
+        <StepBlock
+          block={block}
+          complete={complete}
+          saving={saving}
+          onSaveProgress={onSaveProgress}
+        />
+      )
+    case "code":
+      return <CodeBlock block={block} complete={complete} />
+    case "checkpoint":
+      return (
+        <CheckpointBlock
+          block={block}
+          submission={getBlockSubmission(block.id, submissions)}
+          complete={complete}
+          saving={saving}
+          onSubmitCheckpoint={onSubmitCheckpoint}
         />
       )
     case "module_completion":
@@ -795,6 +824,155 @@ function ProfileFormBlock({
   )
 }
 
+function StepBlock({
+  block,
+  complete,
+  saving,
+  onSaveProgress,
+}: {
+  block: SummerModuleBlock
+  complete: boolean
+  saving: boolean
+  onSaveProgress: SaveProgress
+}) {
+  const native = useThemedNative()
+  const type = useNativeType()
+  const title = asString(block.content.title) ?? "Step"
+  const description = asString(block.content.description)
+  const checkable = block.content.checkable !== false
+
+  return (
+    <SummerModuleBlockShell title={title} complete={complete}>
+      {description ? (
+        <Text style={[type.body, { color: native.label, lineHeight: 22 }]}>{description}</Text>
+      ) : null}
+      {checkable && !complete ? (
+        <SummerModulePrimaryButton
+          label="Mark step complete"
+          onPress={() => void onSaveProgress("step_complete", {})}
+          loading={saving}
+        />
+      ) : null}
+    </SummerModuleBlockShell>
+  )
+}
+
+function CodeBlock({ block, complete }: { block: SummerModuleBlock; complete: boolean }) {
+  const native = useThemedNative()
+  const type = useNativeType()
+  const title = asString(block.content.title) ?? "Sample code"
+  const code = asString(block.content.code) ?? ""
+
+  return (
+    <SummerModuleBlockShell title={title} complete={complete}>
+      {code ? (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          <Text
+            style={[
+              type.caption,
+              styles.codeBlock,
+              { color: native.label, backgroundColor: native.fill, borderColor: native.separator },
+            ]}
+          >
+            {code}
+          </Text>
+        </ScrollView>
+      ) : (
+        <Text style={[type.body, { color: native.secondaryLabel }]}>Code sample will appear here when published.</Text>
+      )}
+    </SummerModuleBlockShell>
+  )
+}
+
+function CheckpointBlock({
+  block,
+  submission,
+  complete,
+  saving,
+  onSubmitCheckpoint,
+}: {
+  block: SummerModuleBlock
+  submission?: SummerCheckpointSubmission
+  complete: boolean
+  saving: boolean
+  onSubmitCheckpoint?: (file: { uri: string; name: string; mime: string }) => Promise<void>
+}) {
+  const native = useThemedNative()
+  const tokens = useAppThemeTokens()
+  const type = useNativeType()
+  const title = asString(block.content.title) ?? "Checkpoint"
+  const description = asString(block.content.description)
+  const acceptedTypes = asStringArray(block.content.acceptedTypes)
+  const maxSizeMb = typeof block.content.maxSizeMb === "number" ? block.content.maxSizeMb : undefined
+  const facultyApproval = block.content.facultyApproval === true
+
+  async function pickAndUpload() {
+    if (!onSubmitCheckpoint) return
+    const result = await DocumentPicker.getDocumentAsync({
+      copyToCacheDirectory: true,
+      multiple: false,
+      type: acceptedTypes.length ? acceptedTypes : "*/*",
+    })
+    if (result.canceled || !result.assets?.[0]) return
+    const asset = result.assets[0]
+    if (maxSizeMb != null && asset.size != null && asset.size > maxSizeMb * 1024 * 1024) {
+      AppAlert.alert("File too large", `Choose a file under ${maxSizeMb} MB.`)
+      return
+    }
+    await onSubmitCheckpoint({
+      uri: asset.uri,
+      name: asset.name ?? "checkpoint-upload",
+      mime: asset.mimeType ?? "application/octet-stream",
+    })
+  }
+
+  return (
+    <SummerModuleBlockShell title={title} complete={complete}>
+      {description ? (
+        <Text style={[type.body, { color: native.label, lineHeight: 22 }]}>{description}</Text>
+      ) : null}
+      {acceptedTypes.length ? (
+        <Text style={[type.caption, { color: native.secondaryLabel }]}>
+          Accepted: {acceptedTypes.map((item) => item.split("/").pop()).join(", ")}
+          {maxSizeMb != null ? ` · ${maxSizeMb} MB max` : ""}
+        </Text>
+      ) : null}
+      {facultyApproval ? (
+        <Text style={[type.caption, { color: tokens.warning }]}>Faculty review required after upload.</Text>
+      ) : null}
+
+      {submission?.file_url ? (
+        <Pressable
+          style={[styles.submissionCard, { borderColor: native.separator, backgroundColor: native.fill }]}
+          onPress={() => void Linking.openURL(submission.file_url!)}
+        >
+          <Ionicons name="document-attach-outline" size={18} color={tokens.accent} />
+          <View style={{ flex: 1 }}>
+            <Text style={[type.bodyEmphasis, { color: native.label }]} numberOfLines={1}>
+              {submission.file_name ?? "Submitted file"}
+            </Text>
+            <Text style={[type.caption, { color: native.secondaryLabel }]}>
+              {submission.status === "approved" ? "Approved" : "Submitted · tap to open"}
+            </Text>
+          </View>
+        </Pressable>
+      ) : null}
+
+      {!complete ? (
+        <SummerModulePrimaryButton
+          label={submission ? "Replace submission" : "Upload checkpoint file"}
+          onPress={() => void pickAndUpload()}
+          loading={saving}
+        />
+      ) : submission?.feedback ? (
+        <View style={[styles.revealBox, { backgroundColor: semanticSoft(tokens.accent, tokens.isDark) }]}>
+          <Text style={[type.body, { color: native.label, lineHeight: 22 }]}>{submission.feedback}</Text>
+        </View>
+      ) : null}
+    </SummerModuleBlockShell>
+  )
+}
+
 function ModuleCompletionBlock({
   block,
   complete,
@@ -957,5 +1135,20 @@ const styles = StyleSheet.create({
     padding: 18,
     gap: 10,
     alignItems: "center",
+  },
+  codeBlock: {
+    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    lineHeight: 18,
+  },
+  submissionCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 12,
+    padding: 12,
   },
 })

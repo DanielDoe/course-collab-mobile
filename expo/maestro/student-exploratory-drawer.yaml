@@ -1,0 +1,456 @@
+appId: com.coursecollab.app
+---
+- openLink: coursecollab://dev-student-login
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 90000
+- takeScreenshot: drawer-dashboard
+
+# Learning
+- tapOn: "Open navigation menu"
+- tapOn: "Lectures"
+- extendedWaitUntil:
+    visible: "Lectures"
+    timeout: 30000
+- extendedWaitUntil:
+    visible: "Lecture|Completed|Not Started|In Progress"
+    timeout: 30000
+    optional: true
+- tapOn:
+    text: ".*Lecture 1.*"
+    optional: true
+- tapOn:
+    text: "Tools"
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn:
+    text: "Close"
+    optional: true
+- back
+- takeScreenshot: drawer-lectures
+
+- tapOn: "Open navigation menu"
+- tapOn: "My Notes"
+- extendedWaitUntil:
+    visible: "My Notes"
+    timeout: 30000
+- tapOn:
+    text: "Course Notes"
+    optional: true
+- tapOn:
+    text: "My Notes"
+    optional: true
+- tapOn:
+    text: "Search my notes…"
+    optional: true
+- inputText: "Exam"
+- hideKeyboard
+- takeScreenshot: drawer-notes
+
+- tapOn: "Open navigation menu"
+- tapOn: "Flashcards"
+- extendedWaitUntil:
+    visible: "Flashcards"
+    timeout: 30000
+- tapOn:
+    text: "Course"
+    optional: true
+- tapOn:
+    text: "Mine"
+    optional: true
+- tapOn:
+    text: "Stats"
+    optional: true
+- tapOn:
+    text: "All"
+    optional: true
+- takeScreenshot: drawer-flashcards
+
+- tapOn: "Open navigation menu"
+- tapOn: "AI Notetaker"
+- extendedWaitUntil:
+    visible: "AI Notetaker"
+    timeout: 30000
+- takeScreenshot: drawer-notetaker
+
+- tapOn: "Open navigation menu"
+- tapOn: "Practice Hub"
+- extendedWaitUntil:
+    visible: "Practice Hub"
+    timeout: 45000
+- tapOn:
+    text: "Leaderboard"
+    optional: true
+- tapOn:
+    text: "Practice"
+    optional: true
+- takeScreenshot: drawer-practice
+
+- tapOn: "Open navigation menu"
+- tapOn: "Cora Assistant"
+- extendedWaitUntil:
+    visible: "Cora|Good evening|Capabilities|Upgrade"
+    timeout: 45000
+- takeScreenshot: drawer-cora
+
+# Assessments
+- tapOn: "Open navigation menu"
+- tapOn: "Quizzes"
+- extendedWaitUntil:
+    visible: "Quizzes"
+    timeout: 30000
+- tapOn:
+    text: "Quiz 1"
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn:
+    text: "Close"
+    optional: true
+- back
+- takeScreenshot: drawer-quizzes
+
+- tapOn: "Open navigation menu"
+- tapOn: "History"
+- extendedWaitUntil:
+    visible: "History|Quiz History"
+    timeout: 30000
+- takeScreenshot: drawer-quiz-history
+
+- tapOn: "Open navigation menu"
+- tapOn: "Homework"
+- extendedWaitUntil:
+    visible: "Homework"
+    timeout: 30000
+- takeScreenshot: drawer-homework
+
+- tapOn: "Open navigation menu"
+- tapOn: "Mid-Semester"
+- extendedWaitUntil:
+    visible: "Mid-Semester"
+    timeout: 30000
+- takeScreenshot: drawer-mid
+
+- tapOn: "Open navigation menu"
+- tapOn: "Finals"
+- extendedWaitUntil:
+    visible: "Finals"
+    timeout: 30000
+- takeScreenshot: drawer-finals
+
+- tapOn: "Open navigation menu"
+- tapOn: "Grades"
+- extendedWaitUntil:
+    visible: "Grades"
+    timeout: 30000
+- tapOn:
+    text: "Final"
+    optional: true
+- tapOn:
+    text: "Pending"
+    optional: true
+- takeScreenshot: drawer-grades
+
+# Collaboration
+- tapOn: "Open navigation menu"
+- tapOn: "Forum Hub"
+- extendedWaitUntil:
+    visible: "Forum Hub"
+    timeout: 45000
+- tapOn:
+    text: "Tutoring"
+    optional: true
+- tapOn:
+    text: "Leaderboard"
+    optional: true
+- tapOn:
+    text: "Discussions"
+    optional: true
+- tapOn:
+    text: "Start a thread"
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn:
+    text: "Close"
+    optional: true
+- takeScreenshot: drawer-forum
+
+- tapOn: "Open navigation menu"
+- tapOn: "Messages"
+- extendedWaitUntil:
+    visible: "Messages"
+    timeout: 30000
+- tapOn:
+    text: "Daniel Doe"
+    optional: true
+- tapOn:
+    text: "Course question"
+    optional: true
+- back
+- tapOn:
+    text: "New message"
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true
+- takeScreenshot: drawer-messages
+
+- tapOn: "Open navigation menu"
+- tapOn: "Groups"
+- extendedWaitUntil:
+    visible: "Groups"
+    timeout: 45000
+- tapOn:
+    text: "Mine"
+    optional: true
+- tapOn:
+    text: "Join"
+    optional: true
+- tapOn:
+    text: "All"
+    optional: true
+- takeScreenshot: drawer-groups
+
+- tapOn: "Open navigation menu"
+- tapOn: "Projects"
+- extendedWaitUntil:
+    visible: "Projects"
+    timeout: 45000
+- takeScreenshot: drawer-projects
+
+- tapOn: "Open navigation menu"
+- tapOn: "Playground"
+- extendedWaitUntil:
+    visible: "Playground"
+    timeout: 30000
+- tapOn:
+    text: "Solo practice"
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn:
+    text: "Close"
+    optional: true
+- back
+- takeScreenshot: drawer-playground
+
+# Rewards + course info (scroll drawer)
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Classroom Points"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Classroom Points"
+- extendedWaitUntil:
+    visible: "Classroom Points"
+    timeout: 30000
+- tapOn:
+    text: "Tasks"
+    optional: true
+- tapOn:
+    text: "Ranks"
+    optional: true
+- tapOn:
+    text: "History"
+    optional: true
+- takeScreenshot: drawer-points
+
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Attendance"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Attendance"
+- extendedWaitUntil:
+    visible: "Attendance"
+    timeout: 30000
+- tapOn:
+    text: "History"
+    optional: true
+- tapOn:
+    text: "Overview"
+    optional: true
+- takeScreenshot: drawer-attendance
+
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Trade Center"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Trade Center"
+- extendedWaitUntil:
+    visible: "Trade Center"
+    timeout: 30000
+- tapOn:
+    text: "Trade"
+    optional: true
+- tapOn:
+    text: "Points to trade"
+    optional: true
+- inputText: "0"
+- tapOn:
+    text: "Trade points"
+    optional: true
+- tapOn:
+    text: "OK"
+    optional: true
+- tapOn:
+    text: "Donate"
+    optional: true
+- tapOn:
+    text: "Overview"
+    optional: true
+- takeScreenshot: drawer-trade
+
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Syllabus"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Syllabus"
+- extendedWaitUntil:
+    visible: "Syllabus"
+    timeout: 30000
+- takeScreenshot: drawer-syllabus
+
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Calendar"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Calendar"
+- extendedWaitUntil:
+    visible: "Calendar"
+    timeout: 30000
+- tapOn:
+    text: "Jump to today"
+    optional: true
+- tapOn:
+    text: "15 min before"
+    optional: true
+- tapOn:
+    text: "30 min before"
+    optional: true
+- takeScreenshot: drawer-calendar
+
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Office Hours"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Office Hours"
+- extendedWaitUntil:
+    visible: "Office Hours"
+    timeout: 30000
+- tapOn: "Topic"
+- inputText: "Beta UI check"
+- tapOn:
+    text: "High"
+    optional: true
+- tapOn:
+    text: "My requests"
+    optional: true
+- takeScreenshot: drawer-office
+
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Policies"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Policies"
+- extendedWaitUntil:
+    visible: "Policies"
+    timeout: 30000
+- takeScreenshot: drawer-policies
+
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Course Evaluation"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Course Evaluation"
+- extendedWaitUntil:
+    visible: "Course Evaluation"
+    timeout: 30000
+- takeScreenshot: drawer-eval
+
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Recommendation Letters"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Recommendation Letters"
+- extendedWaitUntil:
+    visible: "Recommendation"
+    timeout: 30000
+- tapOn:
+    text: "New request"
+    optional: true
+- tapOn:
+    text: "Deadline"
+    optional: true
+- inputText: "2026-09-01"
+- tapOn:
+    text: "My requests"
+    optional: true
+- takeScreenshot: drawer-recs
+
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Settings"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Settings"
+- extendedWaitUntil:
+    visible: "Settings"
+    timeout: 20000
+- tapOn:
+    text: "Edit profile"
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn:
+    text: "Notifications"
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn:
+    text: "Membership"
+    optional: true
+- takeScreenshot: drawer-settings
+
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Help Center"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Help Center"
+- extendedWaitUntil:
+    visible: "Help Center"
+    timeout: 20000
+- takeScreenshot: drawer-help
+
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Report Bug"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Report Bug"
+- extendedWaitUntil:
+    visible: "Report"
+    timeout: 20000
+- tapOn:
+    text: "Submit bug report"
+    optional: true
+- tapOn:
+    text: "OK"
+    optional: true
+- takeScreenshot: drawer-bug

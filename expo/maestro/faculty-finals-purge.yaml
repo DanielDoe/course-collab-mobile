@@ -1,0 +1,9 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Deleted"
+- tapOn: "Search deleted assessments…"
+- inputText: "QA16"
+- hideKeyboard
+- tapOn: "Delete forever"
+- tapOn: "Delete"
+- waitForAnimationToEnd

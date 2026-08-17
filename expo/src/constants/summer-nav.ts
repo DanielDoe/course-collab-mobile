@@ -97,6 +97,8 @@ export function getSummerWebNavLabel(webPath: string): string {
 
 export function isSummerImmersiveRoute(pathname: string): boolean {
   if (/^\/messages\//.test(pathname)) return true
+  if (/^\/membership/.test(pathname)) return true
+  if (pathname === "/settings" || pathname.startsWith("/settings/")) return true
   return pathname.includes("/summer/training/") && pathname.includes("/module/")
 }
 

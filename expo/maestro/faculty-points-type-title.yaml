@@ -1,0 +1,12 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Title"
+- inputText: "QA16CP"
+- hideKeyboard
+- tapOn: "Solution upload"
+- tapOn: "Code submission"
+- tapOn: "All Sections"
+- tapOn: "ECE 2202"
+- tapOn: "All sections"
+- tapOn: "Submit Create assignment"
+- waitForAnimationToEnd

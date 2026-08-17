@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from "react-native"
-import { NATIVE } from "../../constants/faculty-native-theme"
+import { useThemedNative } from "../../context/AppearanceProvider"
 import { useNativeType } from "../../lib/themed-module-theme"
 import { formatFacultyRelativeTime, type OfficeHourRequest, type RegularOfficeHourSlot } from "../../lib/instructor-api"
 import {
@@ -20,6 +20,7 @@ export function FacultyOfficeHoursRequestCard({
   onPress: () => void
   onDecline?: () => void
 }) {
+  const native = useThemedNative()
   const type = useNativeType()
   const status = facultyOfficeHoursRequestStatus(request.status)
   const isPending = request.status === "pending" || request.status === "requested"
@@ -49,13 +50,16 @@ export function FacultyOfficeHoursRequestCard({
         isPending && onDecline ? (
           <View style={styles.quickActions}>
             <Pressable
-              style={[styles.secondaryBtn, { borderColor: NATIVE.separator }]}
+              style={[
+                styles.secondaryBtn,
+                { borderColor: native.separator, backgroundColor: native.fill },
+              ]}
               onPress={(e) => {
                 e.stopPropagation?.()
                 onDecline()
               }}
             >
-              <Text style={[type.caption, styles.secondaryText]}>Decline</Text>
+              <Text style={[type.caption, styles.secondaryText, { color: native.label }]}>Decline</Text>
             </Pressable>
             <Pressable
               style={[styles.primaryBtn, { backgroundColor: FACULTY_OFFICE_HOURS_COLOR.action }]}
@@ -116,5 +120,5 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   primaryText: { color: "#ffffff", fontWeight: "700" },
-  secondaryText: { fontWeight: "600", color: NATIVE.label },
+  secondaryText: { fontWeight: "600" },
 })

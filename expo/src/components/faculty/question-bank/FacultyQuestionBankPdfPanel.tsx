@@ -16,6 +16,8 @@ import { instructorApi } from "../../../lib/instructor-api"
 import { useFacultyScope } from "../../../hooks/useFacultyScope"
 import { AppButton } from "../../theme/AppButton"
 import { FacultySheetField, FacultySheetSelectButton, FacultySheetTextInput } from "../faculty-collab-sheet-ui"
+import { NativeSelect } from "../../NativeSelect"
+import { QUESTION_COUNT_OPTIONS } from "../FacultyNativePickers"
 import { FacultyGroupedFilterSheet } from "../faculty-module-shell"
 import { NativeSwitch } from "../../NativeSwitch"
 import { FacultyQuestionBankDraftReviewPanel } from "./FacultyQuestionBankDraftReviewPanel"
@@ -220,10 +222,11 @@ export function FacultyQuestionBankPdfPanel({ questionType, onSuccess }: Props) 
       </FacultySheetField>
 
       <FacultySheetField label="Number of questions">
-        <FacultySheetTextInput
+        <NativeSelect
+          placeholder="5 questions"
           value={String(spec.questionCount)}
-          onChangeText={(text) => patch({ questionCount: Number(text) || 1 })}
-          keyboardType="number-pad"
+          options={QUESTION_COUNT_OPTIONS}
+          onChange={(value) => patch({ questionCount: Number(value) || 5 })}
         />
       </FacultySheetField>
 

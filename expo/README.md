@@ -55,8 +55,7 @@ Chrome is implemented in `src/components/theme/GlassSurface.tsx` with automatic 
 
 **API URL**
 
-- Production default: `https://coursecollab.vercel.app`
-- Local dev: set `extra.appUrl` in `app.json` to your LAN IP (e.g. `http://192.168.1.5:3000`)
+- The app always uses production: `https://coursecollab.vercel.app`
 
 **Capacitor vs Expo in this repo**
 

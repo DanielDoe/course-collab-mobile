@@ -6,7 +6,11 @@ import { useFacultyScope } from "../../../hooks/useFacultyScope"
 import { FacultySearchToolbar } from "../faculty-module-shell"
 import { FacultyEmptyState } from "../faculty-shared"
 import { facultyAdminTaThumb } from "../../../lib/faculty-admin-theme"
-import { FacultyAdminScreen } from "../faculty-admin-ui"
+import {
+  FacultyAdminScreen,
+  FacultyAdminTierGate,
+  useAdminStyles,
+} from "../faculty-admin-ui"
 import { FacultySignatureListCard } from "../FacultyCollabListCards"
 import { useModuleTheme } from "../../../lib/themed-module-shell"
 import { FacultyTeachingAssistantActionSheet } from "./FacultyTeachingAssistantsActionSheet"
@@ -14,8 +18,17 @@ import { FacultyTeachingAssistantActionSheet } from "./FacultyTeachingAssistants
 type CourseWithTerm = InstructorCourse & { is_active_term?: boolean }
 
 export function FacultyTeachingAssistantsScreen() {
+  return (
+    <FacultyAdminTierGate minTier="Enterprise" featureLabel="Teaching Assistants">
+      <FacultyTeachingAssistantsContent />
+    </FacultyAdminTierGate>
+  )
+}
+
+function FacultyTeachingAssistantsContent() {
   const { session } = useFacultyScope()
-  const { native, tokens, type } = useModuleTheme()
+  const { tokens } = useModuleTheme()
+  const adminStyles = useAdminStyles()
 
   const [search, setSearch] = useState("")
   const [loading, setLoading] = useState(true)
@@ -71,10 +84,11 @@ export function FacultyTeachingAssistantsScreen() {
     )
   }, [tas, search])
 
+  const activeCount = useMemo(() => tas.filter((ta) => ta.is_active).length, [tas])
+
   return (
     <>
       <FacultyAdminScreen
-        title="Teaching Assistants"
         loading={loading}
         refreshing={refreshing}
         error={error}
@@ -103,34 +117,39 @@ export function FacultyTeachingAssistantsScreen() {
             }
           />
         ) : (
-          <View style={styles.list}>
-            <Text style={[type.sectionHeader, styles.sectionLabel, { color: native.secondaryLabel }]}>
-              Assistants
-            </Text>
-            {filtered.map((ta) => {
-              const courseMeta =
-                ta.course_codes?.filter(Boolean).join(", ") ||
-                (ta.assigned_course_ids?.length
-                  ? `${ta.assigned_course_ids.length} course${ta.assigned_course_ids.length === 1 ? "" : "s"}`
-                  : undefined)
+          <View style={adminStyles.sectionWrap}>
+            <Text style={adminStyles.sectionHeader}>Assistants</Text>
+            <View style={styles.list}>
+              {filtered.map((ta) => {
+                const courseMeta =
+                  ta.course_codes?.filter(Boolean).join(", ") ||
+                  (ta.assigned_course_ids?.length
+                    ? `${ta.assigned_course_ids.length} course${ta.assigned_course_ids.length === 1 ? "" : "s"}`
+                    : undefined)
 
-              return (
-                <FacultySignatureListCard
-                  key={ta.id}
-                  thumb={facultyAdminTaThumb(ta.id)}
-                  icon="person-outline"
-                  title={ta.name}
-                  description={`@${ta.username} · ${ta.email}`}
-                  metaLine={courseMeta}
-                  status={
-                    !ta.is_active
-                      ? { label: "Inactive", color: tokens.danger, icon: "ellipse" }
-                      : undefined
-                  }
-                  onPress={() => setDetailTa(ta)}
-                />
-              )
-            })}
+                return (
+                  <FacultySignatureListCard
+                    key={ta.id}
+                    thumb={facultyAdminTaThumb(ta.id)}
+                    icon="person-outline"
+                    title={ta.name}
+                    description={`@${ta.username} · ${ta.email}`}
+                    metaLine={courseMeta}
+                    status={
+                      !ta.is_active
+                        ? { label: "Inactive", color: tokens.danger, icon: "ellipse" }
+                        : undefined
+                    }
+                    onPress={() => setDetailTa(ta)}
+                  />
+                )
+              })}
+            </View>
+            <Text style={adminStyles.sectionFooter}>
+              {activeCount === tas.length
+                ? `${tas.length} assistant${tas.length === 1 ? "" : "s"} with course-scoped module access.`
+                : `${activeCount} active · ${tas.length - activeCount} inactive`}
+            </Text>
           </View>
         )}
       </FacultyAdminScreen>
@@ -170,10 +189,6 @@ const styles = StyleSheet.create({
   list: {
     gap: 10,
     paddingHorizontal: 4,
-  },
-  sectionLabel: {
-    textTransform: "none",
-    paddingHorizontal: 4,
-    marginBottom: 2,
+    paddingBottom: 4,
   },
 })

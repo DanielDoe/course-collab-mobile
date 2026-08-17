@@ -1,0 +1,153 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Open navigation menu"
+- tapOn: "Academic Terms"
+- extendedWaitUntil:
+    visible: "Academic Terms"
+    timeout: 30000
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: ".*Summer 2026.*|.*Spring 2026.*|No academic terms"
+    timeout: 25000
+- takeScreenshot: terms-list
+
+# Search — empty then match
+- tapOn: "Search terms…"
+- inputText: "zzz"
+- hideKeyboard
+- extendedWaitUntil:
+    visible: "No matching terms"
+    timeout: 8000
+- takeScreenshot: terms-search-empty
+- tapOn: "Search terms…"
+- eraseText
+- inputText: "Summer"
+- hideKeyboard
+- extendedWaitUntil:
+    visible: ".*Summer 2026.*"
+    timeout: 8000
+- takeScreenshot: terms-search-summer
+
+# Filter sheet
+- tapOn: "Open filters"
+- extendedWaitUntil:
+    visible: "Filter terms|Active only|All terms"
+    timeout: 8000
+- tapOn: "Active only"
+- takeScreenshot: terms-filter-active
+- tapOn: "Open filters"
+- tapOn: "All terms"
+
+# Open a real term and use the action sheet
+- tapOn:
+    text: ".*Summer 2026.*"
+- extendedWaitUntil:
+    visible: "Academic term|Edit term"
+    timeout: 15000
+- extendedWaitUntil:
+    visible: "Edit term"
+    timeout: 15000
+- swipe:
+    direction: UP
+- takeScreenshot: terms-summer-sheet
+
+- tapOn: "Edit term"
+- extendedWaitUntil:
+    visible: "Edit academic term"
+    timeout: 10000
+- takeScreenshot: terms-edit-sheet
+- tapOn: "Save"
+- tapOn:
+    text: "Done"
+    optional: true
+
+# Re-open and exercise Add section (cancel — do not persist)
+- tapOn:
+    text: ".*Summer 2026.*"
+- extendedWaitUntil:
+    visible: "Academic term"
+    timeout: 12000
+- swipe:
+    direction: UP
+- swipe:
+    direction: UP
+- extendedWaitUntil:
+    visible: "Add section"
+    timeout: 8000
+- tapOn: "Add section"
+- extendedWaitUntil:
+    visible: "Add section"
+    timeout: 10000
+- tapOn: "e.g. P01"
+- inputText: "QA99"
+- tapOn: "Optional description"
+- inputText: "Exploratory QA — will cancel"
+- takeScreenshot: terms-add-section
+- tapOn: "Done"
+
+# Open a section row if present
+- tapOn:
+    text: ".*Summer 2026.*"
+- extendedWaitUntil:
+    visible: "Academic term"
+    timeout: 12000
+- tapOn:
+    text: ".*P0.*|.*ECE.*"
+    index: 0
+    optional: true
+- tapOn:
+    text: "Edit section"
+    optional: true
+- takeScreenshot: terms-edit-section
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true
+
+# Add academic term — empty-ish submit then cancel
+- tapOn: "Add academic term"
+- extendedWaitUntil:
+    visible: "Add academic term"
+    timeout: 10000
+- tapOn: "Winter"
+- tapOn:
+    text: "YYYY-MM-DD"
+    index: 0
+- inputText: "2027-01-05"
+- tapOn:
+    text: "YYYY-MM-DD"
+    index: 0
+    optional: true
+- inputText: "2027-03-15"
+- takeScreenshot: terms-add-form
+- tapOn: "Create"
+- tapOn:
+    text: "Done"
+    optional: true
+- takeScreenshot: terms-after-create
+- tapOn:
+    text: "Winter 2026"
+    optional: true
+- tapOn:
+    text: "Delete term"
+    optional: true
+- tapOn:
+    text: "Delete"
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true
+
+# Open Spring 2026 as a second real row
+- tapOn:
+    text: "Spring 2026"
+    optional: true
+- swipe:
+    direction: UP
+    optional: true
+- takeScreenshot: terms-spring-sheet
+- tapOn:
+    text: "Done"
+    optional: true

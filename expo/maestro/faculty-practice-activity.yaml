@@ -1,0 +1,9 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Activity"
+- extendedWaitUntil:
+    visible: "No recent activity|correct"
+    timeout: 10000
+- takeScreenshot: practice-activity
+- scroll
+- takeScreenshot: practice-activity-rest

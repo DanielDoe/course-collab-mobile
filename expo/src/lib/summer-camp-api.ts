@@ -38,6 +38,31 @@ export type SummerModuleProgressRecord = {
   metadata?: Record<string, unknown>
 }
 
+export type SummerCheckpointSubmission = {
+  id: number
+  block_id: number
+  status: string
+  file_url?: string
+  file_name?: string
+  feedback?: string | null
+  grade?: string | null
+  submitted_at?: string
+  reviewed_at?: string | null
+}
+
+export type SummerSubmitCheckpointPayload = {
+  moduleId: number
+  blockId: number
+  uri: string
+  name: string
+  mime: string
+}
+
+export type SummerSubmitCheckpointResult = {
+  submission: SummerCheckpointSubmission
+  totalXp?: number
+}
+
 export type SummerModuleLessonRef = {
   id: number
   title: string
@@ -47,6 +72,7 @@ export type SummerModuleDetailResponse = {
   module: SummerModuleDetail
   blocks: SummerModuleBlock[]
   progress: SummerModuleProgressRecord[]
+  submissions: SummerCheckpointSubmission[]
   nextLesson: SummerModuleLessonRef | null
   totalXp?: number
   curriculumLocked?: boolean
@@ -470,6 +496,8 @@ export type SummerGalleryEntry = {
   description?: string
   project_title?: string
   training_title?: string
+  votes?: number
+  has_voted?: boolean
 }
 
 export type SummerGalleryAward = {
@@ -518,6 +546,8 @@ function mapSummerGalleryEntry(raw: Record<string, unknown>): SummerGalleryEntry
     description: typeof raw.description === "string" ? raw.description : undefined,
     project_title: typeof raw.project_title === "string" ? raw.project_title : undefined,
     training_title: typeof raw.training_title === "string" ? raw.training_title : undefined,
+    votes: typeof raw.votes === "number" ? raw.votes : undefined,
+    has_voted: raw.has_voted === true,
   }
 }
 
@@ -1149,6 +1179,26 @@ function mapSummerModuleBlock(raw: unknown): SummerModuleBlock | null {
   }
 }
 
+function mapSummerCheckpointSubmission(raw: unknown): SummerCheckpointSubmission | null {
+  if (!raw || typeof raw !== "object") return null
+  const record = raw as Record<string, unknown>
+  const id = typeof record.id === "number" ? record.id : null
+  const blockId = typeof record.block_id === "number" ? record.block_id : null
+  const status = typeof record.status === "string" ? record.status : null
+  if (!id || !blockId || !status) return null
+  return {
+    id,
+    block_id: blockId,
+    status,
+    file_url: typeof record.file_url === "string" ? record.file_url : undefined,
+    file_name: typeof record.file_name === "string" ? record.file_name : undefined,
+    feedback: typeof record.feedback === "string" ? record.feedback : record.feedback === null ? null : undefined,
+    grade: typeof record.grade === "string" ? record.grade : record.grade === null ? null : undefined,
+    submitted_at: typeof record.submitted_at === "string" ? record.submitted_at : undefined,
+    reviewed_at: typeof record.reviewed_at === "string" ? record.reviewed_at : record.reviewed_at === null ? null : undefined,
+  }
+}
+
 function mapSummerModuleProgressRecord(raw: unknown): SummerModuleProgressRecord | null {
   if (!raw || typeof raw !== "object") return null
   const record = raw as Record<string, unknown>
@@ -1204,6 +1254,9 @@ function normalizeSummerModuleDetailPayload(payload: Record<string, unknown>): S
     progress: (Array.isArray(payload.progress) ? payload.progress : [])
       .map((item) => mapSummerModuleProgressRecord(item))
       .filter((item): item is SummerModuleProgressRecord => item !== null),
+    submissions: (Array.isArray(payload.submissions) ? payload.submissions : [])
+      .map((item) => mapSummerCheckpointSubmission(item))
+      .filter((item): item is SummerCheckpointSubmission => item !== null),
     nextLesson,
     totalXp: typeof payload.totalXp === "number" ? payload.totalXp : undefined,
     curriculumLocked: payload.curriculum_locked === true,
@@ -1528,6 +1581,7 @@ export const summerCampApi = {
             },
             blocks: [],
             progress: [],
+            submissions: [],
             nextLesson: null,
             curriculum_locked: true,
             error: typeof body.error === "string" ? body.error : "Complete earlier modules first.",
@@ -1581,4 +1635,86 @@ export const summerCampApi = {
       alreadyComplete: record.alreadyComplete === true,
     } satisfies SummerSaveProgressResult
   },
+
+  submitCheckpoint: async (studentId: string, payload: SummerSubmitCheckpointPayload) => {
+    const form = new FormData()
+    form.append("file", { uri: payload.uri, name: payload.name, type: payload.mime } as unknown as Blob)
+    form.append("moduleId", String(payload.moduleId))
+    form.append("blockId", String(payload.blockId))
+
+    const url = `${API_BASE_URL}/api/summer-camp/submissions?studentId=${encodeURIComponent(studentId)}`
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "x-student-id": studentId,
+      },
+      body: form,
+    })
+    const text = await response.text()
+    let body: unknown = null
+    if (text) {
+      try {
+        body = JSON.parse(text)
+      } catch {
+        body = { error: text }
+      }
+    }
+    if (!response.ok) {
+      const message =
+        typeof body === "object" &&
+        body !== null &&
+        "error" in body &&
+        typeof (body as { error: unknown }).error === "string"
+          ? (body as { error: string }).error
+          : `Upload failed (${response.status})`
+      throw new ApiError(message, response.status, body)
+    }
+    const record = (body ?? {}) as Record<string, unknown>
+    const submission = mapSummerCheckpointSubmission(record.submission)
+    if (!submission) throw new ApiError("Invalid checkpoint submission response", 500, body)
+    return {
+      submission,
+      totalXp: typeof record.totalXp === "number" ? record.totalXp : undefined,
+    } satisfies SummerSubmitCheckpointResult
+  },
+
+  voteGalleryEntry: async (studentId: string, entryId: number) => {
+    const url = `${API_BASE_URL}/api/summer-camp/gallery/vote`
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        "x-student-id": studentId,
+      },
+      body: JSON.stringify({ entryId, studentDatabaseId: studentId }),
+    })
+    const text = await response.text()
+    let body: unknown = null
+    if (text) {
+      try {
+        body = JSON.parse(text)
+      } catch {
+        body = { error: text }
+      }
+    }
+    if (!response.ok) {
+      const message =
+        typeof body === "object" &&
+        body !== null &&
+        "error" in body &&
+        typeof (body as { error: unknown }).error === "string"
+          ? (body as { error: string }).error
+          : `Vote failed (${response.status})`
+      throw new ApiError(message, response.status, body)
+    }
+    return body as { success?: boolean; votes?: number }
+  },
+
+  getCertificatePreviewUrl: (studentId: string, certificateId: number) =>
+    `${API_BASE_URL}/api/summer-camp/certificates/${certificateId}/preview?studentDatabaseId=${encodeURIComponent(studentId)}`,
+
+  getCertificateDownloadUrl: (studentId: string, certificateId: number) =>
+    `${API_BASE_URL}/api/summer-camp/certificates/${certificateId}/download?studentDatabaseId=${encodeURIComponent(studentId)}`,
 }

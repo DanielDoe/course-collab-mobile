@@ -1,0 +1,14 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Team name"
+- eraseText
+- inputText: "QA99 Groups"
+- tapOn: "Create group"
+- takeScreenshot: groups-create-named
+- tapOn: "Search classmates"
+- eraseText
+- inputText: "Ahmad"
+- tapOn: "Create group"
+- tapOn:
+    text: ".*Ahmad Nobani.*|Add Ahmad Nobani"
+- takeScreenshot: groups-create-member

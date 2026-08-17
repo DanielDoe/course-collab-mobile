@@ -42,6 +42,7 @@ import {
 } from "./faculty-collab-sheet-ui"
 import { FacultyFilterSheet, FacultySegmentedControl } from "./faculty-module-shell"
 import { SHEET_CLASSROOM_POINTS } from "./faculty-sheet-semantics"
+import { FacultyDateTimeField } from "./FacultyNativePickers"
 
 type Scope = { instructorId: number; courseId: number }
 
@@ -240,7 +241,7 @@ export function FacultyClassroomPointAssignmentDetailModal({
       return
     }
     if (!form.neverExpires && !parseDueAtInput(form.dueAtLocal)) {
-      AppAlert.alert("Invalid due date", "Use format YYYY-MM-DD HH:MM (24-hour).")
+      AppAlert.alert("Invalid due date", "Pick a valid date and time.")
       setEditTab("schedule")
       return
     }
@@ -444,17 +445,14 @@ export function FacultyClassroomPointAssignmentDetailModal({
               {!form.neverExpires ? (
                 <>
                   <FacultySheetField label="Due date & time">
-                    <FacultySheetTextInput
+                    <FacultyDateTimeField
                       value={form.dueAtLocal}
-                      onChangeText={(dueAtLocal) => updateForm({ dueAtLocal })}
-                      placeholder="2026-07-25 23:59"
-                      autoCapitalize="none"
-                      autoCorrect={false}
+                      onChange={(dueAtLocal) => updateForm({ dueAtLocal })}
+                      dateLabel="Due date"
+                      timeLabel="Due time"
+                      joinStyle="space"
                     />
                   </FacultySheetField>
-                  <Text style={[sheetStyles.helperText, { color: native.secondaryLabel }]}>
-                    Use your local timezone (YYYY-MM-DD HH:MM).
-                  </Text>
                 </>
               ) : (
                 <Text style={[type.caption, { color: native.secondaryLabel, fontWeight: "600" }]}>

@@ -65,6 +65,7 @@ function ToolButton({
     <Pressable
       onPress={onPress}
       disabled={disabled}
+      accessibilityRole="button"
       accessibilityLabel={label}
       style={({ pressed }) => [
         styles.toolBtn,
@@ -108,6 +109,8 @@ export function CircuitWorkspaceToolbar({ workspace, onChange, disabled, darkPap
         <Pressable
           onPress={() => !disabled && onChange(undoLastStroke(workspace))}
           disabled={disabled}
+          accessibilityRole="button"
+          accessibilityLabel="Undo stroke"
           style={({ pressed }) => [styles.actionBtn, { opacity: pressed || disabled ? 0.5 : 1 }]}
         >
           <Ionicons name="arrow-undo-outline" size={18} color={tokens.accent} />
@@ -115,6 +118,8 @@ export function CircuitWorkspaceToolbar({ workspace, onChange, disabled, darkPap
         <Pressable
           onPress={() => !disabled && onChange(clearActivePage(workspace))}
           disabled={disabled}
+          accessibilityRole="button"
+          accessibilityLabel="Clear page"
           style={({ pressed }) => [styles.actionBtn, { opacity: pressed || disabled ? 0.5 : 1 }]}
         >
           <Ionicons name="trash-outline" size={18} color={tokens.danger} />
@@ -127,6 +132,8 @@ export function CircuitWorkspaceToolbar({ workspace, onChange, disabled, darkPap
             <Pressable
               key={swatch.id}
               onPress={() => !disabled && onChange(setWorkspaceColor(workspace, swatch.value, tool))}
+              accessibilityRole="button"
+              accessibilityLabel={`${swatch.id} color`}
               style={[
                 styles.colorSwatch,
                 { backgroundColor: swatch.value },
@@ -141,6 +148,8 @@ export function CircuitWorkspaceToolbar({ workspace, onChange, disabled, darkPap
             <Pressable
               key={w.id}
               onPress={() => !disabled && onChange(setWorkspaceWidth(workspace, w.value))}
+              accessibilityRole="button"
+              accessibilityLabel={`${w.label} stroke`}
               style={[
                 styles.widthSwatch,
                 { borderColor: native.separator },
@@ -164,6 +173,8 @@ export function CircuitWorkspaceToolbar({ workspace, onChange, disabled, darkPap
             <Pressable
               key={w.id}
               onPress={() => !disabled && onChange(setWorkspaceEraserWidth(workspace, w.value))}
+              accessibilityRole="button"
+              accessibilityLabel={`${w.label} eraser`}
               style={[
                 styles.widthSwatch,
                 { borderColor: native.separator },

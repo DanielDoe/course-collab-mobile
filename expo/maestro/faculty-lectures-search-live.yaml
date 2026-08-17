@@ -1,0 +1,27 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Search lectures…"
+- eraseText
+- inputText: "zzz"
+- tapOn: "Manage Lectures"
+- extendedWaitUntil:
+    visible: "No matches"
+    timeout: 8000
+- tapOn: "Clear search"
+- tapOn: "Search lectures…"
+- inputText: "4"
+- tapOn: "Manage Lectures"
+- tapOn: "Clear search"
+- tapOn: "ECE 2202: Circuit Analysis II — Lecture 1: Course Introduction and Review of Fundamental Circuit Laws"
+- extendedWaitUntil:
+    visible: "Delete lecture. Permanently removes this week"
+    timeout: 10000
+- scrollUntilVisible:
+    element: "Delete lecture. Permanently removes this week"
+    direction: DOWN
+    timeout: 8000
+- tapOn: "Delete lecture. Permanently removes this week"
+- tapOn: "Cancel"
+- tapOn: "Done"
+- tapOn: "ECE 2202: Circuit Analysis II — Lecture 2: Node Voltage and Mesh Current Methods"
+- tapOn: "Done"

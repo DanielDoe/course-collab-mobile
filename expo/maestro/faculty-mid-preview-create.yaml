@@ -1,0 +1,10 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Preview"
+- waitForAnimationToEnd
+- tapOn: "Close preview"
+- waitForAnimationToEnd
+- tapOn: "Create mid-sem"
+- waitForAnimationToEnd
+- tapOn:
+    id: "assessment-title"

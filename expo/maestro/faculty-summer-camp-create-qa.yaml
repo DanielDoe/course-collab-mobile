@@ -1,0 +1,28 @@
+appId: com.coursecollab.app
+---
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn: "Create summer program"
+- tapOn: "Title"
+- eraseText
+- inputText: "QA16S"
+- tapOn: "New program"
+- tapOn: "Description"
+- eraseText
+- inputText: "QA probe"
+- tapOn: "New program"
+- tapOn: "Start date"
+- eraseText
+- inputText: "2026-08-17"
+- tapOn: "New program"
+- tapOn: "End date"
+- eraseText
+- inputText: "2026-08-31"
+- tapOn: "New program"
+- takeScreenshot: summer-create-filled
+- tapOn: "Create"
+- extendedWaitUntil:
+    visible: "QA16S, Draft|QA16S"
+    timeout: 25000
+- takeScreenshot: summer-qa-created

@@ -1,6 +1,9 @@
 import { useState } from "react"
 import { ApiError, api } from "../../lib/api"
 import { useSession } from "../../context/SessionProvider"
+import { parseMfaCompletePayload, parseMfaLoginResponse, type MfaLoginState } from "../../lib/mfa-types"
+import { persistMfaDeviceTrustFromLogin, studentMfaLoginKey } from "../../lib/mfa-device-trust"
+import { MfaLoginStep } from "../auth/MfaLoginStep"
 import { ErrorBanner, InfoBanner, LoginFieldGroup } from "./LoginCard"
 import { LoginButton, LoginField, LoginPasswordToggle } from "./LoginButton"
 import { LoginBackLink, LoginPortalHeader, LoginPortalStack } from "./login-chrome"
@@ -17,6 +20,42 @@ export function GuestLoginPanel({ onBack }: Props) {
   const [showPassword, setShowPassword] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState("")
+  const [mfaState, setMfaState] = useState<MfaLoginState | null>(null)
+
+  async function finishGuestLogin(data: Record<string, unknown>) {
+    const normalized = parseMfaCompletePayload(data) ?? data
+    const student = normalized.student as
+      | {
+          id: number
+          student_id: string
+          full_name: string
+          guest_access_purpose?: string
+        }
+      | undefined
+    if (!student) throw new ApiError("Login failed", 500)
+
+    const purposeRaw =
+      (normalized.guestAccessPurpose as string | undefined) ?? student.guest_access_purpose
+    const guestAccessPurpose =
+      purposeRaw === "recommendation_letter" || purposeRaw === "other" ? purposeRaw : "other"
+
+    const authId = email.trim().toLowerCase()
+    await persistMfaDeviceTrustFromLogin({
+      userType: "student",
+      loginKey: studentMfaLoginKey(0, authId),
+      payload: normalized,
+    })
+
+    await signIn({
+      portal: "guest",
+      id: student.student_id,
+      name: student.full_name,
+      databaseId: String(student.id),
+      email: authId,
+      authIdentifier: authId,
+      guestAccessPurpose,
+    })
+  }
 
   async function handleSubmit() {
     setError("")
@@ -31,20 +70,13 @@ export function GuestLoginPanel({ onBack }: Props) {
 
     setSubmitting(true)
     try {
-      const data = await api.guestLogin(email, password)
-      const student = data.student
-      const purposeRaw = data.guestAccessPurpose ?? student.guest_access_purpose
-      const guestAccessPurpose =
-        purposeRaw === "recommendation_letter" || purposeRaw === "other" ? purposeRaw : "other"
-
-      await signIn({
-        portal: "guest",
-        id: student.student_id,
-        name: student.full_name,
-        databaseId: String(student.id),
-        guestAccessPurpose,
-      })
-
+      const data = (await api.guestLogin(email, password)) as Record<string, unknown>
+      const mfa = parseMfaLoginResponse(data)
+      if (mfa) {
+        setMfaState(mfa)
+        return
+      }
+      await finishGuestLogin(data)
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Sign in failed. Please try again.")
     } finally {
@@ -52,12 +84,25 @@ export function GuestLoginPanel({ onBack }: Props) {
     }
   }
 
+  if (mfaState) {
+    return (
+      <MfaLoginStep
+        state={mfaState}
+        portalLabel="Career Member"
+        backLabel="Back to Career Member sign in"
+        onComplete={(payload) => finishGuestLogin(payload)}
+        onBack={() => setMfaState(null)}
+      />
+    )
+  }
+
   return (
     <LoginPortalStack>
       <LoginPortalHeader portal="guest" />
 
       <InfoBanner>
-        Use the email and password from your approval message. New guest requests are handled on the web app.
+        Sign in with your Career Member email and password. New accounts are created on the web at
+        course-collab.com.
       </InfoBanner>
 
       <LoginFieldGroup>
@@ -83,7 +128,7 @@ export function GuestLoginPanel({ onBack }: Props) {
 
       {error ? <ErrorBanner message={error} /> : null}
 
-      <LoginButton label="Continue as guest" onPress={() => void handleSubmit()} loading={submitting} />
+      <LoginButton label="Sign in" onPress={() => void handleSubmit()} loading={submitting} />
 
       {onBack ? <LoginBackLink label="Other sign-in options" onPress={onBack} /> : null}
     </LoginPortalStack>

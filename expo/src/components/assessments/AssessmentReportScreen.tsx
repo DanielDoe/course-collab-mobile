@@ -20,11 +20,14 @@ import type { StudentSession } from "../../lib/session"
 import { hexToRgba } from "../../constants/app-themes"
 import { useThemedNative } from "../../context/AppearanceProvider"
 import { useAssessmentTheme, useThemedStudentNative } from "../../lib/themed-module-theme"
+import { safeRouterBack } from "../../lib/safe-router-back"
 import type { AssessmentListKind } from "./assessment-config"
+import { assessmentModuleHrefForKind } from "./assessment-navigation"
 import { GradeSummaryCard } from "./GradeSummaryCard"
 import { AssessmentQuestionDetail } from "./AssessmentQuestionDetail"
 import { NotetakerScreenHeader } from "../notetaker/NotetakerScreenHeader"
 import { useNotificationModuleRefresh } from "../../lib/notifications/notification-events"
+import { CommEmptyState } from "../faculty/faculty-communication-ui"
 import { QuestionPrepareGate } from "../questions/QuestionPrepareGate"
 import { extractAssessmentResultQuestionTexts } from "../../lib/question-prepare"
 
@@ -228,6 +231,11 @@ export function AssessmentReportScreen() {
 
   const kind = resolveKind(typeParam ?? data?.assessment_type)
   const config = configFor(kind)
+  /** Reports open via router.replace from web deep links — back must not dead-end. */
+  const handleBack = useCallback(
+    () => safeRouterBack(router, assessmentModuleHrefForKind(kind)),
+    [router, kind],
+  )
 
   const load = useCallback(async () => {
     if (!session || !Number.isFinite(attemptId)) return
@@ -373,7 +381,7 @@ export function AssessmentReportScreen() {
       <AssessmentReportShell
         native={native}
         title="Report"
-        onBack={() => router.back()}
+        onBack={handleBack}
         saveDisabled
       >
         <QuestionPrepareGate
@@ -395,16 +403,17 @@ export function AssessmentReportScreen() {
       <AssessmentReportShell
         native={native}
         title="Report"
-        onBack={() => router.back()}
+        onBack={handleBack}
         saveDisabled
       >
-        <ModuleScreen error={error || "Report unavailable."} disableTopInsetAdjustment>
-          <Pressable
-            style={[styles.retryBtn, { borderColor: tokens.accent }]}
-            onPress={onRefresh}
-          >
-            <Text style={[styles.retryText, { color: tokens.accent }]}>Try again</Text>
-          </Pressable>
+        <ModuleScreen
+          error={error || "Report unavailable."}
+          errorFeature="assessment report"
+          onRetryError={onRefresh}
+          disableTopInsetAdjustment
+          stackedHeader
+        >
+          {null}
         </ModuleScreen>
       </AssessmentReportShell>
     )
@@ -417,7 +426,7 @@ export function AssessmentReportScreen() {
     <AssessmentReportShell
       native={native}
       title={data.quiz_title ?? config.title}
-      onBack={() => router.back()}
+      onBack={handleBack}
       onSave={handleSavePdf}
       saving={savingPdf}
       saveDisabled={locked || showPnd}
@@ -434,7 +443,9 @@ export function AssessmentReportScreen() {
         refreshing={refreshing}
         onRefresh={onRefresh}
         error={error}
+        errorFeature="assessment report"
         disableTopInsetAdjustment
+        stackedHeader
       >
       <GradeSummaryCard
         title={data.quiz_title ?? "Assessment"}
@@ -461,6 +472,14 @@ export function AssessmentReportScreen() {
           <Text style={[styles.lockedText, { color: tokens.textSecondary }]}>
             Question review is locked. Your grade above is final until your instructor releases details.
           </Text>
+        </View>
+      ) : questions.length === 0 ? (
+        <View style={[styles.emptyCard, { backgroundColor: SN.secondaryGrouped, borderColor: tokens.border }]}>
+          <CommEmptyState
+            icon="document-text-outline"
+            title="No question review"
+            body="Your score above is final for this attempt. Individual questions aren't available to review."
+          />
         </View>
       ) : (
         <View style={styles.questionsSection}>
@@ -578,6 +597,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   lockedText: { flex: 1, fontSize: 13, lineHeight: 19 },
+  emptyCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    paddingVertical: 8,
+  },
   questionsSection: { gap: 10 },
   questionsHeader: {
     gap: 8,
@@ -667,12 +691,4 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     borderTopWidth: 1,
   },
-  retryBtn: {
-    alignSelf: "center",
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 999,
-    borderWidth: 1.5,
-  },
-  retryText: { fontSize: 14, fontWeight: "700" },
 })

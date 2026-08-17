@@ -1,0 +1,19 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Score"
+- waitForAnimationToEnd
+- tapOn: "Board"
+- waitForAnimationToEnd
+- tapOn: "Manage"
+- waitForAnimationToEnd
+- tapOn: "Slots"
+- waitForAnimationToEnd
+- tapOn:
+    text: "Show more tabs"
+    optional: true
+- tapOn:
+    text: "Config"
+    optional: true
+- tapOn:
+    text: "Grades"
+    optional: true

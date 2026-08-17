@@ -1,7 +1,7 @@
 import { useMemo } from "react"
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View, useColorScheme } from "react-native"
+import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { Ionicons } from "@/components/icons/AppIcon"
-import { useModuleScrollContentPadding } from "../../context/ChromeInsetContext"
 import { useAppearance } from "../../context/AppearanceProvider"
 import {
   THEME_DEFINITIONS,
@@ -12,6 +12,7 @@ import {
   type ThemeId,
 } from "../../constants/app-themes"
 import { useThemeGridCardWidth } from "../../lib/responsive-layout"
+import { NotetakerScreenHeader } from "../notetaker/NotetakerScreenHeader"
 
 const APPEARANCE_MODES: Array<{ id: AppearanceMode; label: string; icon: keyof typeof Ionicons.glyphMap }> = [
   { id: "light", label: "Light", icon: "sunny-outline" },
@@ -123,27 +124,23 @@ function ThemePreviewCard({
   )
 }
 
-export function AppearanceSettingsScreen() {
-  const scrollPad = useModuleScrollContentPadding(24)
+export function AppearanceSettingsContent({ compact = false }: { compact?: boolean }) {
   const systemScheme = useColorScheme()
   const { prefs, tokens, applying, setAppearanceMode, setThemeId } = useAppearance()
   const themeCardWidth = useThemeGridCardWidth(CONTENT_PAD, THEME_GRID_GAP)
 
   return (
-    <ScrollView
-      style={[styles.scroll, { backgroundColor: tokens.native.groupedBackground }]}
-      contentContainerStyle={[styles.content, scrollPad]}
-      showsVerticalScrollIndicator={false}
-      scrollEnabled={!applying}
-      directionalLockEnabled={Platform.OS === "ios"}
-      alwaysBounceVertical={false}
-    >
-      <Text style={[styles.lead, { color: tokens.textSecondary }]}>
-        Pick a theme for accent and surface style. Light and Dark adjust dual-mode themes only — dark-first themes
-        (Carbon, Obsidian Glass, Midnight, Graphite Dark) always stay dark.
-      </Text>
+    <>
+      {!compact ? (
+        <Text style={[styles.lead, { color: tokens.textSecondary }]}>
+          Pick a theme for accent and surface style. Light and Dark adjust dual-mode themes only — dark-first themes
+          (Carbon, Obsidian Glass, Midnight, Graphite Dark) always stay dark.
+        </Text>
+      ) : null}
 
-      <Text style={[styles.sectionLabel, { color: tokens.textSecondary }]}>APPEARANCE</Text>
+      <Text style={[styles.sectionLabel, { color: tokens.textSecondary }]}>
+        {compact ? "Theme mode" : "APPEARANCE"}
+      </Text>
       <View style={[styles.groupCard, { backgroundColor: tokens.surface, borderColor: tokens.border }, tokens.cardShadow]}>
         <View style={styles.modeRow}>
           {APPEARANCE_MODES.map((mode) => {
@@ -151,17 +148,11 @@ export function AppearanceSettingsScreen() {
             return (
               <Pressable
                 key={mode.id}
-                style={[
-                  styles.modeBtn,
-                  active && { backgroundColor: tokens.accentSoftStrong },
-                ]}
+                style={[styles.modeBtn, active && { backgroundColor: tokens.accentSoftStrong }]}
                 onPress={() => setAppearanceMode(mode.id)}
+                disabled={applying}
               >
-                <Ionicons
-                  name={mode.icon}
-                  size={18}
-                  color={active ? tokens.accent : tokens.textMuted}
-                />
+                <Ionicons name={mode.icon} size={18} color={active ? tokens.accent : tokens.textMuted} />
                 <Text
                   style={[styles.modeLabel, { color: active ? tokens.accent : tokens.textSecondary }]}
                   numberOfLines={1}
@@ -190,7 +181,28 @@ export function AppearanceSettingsScreen() {
       </View>
 
       <LivePreview tokens={tokens} />
-    </ScrollView>
+    </>
+  )
+}
+
+export function AppearanceSettingsScreen() {
+  const insets = useSafeAreaInsets()
+  const { tokens, applying } = useAppearance()
+
+  return (
+    <View style={[styles.root, { backgroundColor: tokens.native.groupedBackground }]}>
+      <NotetakerScreenHeader title="Appearance" fallbackHref="/dashboard" />
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}
+        showsVerticalScrollIndicator={false}
+        scrollEnabled={!applying}
+        directionalLockEnabled={Platform.OS === "ios"}
+        alwaysBounceVertical={false}
+      >
+        <AppearanceSettingsContent />
+      </ScrollView>
+    </View>
   )
 }
 
@@ -209,13 +221,13 @@ function LivePreview({ tokens }: { tokens: AppThemeTokens }) {
           <Text style={[styles.chipText, { color: tokens.textSecondary }]}>Default chip</Text>
         </View>
       </View>
-      <View style={styles.liveActions}>
-        <Pressable style={[styles.livePrimary, { backgroundColor: tokens.accent }]}>
+      <View style={styles.liveActions} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+        <View style={[styles.livePrimary, { backgroundColor: tokens.accent }]}>
           <Text style={styles.livePrimaryText}>Primary</Text>
-        </Pressable>
-        <Pressable style={[styles.liveSecondary, { borderColor: tokens.border, backgroundColor: tokens.surface }]}>
+        </View>
+        <View style={[styles.liveSecondary, { borderColor: tokens.border, backgroundColor: tokens.surface }]}>
           <Text style={[styles.liveSecondaryText, { color: tokens.text }]}>Secondary</Text>
-        </Pressable>
+        </View>
       </View>
     </View>
   )
@@ -318,8 +330,9 @@ const previewStyles = StyleSheet.create({
 })
 
 const styles = StyleSheet.create({
+  root: { flex: 1 },
   scroll: { flex: 1 },
-  content: { paddingHorizontal: CONTENT_PAD, gap: 0 },
+  content: { paddingHorizontal: CONTENT_PAD, paddingTop: 12, gap: 0 },
   lead: { fontSize: 14, lineHeight: 20, marginBottom: 20, marginTop: 4 },
   sectionLabel: {
     fontSize: 12,

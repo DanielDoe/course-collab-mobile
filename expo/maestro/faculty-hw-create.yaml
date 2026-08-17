@@ -1,0 +1,7 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Issues"
+- tapOn: "Deleted"
+- tapOn: "All homework"
+- tapOn: "Create homework"
+- waitForAnimationToEnd

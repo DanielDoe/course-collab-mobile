@@ -1,0 +1,7 @@
+appId: com.coursecollab.app
+---
+- tapOn: "ECE 2202"
+- extendedWaitUntil:
+    visible: "Dashboard|Loading course dashboard|Select a Course|Instructor"
+    timeout: 45000
+- takeScreenshot: after-ece2202

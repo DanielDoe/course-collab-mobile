@@ -1,0 +1,6 @@
+appId: com.coursecollab.app
+---
+- scrollUntilVisible:
+    element: "Group QA16P|No approved groups|Title"
+    direction: DOWN
+    timeout: 15000

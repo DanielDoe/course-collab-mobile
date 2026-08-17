@@ -1,0 +1,10 @@
+appId: com.coursecollab.app
+---
+- tapOn: "New homework"
+- tapOn: "AC Power"
+- extendedWaitUntil:
+    visible: "Select all"
+    timeout: 15000
+- tapOn: "Select all"
+- tapOn: "Submit Create homework (12)"
+- waitForAnimationToEnd

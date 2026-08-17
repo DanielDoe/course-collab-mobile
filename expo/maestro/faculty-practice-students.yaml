@@ -1,0 +1,31 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Search students…"
+- inputText: "zzz"
+- tapOn: "Manage Practice"
+- extendedWaitUntil:
+    visible: "No matches"
+    timeout: 8000
+- takeScreenshot: practice-students-empty
+- tapOn: "Clear search"
+- tapOn: "Search students…"
+- inputText: "Daniel"
+- tapOn: "Manage Practice"
+- extendedWaitUntil:
+    visible: "Daniel Doe"
+    timeout: 8000
+- takeScreenshot: practice-students-match
+- tapOn: "Clear search"
+- tapOn: "Open filters"
+- extendedWaitUntil:
+    visible: "Filter students|All students"
+    timeout: 10000
+- takeScreenshot: practice-student-filters
+- tapOn: "Section ECE2202"
+- tapOn: "Open filters"
+- tapOn: "All students"
+- tapOn: "Alvin Pulickal Reni"
+- extendedWaitUntil:
+    visible: "Practice progress"
+    timeout: 10000
+- takeScreenshot: practice-student-alvin

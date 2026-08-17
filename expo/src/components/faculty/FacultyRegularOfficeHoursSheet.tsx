@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { AppAlert } from '../../lib/app-alert'
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
@@ -11,6 +11,7 @@ import {
 } from "../../lib/instructor-api"
 import { useModuleTheme } from "../../lib/themed-module-shell"
 import { NativeSelect } from "../NativeSelect"
+import { TIME_OF_DAY_OPTIONS, withCurrentOption } from "./FacultyNativePickers"
 import {
   FacultySheetAddButton,
   FacultySheetContainer,
@@ -18,7 +19,6 @@ import {
   FacultySheetNotice,
   FacultySheetSection,
   FacultySheetSubmitButton,
-  sheetPlaceholderColor,
   useCollabSheetStyles,
 } from "./faculty-collab-sheet-ui"
 import { SHEET_SECTION } from "./faculty-sheet-semantics"
@@ -155,25 +155,21 @@ export function FacultyRegularOfficeHoursSheet({
 
                 <View style={localStyles.timeRow}>
                   <View style={localStyles.timeField}>
-                    <Text style={[type.caption, localStyles.timeLabel, { color: native.secondaryLabel }]}>Start</Text>
-                    <TextInput
-                      style={[collabSheetStyles.fieldInput, localStyles.timeInput]}
+                    <NativeSelect
+                      label="Start"
+                      placeholder="12:00 PM"
                       value={slot.startTime}
-                      onChangeText={(startTime) => updateSlot(index, { startTime })}
-                      placeholder="12:00"
-                      placeholderTextColor={sheetPlaceholderColor}
-                      autoCapitalize="none"
+                      options={withCurrentOption(TIME_OF_DAY_OPTIONS, slot.startTime)}
+                      onChange={(startTime) => updateSlot(index, { startTime })}
                     />
                   </View>
                   <View style={localStyles.timeField}>
-                    <Text style={[type.caption, localStyles.timeLabel, { color: native.secondaryLabel }]}>End</Text>
-                    <TextInput
-                      style={[collabSheetStyles.fieldInput, localStyles.timeInput]}
+                    <NativeSelect
+                      label="End"
+                      placeholder="1:00 PM"
                       value={slot.endTime}
-                      onChangeText={(endTime) => updateSlot(index, { endTime })}
-                      placeholder="13:00"
-                      placeholderTextColor={sheetPlaceholderColor}
-                      autoCapitalize="none"
+                      options={withCurrentOption(TIME_OF_DAY_OPTIONS, slot.endTime)}
+                      onChange={(endTime) => updateSlot(index, { endTime })}
                     />
                   </View>
                 </View>

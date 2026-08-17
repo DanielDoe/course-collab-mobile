@@ -1,0 +1,21 @@
+appId: com.coursecollab.app
+---
+- tapOn:
+    text: "Dismiss"
+    optional: true
+- tapOn:
+    id: "Close"
+    optional: true
+- tapOn:
+    text: "Open debugger to view warnings."
+    optional: true
+- tapOn: "Open navigation menu"
+- waitForAnimationToEnd
+- tapOn: "Flashcards"
+- tapOn:
+    text: "Close menu"
+    optional: true
+- extendedWaitUntil:
+    visible: "Search flashcard decks…|No flashcard decks|Generate from question bank|Create deck"
+    timeout: 35000
+- takeScreenshot: flashcards-production

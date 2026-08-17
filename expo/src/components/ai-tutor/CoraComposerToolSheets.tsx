@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import {
+  Keyboard,
   Modal,
   Platform,
   Pressable,
@@ -24,29 +25,50 @@ type SheetShellProps = {
   visible: boolean
   title: string
   onClose: () => void
+  closeAccessibilityLabel?: string
   children: React.ReactNode
   footer?: React.ReactNode
 }
 
-function SheetShell({ visible, title, onClose, children, footer }: SheetShellProps) {
+function SheetShell({
+  visible,
+  title,
+  onClose,
+  closeAccessibilityLabel = "Close",
+  children,
+  footer,
+}: SheetShellProps) {
   const native = useThemedNative()
   const SN = useThemedStudentNative()
   const type = useNativeType()
+  const handleClose = () => {
+    Keyboard.dismiss()
+    onClose()
+  }
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose}>
-        <Pressable style={[styles.sheet, { backgroundColor: native.secondaryGrouped }]} onPress={() => {}}>
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={handleClose}>
+      <Pressable accessible={false} style={styles.backdrop} onPress={handleClose}>
+        <View
+          style={[styles.sheet, { backgroundColor: native.secondaryGrouped }]}
+          onStartShouldSetResponder={() => true}
+        >
           <View style={[styles.handle, { backgroundColor: native.separator }]} />
           <View style={styles.header}>
             <Text style={[type.bodyEmphasis, styles.title]}>{title}</Text>
-            <Pressable onPress={onClose} hitSlop={8}>
+            <Pressable
+              onPress={handleClose}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel={closeAccessibilityLabel}
+              style={styles.closeBtn}
+            >
               <Ionicons name="close" size={22} color={SN.secondaryLabel} />
             </Pressable>
           </View>
           {children}
           {footer}
-        </Pressable>
+        </View>
       </Pressable>
     </Modal>
   )
@@ -222,14 +244,18 @@ export function CoraCodeToolSheet({
   visible,
   title,
   hint,
+  placeholder = "Paste your C++ code here…",
   buttonLabel = "Use in chat",
+  closeAccessibilityLabel = "Close",
   onClose,
   onSubmit,
 }: {
   visible: boolean
   title: string
   hint?: string
+  placeholder?: string
   buttonLabel?: string
+  closeAccessibilityLabel?: string
   onClose: () => void
   onSubmit: (code: string) => void
 }) {
@@ -247,6 +273,7 @@ export function CoraCodeToolSheet({
       visible={visible}
       title={title}
       onClose={onClose}
+      closeAccessibilityLabel={closeAccessibilityLabel}
       footer={
         <Pressable
           onPress={() => {
@@ -256,6 +283,8 @@ export function CoraCodeToolSheet({
             onClose()
           }}
           disabled={!code.trim()}
+          accessibilityRole="button"
+          accessibilityLabel={buttonLabel}
           style={({ pressed }) => [
             styles.primaryBtn,
             {
@@ -278,8 +307,9 @@ export function CoraCodeToolSheet({
         ]}
         value={code}
         onChangeText={setCode}
-        placeholder="Paste your C++ code here…"
+        placeholder={placeholder}
         placeholderTextColor={SN.secondaryLabel}
+        accessibilityLabel={title}
         multiline
         autoFocus
         textAlignVertical="top"
@@ -455,6 +485,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     marginBottom: 12,
+  },
+  closeBtn: {
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
   },
   title: { fontSize: 17 },
   hint: { marginBottom: 10, lineHeight: 18 },

@@ -13,7 +13,13 @@
     "dev:emulator": "bash scripts/start-emulator.sh",
     "dev:android": "bash scripts/start-emulator.sh && source scripts/setup-env.sh && npx cap run android --target CourseCollab_Pixel",
     "expo:install": "cd expo && npm install",
-    "expo:start": "cd expo && npx expo start"
+    "expo:start": "cd expo && npx expo start",
+    "release:audit": "cd expo && npm run release:audit",
+    "release:audit:mobile": "cd expo && npm run release:audit:mobile",
+    "audit:coursecollab": "node scripts/audit-coursecollab.mjs",
+    "audit:mobile-production": "cd expo && npm run audit:mobile-production",
+    "audit:ios": "cd expo && npm run audit:ios",
+    "audit:appstore": "cd expo && npm run audit:appstore"
   },
   "dependencies": {
     "@capacitor/android": "^7.2.0",

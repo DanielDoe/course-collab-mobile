@@ -9,6 +9,7 @@ import {
   type CodebenchStreak,
   type DailyChallenge,
 } from "../lib/codebench-api"
+import { ApiError } from "../lib/api"
 import { fetchCodebenchProgress } from "../lib/codebench-progress"
 import { SHELL_REFRESH_TTL_MS } from "../lib/faculty-shell-refresh-types"
 import type { StudentSession } from "../lib/session"
@@ -24,6 +25,7 @@ export function useCodebenchProgress(session: StudentSession | null, options: Op
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [analysisLoading, setAnalysisLoading] = useState(false)
+  const [error, setError] = useState("")
 
   const [streak, setStreak] = useState<CodebenchStreak>({ streakDays: 0 })
   const [badges, setBadges] = useState<Record<string, boolean>>({})
@@ -82,8 +84,11 @@ export function useCodebenchProgress(session: StudentSession | null, options: Op
       try {
         const snapshot = await fetchCodebenchProgress(session)
         applySnapshot(snapshot)
-      } catch {
-        /* non-fatal */
+        setError(snapshot.error)
+      } catch (err) {
+        setError(
+          err instanceof ApiError ? err.message : "Failed to load your CodeBench progress.",
+        )
       } finally {
         if (!opts?.silent) setLoading(false)
       }
@@ -94,6 +99,7 @@ export function useCodebenchProgress(session: StudentSession | null, options: Op
   useEffect(() => {
     if (!session || !enabled) {
       setLoading(false)
+      setError("")
       return
     }
     void load()
@@ -125,6 +131,7 @@ export function useCodebenchProgress(session: StudentSession | null, options: Op
     loading,
     refreshing,
     analysisLoading,
+    error,
     streak,
     badges,
     badgeDetails,

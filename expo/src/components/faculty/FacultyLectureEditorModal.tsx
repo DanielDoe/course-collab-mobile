@@ -12,7 +12,9 @@ import { Ionicons } from "@/components/icons/AppIcon"
 import * as DocumentPicker from "expo-document-picker"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { ApiError } from "../../lib/api"
+import { AppAlert } from "../../lib/app-alert"
 import { instructorApi, type InstructorLecture } from "../../lib/instructor-api"
+import { mergeLectureDeckFromContent } from "../../lib/lecture-deck-url"
 import { useFacultyScope } from "../../hooks/useFacultyScope"
 import { useThemedNative } from "../../context/AppearanceProvider"
 import { FACULTY_SHEET_COLOR } from "../../lib/faculty-sheet-theme"
@@ -32,6 +34,8 @@ import {
   sheetPlaceholderColor
 } from "./faculty-collab-sheet-ui"
 import { SHEET_SECTION } from "./faculty-sheet-semantics"
+import { NativeSelect } from "../NativeSelect"
+import { WEEK_OPTIONS } from "./FacultyNativePickers"
 
 type Props = {
   visible: boolean
@@ -44,6 +48,20 @@ type Props = {
 
 function hasDeck(lecture: InstructorLecture): boolean {
   return Boolean(lecture.pdf_url || lecture.document_url)
+}
+
+function objectivesTextFromLecture(lecture: InstructorLecture): string {
+  const raw = lecture.objectives
+  if (Array.isArray(raw)) return raw.map((item) => String(item).trim()).filter(Boolean).join("\n")
+  if (typeof raw === "string") return raw
+  return ""
+}
+
+function objectivesListFromText(value: string): string[] {
+  return value
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
 }
 
 export function FacultyLectureEditorModal({
@@ -61,6 +79,7 @@ export function FacultyLectureEditorModal({
   const [title, setTitle] = useState("")
   const [week, setWeek] = useState("")
   const [description, setDescription] = useState("")
+  const [objectives, setObjectives] = useState("")
   const [published, setPublished] = useState(true)
   const [allowDownload, setAllowDownload] = useState(false)
   const [deckAttached, setDeckAttached] = useState(false)
@@ -82,7 +101,7 @@ export function FacultyLectureEditorModal({
     setRefreshingDeck(true)
     try {
       const data = await instructorApi.getLectureContent(scope, lecture.id)
-      if (data.lecture) syncDeckFromLecture(data.lecture)
+      syncDeckFromLecture(mergeLectureDeckFromContent(lecture, data))
     } catch {
       syncDeckFromLecture(lecture)
     } finally {
@@ -96,6 +115,7 @@ export function FacultyLectureEditorModal({
       setTitle("")
       setWeek(String(defaultWeek))
       setDescription("")
+      setObjectives("")
       setPublished(false)
       setAllowDownload(false)
       setDeckAttached(false)
@@ -107,6 +127,7 @@ export function FacultyLectureEditorModal({
     setTitle(lecture.title)
     setWeek(String(lecture.week))
     setDescription(lecture.description ?? "")
+    setObjectives(objectivesTextFromLecture(lecture))
     setPublished(lecture.is_published ?? lecture.is_active ?? false)
     setAllowDownload(lecture.allow_download ?? false)
     syncDeckFromLecture(lecture)
@@ -134,10 +155,12 @@ export function FacultyLectureEditorModal({
     setSaving(true)
     setError("")
     try {
+      const objectiveList = objectivesListFromText(objectives)
       const payload = {
         title: title.trim(),
         week: weekNum,
         description: description.trim() || undefined,
+        objectives: objectiveList,
         is_published: published,
         ...(createMode ? {} : { allow_download: allowDownload })}
       if (createMode) {
@@ -187,23 +210,34 @@ export function FacultyLectureEditorModal({
     }
   }
 
-  async function removeDeck() {
+  function confirmRemoveDeck() {
     if (!scope || createMode) return
-    setRemoving(true)
-    setError("")
-    try {
-      const result = await instructorApi.deleteLectureDocument(scope, lectureId)
-      if (result.lecture) syncDeckFromLecture(result.lecture)
-      else {
-        setDeckAttached(false)
-        setDeckPreviewUrl(null)
-      }
-      onSaved()
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not remove deck.")
-    } finally {
-      setRemoving(false)
-    }
+    AppAlert.alert("Remove slide deck?", "Students will no longer see this PDF until you upload another deck.", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Remove",
+        style: "destructive",
+        onPress: () => {
+          void (async () => {
+            setRemoving(true)
+            setError("")
+            try {
+              const result = await instructorApi.deleteLectureDocument(scope, lectureId)
+              if (result.lecture) syncDeckFromLecture(result.lecture)
+              else {
+                setDeckAttached(false)
+                setDeckPreviewUrl(null)
+              }
+              onSaved()
+            } catch (err) {
+              setError(err instanceof ApiError ? err.message : "Could not remove deck.")
+            } finally {
+              setRemoving(false)
+            }
+          })()
+        },
+      },
+    ])
   }
 
   return (
@@ -234,14 +268,41 @@ export function FacultyLectureEditorModal({
             tone={SHEET_SECTION.edit}
           >
             <FacultySheetField label="Title">
-              <TextInput style={collabSheetStyles.fieldInput} value={title} onChangeText={setTitle} />
-            </FacultySheetField>
-            <FacultySheetField label="Week">
               <TextInput
                 style={collabSheetStyles.fieldInput}
+                value={title}
+                onChangeText={setTitle}
+                autoCorrect={false}
+                autoCapitalize="none"
+                keyboardType="ascii-capable"
+                accessibilityLabel="Lecture title"
+                testID="lecture-title"
+              />
+            </FacultySheetField>
+            <FacultySheetField label="Week">
+              <NativeSelect
+                placeholder="Week"
                 value={week}
-                onChangeText={setWeek}
-                keyboardType="number-pad"
+                options={
+                  WEEK_OPTIONS.some((option) => option.value === week)
+                    ? WEEK_OPTIONS
+                    : [...WEEK_OPTIONS, { value: week, label: `Week ${week}` }]
+                }
+                onChange={setWeek}
+              />
+            </FacultySheetField>
+            <FacultySheetField label="Learning objectives">
+              <TextInput
+                style={[collabSheetStyles.fieldInput, collabSheetStyles.textArea]}
+                value={objectives}
+                onChangeText={setObjectives}
+                multiline
+                textAlignVertical="top"
+                placeholder="One objective per line"
+                placeholderTextColor={sheetPlaceholderColor}
+                accessibilityLabel="Learning objectives"
+                autoCorrect={false}
+                autoCapitalize="sentences"
               />
             </FacultySheetField>
             <FacultySheetField label="Description">
@@ -252,6 +313,10 @@ export function FacultyLectureEditorModal({
                 multiline
                 textAlignVertical="top"
                 placeholderTextColor={sheetPlaceholderColor}
+                autoCorrect={false}
+                keyboardType="ascii-capable"
+                accessibilityLabel="Lecture description"
+                testID="lecture-description"
               />
             </FacultySheetField>
           </FacultySheetSection>
@@ -288,7 +353,7 @@ export function FacultyLectureEditorModal({
                   tone="danger"
                   loading={removing}
                   disabled={uploading || removing}
-                  onPress={() => void removeDeck()}
+                  onPress={confirmRemoveDeck}
                 />
               ) : null}
             </FacultySheetSection>

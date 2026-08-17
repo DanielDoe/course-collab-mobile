@@ -1,0 +1,26 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Share code"
+- takeScreenshot: playground-p31-share
+- tapOn:
+    text: "Close"
+    optional: true
+- tapOn:
+    text: "Cancel"
+    optional: true
+- scrollUntilVisible:
+    element:
+      text: "Delete session"
+    direction: DOWN
+    timeout: 10000
+- takeScreenshot: playground-p31-actions
+- tapOn: "Delete session"
+- extendedWaitUntil:
+    visible: "Delete session?"
+    timeout: 8000
+- takeScreenshot: playground-p31-delete
+- tapOn: "Cancel"
+- tapOn: "Leaderboard"
+- takeScreenshot: playground-p31-board
+- tapOn: "Questions"
+- takeScreenshot: playground-p31-questions

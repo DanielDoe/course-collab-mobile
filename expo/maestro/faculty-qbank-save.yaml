@@ -1,0 +1,6 @@
+appId: com.coursecollab.app
+---
+- tapOn: "New question"
+- waitForAnimationToEnd
+- tapOn: "Save"
+- waitForAnimationToEnd

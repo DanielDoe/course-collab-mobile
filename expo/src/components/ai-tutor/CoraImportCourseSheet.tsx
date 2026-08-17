@@ -29,15 +29,27 @@ type Props = {
   session: StudentSession
   onClose: () => void
   onImportProblem: (problem: CoraImportedProblem, label: string) => void
+  /**
+   * `messages` unlocks graded assessments for peer/professor discussion sharing.
+   * Default `cora` keeps tutoring integrity locks.
+   */
+  purpose?: "cora" | "messages"
 }
 
 type Step = "sources" | "containers" | "questions"
 type ImportListRow = CoraQuestionImportSource | CoraQuestionImportContainer | CoraQuestionImportItem
 
-export function CoraImportCourseSheet({ visible, session, onClose, onImportProblem }: Props) {
+export function CoraImportCourseSheet({
+  visible,
+  session,
+  onClose,
+  onImportProblem,
+  purpose = "cora",
+}: Props) {
   const native = useThemedNative()
   const SN = useThemedStudentNative()
   const type = useNativeType()
+  const forMessages = purpose === "messages"
   const [step, setStep] = useState<Step>("sources")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -53,7 +65,7 @@ export function CoraImportCourseSheet({ visible, session, onClose, onImportProbl
     setImportingRef(item.ref)
     setError(null)
     try {
-      const problem = await resolveCoraQuestionImport(session, item)
+      const problem = await resolveCoraQuestionImport(session, item, purpose)
       onImportProblem(problem, item.label)
       onClose()
     } catch (err) {
@@ -71,11 +83,11 @@ export function CoraImportCourseSheet({ visible, session, onClose, onImportProbl
     setContainerLabel("")
     setError(null)
     setLoading(true)
-    void getCoraQuestionImportSources(session)
+    void getCoraQuestionImportSources(session, purpose)
       .then((res) => setSources(res.sources ?? []))
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load sources"))
       .finally(() => setLoading(false))
-  }, [visible, session])
+  }, [visible, session, purpose])
 
   const openSource = async (source: CoraQuestionImportSource) => {
     setLoading(true)
@@ -83,7 +95,7 @@ export function CoraImportCourseSheet({ visible, session, onClose, onImportProbl
     setSourceKey(source.key)
     setSourceLabel(source.label)
     try {
-      const res = await getCoraQuestionImportContainers(session, source.key)
+      const res = await getCoraQuestionImportContainers(session, source.key, purpose)
       setContainers(res.containers ?? [])
       setStep("containers")
     } catch (err) {
@@ -95,7 +107,7 @@ export function CoraImportCourseSheet({ visible, session, onClose, onImportProbl
 
   const openContainer = async (container: CoraQuestionImportContainer) => {
     if (!sourceKey) return
-    if (container.locked) {
+    if (container.locked && !forMessages) {
       setError(
         container.lockReason ||
           "Attempt this assessment first. Cora can help with its questions only after you submit.",
@@ -106,7 +118,7 @@ export function CoraImportCourseSheet({ visible, session, onClose, onImportProbl
     setError(null)
     setContainerLabel(container.label)
     try {
-      const res = await getCoraQuestionImportItems(session, sourceKey, container.id)
+      const res = await getCoraQuestionImportItems(session, sourceKey, container.id, purpose)
       setItems(res.items ?? [])
       setStep("questions")
     } catch (err) {
@@ -132,7 +144,9 @@ export function CoraImportCourseSheet({ visible, session, onClose, onImportProbl
 
   const title =
     step === "sources"
-      ? "Import from course"
+      ? forMessages
+        ? "Share from course"
+        : "Import from course"
       : step === "containers"
         ? sourceLabel
         : containerLabel
@@ -176,9 +190,15 @@ export function CoraImportCourseSheet({ visible, session, onClose, onImportProbl
           ) : (
             <>
               {step === "containers" &&
+              !forMessages &&
               ["quizzes", "homework", "mid_semester", "final_exam"].includes(sourceKey ?? "") ? (
                 <Text style={[type.caption, styles.lockHint, { color: "#b45309" }]}>
                   Pending assessments are locked until you attempt and submit them.
+                </Text>
+              ) : null}
+              {step === "sources" && forMessages ? (
+                <Text style={[type.caption, styles.lockHint, { color: SN.secondaryLabel }]}>
+                  Pick a question to share in this conversation. Answer keys are not included.
                 </Text>
               ) : null}
               {error ? (
@@ -243,7 +263,7 @@ export function CoraImportCourseSheet({ visible, session, onClose, onImportProbl
 
                 if (step === "containers") {
                   const container = row as CoraQuestionImportContainer
-                  const isLocked = Boolean(container.locked)
+                  const isLocked = Boolean(container.locked) && !forMessages
                   return (
                     <Pressable
                       testID={`cora-import-container-${container.id}`}

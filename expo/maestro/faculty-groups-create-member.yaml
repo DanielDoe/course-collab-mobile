@@ -1,0 +1,13 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Create group"
+- swipe:
+    direction: UP
+- tapOn:
+    text: "Add Ahmad Nobani"
+    optional: true
+- tapOn:
+    text: ".*Ahmad Nobani.*"
+    optional: true
+- takeScreenshot: groups-create-member
+- tapOn: "Done"

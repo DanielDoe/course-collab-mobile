@@ -1,0 +1,8 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Pending"
+- tapOn: "Board"
+- tapOn: "Awards"
+- tapOn: "Show more tabs"
+- tapOn: "Tasks"
+- waitForAnimationToEnd

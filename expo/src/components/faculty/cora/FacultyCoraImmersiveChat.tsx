@@ -33,7 +33,10 @@ import {
   facultyCoraChatSolidCanvas,
   facultyCoraChatStarterCardStyle,
 } from "../../../lib/faculty-cora-theme"
+import { getThemedCoraChatBubblePalette } from "../../ai-tutor/cora-chat-bubble-theme"
 import { CoraActionCard } from "../../cora/CoraActionCard"
+import { CoraChatDayDivider } from "../../cora/CoraChatDayDivider"
+import { shouldShowChatDayDivider } from "../../../lib/cora/chat-day-divider"
 import {
   confirmFacultyCoraAction,
 } from "../../../lib/cora/confirm-action"
@@ -41,6 +44,7 @@ import {
   executeLocalCoraProposal,
   isLocalCoraProposal,
 } from "../../../lib/cora/local-proposals"
+import { isProposalConfirmable } from "../../../lib/cora/proposal-message"
 import type { CoraActionProposal } from "../../../lib/cora/types"
 import {
   activateFacultyCoraThread,
@@ -72,8 +76,12 @@ import {
   recordCoraError,
   recordCoraSuccess,
 } from "../../../lib/cora-rbac"
+import { mapFacultyOrAdminChatResponse } from "../../../lib/cora/scope/types"
+import { submitCoraScopeFeedback } from "../../../lib/cora/scope/feedback-api"
+import { useChatListScrollToEnd } from "../../../hooks/useChatListScrollToEnd"
 import { useCoraVoiceDictation } from "../../../hooks/use-cora-voice-dictation"
 import { CoraChatBubble } from "../../ai-tutor/CoraChatBubble"
+import { CoraScopeFeedbackBar } from "../../cora/CoraScopeFeedbackBar"
 import { CoraWorkspaceComposer } from "../../ai-tutor/CoraWorkspaceComposer"
 import { CoraMessageOptionsSheet } from "../../ai-tutor/CoraMessageOptionsSheet"
 import {
@@ -326,6 +334,7 @@ export function FacultyCoraImmersiveChat({
   const SN = useThemedStudentNative()
   const type = useNativeType()
   const listRef = useRef<FlatList>(null)
+  const scrollToEnd = useChatListScrollToEnd(listRef, 120)
 
   const { context, capabilities } = useFacultyCoraContext()
   const [activeCapabilityId, setActiveCapabilityId] = useState<FacultyCoraCapabilityId>(
@@ -364,6 +373,7 @@ export function FacultyCoraImmersiveChat({
   const sentInitialRef = useRef(false)
   const createdAtRef = useRef(new Date().toISOString())
   const sendAbortRef = useRef<AbortController | null>(null)
+  const scopeRetryRef = useRef<{ confirm: boolean; context: string | null } | null>(null)
   const [threadId, setThreadId] = useState<string | null>(null)
   const [threads, setThreads] = useState<FacultyCoraChatThread[]>([])
   const [archivedThreads, setArchivedThreads] = useState<FacultyCoraChatThread[]>([])
@@ -371,6 +381,7 @@ export function FacultyCoraImmersiveChat({
   const [chatHydrated, setChatHydrated] = useState(false)
   const [historyLoading, setHistoryLoading] = useState(false)
   const [historySyncing, setHistorySyncing] = useState(false)
+  const [composerHeight, setComposerHeight] = useState(128)
   const messagesRef = useRef<AssistantMessage[]>([])
   const threadIdRef = useRef<string | null>(null)
 
@@ -381,31 +392,61 @@ export function FacultyCoraImmersiveChat({
     if (capabilityId) setActiveCapabilityId(capabilityId)
   }, [capabilityId])
 
-  const persistActiveThread = useCallback(async () => {
-    const id = threadIdRef.current
-    const courseId = scope.courseId
-    if (!id || !courseId) return
+  const persistActiveThread = useCallback(
+    async (messagesOverride?: AssistantMessage[]) => {
+      const id = threadIdRef.current
+      const courseId = scope.courseId
+      if (!id || !courseId) return
 
-    const storable = messagesRef.current.filter((message) => message.content.trim() || message.importedQuestion)
-    if (storable.length === 0) return
-
-    const existingThread =
-      threads.find((thread) => thread.id === id) ?? archivedThreads.find((thread) => thread.id === id)
-
-    const thread = buildFacultyCoraThread(id, storable, activeCapabilityId, {
-      createdAt: createdAtRef.current,
-      capabilityId: activeCapabilityId,
-      title: existingThread?.title ?? capability.label,
-      titleIsCustom: existingThread?.titleIsCustom,
-    })
-    await saveFacultyCoraThread(scope.instructorId, courseId, thread, scope)
-    setThreads((prev) => {
-      const without = prev.filter((item) => item.id !== thread.id)
-      return [thread, ...without].sort(
-        (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+      const source = messagesOverride ?? messagesRef.current
+      const storable = source.filter(
+        (message) =>
+          message.content.trim() ||
+          message.importedQuestion ||
+          (message.proposals?.length ?? 0) > 0 ||
+          Object.keys(message.proposalResultById ?? {}).length > 0 ||
+          Object.keys(message.proposalStatusById ?? {}).length > 0,
       )
-    })
-  }, [activeCapabilityId, archivedThreads, scope, threads])
+      if (storable.length === 0) return
+
+      // Keep ref in sync when caller passes the just-built message list (setState is async).
+      if (messagesOverride) messagesRef.current = messagesOverride
+
+      const existingThread =
+        threads.find((thread) => thread.id === id) ?? archivedThreads.find((thread) => thread.id === id)
+
+      const thread = buildFacultyCoraThread(id, storable, activeCapabilityId, {
+        createdAt: createdAtRef.current,
+        capabilityId: activeCapabilityId,
+        title: existingThread?.title ?? capability.label,
+        titleIsCustom: existingThread?.titleIsCustom,
+      })
+      await saveFacultyCoraThread(scope.instructorId, courseId, thread, scope)
+      setThreads((prev) => {
+        const without = prev.filter((item) => item.id !== thread.id)
+        return [thread, ...without].sort(
+          (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+        )
+      })
+    },
+    [activeCapabilityId, archivedThreads, capability.label, scope, threads],
+  )
+
+  // Debounced disk save so confirm cards survive even if send's finally-path races.
+  useEffect(() => {
+    if (!chatHydrated || sending || !threadId || !scope.courseId) return
+    const meaningful = messages.filter(
+      (message) =>
+        message.content.trim() ||
+        message.importedQuestion ||
+        (message.proposals?.length ?? 0) > 0,
+    )
+    if (meaningful.length === 0) return
+    const timer = setTimeout(() => {
+      void persistActiveThread(messages)
+    }, 500)
+    return () => clearTimeout(timer)
+  }, [chatHydrated, messages, persistActiveThread, scope.courseId, sending, threadId])
 
   const applyLoadedSession = useCallback(
     (
@@ -420,7 +461,7 @@ export function FacultyCoraImmersiveChat({
         sentInitialRef.current = false
         setActiveCapabilityId("assistant")
         if (scope.courseId) {
-          void activateFacultyCoraThread(scope.instructorId, scope.courseId, null)
+          void activateFacultyCoraThread(scope.instructorId, scope.courseId, null, scope)
         }
         return
       }
@@ -441,7 +482,7 @@ export function FacultyCoraImmersiveChat({
         setActiveCapabilityId(threadToOpen.capabilityId ?? resumeCapability)
         sentInitialRef.current = !initialPrompt?.trim()
         if (scope.courseId) {
-          void activateFacultyCoraThread(scope.instructorId, scope.courseId, threadToOpen.id)
+          void activateFacultyCoraThread(scope.instructorId, scope.courseId, threadToOpen.id, scope)
         }
         return
       }
@@ -453,7 +494,7 @@ export function FacultyCoraImmersiveChat({
       setActiveCapabilityId(resumeCapability)
       sentInitialRef.current = false
       if (scope.courseId) {
-        void activateFacultyCoraThread(scope.instructorId, scope.courseId, null)
+        void activateFacultyCoraThread(scope.instructorId, scope.courseId, null, scope)
       }
     },
     [capabilityId, initialPrompt, scope.courseId, scope.instructorId],
@@ -499,7 +540,26 @@ export function FacultyCoraImmersiveChat({
             synced.threads.find((thread) => thread.id === activeId) ??
             synced.archivedThreads.find((thread) => thread.id === activeId)
           if (updated && updated.messages.length >= messagesRef.current.length) {
-            setMessages(updated.messages)
+            // Prefer synced thread but keep in-memory confirm cards if sync omitted them.
+            const currentById = new Map(messagesRef.current.map((m) => [m.id, m]))
+            setMessages(
+              updated.messages.map((m) => {
+                const local = currentById.get(m.id)
+                if (!local) return m
+                return {
+                  ...m,
+                  proposals: m.proposals?.length ? m.proposals : local.proposals,
+                  proposalStatusById: {
+                    ...(local.proposalStatusById ?? {}),
+                    ...(m.proposalStatusById ?? {}),
+                  },
+                  proposalResultById: {
+                    ...(local.proposalResultById ?? {}),
+                    ...(m.proposalResultById ?? {}),
+                  },
+                }
+              }),
+            )
           }
         }
       } finally {
@@ -528,21 +588,34 @@ export function FacultyCoraImmersiveChat({
     setPendingAssistantId(null)
     setActiveCapabilityId("assistant")
     if (scope.courseId) {
-      await activateFacultyCoraThread(scope.instructorId, scope.courseId, null)
+      await activateFacultyCoraThread(scope.instructorId, scope.courseId, null, scope)
     }
     setSideNavOpen(false)
   }, [persistActiveThread, scope.courseId, scope.instructorId])
 
   const startNewConversation = useCallback(() => {
-    if (sending) return
+    if (sending) {
+      AppAlert.alert(
+        "Cora is still responding",
+        "Wait for this reply to finish, or tap Stop, then start a new chat.",
+        [{ text: "OK" }],
+        { tone: "warning" },
+      )
+      return
+    }
     if (messages.length === 0) {
       void resetToNewThread()
       return
     }
-    AppAlert.alert("Start new conversation?", "Your current chat will be saved to history.", [
-      { text: "Cancel", style: "cancel" },
-      { text: "New chat", onPress: () => void resetToNewThread() },
-    ])
+    AppAlert.alert(
+      "Start new conversation?",
+      "Your current chat will be saved to history.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "New chat", onPress: () => void resetToNewThread() },
+      ],
+      { tone: "warning" },
+    )
   }, [messages.length, resetToNewThread, sending])
 
   const openThread = useCallback(
@@ -554,7 +627,7 @@ export function FacultyCoraImmersiveChat({
       sentInitialRef.current = true
       if (thread.capabilityId) setActiveCapabilityId(thread.capabilityId)
       if (scope.courseId) {
-        await activateFacultyCoraThread(scope.instructorId, scope.courseId, thread.id)
+        await activateFacultyCoraThread(scope.instructorId, scope.courseId, thread.id, scope)
       }
       setSideNavOpen(false)
     },
@@ -707,30 +780,17 @@ export function FacultyCoraImmersiveChat({
     opacity: (1 - focusProgress.value) * headerWelcomeMaxOpacity,
   }))
 
-  const headerSolidBg = hexToRgba(solidCanvas, tokens.isDark ? 0.96 : 0.98)
-
   const bubblePalette = useMemo(() => {
     if (!chatFocused) return undefined
-    // Prose on canvas — reserve accent surfaces for action cards, not entire replies
-    const assistant = {
-      background: "transparent",
-      border: "transparent",
-      text: tokens.native.label,
-    }
-    const user = {
-      background: tokens.isDark ? "#3A3A3C" : tokens.native.groupedBackground,
-      border: "transparent",
-      text: tokens.native.label,
-    }
+    const themed = getThemedCoraChatBubblePalette(tokens)
     return {
-      user,
-      assistant,
-      userBorderWidth: 0,
-      assistantBorderWidth: 0,
-      userRadius: 22,
-      assistantRadius: 0,
-      assistantShadow: false,
-      assistantMarkdownOnAccent: false,
+      ...themed,
+      // Visible outline so Cora replies read as bubbles, not bare canvas text.
+      assistantBorderWidth: StyleSheet.hairlineWidth,
+      assistant: {
+        ...themed.assistant,
+        border: tokens.isDark ? hexToRgba("#FFFFFF", 0.16) : hexToRgba("#000000", 0.1),
+      },
     }
   }, [chatFocused, tokens])
 
@@ -741,20 +801,16 @@ export function FacultyCoraImmersiveChat({
   const handleVoiceTranscript = useCallback((text: string) => setInput(text), [])
   const { listening, toggleListening } = useCoraVoiceDictation(handleVoiceTranscript)
 
-  const scrollToEnd = useCallback(() => {
-    setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80)
-  }, [])
-
   const prevMessageCountRef = useRef(messages.length)
   useEffect(() => {
     if (messages.length !== prevMessageCountRef.current) {
       prevMessageCountRef.current = messages.length
-      scrollToEnd()
+      scrollToEnd(true)
     }
   }, [messages.length, scrollToEnd])
 
   const handleListContentSizeChange = useCallback(() => {
-    if (sending || pendingAssistantId) scrollToEnd()
+    if (sending || pendingAssistantId) scrollToEnd(true)
   }, [pendingAssistantId, scrollToEnd, sending])
 
   const stopGeneration = useCallback(() => {
@@ -770,16 +826,22 @@ export function FacultyCoraImmersiveChat({
 
       setInput("")
       setAttachments([])
+      const nowIso = new Date().toISOString()
       const userMsg: ChatMessage = {
         id: nextChatMessageId(),
         role: "user",
         content: finalText,
+        createdAt: nowIso,
         importedQuestion: importedQuestion ?? undefined,
         importedQuestionLabel: importedQuestionLabel ?? undefined,
       }
       const apiText = buildMessageForApi(userMsg).replace("Student request:", "Instructor request:")
       const thinkingId = nextChatMessageId()
-      const draft = [...messages, userMsg, { id: thinkingId, role: "assistant" as const, content: "" }]
+      const draft = [
+        ...messages,
+        userMsg,
+        { id: thinkingId, role: "assistant" as const, content: "", createdAt: nowIso },
+      ]
       setMessages(draft)
       setPendingAssistantId(thinkingId)
       setSending(true)
@@ -791,6 +853,7 @@ export function FacultyCoraImmersiveChat({
       sendAbortRef.current = streamController
 
       let prepared
+      let nextMessages: AssistantMessage[] = draft
       try {
         prepared = prepareCoraRequest({
           session,
@@ -802,7 +865,7 @@ export function FacultyCoraImmersiveChat({
         sendAbortRef.current = null
         setSending(false)
         setPendingAssistantId(null)
-        setMessages([
+        nextMessages = [
           ...draft.slice(0, -1),
           {
             id: thinkingId,
@@ -810,8 +873,11 @@ export function FacultyCoraImmersiveChat({
             content: isCoraAccessDeniedError(err)
               ? err.message
               : "Cora is not available for this action.",
+            createdAt: nowIso,
           },
-        ])
+        ]
+        setMessages(nextMessages)
+        void persistActiveThread(nextMessages)
         return
       }
 
@@ -821,44 +887,94 @@ export function FacultyCoraImmersiveChat({
           {
             message: apiText,
             capabilityId: activeCapabilityId,
+            threadId: threadIdRef.current,
             conversationHistory: messages,
+            confirmScopeRelated: scopeRetryRef.current?.confirm,
+            declaredAcademicContext: scopeRetryRef.current?.context ?? null,
           },
           { prepared, signal: streamController.signal },
         )
+        scopeRetryRef.current = null
 
-        if (res.rbacBlocked || res.restricted) {
+        const outcome = mapFacultyOrAdminChatResponse(
+          res as unknown as Record<string, unknown>,
+          finalText,
+        )
+
+        if (outcome.kind === "scope_redirect") {
+          nextMessages = [
+            ...draft.slice(0, -1),
+            {
+              id: thinkingId,
+              role: "assistant",
+              content: outcome.text,
+              createdAt: nowIso,
+              scopeFeedback: outcome.offerFeedback
+                ? { eventId: outcome.eventId, originalMessage: outcome.originalUserMessage }
+                : null,
+            },
+          ]
+          setMessages(nextMessages)
+          return
+        }
+
+        if (outcome.kind === "integrity_block") {
+          nextMessages = [
+            ...draft.slice(0, -1),
+            {
+              id: thinkingId,
+              role: "assistant",
+              content: outcome.text,
+              createdAt: nowIso,
+              integrityBlock: true,
+            },
+          ]
+          setMessages(nextMessages)
+          return
+        }
+
+        if (outcome.kind === "permission_deny" || res.rbacBlocked || (res.restricted && !res.scopeRedirect)) {
           recordCoraError(prepared, finalText)
-          setMessages([
+          nextMessages = [
             ...draft.slice(0, -1),
             {
               id: thinkingId,
               role: "assistant",
               content:
-                res.blockReason ??
-                "That request is outside Cora's teaching permissions for your account.",
+                outcome.kind === "permission_deny"
+                  ? outcome.text
+                  : res.blockReason ??
+                    "That request is outside Cora's teaching permissions for your account.",
+              createdAt: nowIso,
+              permissionDeny: true,
             },
-          ])
+          ]
+          setMessages(nextMessages)
           return
         }
 
         recordCoraSuccess(prepared, { prompt: apiText, response: res.reply })
-        setMessages([
+        nextMessages = [
           ...draft.slice(0, -1),
           {
             id: thinkingId,
             role: "assistant",
             content: res.reply,
+            createdAt: nowIso,
             actions: res.actions ?? [],
             proposals: res.proposals ?? [],
+            coraPublicMode: res.publicMode,
+            coraProfile: res.profile,
+            ui: res.ui,
           },
-        ])
+        ]
+        setMessages(nextMessages)
       } catch (err) {
         if (err instanceof Error && err.name === "AbortError") {
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === thinkingId && !m.content.trim() ? { ...m, content: "Stopped." } : m,
-            ),
+          nextMessages = messagesRef.current.map((m) =>
+            m.id === thinkingId && !m.content.trim() ? { ...m, content: "Stopped." } : m,
           )
+          setMessages(nextMessages)
           return
         }
         if (prepared) recordCoraError(prepared, finalText)
@@ -866,13 +982,17 @@ export function FacultyCoraImmersiveChat({
           err instanceof ApiError
             ? err.message
             : "Something went wrong. Try again or open the related module directly."
-        setMessages([...draft.slice(0, -1), { id: thinkingId, role: "assistant", content: fallback }])
+        nextMessages = [
+          ...draft.slice(0, -1),
+          { id: thinkingId, role: "assistant", content: fallback, createdAt: nowIso },
+        ]
+        setMessages(nextMessages)
       } finally {
         sendAbortRef.current = null
         setSending(false)
         setPendingAssistantId(null)
         scrollToEnd()
-        void persistActiveThread()
+        void persistActiveThread(nextMessages)
       }
     },
     [activeCapabilityId, attachments, importedQuestion, importedQuestionLabel, messages, persistActiveThread, scope, sending, session, scrollToEnd],
@@ -916,7 +1036,7 @@ export function FacultyCoraImmersiveChat({
         createdAtRef.current = capabilityThread.createdAt
         sentInitialRef.current = true
         if (scope.courseId) {
-          await activateFacultyCoraThread(scope.instructorId, scope.courseId, capabilityThread.id)
+          await activateFacultyCoraThread(scope.instructorId, scope.courseId, capabilityThread.id, scope)
         }
       } else {
         const newId = createFacultyCoraThreadId()
@@ -925,7 +1045,7 @@ export function FacultyCoraImmersiveChat({
         createdAtRef.current = new Date().toISOString()
         sentInitialRef.current = false
         if (scope.courseId) {
-          await activateFacultyCoraThread(scope.instructorId, scope.courseId, null)
+          await activateFacultyCoraThread(scope.instructorId, scope.courseId, null, scope)
         }
       }
 
@@ -977,32 +1097,37 @@ export function FacultyCoraImmersiveChat({
 
   const confirmProposal = useCallback(
     async (messageId: string, proposal: CoraActionProposal) => {
-      setMessages((prev) =>
-        prev.map((m) =>
+      const current = messagesRef.current.find((m) => m.id === messageId)
+      if (!isProposalConfirmable(current, proposal.actionId)) return
+
+      setMessages((prev) => {
+        const next = prev.map((m) =>
           m.id === messageId
             ? {
                 ...m,
                 proposalStatusById: {
                   ...(m.proposalStatusById ?? {}),
-                  [proposal.actionId]: "confirming",
+                  [proposal.actionId]: "confirming" as const,
                 },
               }
             : m,
-        ),
-      )
+        )
+        void persistActiveThread(next)
+        return next
+      })
       try {
         const result = isLocalCoraProposal(proposal)
           ? await executeLocalCoraProposal(proposal, { role: "faculty", scope })
           : await confirmFacultyCoraAction(scope, proposal)
 
-        setMessages((prev) =>
-          prev.map((m) =>
+        setMessages((prev) => {
+          const next = prev.map((m) =>
             m.id === messageId
               ? {
                   ...m,
                   proposalStatusById: {
                     ...(m.proposalStatusById ?? {}),
-                    [proposal.actionId]: result.success ? "done" : "error",
+                    [proposal.actionId]: result.success ? ("done" as const) : ("error" as const),
                   },
                   proposalResultById: {
                     ...(m.proposalResultById ?? {}),
@@ -1010,8 +1135,10 @@ export function FacultyCoraImmersiveChat({
                   },
                 }
               : m,
-          ),
-        )
+          )
+          void persistActiveThread(next)
+          return next
+        })
 
         if (result.success) {
           void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
@@ -1019,40 +1146,47 @@ export function FacultyCoraImmersiveChat({
           AppAlert.alert("Could not complete", result.message || result.error || "Action failed.")
         }
       } catch (err) {
-        setMessages((prev) =>
-          prev.map((m) =>
+        setMessages((prev) => {
+          const next = prev.map((m) =>
             m.id === messageId
               ? {
                   ...m,
                   proposalStatusById: {
                     ...(m.proposalStatusById ?? {}),
-                    [proposal.actionId]: "error",
+                    [proposal.actionId]: "error" as const,
                   },
                 }
               : m,
-          ),
-        )
+          )
+          void persistActiveThread(next)
+          return next
+        })
         AppAlert.alert(
           "Could not complete",
           err instanceof Error ? err.message : "Action failed.",
         )
       }
     },
-    [scope],
+    [persistActiveThread, scope],
   )
 
-  const cancelProposal = useCallback((messageId: string, proposalId: string) => {
-    setMessages((prev) =>
-      prev.map((m) =>
-        m.id === messageId
-          ? {
-              ...m,
-              proposals: (m.proposals ?? []).filter((p) => p.actionId !== proposalId),
-            }
-          : m,
-      ),
-    )
-  }, [])
+  const cancelProposal = useCallback(
+    (messageId: string, proposalId: string) => {
+      setMessages((prev) => {
+        const next = prev.map((m) =>
+          m.id === messageId
+            ? {
+                ...m,
+                proposals: (m.proposals ?? []).filter((p) => p.actionId !== proposalId),
+              }
+            : m,
+        )
+        void persistActiveThread(next)
+        return next
+      })
+    },
+    [persistActiveThread],
+  )
 
   const openImportCourse = useCallback((hint?: FacultyCoraImportHint | null) => {
     if (hint) setImportHint(hint)
@@ -1331,19 +1465,26 @@ export function FacultyCoraImmersiveChat({
           styles.headerHost,
           {
             paddingTop: insets.top,
-            backgroundColor: headerSolidBg,
+            backgroundColor: solidCanvas,
             borderBottomColor: native.separator,
           },
         ]}
       >
-        <Animated.View
+        {/* Opaque shield so transcript never ghosts through the chrome while scrolling */}
+        <View
           pointerEvents="none"
-          style={[
-            StyleSheet.absoluteFill,
-            { backgroundColor: welcomeCanvas },
-            headerWelcomeOverlayStyle,
-          ]}
+          style={[StyleSheet.absoluteFillObject, { backgroundColor: solidCanvas }]}
         />
+        {!chatFocused ? (
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              StyleSheet.absoluteFill,
+              { backgroundColor: welcomeCanvas },
+              headerWelcomeOverlayStyle,
+            ]}
+          />
+        ) : null}
         <View style={styles.headerRow}>
           <CoraChatMenuButton active={sideNavOpen} onPress={() => setSideNavOpen((open) => !open)} />
           <View style={styles.headerCopy}>
@@ -1364,18 +1505,23 @@ export function FacultyCoraImmersiveChat({
         data={messages}
         keyExtractor={(item) => item.id}
         style={styles.list}
-        initialNumToRender={8}
-        maxToRenderPerBatch={4}
-        windowSize={7}
-        removeClippedSubviews={Platform.OS === "android"}
+        initialNumToRender={12}
+        maxToRenderPerBatch={8}
+        windowSize={11}
+        removeClippedSubviews={false}
         contentContainerStyle={[
           styles.listContent,
-          { paddingTop: headerHeight + 8 },
+          {
+            paddingTop: headerHeight + 12,
+            // Hard floor so end-of-thread bubbles clear the composer even before onLayout.
+            paddingBottom: Math.max(composerHeight + 80, 260),
+          },
           showWelcome && styles.listWelcome,
         ]}
+        ListFooterComponent={<View style={{ height: 48 }} />}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
-        automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
+        automaticallyAdjustKeyboardInsets={false}
         onContentSizeChange={handleListContentSizeChange}
         onScrollToIndexFailed={(info) => {
           setTimeout(() => {
@@ -1401,17 +1547,32 @@ export function FacultyCoraImmersiveChat({
             />
           ) : null
         }
-        renderItem={({ item, index }) => (
+        renderItem={({ item, index }) => {
+          const prev = index > 0 ? messages[index - 1] : null
+          const dayDivider = shouldShowChatDayDivider(item, prev, createdAtRef.current)
+          const followsActionCards =
+            item.role === "user" &&
+            !!prev &&
+            prev.role === "assistant" &&
+            !!(prev.proposals?.length || prev.actions?.length)
+          return (
           <View
-            style={
+            style={[
+              styles.messageTurn,
+              item.role === "user" ? styles.messageTurnUser : null,
+              followsActionCards ? styles.messageTurnAfterCards : null,
+              item.role === "assistant" && (item.proposals?.length || item.actions?.length)
+                ? styles.messageTurnWithCards
+                : null,
               highlightMessageId === item.id
                 ? [
                     styles.highlightWrap,
                     { backgroundColor: hexToRgba(SN.accent, 0.08), borderColor: hexToRgba(SN.accent, 0.2) },
                   ]
-                : undefined
-            }
+                : null,
+            ]}
           >
+            {dayDivider.show && dayDivider.label ? <CoraChatDayDivider label={dayDivider.label} /> : null}
             <CoraChatBubble
               message={item}
               isStreaming={pendingAssistantId === item.id}
@@ -1433,21 +1594,67 @@ export function FacultyCoraImmersiveChat({
               suppressWhileMenuOpen={userMenuMessage?.id === item.id}
               onNavigateUserMessageVersion={() => {}}
             />
+            {item.role === "assistant" && item.scopeFeedback ? (
+              <CoraScopeFeedbackBar
+                feedback={item.scopeFeedback}
+                promptLabel="Was this actually related to your teaching work?"
+                onRelated={(note) => {
+                  void (async () => {
+                    try {
+                      const result = await submitCoraScopeFeedback({
+                        role: "instructor",
+                        session,
+                        related: true,
+                        eventId: item.scopeFeedback?.eventId,
+                        note,
+                      })
+                      setMessages((prev) =>
+                        prev.map((m) => (m.id === item.id ? { ...m, scopeFeedback: null } : m)),
+                      )
+                      if (result.allowRetry && item.scopeFeedback) {
+                        scopeRetryRef.current = { confirm: true, context: note }
+                        void sendMessage(item.scopeFeedback.originalMessage)
+                      }
+                    } catch {
+                      AppAlert.alert("Could not send feedback", "Try again in a moment.")
+                    }
+                  })()
+                }}
+                onNotRelated={() => {
+                  void (async () => {
+                    try {
+                      await submitCoraScopeFeedback({
+                        role: "instructor",
+                        session,
+                        related: false,
+                        eventId: item.scopeFeedback?.eventId,
+                      })
+                    } catch {
+                      /* ignore */
+                    }
+                    setMessages((prev) =>
+                      prev.map((m) => (m.id === item.id ? { ...m, scopeFeedback: null } : m)),
+                    )
+                  })()
+                }}
+              />
+            ) : null}
             {item.role === "assistant" && item.proposals?.length
               ? item.proposals.map((proposal: CoraActionProposal) => (
-                  <CoraActionCard
-                    key={proposal.actionId}
-                    proposal={proposal}
-                    status={item.proposalStatusById?.[proposal.actionId] ?? "idle"}
-                    result={item.proposalResultById?.[proposal.actionId] ?? null}
-                    resultMessage={item.proposalResultById?.[proposal.actionId]?.message}
-                    onConfirm={() => void confirmProposal(item.id, proposal)}
-                    onCancel={() => cancelProposal(item.id, proposal.actionId)}
-                    onOpen={(route) => {
-                      onClose()
-                      router.push(route as never)
-                    }}
-                  />
+                  <View key={proposal.actionId} style={styles.proposalWrap}>
+                    <CoraActionCard
+                      proposal={proposal}
+                      status={item.proposalStatusById?.[proposal.actionId] ?? "idle"}
+                      result={item.proposalResultById?.[proposal.actionId] ?? null}
+                      resultMessage={item.proposalResultById?.[proposal.actionId]?.message}
+                      onConfirm={() => void confirmProposal(item.id, proposal)}
+                      onCancel={() => cancelProposal(item.id, proposal.actionId)}
+                      onOpen={(route) => {
+                        onClose()
+                        router.push(route as never)
+                      }}
+                    />
+                  </View>
                 ))
               : null}
             {item.role === "assistant" && item.actions?.length ? (
@@ -1460,10 +1667,20 @@ export function FacultyCoraImmersiveChat({
               />
             ) : null}
           </View>
-        )}
+          )
+        }}
       />
 
-        <View style={[styles.composerArea, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+        <View
+          style={[
+            styles.composerArea,
+            { paddingBottom: Math.max(insets.bottom, 12), backgroundColor: solidCanvas },
+          ]}
+          onLayout={(e) => {
+            const next = Math.ceil(e.nativeEvent.layout.height)
+            setComposerHeight((prev) => (Math.abs(prev - next) > 1 ? next : prev))
+          }}
+        >
           <CoraWorkspaceComposer
             value={input}
             onChangeText={setInput}
@@ -1525,8 +1742,13 @@ export function FacultyCoraImmersiveChat({
         onIntent={handleIntent}
       />
       <Modal visible={modeSheetOpen} animationType="slide" transparent onRequestClose={() => setModeSheetOpen(false)}>
-        <Pressable style={styles.modeSheetBackdrop} onPress={() => setModeSheetOpen(false)}>
+        <Pressable
+          accessible={false}
+          style={styles.modeSheetBackdrop}
+          onPress={() => setModeSheetOpen(false)}
+        >
           <Pressable
+            accessible={false}
             style={[styles.modeSheet, { backgroundColor: native.secondaryGrouped }]}
             onPress={(event) => event.stopPropagation()}
           >
@@ -1545,6 +1767,9 @@ export function FacultyCoraImmersiveChat({
                       setModeSheetOpen(false)
                       void switchToCapability(item.id)
                     }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${item.label}, ${item.tagline}`}
+                    accessibilityState={{ selected: active }}
                     style={({ pressed }) => [
                       styles.modeSheetRow,
                       {
@@ -1573,7 +1798,9 @@ export function FacultyCoraImmersiveChat({
         visible={pasteContentOpen}
         title="Paste content"
         hint="Paste rubric text, a syllabus excerpt, question wording, or notes for Cora to work with."
+        placeholder="Paste rubric text, a syllabus excerpt, question wording, or notes…"
         buttonLabel="Add to chat"
+        closeAccessibilityLabel="Close paste sheet"
         onClose={() => setPasteContentOpen(false)}
         onSubmit={(content) => {
           setPasteContentOpen(false)
@@ -1647,8 +1874,10 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    zIndex: 40,
+    zIndex: 60,
+    elevation: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
+    overflow: "hidden",
   },
   headerRow: {
     flexDirection: "row",
@@ -1713,17 +1942,39 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 2,
   },
-  list: { flex: 1, backgroundColor: "transparent" },
-  listContent: { paddingBottom: 16 },
+  list: { flex: 1, backgroundColor: "transparent", zIndex: 0 },
+  listContent: { paddingBottom: 160 },
   listWelcome: { flexGrow: 1, justifyContent: "center" },
+  messageTurn: {
+    marginBottom: 8,
+    paddingBottom: 0,
+  },
+  messageTurnUser: {
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  /** Modest air between confirm/task cards and the next user bubble. */
+  messageTurnAfterCards: {
+    marginTop: 10,
+  },
+  messageTurnWithCards: {
+    marginBottom: 10,
+    paddingBottom: 4,
+  },
+  proposalWrap: {
+    marginTop: 6,
+    marginBottom: 8,
+  },
   highlightWrap: {
     borderRadius: 16,
     borderWidth: StyleSheet.hairlineWidth,
     paddingVertical: 2,
   },
   composerArea: {
+    zIndex: 20,
     paddingHorizontal: NATIVE.pagePadding,
-    paddingTop: 8,
+    paddingTop: 14,
+    backgroundColor: "transparent",
   },
   welcomeWrap: {
     alignItems: "center",

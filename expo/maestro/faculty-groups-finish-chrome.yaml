@@ -1,0 +1,11 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Active"
+- tapOn: "Denied"
+- tapOn: "Trash"
+- tapOn: "Queue"
+- tapOn: "Open filters"
+- tapOn: "Done"
+- tapOn: "Create group or project"
+- tapOn: "Create project. Submit a project under an approved group"
+- tapOn: "Done"

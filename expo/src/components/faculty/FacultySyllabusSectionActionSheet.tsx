@@ -31,6 +31,7 @@ import { SHEET_METRIC, SHEET_SECTION } from "./faculty-sheet-semantics"
 type Props = {
   visible: boolean
   section: SyllabusSection | null
+  canEdit?: boolean
   onClose: () => void
   onEdit: (section: SyllabusSection) => void
   onUpdate: (section: SyllabusSection) => void
@@ -65,6 +66,7 @@ function sectionTypeLabel(section: SyllabusSection): string {
 export function FacultySyllabusSectionActionSheet({
   visible,
   section,
+  canEdit = true,
   onClose,
   onEdit,
   onUpdate,
@@ -101,7 +103,7 @@ export function FacultySyllabusSectionActionSheet({
   )
 
   const hasFields = fieldEntries.length > 0
-  const hasQuickEdit = hasFields
+  const hasQuickEdit = canEdit && hasFields
 
   useEffect(() => {
     if (!visible || !section) {
@@ -153,7 +155,11 @@ export function FacultySyllabusSectionActionSheet({
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <FacultySheetContainer>
-        <FacultySheetChrome topInset={insets.top} title="Syllabus section" onClose={onClose} />
+        <FacultySheetChrome
+          topInset={insets.top}
+          title={canEdit ? "Syllabus section" : "View section"}
+          onClose={onClose}
+        />
 
         <ScrollView
           contentContainerStyle={[collabSheetStyles.scroll, { paddingBottom: insets.bottom + 24 }]}
@@ -194,15 +200,16 @@ export function FacultySyllabusSectionActionSheet({
                     style={collabSheetStyles.fieldInput}
                     value={draftFields[label] ?? ""}
                     onChangeText={(value) => updateDraftField(label, value)}
-                    multiline={label.length > 22}
+                    multiline={label.length > 22 || (draftFields[label] ?? "").length > 36}
                     placeholder={`Enter ${label.toLowerCase()}`}
                     placeholderTextColor={placeholderColor}
+                    accessibilityLabel={label}
                   />
                 </FacultySheetField>
               ))}
             </FacultySheetSection>
           ) : visibleContent && syllabusHasRenderableContent(visibleContent) ? (
-            <FacultySheetSection label="Preview">
+            <FacultySheetSection label={canEdit ? "Preview" : "Content"}>
               {visibleContent.fieldEntries.map(([label, value]) => (
                 <View key={label} style={localStyles.previewRow}>
                   <Text style={[type.caption, { color: native.tertiaryLabel }]}>{label}</Text>
@@ -230,7 +237,8 @@ export function FacultySyllabusSectionActionSheet({
                   <Ionicons name="grid-outline" size={16} color={native.secondaryLabel} />
                   <Text style={[type.caption, { flex: 1, color: native.label, fontWeight: "600" }]}>
                     {visibleContent.tables.length + (visibleContent.legacyTable ? 1 : 0)} table
-                    {visibleContent.tables.length + (visibleContent.legacyTable ? 1 : 0) === 1 ? "" : "s"} — use full editor to change cells
+                    {visibleContent.tables.length + (visibleContent.legacyTable ? 1 : 0) === 1 ? "" : "s"}
+                    {canEdit ? " — use full editor to change cells" : ""}
                   </Text>
                 </View>
               ) : null}
@@ -242,8 +250,10 @@ export function FacultySyllabusSectionActionSheet({
                 { backgroundColor: native.secondaryGrouped, borderColor: native.separator },
               ]}
             >
-              <Ionicons name="create-outline" size={22} color={native.tertiaryLabel} />
-              <Text style={collabSheetStyles.emptyText}>No content yet. Add details below.</Text>
+              <Ionicons name={canEdit ? "create-outline" : "document-text-outline"} size={22} color={native.tertiaryLabel} />
+              <Text style={collabSheetStyles.emptyText}>
+                {canEdit ? "No content yet. Add details below." : "No content in this section."}
+              </Text>
             </View>
           )}
 
@@ -257,28 +267,31 @@ export function FacultySyllabusSectionActionSheet({
                   : "Only instructors see this section while hidden."
               }
               value={section.isVisible}
+              disabled={!canEdit}
               onValueChange={() => onToggleVisibility(section.sectionId)}
             />
           </FacultySheetSection>
 
-          <FacultySheetSection label="Actions">
-            <FacultySheetActionRow
-              icon="create-outline"
-              label="Full editor"
-              subtitle="Lists, markdown, tables, and advanced edits"
-              tone="primary"
-              onPress={() => onEdit(section)}
-            />
-            {!section.isRequired ? (
+          {canEdit ? (
+            <FacultySheetSection label="Actions">
               <FacultySheetActionRow
-                icon="trash-outline"
-                label="Delete section"
-                subtitle="Removed after you save draft or publish"
-                tone="danger"
-                onPress={() => setConfirmDelete(true)}
+                icon="create-outline"
+                label="Full editor"
+                subtitle="Lists, markdown, tables, and advanced edits"
+                tone="primary"
+                onPress={() => onEdit(section)}
               />
-            ) : null}
-          </FacultySheetSection>
+              {!section.isRequired ? (
+                <FacultySheetActionRow
+                  icon="trash-outline"
+                  label="Delete section"
+                  subtitle="Removed after you save draft or publish"
+                  tone="danger"
+                  onPress={() => setConfirmDelete(true)}
+                />
+              ) : null}
+            </FacultySheetSection>
+          ) : null}
         </ScrollView>
 
         {confirmDelete ? (

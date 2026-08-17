@@ -9,6 +9,7 @@ import { NotesScreen } from "../components/notes/NotesScreen"
 import { FlashcardsHomeScreen } from "../components/flashcards/FlashcardsHomeScreen"
 import { PracticeHubScreen } from "../components/practice/PracticeHubScreen"
 import {
+  AnnouncementsModuleScreen,
   AssessmentModuleScreen,
   AttendanceModuleScreen,
   CalendarModuleScreen,
@@ -21,6 +22,7 @@ import {
   LecturesModuleScreen,
   MembershipModuleScreen,
   OfficeHoursModuleScreen,
+  ScheduleAdjustmentModuleScreen,
   PlaygroundModuleScreen,
   CourseEvaluationModuleScreen,
   PoliciesModuleScreen,
@@ -61,10 +63,12 @@ export const MODULE_RENDERERS: Record<string, ModuleRenderer> = {
   "classroom-points": ClassroomPointsModuleScreen,
   attendance: AttendanceModuleScreen,
   "trade-center": TradeCenterModuleScreen,
+  announcements: AnnouncementsModuleScreen,
   "progress-review": ProgressReviewModuleScreen,
   syllabus: SyllabusModuleScreen,
   calendar: CalendarModuleScreen,
   "office-hours": OfficeHoursModuleScreen,
+  "schedule-adjustment": ScheduleAdjustmentModuleScreen,
   "course-policies": PoliciesModuleScreen,
   "course-evaluation": CourseEvaluationModuleScreen,
   recommendations: RecommendationsModuleScreen,

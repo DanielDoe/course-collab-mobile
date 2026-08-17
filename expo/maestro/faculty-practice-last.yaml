@@ -1,0 +1,18 @@
+appId: com.coursecollab.app
+---
+- scroll
+- takeScreenshot: practice-activity-rest
+- tapOn: "Students"
+- tapOn: "Open filters"
+- extendedWaitUntil:
+    visible: "All students"
+    timeout: 8000
+- scrollUntilVisible:
+    element:
+      text: "AC Power"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "AC Power"
+- takeScreenshot: practice-students-topic-filter
+- tapOn: "Open filters"
+- tapOn: "All students"

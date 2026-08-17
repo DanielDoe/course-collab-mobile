@@ -1,0 +1,12 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Delete announcement"
+- tapOn: "Cancel"
+- tapOn: "Edit"
+- takeScreenshot: ann-live-edit
+- tapOn: "Cancel"
+- tapOn:
+    text: "Discard"
+    optional: true
+- tapOn: "Back"
+- tapOn: "New announcement"

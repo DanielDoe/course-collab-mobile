@@ -1,0 +1,304 @@
+appId: com.coursecollab.app
+---
+- openLink: coursecollab://dev-faculty-login
+- extendedWaitUntil:
+    visible: "Select a course|Dashboard"
+    timeout: 90000
+- tapOn:
+    text: "ECE 2202"
+    optional: true
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 90000
+- swipe:
+    direction: UP
+- swipe:
+    direction: UP
+- tapOn:
+    text: "View all"
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn:
+    text: "Close"
+    optional: true
+- tapOn:
+    text: "Go back"
+    optional: true
+- back
+- takeScreenshot: fac-dashboard
+
+- tapOn: "Open navigation menu"
+- tapOn: "Academic Terms"
+- extendedWaitUntil:
+    visible: "Academic Terms"
+    timeout: 30000
+- swipe:
+    direction: UP
+- tapOn:
+    text: "New term"
+    optional: true
+- tapOn:
+    text: "Add term"
+    optional: true
+- tapOn:
+    text: "Create"
+    optional: true
+- tapOn:
+    text: "2026"
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn:
+    text: "Cancel"
+    optional: true
+- tapOn:
+    text: "Close"
+    optional: true
+- takeScreenshot: fac-terms
+
+- tapOn: "Open navigation menu"
+- tapOn: "Announcements"
+- extendedWaitUntil:
+    visible: "Announcements"
+    timeout: 30000
+- tapOn:
+    text: "Search title, summary, section…"
+    optional: true
+- inputText: "exam"
+- hideKeyboard
+- tapOn:
+    text: "New announcement"
+    optional: true
+- tapOn:
+    text: "e.g. Mid-semester exam schedule"
+    optional: true
+- inputText: "QA title check"
+- tapOn:
+    text: "Write what students need to know…"
+    optional: true
+- inputText: "QA body check"
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn:
+    text: "Cancel"
+    optional: true
+- tapOn:
+    text: "Close"
+    optional: true
+- swipe:
+    direction: UP
+- takeScreenshot: fac-announcements
+
+- tapOn: "Open navigation menu"
+- tapOn: "Syllabus"
+- extendedWaitUntil:
+    visible: "Syllabus"
+    timeout: 30000
+- tapOn:
+    text: "Search syllabus sections…"
+    optional: true
+- inputText: "grading"
+- hideKeyboard
+- tapOn:
+    text: "Add syllabus section"
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn:
+    text: "Cancel"
+    optional: true
+- swipe:
+    direction: UP
+- takeScreenshot: fac-syllabus
+
+- tapOn: "Open navigation menu"
+- tapOn: "Manage Lectures"
+- extendedWaitUntil:
+    visible: "Lectures|Manage Lectures"
+    timeout: 30000
+- tapOn:
+    text: "Search lectures…"
+    optional: true
+- inputText: "Thevenin"
+- hideKeyboard
+- tapOn:
+    text: ".*Lecture.*"
+    index: 0
+    optional: true
+- swipe:
+    direction: UP
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn:
+    text: "Close"
+    optional: true
+- tapOn:
+    text: "Go back"
+    optional: true
+- back
+- tapOn:
+    text: "Create lecture"
+    optional: true
+- tapOn:
+    text: "New lecture"
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn:
+    text: "Cancel"
+    optional: true
+- takeScreenshot: fac-lectures
+
+- tapOn: "Open navigation menu"
+- tapOn: "Course Notes"
+- extendedWaitUntil:
+    visible: "Course Notes"
+    timeout: 30000
+- tapOn:
+    text: "Search notes…"
+    optional: true
+- inputText: "exam"
+- hideKeyboard
+- swipe:
+    direction: UP
+- tapOn:
+    text: "Create note"
+    optional: true
+- tapOn:
+    text: "New note"
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn:
+    text: "Cancel"
+    optional: true
+- takeScreenshot: fac-notes
+
+- tapOn: "Open navigation menu"
+- tapOn: "Flashcards"
+- extendedWaitUntil:
+    visible: "Flashcards"
+    timeout: 30000
+- tapOn:
+    text: "Search flashcard decks…"
+    optional: true
+- inputText: "circuit"
+- hideKeyboard
+- tapOn:
+    text: "Create deck"
+    optional: true
+- tapOn:
+    text: "Deck title"
+    optional: true
+- inputText: "QA deck"
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn:
+    text: "Cancel"
+    optional: true
+- tapOn:
+    text: "Close"
+    optional: true
+- takeScreenshot: fac-flashcards
+
+- tapOn: "Open navigation menu"
+- tapOn: "Manage Practice"
+- extendedWaitUntil:
+    visible: "Practice"
+    timeout: 45000
+- swipe:
+    direction: UP
+- tapOn:
+    text: "Create practice"
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn:
+    text: "Cancel"
+    optional: true
+- takeScreenshot: fac-practice
+
+- tapOn: "Open navigation menu"
+- tapOn: "Manage Playground"
+- extendedWaitUntil:
+    visible: "Playground"
+    timeout: 30000
+- swipe:
+    direction: UP
+- tapOn:
+    text: "Start"
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn:
+    text: "Cancel"
+    optional: true
+- takeScreenshot: fac-playground
+
+- tapOn: "Open navigation menu"
+- tapOn: "Manage Groups"
+- extendedWaitUntil:
+    visible: "Groups"
+    timeout: 45000
+- tapOn:
+    text: "Search groups, leaders…"
+    optional: true
+- inputText: "team"
+- hideKeyboard
+- tapOn:
+    text: "Create group or project"
+    optional: true
+- tapOn:
+    text: "Team name"
+    optional: true
+- inputText: "QA team"
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn:
+    text: "Cancel"
+    optional: true
+- swipe:
+    direction: UP
+- takeScreenshot: fac-groups
+
+- tapOn: "Open navigation menu"
+- tapOn: "Manage Projects"
+- extendedWaitUntil:
+    visible: "Projects"
+    timeout: 45000
+- swipe:
+    direction: UP
+- tapOn:
+    text: ".*Project.*"
+    index: 0
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn:
+    text: "Go back"
+    optional: true
+- back
+- takeScreenshot: fac-projects
+
+- tapOn: "Open navigation menu"
+- tapOn: "Summer Camp"
+- extendedWaitUntil:
+    visible: "Summer Camp|Camp"
+    timeout: 30000
+- swipe:
+    direction: UP
+- takeScreenshot: fac-summer

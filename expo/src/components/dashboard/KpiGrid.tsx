@@ -9,6 +9,7 @@ import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProv
 import { useNativeType } from "../../lib/themed-module-theme"
 import { useKpiGridCardStyle } from "../../lib/responsive-layout"
 import { MODERN, kpiLabelTextA11yProps, kpiMetricTextA11yProps } from "../../constants/faculty-native-theme"
+import { DASHBOARD_SURFACE } from "./DashboardCard"
 import { SolidListThumbTile } from "../theme/SolidListThumbTile"
 
 type KpiDef = {
@@ -28,7 +29,12 @@ function buildKpis(stats: StudentDashboardStats): KpiDef[] {
       id: "overall-grade",
       label: "Overall grade",
       value: `${stats.overallGrade}%`,
-      sub: stats.letterGrade !== "—" ? `Letter ${stats.letterGrade}` : undefined,
+      sub:
+        !stats.letterGrade || stats.letterGrade === "—"
+          ? undefined
+          : /^[A-F][+-]?$/.test(stats.letterGrade)
+            ? `Letter ${stats.letterGrade}`
+            : stats.letterGrade,
       icon: "ribbon-outline",
       thumb: DASHBOARD_KPI_THUMBS.overallGrade,
     },
@@ -146,9 +152,10 @@ const styles = StyleSheet.create({
   },
   label: { fontSize: 12, fontWeight: "600", lineHeight: 16 },
   value: {
-    fontSize: 24,
+    fontSize: DASHBOARD_SURFACE.gridMetricSize,
     fontWeight: "700",
     letterSpacing: -0.3,
+    lineHeight: DASHBOARD_SURFACE.gridMetricLineHeight,
   },
   sub: { fontSize: 11, lineHeight: 15 },
 })

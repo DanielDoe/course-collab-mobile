@@ -255,7 +255,7 @@ export function AttendanceScreen() {
           <View style={[styles.modalSheet, { backgroundColor: native.secondaryGrouped }]}>
             <Text style={type.sheetTitle}>Check in</Text>
             <Text style={[type.secondary, styles.modalHint]}>
-              Enter the session ID and fallback code shown by your instructor. QR scanning will be added in a future update.
+              Enter the session ID and class code shown on your instructor’s screen.
             </Text>
             <Text style={[styles.inputLabel, { color: theme.primaryDark }]}>Session ID</Text>
             <TextInput

@@ -1,4 +1,5 @@
 import { API_BASE_URL } from "../constants"
+import { abortTimeout } from "./abort-timeout"
 
 export type StudentNotification = {
   id: number
@@ -29,7 +30,7 @@ async function notificationRequest<T>(
         Accept: "application/json",
         "x-student-id": databaseId,
         ...(init?.headers ?? {})},
-      signal: init?.signal ?? AbortSignal.timeout(12_000)})
+      signal: init?.signal ?? abortTimeout(12_000)})
     if (!res.ok) return null
     return (await res.json()) as T
   } catch {

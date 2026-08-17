@@ -16,7 +16,7 @@ import { resetToAppRoute, replaceAuthRoute, navigatePostSignIn } from "../../lib
 const STEPS: Record<AppSession["portal"], string[]> = {
   student: ["Signing you in", "Loading your course data", "Preparing your dashboard"],
   faculty: ["Signing you in", "Loading your courses", "Choose your course"],
-  guest: ["Signing you in", "Setting up guest access"],
+  guest: ["Signing you in", "Setting up your Career Member workspace"],
   summer: ["Signing you in", "Loading camp workspace"],
   admin: ["Signing you in", "Loading admin workspace"],
 }
@@ -84,11 +84,19 @@ export function SigningInScreen() {
         await bootstrapAfterLogin(session)
         if (cancelled) return
         if (session.portal === "student") {
+          if (session.requiresPasswordChange) {
+            navigatePostSignIn(router, "/change-password")
+            return
+          }
           const next = await resolveStudentPostLoginRoute(session)
           navigatePostSignIn(router, next)
           return
         }
         if (session.portal === "faculty") {
+          if (session.requiresPasswordChange) {
+            navigatePostSignIn(router, "/change-password")
+            return
+          }
           const next = await resolveFacultyPostLoginRoute(session)
           navigatePostSignIn(router, next)
           return

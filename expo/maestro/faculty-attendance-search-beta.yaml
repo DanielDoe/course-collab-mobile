@@ -1,0 +1,7 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Clear search"
+- tapOn: "Search students…"
+- inputText: "Beta"
+- hideKeyboard
+- waitForAnimationToEnd

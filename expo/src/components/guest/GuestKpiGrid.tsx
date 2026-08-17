@@ -16,10 +16,11 @@ type KpiItem = {
 type Props = {
   total: number
   awaitingYou: number
+  inProgress: number
   completed: number
 }
 
-export function GuestKpiGrid({ total, awaitingYou, completed }: Props) {
+export function GuestKpiGrid({ total, awaitingYou, inProgress, completed }: Props) {
   const native = useThemedNative()
   const tokens = useAppThemeTokens()
   const type = useNativeType()
@@ -41,6 +42,13 @@ export function GuestKpiGrid({ total, awaitingYou, completed }: Props) {
       color: tokens.warning,
     },
     {
+      id: "progress",
+      label: "In progress",
+      value: String(inProgress),
+      icon: "sync-outline",
+      color: tokens.accent,
+    },
+    {
       id: "done",
       label: "Completed",
       value: String(completed),
@@ -50,23 +58,24 @@ export function GuestKpiGrid({ total, awaitingYou, completed }: Props) {
   ]
 
   return (
-    <View style={styles.row}>
+    <View style={styles.grid}>
       {items.map((item) => (
         <View
           key={item.id}
           style={[styles.card, cardLayout, tokens.cardShadow, { backgroundColor: native.secondaryGrouped }]}
         >
-          <View style={styles.cardInner}>
-            <View style={styles.copy}>
-              <Text {...kpiLabelTextA11yProps} style={[type.caption, styles.label, { color: native.secondaryLabel }]} numberOfLines={2}>
-                {item.label}
-              </Text>
-              <Text {...kpiMetricTextA11yProps} style={[styles.value, { color: native.label }]}>{item.value}</Text>
-            </View>
-            <View style={[styles.iconWrap, { backgroundColor: semanticSoft(item.color, tokens.isDark) }]}>
-              <Ionicons name={item.icon} size={18} color={item.color} />
-            </View>
+          <View style={[styles.iconWrap, { backgroundColor: semanticSoft(item.color, tokens.isDark) }]}>
+            <Ionicons name={item.icon} size={18} color={item.color} />
           </View>
+          <Text {...kpiMetricTextA11yProps} style={[styles.value, { color: native.label }]}>
+            {item.value}
+          </Text>
+          <Text
+            {...kpiLabelTextA11yProps}
+            style={[type.caption, styles.label, { color: native.secondaryLabel }]}
+          >
+            {item.label}
+          </Text>
         </View>
       ))}
     </View>
@@ -74,24 +83,16 @@ export function GuestKpiGrid({ total, awaitingYou, completed }: Props) {
 }
 
 const styles = StyleSheet.create({
-  row: {
+  grid: {
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: 10,
   },
   card: {
     borderRadius: 16,
-    padding: 12,
-  },
-  cardInner: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    gap: 8,
-  },
-  copy: {
-    flex: 1,
-    minWidth: 0,
-    gap: 4,
+    padding: 14,
+    gap: 6,
+    minHeight: 108,
   },
   iconWrap: {
     width: MODERN.metricIconSize,
@@ -99,16 +100,15 @@ const styles = StyleSheet.create({
     borderRadius: MODERN.metricIconRadius,
     alignItems: "center",
     justifyContent: "center",
-    flexShrink: 0,
+  },
+  value: {
+    fontSize: 28,
+    fontWeight: "700",
+    letterSpacing: -0.4,
+    lineHeight: 32,
   },
   label: {
     fontWeight: "600",
-    lineHeight: 15,
-  },
-  value: {
-    fontSize: 24,
-    fontWeight: "700",
-    letterSpacing: -0.3,
-    lineHeight: 28,
+    lineHeight: 18,
   },
 })

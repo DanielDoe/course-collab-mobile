@@ -9,10 +9,17 @@ type HomeworkHistoryItem = {
   attempts?: { percentage?: number; completed_at?: string }[]
 }
 
+/** Some APIs send 0–1 fractions; KPI cards already show 0–100. */
+function asPercent(value: number): number {
+  if (!Number.isFinite(value) || value <= 0) return 0
+  const scaled = value > 0 && value <= 1 ? value * 100 : value
+  return Math.round(scaled * 10) / 10
+}
+
 function lifetimeQuizAverage(quizHistory: QuizHistoryItem[]): number {
   const scores: number[] = []
   for (const q of quizHistory) {
-    const best = q.attempts?.reduce((max, a) => Math.max(max, a.percentage ?? 0), 0) ?? 0
+    const best = q.attempts?.reduce((max, a) => Math.max(max, asPercent(a.percentage ?? 0)), 0) ?? 0
     if (best > 0) scores.push(best)
   }
   return scores.length > 0
@@ -23,21 +30,31 @@ function lifetimeQuizAverage(quizHistory: QuizHistoryItem[]): number {
 function lifetimeHomeworkAverage(homeworkHistory: HomeworkHistoryItem[]): number {
   const completed = homeworkHistory.filter((h) => h.status === "completed")
   const scores = completed
-    .map((h) => h.attempts?.reduce((max, a) => Math.max(max, a.percentage ?? 0), 0) ?? 0)
+    .map((h) => h.attempts?.reduce((max, a) => Math.max(max, asPercent(a.percentage ?? 0)), 0) ?? 0)
     .filter((s) => s > 0)
   return scores.length > 0
     ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10
     : 0
 }
 
+/**
+ * No weekly attempts landed in the visible window — show the honest lifetime
+ * average as a FLAT line, not a fake ramp.
+ *
+ * This previously spread the value linearly across the weeks
+ * (`value * (i + 1) / weeks.length`), which invented a rising trend the student
+ * never had: a steady 76% average was drawn as a climb from 12% to 76%. The web
+ * implementation (components/student/dashboard-v2/GradeTrendChart.tsx) has
+ * always assigned the value flat; this is now in parity with it.
+ */
 function applyFlatTrend(
   weeks: GradeTrendPoint[],
   key: "quiz" | "homework",
   value: number,
 ): void {
   if (value <= 0) return
-  weeks.forEach((w, i) => {
-    w[key] = Math.round(((value * (i + 1)) / weeks.length) * 10) / 10
+  weeks.forEach((w) => {
+    w[key] = value
   })
 }
 
@@ -46,6 +63,13 @@ export function buildGradeTrendSeries(
   gradeTotal: number,
   quizHistory: QuizHistoryItem[],
   homeworkHistory: HomeworkHistoryItem[],
+  /**
+   * Averages already computed for the KPI cards. Used only as a last resort
+   * when neither the weekly buckets nor the lifetime pass yield anything, so
+   * the chart can never sit at 0% while the card above it reads 76%. The two
+   * surfaces disagreeing is what students were reporting.
+   */
+  fallbackAverages?: { quiz?: number; homework?: number },
 ): GradeTrendPoint[] {
   const weeks: GradeTrendPoint[] = []
   const now = new Date()
@@ -55,7 +79,11 @@ export function buildGradeTrendSeries(
     d.setDate(d.getDate() - i * 7)
     const weekStart = new Date(d)
     weekStart.setDate(weekStart.getDate() - weekStart.getDay())
-    const label = `W${Math.floor(weekStart.getTime() / (7 * 24 * 60 * 60 * 1000)) % 52}`
+    // Production labels the bucket with the week's start date ("Sep 7").
+    // The previous `W${epochWeeks % 52}` produced values like "W36" that are
+    // an epoch-week index, not an academic week number — meaningless to a
+    // student and not what the web dashboard shows.
+    const label = weekStart.toLocaleDateString("en-US", { month: "short", day: "numeric" })
     weeks.push({ label, overall: undefined, quiz: 0, homework: 0 })
   }
 
@@ -75,7 +103,7 @@ export function buildGradeTrendSeries(
       if (a.completed_at && a.percentage != null) {
         const weekNum = Math.floor(new Date(a.completed_at).getTime() / (7 * 24 * 60 * 60 * 1000))
         if (!quizByWeek.has(weekNum)) quizByWeek.set(weekNum, [])
-        quizByWeek.get(weekNum)!.push(a.percentage)
+        quizByWeek.get(weekNum)!.push(asPercent(a.percentage))
       }
     }
   }
@@ -93,7 +121,7 @@ export function buildGradeTrendSeries(
     for (let i = 0; i < firstNonZero; i++) weeks[i].quiz = weeks[firstNonZero].quiz
   }
   if (!weeks.some((w) => w.quiz > 0)) {
-    applyFlatTrend(weeks, "quiz", lifetimeQuizAverage(quizHistory))
+    applyFlatTrend(weeks, "quiz", asPercent(lifetimeQuizAverage(quizHistory) || fallbackAverages?.quiz || 0))
   }
 
   const hwByWeek = new Map<number, number[]>()
@@ -102,7 +130,7 @@ export function buildGradeTrendSeries(
       if (a.completed_at && a.percentage != null) {
         const weekNum = Math.floor(new Date(a.completed_at).getTime() / (7 * 24 * 60 * 60 * 1000))
         if (!hwByWeek.has(weekNum)) hwByWeek.set(weekNum, [])
-        hwByWeek.get(weekNum)!.push(a.percentage)
+        hwByWeek.get(weekNum)!.push(asPercent(a.percentage))
       }
     }
   }
@@ -116,7 +144,11 @@ export function buildGradeTrendSeries(
   })
 
   if (!weeks.some((w) => w.homework > 0)) {
-    applyFlatTrend(weeks, "homework", lifetimeHomeworkAverage(homeworkHistory))
+    applyFlatTrend(
+      weeks,
+      "homework",
+      asPercent(lifetimeHomeworkAverage(homeworkHistory) || fallbackAverages?.homework || 0),
+    )
   }
 
   return weeks

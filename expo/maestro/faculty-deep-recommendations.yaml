@@ -1,0 +1,141 @@
+appId: com.coursecollab.app
+---
+- tapOn:
+    text: "Close menu"
+    optional: true
+- tapOn:
+    id: "open-navigation-menu"
+- waitForAnimationToEnd
+- scrollUntilVisible:
+    element: "Recommendation Letters"
+    direction: DOWN
+    timeout: 30000
+- tapOn: "Recommendation Letters"
+- tapOn:
+    text: "Close menu"
+    optional: true
+- extendedWaitUntil:
+    visible: "All|Pending|Filter by student|No letters"
+    timeout: 45000
+- takeScreenshot: recs-landing
+
+# Filter tabs
+- tapOn: "Pending tab"
+- takeScreenshot: recs-pending
+- tapOn: "Active tab"
+- takeScreenshot: recs-active
+- tapOn: "Done tab"
+- takeScreenshot: recs-done
+- tapOn: "All tab"
+
+# Search
+- tapOn: "Filter by student, course, status…"
+- inputText: "zzz-no-match"
+- hideKeyboard
+- takeScreenshot: recs-search-empty
+- tapOn:
+    text: "Clear search"
+    optional: true
+
+# Open live letter (cancel writes)
+- tapOn:
+    text: ".*"
+    index: 0
+    optional: true
+- extendedWaitUntil:
+    visible: "Recommendation|Done|Decline|Save"
+    timeout: 15000
+    optional: true
+- takeScreenshot: recs-live-sheet
+- swipe:
+    direction: UP
+- tapOn:
+    text: "Decline"
+    optional: true
+- tapOn:
+    text: "Cancel"
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true
+
+# Create QA letter
+- tapOn: "New recommendation letter request"
+- extendedWaitUntil:
+    visible: "New recommendation|Create request|Select student"
+    timeout: 15000
+- takeScreenshot: recs-create-empty
+- tapOn:
+    text: "Create request"
+    optional: true
+- tapOn:
+    text: "Search students"
+    optional: true
+- inputText: "Daniel"
+- hideKeyboard
+- tapOn:
+    text: ".*Daniel.*"
+    index: 0
+    optional: true
+- tapOn:
+    text: "Purpose"
+    optional: true
+- tapOn:
+    text: "Graduate school"
+    optional: true
+- tapOn:
+    text: "Deadline"
+    optional: true
+- inputText: "2026-12-31"
+- tapOn:
+    text: "Description"
+    optional: true
+- inputText: "QA99 recommendation letter disposable"
+- hideKeyboard
+- tapOn:
+    text: "Create request"
+    optional: true
+- extendedWaitUntil:
+    visible: "OK|Created|QA99|All"
+    timeout: 30000
+    optional: true
+- takeScreenshot: recs-qa-created
+- tapOn: "OK"
+- tapOn:
+    text: "Done"
+    optional: true
+
+# Find and open QA letter
+- tapOn: "Filter by student, course, status…"
+- eraseText
+- inputText: "QA99"
+- hideKeyboard
+- tapOn:
+    text: ".*QA99.*"
+    optional: true
+- extendedWaitUntil:
+    visible: "Recommendation|Done|QA99"
+    timeout: 15000
+    optional: true
+- takeScreenshot: recs-qa-workspace
+- tapOn:
+    text: "Done"
+    optional: true
+
+# Guest requests tab
+- tapOn: "Guest requests tab"
+- extendedWaitUntil:
+    visible: "Search name, email|Guest"
+    timeout: 15000
+- takeScreenshot: recs-guest-tab
+- tapOn: "Open filters"
+- takeScreenshot: recs-guest-filter
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn:
+    text: "All statuses"
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true

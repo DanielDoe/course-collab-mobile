@@ -1,0 +1,9 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Programs"
+- swipe:
+    direction: UP
+- tapOn: "QA16S, Draft"
+- swipe:
+    direction: UP
+- tapOn: "Add track"

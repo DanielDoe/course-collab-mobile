@@ -1,0 +1,24 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Back"
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Instructor|Submissions|Dashboard"
+    timeout: 20000
+- takeScreenshot: dash-from-membership
+
+- tapOn: "Open account menu"
+- waitForAnimationToEnd
+- tapOn:
+    text: ".*Appearance.*"
+- extendedWaitUntil:
+    visible: "Appearance|Emerald|Theme"
+    timeout: 20000
+- takeScreenshot: dest-appearance
+- tapOn:
+    text: "Back"
+    optional: true
+- tapOn:
+    text: "Go back"
+    optional: true
+- takeScreenshot: after-appearance

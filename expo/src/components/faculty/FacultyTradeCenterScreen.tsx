@@ -19,10 +19,15 @@ import {
 import {
   parseTradeCenterConfig,
   TRADE_CENTER_TABS,
+  mergeTradeCenterDevDonationFixtures,
+  mergeTradeCenterDevPointFixtures,
+  mergeTradeCenterDevRolloverResponse,
+  isTradeCenterRequestPending,
   type TradeCenterConfig,
   type TradeCenterMenuTab,
 } from "../../lib/faculty-trade-center-utils"
 import { useFacultyScope } from "../../hooks/useFacultyScope"
+import { useNotificationModuleRefresh } from "../../lib/notifications/notification-events"
 import { FacultyEmptyState } from "./faculty-shared"
 import { FacultyTradeCenterActionSheet } from "./FacultyTradeCenterActionSheet"
 import {
@@ -53,7 +58,7 @@ const SEARCH_TABS: TradeCenterMenuTab[] = [
 ]
 
 export function FacultyTradeCenterScreen() {
-  const { styles: moduleStyles, native, tokens, type } = useModuleTheme()
+  const { styles: moduleStyles, tokens, type } = useModuleTheme()
   const { listScrollPad } = useFacultyStickyHeaderScrollLayout()
   const { scope, ready } = useFacultyScope()
 
@@ -74,8 +79,24 @@ export function FacultyTradeCenterScreen() {
   const [loadingRollover, setLoadingRollover] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState("")
+  const [devFixturePatches, setDevFixturePatches] = useState<Record<number, Record<string, unknown>>>({})
 
-  const pendingDonations = donations.length + pointRequests.length
+  const mergedDonations = useMemo(
+    () => mergeTradeCenterDevDonationFixtures(donations, devFixturePatches),
+    [donations, devFixturePatches],
+  )
+  const mergedPointRequests = useMemo(
+    () => mergeTradeCenterDevPointFixtures(pointRequests, devFixturePatches),
+    [pointRequests, devFixturePatches],
+  )
+
+  const mergedRollover = useMemo(() => mergeTradeCenterDevRolloverResponse(rollover), [rollover])
+
+  const pendingDonations = useMemo(() => {
+    const countPending = (rows: Array<Record<string, unknown>>) =>
+      rows.filter((row) => isTradeCenterRequestPending(row.status)).length
+    return countPending(mergedDonations) + countPending(mergedPointRequests)
+  }, [mergedDonations, mergedPointRequests])
 
   const tabItems = useMemo(
     () =>
@@ -95,7 +116,7 @@ export function FacultyTradeCenterScreen() {
       case "donations":
         return "Filter donation & point requests…"
       case "trade-log":
-        return "Filter trade log entries…"
+        return "Search trades, rollovers, donations…"
       case "rollover-trades":
         return "Filter rollover trades…"
       default:
@@ -194,12 +215,14 @@ export function FacultyTradeCenterScreen() {
   useEffect(() => {
     if (!ready || tab !== "rollover-trades") return
     const timer = setTimeout(() => {
-      loadRollover().catch(() => {})
+      loadRollover().catch((err) =>
+        setError(err instanceof ApiError ? err.message : "Could not search rollover trades."),
+      )
     }, 300)
     return () => clearTimeout(timer)
   }, [search, tab, ready, loadRollover])
 
-  async function handleRefresh() {
+  const handleRefresh = useCallback(async () => {
     setRefreshing(true)
     try {
       await refreshAll()
@@ -208,7 +231,9 @@ export function FacultyTradeCenterScreen() {
     } finally {
       setRefreshing(false)
     }
-  }
+  }, [refreshAll])
+
+  useNotificationModuleRefresh("trade-center", handleRefresh)
 
   function jumpToTab(next: TradeCenterMenuTab) {
     setTab(next)
@@ -250,25 +275,7 @@ export function FacultyTradeCenterScreen() {
               accessibilityLabel: "Trade center actions",
             }}
           />
-        ) : (
-          <Pressable
-            style={({ pressed }) => [
-              localStyles.settingsAction,
-              {
-                backgroundColor: native.fill,
-                borderColor: native.separator,
-                opacity: pressed ? 0.85 : 1,
-              },
-            ]}
-            onPress={() => setActionSheetOpen(true)}
-            accessibilityLabel="Trade center actions"
-          >
-            <Ionicons name="add-outline" size={22} color={native.secondaryLabel} />
-            <Text style={[type.caption, { color: native.secondaryLabel, fontWeight: "600" }]}>
-              Actions
-            </Text>
-          </Pressable>
-        )}
+        ) : null}
 
         {pendingDonations > 0 && tab !== "donations" ? (
           <Pressable
@@ -325,18 +332,21 @@ export function FacultyTradeCenterScreen() {
             {tab === "donations" && scope ? (
               <TradeCenterDonationsPanel
                 scope={scope}
-                donations={donations}
-                pointRequests={pointRequests}
+                donations={mergedDonations}
+                pointRequests={mergedPointRequests}
                 loading={loadingDonations}
                 search={search}
                 onChanged={() => void loadDonations()}
+                onDevFixtureUpdated={(id, patch) =>
+                  setDevFixturePatches((prev) => ({ ...prev, [id]: { ...prev[id], ...patch } }))
+                }
               />
             ) : null}
             {tab === "trade-log" ? (
               <TradeCenterTradeLogPanel tradeLog={tradeLog} loading={loadingTradeLog} search={search} />
             ) : null}
             {tab === "rollover-trades" ? (
-              <TradeCenterRolloverPanel rollover={rollover} loading={loadingRollover} search={search} />
+              <TradeCenterRolloverPanel rollover={mergedRollover} loading={loadingRollover} search={search} />
             ) : null}
             {tab === "activity-settings" && scope ? (
               <TradeCenterActivitySettingsPanel
@@ -373,17 +383,6 @@ const localStyles = StyleSheet.create({
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 16, gap: 14 },
   loader: { marginVertical: 32 },
-  settingsAction: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    alignSelf: "flex-end",
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-  },
   nudgeBanner: {
     flexDirection: "row",
     alignItems: "center",

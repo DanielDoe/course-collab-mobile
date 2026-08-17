@@ -1,11 +1,9 @@
 import { useEffect, useMemo, useState } from "react"
 import {
   Modal,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View} from "react-native"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import type { PracticeStudentProgress, PracticeTopic } from "../../lib/instructor-api"
@@ -29,9 +27,11 @@ import {
   FacultySheetSection,
   FacultySheetStatChip,
   FacultySheetStatRow,
-  FacultySheetToggleRow
+  FacultySheetToggleRow,
 } from "./faculty-collab-sheet-ui"
 import { SHEET_PRACTICE, SHEET_SECTION } from "./faculty-sheet-semantics"
+import { NativeSelect } from "../NativeSelect"
+import { DAILY_LIMIT_OPTIONS } from "./FacultyNativePickers"
 import {
   practiceStudentAccuracy,
   practiceStudentAttempts,
@@ -52,7 +52,7 @@ type TopicProps = {
   acting: boolean
   onClose: () => void
   onManageQuestions?: () => void
-  onToggle: (topic: PracticeTopic, enabled: boolean) => void
+  onToggle: (topic: PracticeTopic, enabled: boolean) => void | Promise<boolean>
   onSaveLimit: (topic: PracticeTopic, dailyLimit: number) => void
   onRemove: (topic: PracticeTopic) => void
 }
@@ -137,8 +137,11 @@ export function FacultyPracticeTopicActionSheet({
               value={enabled}
               disabled={acting}
               onValueChange={(v) => {
+                const previous = enabled
                 setEnabled(v)
-                onToggle(topic, v)
+                void Promise.resolve(onToggle(topic, v)).then((ok) => {
+                  if (ok === false) setEnabled(previous)
+                })
               }}
             />
           </FacultySheetSection>
@@ -149,14 +152,14 @@ export function FacultyPracticeTopicActionSheet({
             action={dirty ? <FacultySheetSaveChip saving={acting} onPress={saveLimit} /> : null}
           >
             <FacultySheetField label="Questions per day">
-              <TextInput
-                style={collabSheetStyles.fieldInput}
+              <NativeSelect
+                placeholder="20 questions / day"
                 value={dailyLimit}
-                onChangeText={(v) => {
+                options={DAILY_LIMIT_OPTIONS}
+                onChange={(v) => {
                   setDailyLimit(v)
                   setDirty(true)
                 }}
-                keyboardType="number-pad"
               />
             </FacultySheetField>
           </FacultySheetSection>

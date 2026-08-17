@@ -8,10 +8,17 @@ export type CoraProposalTool =
   | "questionBank.createQuestions"
   | "assessment.createFromBank"
   | "message.send"
+  | "syllabus.saveSection"
+  | "syllabus.publishSection"
+  | "lecture.createShell"
+  | "account.passwordReset.approve"
+  | "account.passwordReset.reject"
   | "personalFlashcards.createDeck"
   | "personalNotes.create"
   | "personalCalendar.createEvents"
   | "calendar.createStudySessions"
+  | "personalPracticeQuiz.create"
+  | "personalStudyPlan.create"
 
 export type CoraProposalPreviewField = {
   label: string
@@ -28,9 +35,14 @@ export type CoraProposalPreview = {
     | "question"
     | "assessment"
     | "message"
+    | "syllabus"
+    | "lecture"
+    | "account"
     | "flashcard_deck"
     | "note"
     | "calendar_events"
+    | "practice_quiz"
+    | "study_plan"
 }
 
 export type CoraActionProposal = {

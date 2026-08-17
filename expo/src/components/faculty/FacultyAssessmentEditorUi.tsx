@@ -258,8 +258,12 @@ export function EditorTextField({
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
+        accessibilityLabel={label}
         multiline={multiline}
-        keyboardType={keyboardType}
+        keyboardType={
+          keyboardType === "numeric" || keyboardType === "decimal-pad" ? keyboardType : "ascii-capable"
+        }
+        autoCorrect={false}
         textAlignVertical={multiline ? "top" : "center"}
       />
     </View>

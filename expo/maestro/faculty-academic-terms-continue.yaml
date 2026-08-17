@@ -1,0 +1,94 @@
+appId: com.coursecollab.app
+---
+- swipe:
+    direction: UP
+- tapOn:
+    text: ".*Add section.*"
+- extendedWaitUntil:
+    visible: "Add section|Section code|e.g. P01"
+    timeout: 10000
+- tapOn: "e.g. P01"
+- inputText: "QA99"
+- tapOn: "Optional description"
+- inputText: "Exploratory QA — cancel"
+- takeScreenshot: terms-add-section
+- tapOn: "Done"
+
+- tapOn:
+    text: ".*Summer 2026.*"
+- extendedWaitUntil:
+    visible: "Academic term"
+    timeout: 12000
+- tapOn:
+    text: ".*Edit section.*"
+    optional: true
+- takeScreenshot: terms-edit-section
+- tapOn:
+    text: "Done"
+    optional: true
+
+- tapOn:
+    text: ".*Summer 2026.*"
+    optional: true
+- swipe:
+    direction: UP
+    optional: true
+- swipe:
+    direction: UP
+    optional: true
+- tapOn:
+    text: ".*Delete term.*"
+    optional: true
+- tapOn:
+    text: "Cancel"
+    optional: true
+- tapOn: "Done"
+
+- tapOn: "Add academic term"
+- extendedWaitUntil:
+    visible: "Add academic term"
+    timeout: 10000
+- tapOn: "Winter"
+- tapOn:
+    text: "YYYY-MM-DD"
+    index: 0
+- inputText: "2026-12-15"
+- tapOn:
+    text: "YYYY-MM-DD"
+    index: 0
+    optional: true
+- inputText: "2027-01-15"
+- takeScreenshot: terms-add-form
+- tapOn: "Create"
+- tapOn:
+    text: "Done"
+    optional: true
+- takeScreenshot: terms-after-create
+
+- tapOn:
+    text: ".*Winter 2026.*"
+    optional: true
+- swipe:
+    direction: UP
+    optional: true
+- tapOn:
+    text: ".*Delete term.*"
+    optional: true
+- tapOn:
+    text: "Delete"
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true
+- takeScreenshot: terms-after-delete
+
+- tapOn:
+    text: ".*Spring 2026.*"
+    optional: true
+- swipe:
+    direction: UP
+    optional: true
+- takeScreenshot: terms-spring-sheet
+- tapOn:
+    text: "Done"
+    optional: true

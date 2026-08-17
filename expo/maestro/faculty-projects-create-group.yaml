@@ -1,0 +1,9 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Create group. Set up a team with a student as leader"
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Search roster"
+    timeout: 10000
+- tapOn: "Search roster"
+- eraseText: 40

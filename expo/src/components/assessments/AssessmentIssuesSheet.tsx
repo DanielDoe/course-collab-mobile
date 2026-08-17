@@ -24,6 +24,7 @@ import { ApiError } from "../../lib/student-api"
 import type { StudentSession } from "../../lib/session"
 import type { QuizItem } from "../../lib/student-api"
 import { ComposerSendButton } from "../theme/ComposerSendButton"
+import { NativeSelect } from "../NativeSelect"
 
 type SheetTab = "report" | "open" | "closed"
 
@@ -270,20 +271,20 @@ export function AssessmentIssuesSheet({
               </ScrollView>
 
               <Text style={[styles.sectionLabel, { color: tokens.accentDark }]}>Question # (optional)</Text>
-              <TextInput
-                style={[
-                  styles.input,
-                  {
-                    backgroundColor: tokens.surface,
-                    borderColor: tokens.border,
-                    color: tokens.text,
-                  },
-                ]}
+              <NativeSelect
+                placeholder="None"
                 value={questionNumber}
-                onChangeText={setQuestionNumber}
-                placeholder="e.g. 3"
-                placeholderTextColor="#94a3b8"
-                keyboardType="number-pad"
+                options={[
+                  { value: "", label: "None" },
+                  ...Array.from(
+                    { length: Math.max(quizzes.find((q) => q.id === quizId)?.question_count ?? 20, 1) },
+                    (_, index) => ({
+                      value: String(index + 1),
+                      label: `Question ${index + 1}`,
+                    }),
+                  ),
+                ]}
+                onChange={setQuestionNumber}
               />
 
               <Text style={[styles.sectionLabel, { color: tokens.accentDark }]}>What&apos;s wrong?</Text>

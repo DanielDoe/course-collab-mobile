@@ -19,6 +19,7 @@ import {
   presentationStatusLabel,
   PROJECT_LECTURE_DAYS,
   projectModuleSessionCodes,
+  filterRowsToCourseSessions,
   buildProjectScores,
   type ProjectScoreRow,
   type ProjectStudentGradeRow,
@@ -69,10 +70,12 @@ export function FacultyProjectPresentationsPanel({
   scope,
   search,
   statusFilter,
+  sessionCodes = [],
 }: {
   scope: Scope
   search: string
   statusFilter: string
+  sessionCodes?: string[]
 }) {
   const { styles: moduleStyles, native, tokens, type } = useModuleTheme()
   const collabSheetStyles = useCollabSheetStyles()
@@ -99,13 +102,13 @@ export function FacultyProjectPresentationsPanel({
 
   const filtered = useMemo(
     () =>
-      rows.filter((row) =>
+      filterRowsToCourseSessions(rows, (row) => row.session, sessionCodes).filter((row) =>
         matchesProjectSearch(
           [row.project_title, row.group_name, row.session, row.location, row.status],
           search,
         ),
       ),
-    [rows, search],
+    [rows, search, sessionCodes],
   )
 
   function openDetail(row: ProjectPresentation) {
@@ -226,6 +229,7 @@ export function FacultyProjectPresentationsPanel({
                     multiline
                     placeholder="Attendance notes, feedback…"
                     style={localStyles.notesInput}
+                    accessibilityLabel="Notes"
                   />
                 </FacultySheetField>
                 <View style={localStyles.toggleRow}>
@@ -243,6 +247,8 @@ export function FacultyProjectPresentationsPanel({
                   style={[localStyles.actionBtn, { borderColor: tokens.border }]}
                   disabled={saving}
                   onPress={() => void saveDetail()}
+                  accessibilityRole="button"
+                  accessibilityLabel="Save notes"
                 >
                   {saving ? (
                     <ActivityIndicator color={FACULTY_PROJECTS_COLOR.link} />
@@ -257,6 +263,8 @@ export function FacultyProjectPresentationsPanel({
                     style={[localStyles.actionBtn, { backgroundColor: FACULTY_PROJECTS_COLOR.action }]}
                     disabled={saving}
                     onPress={() => void saveDetail("completed")}
+                    accessibilityRole="button"
+                    accessibilityLabel="Mark completed"
                   >
                     <Text style={[type.caption, { color: FACULTY_PROJECTS_COLOR.actionInk, fontWeight: "700" }]}>
                       Mark completed
@@ -265,7 +273,13 @@ export function FacultyProjectPresentationsPanel({
                 ) : null}
               </View>
 
-              <Pressable style={localStyles.deleteLink} disabled={saving} onPress={() => void deletePresentation()}>
+              <Pressable
+                style={localStyles.deleteLink}
+                disabled={saving}
+                onPress={() => void deletePresentation()}
+                accessibilityRole="button"
+                accessibilityLabel="Delete presentation"
+              >
                 <Text style={[type.caption, { color: tokens.danger, fontWeight: "700" }]}>Delete presentation</Text>
               </Pressable>
             </ScrollView>
@@ -276,7 +290,13 @@ export function FacultyProjectPresentationsPanel({
   )
 }
 
-export function FacultyProjectPresentationConfigPanel({ scope }: { scope: Scope }) {
+export function FacultyProjectPresentationConfigPanel({
+  scope,
+  sessionCodes = [],
+}: {
+  scope: Scope
+  sessionCodes?: string[]
+}) {
   const { styles: moduleStyles, native, tokens, type } = useModuleTheme()
   const collabSheetStyles = useCollabSheetStyles()
   const insets = useSafeAreaInsets()
@@ -286,7 +306,7 @@ export function FacultyProjectPresentationConfigPanel({ scope }: { scope: Scope 
   const [editing, setEditing] = useState<PresentationConfig | "new" | null>(null)
   const [saving, setSaving] = useState(false)
   const [draft, setDraft] = useState({
-    session: projectModuleSessionCodes()[0] ?? "",
+    session: sessionCodes[0] ?? projectModuleSessionCodes()[0] ?? "",
     presentationStartDate: "",
     presentationEndDate: "",
     lectureDays: [] as string[],
@@ -323,7 +343,8 @@ export function FacultyProjectPresentationConfigPanel({ scope }: { scope: Scope 
   }
 
   function startNew() {
-    const unused = projectModuleSessionCodes().find((code) => !configs.some((c) => c.session === code))
+    const available = sessionCodes.length > 0 ? sessionCodes : projectModuleSessionCodes()
+    const unused = available.find((code) => !configs.some((c) => c.session === code))
     if (!unused) {
       AppAlert.alert("All sessions configured", "Every available section already has a presentation window.")
       return
@@ -388,6 +409,8 @@ export function FacultyProjectPresentationConfigPanel({ scope }: { scope: Scope 
           { backgroundColor: FACULTY_PROJECTS_COLOR.action, opacity: pressed ? 0.85 : 1 },
         ]}
         onPress={startNew}
+        accessibilityRole="button"
+        accessibilityLabel="Add section config"
       >
         <Ionicons name="add-outline" size={18} color="#fff" />
         <Text style={localStyles.addBtnText}>Add section config</Text>
@@ -431,6 +454,7 @@ export function FacultyProjectPresentationConfigPanel({ scope }: { scope: Scope 
                 value={draft.presentationStartDate}
                 onChangeText={(v) => setDraft((d) => ({ ...d, presentationStartDate: v }))}
                 placeholder="YYYY-MM-DD"
+                accessibilityLabel="Start date"
               />
             </FacultySheetField>
             <FacultySheetField label="End date">
@@ -438,6 +462,7 @@ export function FacultyProjectPresentationConfigPanel({ scope }: { scope: Scope 
                 value={draft.presentationEndDate}
                 onChangeText={(v) => setDraft((d) => ({ ...d, presentationEndDate: v }))}
                 placeholder="YYYY-MM-DD"
+                accessibilityLabel="End date"
               />
             </FacultySheetField>
             <FacultySheetSection label="Lecture days" tone={SHEET_PROJECT.config}>
@@ -453,6 +478,8 @@ export function FacultyProjectPresentationConfigPanel({ scope }: { scope: Scope 
                         lectureDays: active ? d.lectureDays.filter((x) => x !== day) : [...d.lectureDays, day],
                       }))
                     }
+                    accessibilityRole="button"
+                    accessibilityLabel={`${day}${active ? ", selected" : ""}`}
                   >
                     <Text style={[type.body, { color: native.label }]}>{day}</Text>
                     <Ionicons
@@ -486,10 +513,15 @@ export function FacultyProjectPresentationConfigPanel({ scope }: { scope: Scope 
                 value={draft.slotDuration}
                 onChangeText={(v) => setDraft((d) => ({ ...d, slotDuration: v }))}
                 keyboardType="number-pad"
+                accessibilityLabel="Slot duration (minutes)"
               />
             </FacultySheetField>
             <FacultySheetField label="Location">
-              <FacultySheetTextInput value={draft.location} onChangeText={(v) => setDraft((d) => ({ ...d, location: v }))} />
+              <FacultySheetTextInput
+                value={draft.location}
+                onChangeText={(v) => setDraft((d) => ({ ...d, location: v }))}
+                accessibilityLabel="Location"
+              />
             </FacultySheetField>
             <FacultySheetSubmitButton
               label="Save configuration"

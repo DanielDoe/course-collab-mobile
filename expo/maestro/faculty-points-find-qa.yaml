@@ -1,0 +1,7 @@
+appId: com.coursecollab.app
+---
+- tapOn: "OK"
+- tapOn: "Search tasks…"
+- inputText: "QA16"
+- hideKeyboard
+- waitForAnimationToEnd

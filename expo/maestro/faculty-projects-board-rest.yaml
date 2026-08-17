@@ -1,0 +1,28 @@
+appId: com.coursecollab.app
+---
+- swipe:
+    direction: UP
+- takeScreenshot: projects-zipscoot-rest
+- tapOn: "Done"
+- tapOn: "Study Helper Web Application"
+- extendedWaitUntil:
+    visible: "Score breakdown"
+    timeout: 10000
+- takeScreenshot: projects-board-study
+- tapOn: "Done"
+- tapOn: "Search projects, groups…"
+- inputText: "zzz"
+- tapOn: "Manage Projects"
+- takeScreenshot: projects-search-empty
+- tapOn: "Clear search"
+- tapOn: "Search projects, groups…"
+- eraseText
+- inputText: "Zip"
+- tapOn: "Manage Projects"
+- takeScreenshot: projects-search-zip
+- tapOn: "Clear search"
+- tapOn: "Open filters"
+- extendedWaitUntil:
+    visible: "Filter projects|Filter scores|All sections"
+    timeout: 8000
+- takeScreenshot: projects-filters

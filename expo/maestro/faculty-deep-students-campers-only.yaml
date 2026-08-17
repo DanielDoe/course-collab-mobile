@@ -1,0 +1,4 @@
+appId: com.coursecollab.app
+---
+- runFlow: faculty-deep-students-setup.yaml
+- runFlow: faculty-deep-campers.yaml

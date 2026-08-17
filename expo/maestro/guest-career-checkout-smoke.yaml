@@ -1,0 +1,28 @@
+appId: com.coursecollab.app
+---
+# Guest Cora Career native PaymentSheet only (fresh launch).
+
+- launchApp:
+    clearState: false
+
+- extendedWaitUntil:
+    visible: "CourseCollab"
+    timeout: 30000
+
+- openLink: coursecollab://guest/cora-career/checkout
+- extendedWaitUntil:
+    visible: "Upgrade to Cora Career"
+    timeout: 60000
+- scrollUntilVisible:
+    element: "Continue to secure checkout"
+    direction: DOWN
+    timeout: 20000
+    speed: 40
+    visibilityPercentage: 60
+- tapOn: "Continue to secure checkout"
+- extendedWaitUntil:
+    visible: "Card number"
+    timeout: 90000
+- assertVisible: "Card number"
+- assertVisible: "Pay $19.99"
+- assertNotVisible: "Complete payment in Safari"

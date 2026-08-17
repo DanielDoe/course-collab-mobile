@@ -9,6 +9,7 @@ import { useModuleTheme } from "../../lib/themed-module-shell"
 import { FacultyEmptyState } from "./faculty-shared"
 import { FacultySearchToolbar } from "./faculty-module-shell"
 import { noteContentPreviewText } from "../../lib/digital-note-content"
+import { parseCircuitWorkspace, workspaceHasContent } from "../../lib/circuit-workspace"
 
 type DeletedNote = CourseDigitalNote & { deletedAt?: string }
 
@@ -117,6 +118,24 @@ export function FacultyCourseNotesDeletedPanel({ scope, notes, onChanged, onPrev
         }
       />
 
+      {filteredNotes.length > 0 ? (
+        <Pressable
+          onPress={toggleSelectAllVisible}
+          style={localStyles.selectAllRow}
+          accessibilityRole="button"
+          accessibilityLabel={allVisibleSelected ? "Clear selection" : "Select all visible"}
+        >
+          <Ionicons
+            name={allVisibleSelected ? "close-circle-outline" : "checkmark-done-outline"}
+            size={18}
+            color={tokens.accent}
+          />
+          <Text style={[type.caption, { color: tokens.accent, fontWeight: "700" }]}>
+            {allVisibleSelected ? "Clear selection" : "Select all visible"}
+          </Text>
+        </Pressable>
+      ) : null}
+
       {selectionCount > 0 ? (
         <View style={[localStyles.bulkBar, { backgroundColor: native.secondaryGrouped, borderColor: tokens.border }]}>
           <Text style={[type.bodyEmphasis, { color: native.label, flex: 1 }]}>
@@ -126,6 +145,7 @@ export function FacultyCourseNotesDeletedPanel({ scope, notes, onChanged, onPrev
             onPress={() => void restoreNotes(selectedIds)}
             disabled={busy}
             style={localStyles.bulkBtn}
+            accessibilityRole="button"
             accessibilityLabel="Restore selected notes"
           >
             <Ionicons name="arrow-undo-outline" size={18} color={tokens.accent} />
@@ -135,6 +155,7 @@ export function FacultyCourseNotesDeletedPanel({ scope, notes, onChanged, onPrev
             onPress={() => confirmPermanentDelete(selectedIds)}
             disabled={busy}
             style={localStyles.bulkBtn}
+            accessibilityRole="button"
             accessibilityLabel="Permanently delete selected notes"
           >
             <Ionicons name="trash-outline" size={18} color={tokens.danger} />
@@ -168,6 +189,7 @@ export function FacultyCourseNotesDeletedPanel({ scope, notes, onChanged, onPrev
                 <Pressable
                   onPress={() => toggleSelected(note.id)}
                   style={localStyles.checkBtn}
+                  accessibilityRole="button"
                   accessibilityLabel={selected ? "Deselect note" : "Select note"}
                 >
                   <Ionicons
@@ -176,12 +198,20 @@ export function FacultyCourseNotesDeletedPanel({ scope, notes, onChanged, onPrev
                     color={selected ? tokens.accent : native.tertiaryLabel}
                   />
                 </Pressable>
-                <Pressable onPress={() => onPreview(note)} style={localStyles.copy}>
+                <Pressable
+                  onPress={() => onPreview(note)}
+                  style={localStyles.copy}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Preview ${note.title || "Untitled note"}`}
+                >
                   <Text style={[type.bodyEmphasis, { color: native.label }]} numberOfLines={2}>
                     {note.title || "Untitled note"}
                   </Text>
                   <Text style={[type.caption, { color: native.secondaryLabel }]} numberOfLines={2}>
-                    {noteContentPreviewText(note.bodyText, 120) || "No text"}
+                    {noteContentPreviewText(note.bodyText, 120) ||
+                      (workspaceHasContent(parseCircuitWorkspace(note.inkWorkspace))
+                        ? "Handwritten note"
+                        : "No text")}
                   </Text>
                   <Text style={[type.footnote, { color: native.tertiaryLabel }]}>
                     {note.topic ? `${note.topic} · ` : ""}
@@ -193,6 +223,7 @@ export function FacultyCourseNotesDeletedPanel({ scope, notes, onChanged, onPrev
                     onPress={() => void restoreNotes([note.id])}
                     disabled={busy}
                     style={localStyles.actionBtn}
+                    accessibilityRole="button"
                     accessibilityLabel="Restore note"
                   >
                     <Ionicons name="arrow-undo-outline" size={20} color={tokens.accent} />
@@ -201,6 +232,7 @@ export function FacultyCourseNotesDeletedPanel({ scope, notes, onChanged, onPrev
                     onPress={() => confirmPermanentDelete([note.id])}
                     disabled={busy}
                     style={localStyles.actionBtn}
+                    accessibilityRole="button"
                     accessibilityLabel="Permanently delete note"
                   >
                     <Ionicons name="trash-outline" size={20} color={tokens.danger} />
@@ -216,6 +248,13 @@ export function FacultyCourseNotesDeletedPanel({ scope, notes, onChanged, onPrev
 }
 
 const localStyles = StyleSheet.create({
+  selectAllRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 10,
+    paddingVertical: 4,
+  },
   list: { gap: 10 },
   bulkBar: {
     flexDirection: "row",

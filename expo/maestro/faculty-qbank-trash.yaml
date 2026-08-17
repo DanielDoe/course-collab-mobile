@@ -1,0 +1,10 @@
+appId: com.coursecollab.app
+---
+- tapOn: "OK"
+- waitForAnimationToEnd
+- tapOn: "Done"
+- waitForAnimationToEnd
+- tapOn: "Move to trash"
+- waitForAnimationToEnd
+- tapOn: "Move to trash"
+- waitForAnimationToEnd

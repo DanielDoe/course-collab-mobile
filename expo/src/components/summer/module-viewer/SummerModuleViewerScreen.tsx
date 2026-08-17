@@ -132,7 +132,7 @@ export function SummerModuleViewerScreen() {
 
   const progressSummary = useMemo(() => {
     if (!detail) return { completed: 0, total: 0, percent: 0, moduleComplete: false }
-    const { completed, total } = countModuleProgress(detail.blocks, detail.progress)
+    const { completed, total } = countModuleProgress(detail.blocks, detail.progress, detail.submissions)
     const percent = total > 0 ? Math.round((completed / total) * 100) : 0
     return {
       completed,
@@ -141,6 +141,37 @@ export function SummerModuleViewerScreen() {
       moduleComplete: isSummerModuleComplete(detail.progress),
     }
   }, [detail])
+
+  const submitCheckpoint = useCallback(
+    async (blockId: number, file: { uri: string; name: string; mime: string }) => {
+      if (!studentId || !detail) return
+      setSavingBlockId(blockId)
+      setError("")
+      try {
+        const result = await summerCampApi.submitCheckpoint(studentId, {
+          moduleId: detail.module.id,
+          blockId,
+          uri: file.uri,
+          name: file.name,
+          mime: file.mime,
+        })
+        setDetail((current) => {
+          if (!current) return current
+          const filtered = current.submissions.filter((item) => item.block_id !== blockId)
+          return {
+            ...current,
+            submissions: [...filtered, result.submission],
+            totalXp: result.totalXp ?? current.totalXp,
+          }
+        })
+      } catch (err) {
+        setError(err instanceof ApiError ? err.message : "Could not upload checkpoint.")
+      } finally {
+        setSavingBlockId(null)
+      }
+    },
+    [detail, studentId],
+  )
 
   const saveProgress = useCallback(
     async (blockId: number, progressType: string, metadata?: Record<string, unknown>) => {
@@ -314,8 +345,10 @@ export function SummerModuleViewerScreen() {
                 key={block.id}
                 block={block}
                 progress={detail.progress}
+                submissions={detail.submissions}
                 saving={savingBlockId === block.id}
                 onSaveProgress={(progressType, metadata) => saveProgress(block.id, progressType, metadata)}
+                onSubmitCheckpoint={(file) => submitCheckpoint(block.id, file)}
                 onAutoComplete={() => handleAutoComplete(block.id)}
               />
             ))}

@@ -12,6 +12,11 @@ import type { CoraAccessEnvelope } from "./cora-rbac"
 import { filterStudentContextForCora } from "./cora-rbac/context-policy"
 import { recordCoraError, recordCoraSuccess } from "./cora-rbac/prepare-request"
 import type { PreparedCoraRequest } from "./cora-rbac/prepare-request"
+import { coraCreditsApi } from "./cora/credits/api"
+import { studentMonthlyAllocation, type CoraMode } from "./cora/credits/economy"
+import type { CoraExpensiveTaskPayload } from "./cora/credits/types"
+import { mapStudentChatResponse } from "./cora/scope/types"
+import { parseCoraChatMeta } from "./cora/models"
 
 export type { CoraImportedProblem } from "./cora-api"
 
@@ -88,7 +93,16 @@ export type AiTutorCredits = {
   credits: number
   tier: string
   creditsLimit: number | "unlimited"
+  /** Always false under the Cora Credit economy — kept for legacy UI branches. */
   isUnlimited: boolean
+  includedBalance?: number
+  purchasedBalance?: number
+  reservedCredits?: number
+  periodKey?: string
+  coraMode?: CoraMode
+  isLow?: boolean
+  membershipTier?: string | null
+  lifetimeCreditsUsed?: number
 }
 
 export type ChatMessageVersion = {
@@ -102,11 +116,26 @@ export type ChatMessage = {
   id: string
   role: "user" | "assistant"
   content: string
+  /** ISO timestamp — used for iMessage-style day dividers. */
+  createdAt?: string
   importedQuestion?: CoraImportedProblem
   importedQuestionLabel?: string
   /** Present when the user edited and resent this turn. */
   versions?: ChatMessageVersion[]
   activeVersionIndex?: number
+  /** Signed (or local) action proposals — confirm via CoraActionCard before mutating. */
+  proposals?: import("./cora/types").CoraActionProposal[]
+  proposalStatusById?: Record<string, "idle" | "confirming" | "done" | "error">
+  proposalResultById?: Record<string, import("./cora/types").CoraConfirmActionResult>
+  /** Purpose-scope false-positive feedback (server redirect only). */
+  scopeFeedback?: import("./cora/scope/types").CoraScopeFeedbackState | null
+  /** Distinct from scope — assessment integrity refusal. */
+  integrityBlock?: boolean
+  /** Distinct from scope — unauthorized tool/data. */
+  permissionDeny?: boolean
+  coraPublicMode?: import("./cora/models").CoraPublicModeLabel
+  coraProfile?: import("./cora/models").CoraModelProfile
+  ui?: import("./cora/models").CoraUiPayload
 }
 
 type AiTutorMessageResponse = {
@@ -119,6 +148,42 @@ type AiTutorMessageResponse = {
   rbacBlocked?: boolean
   blockReason?: string
   proposals?: import("./cora/types").CoraActionProposal[]
+  needsConfirmation?: boolean
+  expensiveTask?: boolean
+  estimateLow?: number
+  estimateHigh?: number
+  estimatedCredits?: number
+  creditsRemaining?: number
+  threshold?: number
+  coraMode?: CoraMode
+  scopeRedirect?: boolean
+  scopeDecision?: string
+  scopeClassification?: string
+  scopeEventId?: number | null
+  offerScopeFeedback?: boolean
+  creditsCharged?: number
+  examBlocked?: boolean
+  assessmentIntegrity?: unknown
+  assessmentTitle?: string
+  clearanceDenied?: boolean
+  readOnlyRefusal?: boolean
+  profile?: import("./cora/models").CoraModelProfile
+  publicMode?: import("./cora/models").CoraPublicModeLabel
+  ui?: import("./cora/models").CoraUiPayload
+  routing?: import("./cora/models").PublicCoraRoutingMeta
+}
+
+export type AiTutorStreamDoneMeta = {
+  proposals?: import("./cora/types").CoraActionProposal[]
+  scopeFeedback?: import("./cora/scope/types").CoraScopeFeedbackState | null
+  integrityBlock?: boolean
+  permissionDeny?: boolean
+  /** When true, do not refresh local credit balance (scope redirect charges 0). */
+  skipCreditRefresh?: boolean
+  profile?: import("./cora/models").CoraModelProfile
+  publicMode?: import("./cora/models").CoraPublicModeLabel
+  ui?: import("./cora/models").CoraUiPayload
+  routing?: import("./cora/models").PublicCoraRoutingMeta
 }
 
 function normalizeHistoryRole(role: string): "user" | "assistant" {
@@ -148,6 +213,20 @@ async function revealText(
   return true
 }
 
+export function applyCoraChatMeta(message: ChatMessage, meta?: AiTutorStreamDoneMeta | null): ChatMessage {
+  if (!meta) return message
+  return {
+    ...message,
+    ...(meta.proposals?.length ? { proposals: meta.proposals } : {}),
+    coraPublicMode: meta.publicMode ?? message.coraPublicMode,
+    coraProfile: meta.profile ?? message.coraProfile,
+    ui: meta.ui ?? message.ui,
+    scopeFeedback: meta.scopeFeedback ?? message.scopeFeedback,
+    integrityBlock: meta.integrityBlock || message.integrityBlock,
+    permissionDeny: meta.permissionDeny || message.permissionDeny,
+  }
+}
+
 function isAbortError(err: unknown): boolean {
   return err instanceof Error && err.name === "AbortError"
 }
@@ -165,11 +244,39 @@ export const aiTutorApi = {
       `/api/ai-tutor/recommendations?studentId=${encodeURIComponent(session.databaseId)}`,
     ).catch(() => ({ recommendations: [] as AiTutorRecommendation[] })),
 
-  getCredits: (session: StudentSession) =>
-    request<AiTutorCredits>(
-      session,
-      `/api/ai-tutor/credits?studentId=${encodeURIComponent(session.databaseId)}`,
-    ),
+  getCredits: async (session: StudentSession): Promise<AiTutorCredits> => {
+    try {
+      const balance = await coraCreditsApi.getStudentBalance(session)
+      const tier = balance.membershipTier || "Scholar"
+      const includedCap = balance.includedCapHint ?? studentMonthlyAllocation(tier)
+      return {
+        credits: balance.credits,
+        tier,
+        creditsLimit: includedCap > 0 ? includedCap : balance.credits,
+        isUnlimited: false,
+        includedBalance: balance.includedBalance,
+        purchasedBalance: balance.purchasedBalance,
+        reservedCredits: balance.reservedCredits,
+        periodKey: balance.periodKey,
+        coraMode: balance.coraMode,
+        isLow: balance.isLow,
+        membershipTier: balance.membershipTier,
+        lifetimeCreditsUsed: balance.lifetimeCreditsUsed,
+      }
+    } catch {
+      /* Fall back to legacy endpoint during migration. */
+      const legacy = await request<AiTutorCredits & { coraMode?: string; isLow?: boolean }>(
+        session,
+        `/api/ai-tutor/credits?studentId=${encodeURIComponent(session.databaseId)}`,
+      )
+      return {
+        ...legacy,
+        isUnlimited: false,
+        coraMode: legacy.coraMode === "lite" ? "lite" : legacy.credits <= 0 ? "lite" : "premium",
+        isLow: Boolean(legacy.isLow),
+      }
+    }
+  },
 
   getStudentContext: (session: StudentSession) =>
     request<StudentContextPayload>(session, "/api/ai-tutor/student-context"),
@@ -199,7 +306,7 @@ export const aiTutorApi = {
     conversationHistory: { role: string; content: string }[],
     handlers: {
       onChunk: (text: string) => void
-      onDone: (meta?: { proposals?: import("./cora/types").CoraActionProposal[] }) => void
+      onDone: (meta?: AiTutorStreamDoneMeta) => void
       onError: (message: string) => void
       onAborted?: () => void
     },
@@ -213,6 +320,11 @@ export const aiTutorApi = {
       coraAccess?: CoraAccessEnvelope
       prepared?: PreparedCoraRequest
       signal?: AbortSignal
+      confirmExpensiveTask?: boolean
+      onNeedsExpensiveConfirm?: (payload: CoraExpensiveTaskPayload) => void
+      confirmScopeRelated?: boolean
+      declaredAcademicContext?: string | null
+      threadId?: string | null
     },
   ): Promise<void> {
     const prepared = options?.prepared
@@ -230,7 +342,10 @@ export const aiTutorApi = {
         : message
 
       const scopedContext = filterStudentContextForCora(options?.studentContext ?? null)
-
+      const historyPayload = conversationHistory.map((entry) => ({
+        role: normalizeHistoryRole(entry.role),
+        content: entry.content,
+      }))
       const response = await fetch(`${API_BASE_URL}/api/ai-tutor`, {
         method: "POST",
         credentials: "include",
@@ -241,10 +356,8 @@ export const aiTutorApi = {
           studentId: session.databaseId,
           useAgent,
           context: { topic: "auto-detect" },
-          conversationHistory: conversationHistory.map((entry) => ({
-            role: normalizeHistoryRole(entry.role),
-            content: entry.content,
-          })),
+          conversationHistory: historyPayload,
+          ...(options?.threadId ? { threadId: options.threadId } : {}),
           ...(options?.problemContext ? { problemContext: options.problemContext } : {}),
           ...(scopedContext ? { studentContext: scopedContext } : {}),
           ...(learningMemory
@@ -258,6 +371,11 @@ export const aiTutorApi = {
           ...(options?.chatConfig ? { chatConfig: options.chatConfig } : {}),
           ...(options?.coraAccess ? { coraAccess: options.coraAccess } : {}),
           ...(prepared ? prepared.accessBody : {}),
+          ...(options?.confirmExpensiveTask ? { confirmExpensiveTask: true } : {}),
+          ...(options?.confirmScopeRelated ? { confirmScopeRelated: true } : {}),
+          ...(options?.declaredAcademicContext
+            ? { declaredAcademicContext: options.declaredAcademicContext }
+            : {}),
         }),
       })
 
@@ -275,7 +393,43 @@ export const aiTutorApi = {
         return
       }
 
-      if (data.accessDenied || data.rbacBlocked) {
+      if (data.needsConfirmation || response.status === 409) {
+        if (prepared) recordCoraError(prepared, message)
+        const payload: CoraExpensiveTaskPayload = {
+          needsConfirmation: true,
+          expensiveTask: true,
+          estimateLow: Number(data.estimateLow ?? 0),
+          estimateHigh: Number(data.estimateHigh ?? 0),
+          estimatedCredits: Number(data.estimatedCredits ?? 0),
+          creditsRemaining: Number(data.creditsRemaining ?? 0),
+          threshold: Number(data.threshold ?? 100),
+          response: data.response,
+        }
+        if (options?.onNeedsExpensiveConfirm) {
+          options.onNeedsExpensiveConfirm(payload)
+          return
+        }
+        handlers.onError(
+          data.response?.trim() ||
+            `Large Cora task — estimated ${payload.estimateLow}–${payload.estimateHigh} credits. Confirm to continue.`,
+        )
+        return
+      }
+
+      if (data.creditsInsufficient && !data.scopeRedirect) {
+        if (prepared) recordCoraError(prepared, message)
+        handlers.onError(
+          data.coraMode === "lite" || data.response
+            ? data.response?.trim() ||
+                "You're on Cora Lite — premium generation needs more credits. Buy a pack or wait for your monthly refresh."
+            : "You've used your Cora credits for this period. Buy a pack or wait for your monthly refresh.",
+        )
+        return
+      }
+
+      const outcome = mapStudentChatResponse(data as unknown as Record<string, unknown>, message)
+
+      if (outcome.kind === "permission_deny" && !outcome.text.trim() && (data.accessDenied || data.rbacBlocked)) {
         if (prepared) recordCoraError(prepared, message)
         handlers.onError(
           typeof data.blockReason === "string"
@@ -285,13 +439,20 @@ export const aiTutorApi = {
         return
       }
 
-      if (data.creditsInsufficient) {
+      if (outcome.kind === "error") {
         if (prepared) recordCoraError(prepared, message)
-        handlers.onError("You've used your weekly Cora credits. Upgrade or wait for reset.")
+        handlers.onError(outcome.message)
         return
       }
 
-      const answer = data.response?.trim()
+      const answer =
+        outcome.kind === "assistant" ||
+        outcome.kind === "scope_redirect" ||
+        outcome.kind === "integrity_block" ||
+        outcome.kind === "permission_deny"
+          ? outcome.text.trim()
+          : ""
+
       if (!answer) {
         if (prepared) recordCoraError(prepared, message)
         handlers.onError(
@@ -307,6 +468,28 @@ export const aiTutorApi = {
         handlers.onAborted?.()
         return
       }
+
+      if (outcome.kind === "scope_redirect") {
+        handlers.onDone({
+          skipCreditRefresh: true,
+          scopeFeedback: outcome.offerFeedback
+            ? { eventId: outcome.eventId, originalMessage: outcome.originalUserMessage }
+            : null,
+        })
+        return
+      }
+
+      if (outcome.kind === "integrity_block") {
+        handlers.onDone({ integrityBlock: true, skipCreditRefresh: true })
+        return
+      }
+
+      if (outcome.kind === "permission_deny") {
+        if (prepared) recordCoraError(prepared, message)
+        handlers.onDone({ permissionDeny: true, skipCreditRefresh: true })
+        return
+      }
+
       if (prepared) {
         recordCoraSuccess(prepared, {
           prompt: message,
@@ -314,7 +497,14 @@ export const aiTutorApi = {
           dataSources: prepared.claims.contextSources,
         })
       }
-      handlers.onDone(data.proposals?.length ? { proposals: data.proposals } : undefined)
+      const chatMeta = parseCoraChatMeta(data as unknown as Record<string, unknown>)
+      handlers.onDone({
+        ...(outcome.proposals?.length ? { proposals: outcome.proposals } : {}),
+        profile: chatMeta.profile,
+        publicMode: chatMeta.publicMode,
+        routing: chatMeta.routing,
+        ...(chatMeta.ui ? { ui: chatMeta.ui } : {}),
+      })
     } catch (err) {
       if (isAbortError(err) || signal?.aborted) {
         handlers.onAborted?.()

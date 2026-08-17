@@ -1,0 +1,9 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Create assignment"
+- tapOn:
+    id: "assignment-title"
+- inputText: "QA16CP"
+- hideKeyboard
+- tapOn: "Submit Create assignment"
+- waitForAnimationToEnd

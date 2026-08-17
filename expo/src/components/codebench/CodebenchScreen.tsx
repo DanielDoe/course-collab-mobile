@@ -18,6 +18,9 @@ import {
 import { CoraBrand } from "../cora/CoraBrand"
 import { useSession } from "../../context/SessionProvider"
 import { useStudentShell } from "../../context/StudentShellContext"
+import { AppErrorScreen } from "../errors/AppErrorScreen"
+import { ApiError } from "../../lib/api"
+import { codebenchFailureMessage } from "../../lib/codebench-progress"
 import {
   codebenchApi,
   type CodebenchLeaderboardEntry,
@@ -445,6 +448,7 @@ export function CodebenchScreen() {
 
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [error, setError] = useState("")
   const [streakDays, setStreakDays] = useState(0)
   const [badgeCount, setBadgeCount] = useState(0)
   const [badges, setBadges] = useState<Record<string, boolean>>({})
@@ -461,16 +465,29 @@ export function CodebenchScreen() {
       setLoading(false)
       return
     }
+    const failed: string[] = []
     try {
       const [streakRes, badgesRes, lbRes, subsRes] = await Promise.all([
-        codebenchApi.getStreak(session).catch(() => ({ streakDays: 0 })),
-        codebenchApi.getBadges(session).catch(() => ({ badges: {}, badgeDetails: {} })),
-        codebenchApi.getLeaderboard(session).catch(() => ({ leaderboard: [] })),
-        codebenchApi.getSubmissions(session).catch(() => ({
-          codeSubmissions: [],
-          practiceSubmissions: [],
-          dailyChallengeSubmissions: [],
-        })),
+        codebenchApi.getStreak(session).catch(() => {
+          failed.push("streak")
+          return { streakDays: 0 }
+        }),
+        codebenchApi.getBadges(session).catch(() => {
+          failed.push("badges")
+          return { badges: {}, badgeDetails: {} }
+        }),
+        codebenchApi.getLeaderboard(session).catch(() => {
+          failed.push("leaderboard")
+          return { leaderboard: [] }
+        }),
+        codebenchApi.getSubmissions(session).catch(() => {
+          failed.push("submissions")
+          return {
+            codeSubmissions: [],
+            practiceSubmissions: [],
+            dailyChallengeSubmissions: [],
+          }
+        }),
       ])
 
       setStreakDays(streakRes.streakDays ?? 0)
@@ -482,8 +499,9 @@ export function CodebenchScreen() {
       setSubmissionCount(subs.length)
       const xpSum = subs.reduce((sum, s) => sum + Number(s.points_awarded ?? 0), 0)
       setTotalXp(Math.round(xpSum))
-    } catch {
-      /* non-fatal */
+      setError(codebenchFailureMessage(failed))
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to load your CodeBench progress.")
     }
 
     void codebenchApi
@@ -577,6 +595,13 @@ export function CodebenchScreen() {
           <ActivityIndicator color={SN.accent} />
           <Text style={[type.caption, { color: native.secondaryLabel }]}>Loading your progress…</Text>
         </View>
+      ) : error ? (
+        <AppErrorScreen
+          error={new Error(error)}
+          feature="CodeBench"
+          onRetry={() => void onRefresh()}
+          style={styles.errorPanel}
+        />
       ) : (
         <>
           <KpiGrid streakDays={streakDays} badgeCount={badgeCount} totalXp={totalXp} />
@@ -663,6 +688,7 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   section: { gap: 8 },
   loadingBox: { alignItems: "center", gap: 10, paddingVertical: 24 },
+  errorPanel: { flexGrow: 0, paddingVertical: 8 },
   heroWrap: { borderRadius: 20 },
   heroCard: {
     borderRadius: 20,

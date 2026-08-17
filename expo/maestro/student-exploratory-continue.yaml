@@ -1,0 +1,228 @@
+appId: com.coursecollab.app
+---
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn:
+    text: "Back to Lectures"
+    optional: true
+- tapOn:
+    text: "Lectures"
+    optional: true
+- extendedWaitUntil:
+    visible: "Open navigation menu|Dashboard|Lectures|My Notes"
+    timeout: 20000
+- takeScreenshot: continue-home
+
+- tapOn: "Open navigation menu"
+- tapOn: "My Notes"
+- extendedWaitUntil:
+    visible: "My Notes"
+    timeout: 30000
+- tapOn:
+    text: "Course Notes"
+    optional: true
+- tapOn:
+    text: "My Notes"
+    optional: true
+- takeScreenshot: continue-notes
+
+- tapOn: "Open navigation menu"
+- tapOn: "Flashcards"
+- extendedWaitUntil:
+    visible: "Flashcards"
+    timeout: 30000
+- tapOn:
+    text: "Stats"
+    optional: true
+- tapOn:
+    text: "All"
+    optional: true
+- takeScreenshot: continue-flashcards
+
+- tapOn: "Open navigation menu"
+- tapOn: "Practice Hub"
+- extendedWaitUntil:
+    visible: "Practice Hub"
+    timeout: 45000
+- tapOn:
+    text: "Leaderboard"
+    optional: true
+- tapOn:
+    text: "Practice"
+    optional: true
+- takeScreenshot: continue-practice
+
+- tapOn: "Open navigation menu"
+- tapOn: "Cora Assistant"
+- extendedWaitUntil:
+    visible: "Capabilities|Upgrade|Cora"
+    timeout: 45000
+- takeScreenshot: continue-cora
+
+- tapOn: "Open navigation menu"
+- tapOn: "Quizzes"
+- extendedWaitUntil:
+    visible: "Quizzes"
+    timeout: 30000
+- takeScreenshot: continue-quizzes
+
+- tapOn: "Open navigation menu"
+- tapOn: "Homework"
+- extendedWaitUntil:
+    visible: "Homework"
+    timeout: 30000
+- takeScreenshot: continue-homework
+
+- tapOn: "Open navigation menu"
+- tapOn: "Grades"
+- extendedWaitUntil:
+    visible: "Grades"
+    timeout: 30000
+- tapOn:
+    text: "Final"
+    optional: true
+- tapOn:
+    text: "Pending"
+    optional: true
+- takeScreenshot: continue-grades
+
+- tapOn: "Open navigation menu"
+- tapOn: "Forum Hub"
+- extendedWaitUntil:
+    visible: "Forum Hub"
+    timeout: 45000
+- tapOn:
+    text: "Tutoring"
+    optional: true
+- tapOn:
+    text: "Discussions"
+    optional: true
+- takeScreenshot: continue-forum
+
+- tapOn: "Open navigation menu"
+- tapOn: "Messages"
+- extendedWaitUntil:
+    visible: "Messages"
+    timeout: 30000
+- tapOn:
+    text: "New message"
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true
+- takeScreenshot: continue-messages
+
+- tapOn: "Open navigation menu"
+- tapOn: "Groups"
+- extendedWaitUntil:
+    visible: "Groups"
+    timeout: 45000
+- tapOn:
+    text: "Join"
+    optional: true
+- tapOn:
+    text: "All"
+    optional: true
+- takeScreenshot: continue-groups
+
+- tapOn: "Open navigation menu"
+- tapOn: "Projects"
+- extendedWaitUntil:
+    visible: "Projects"
+    timeout: 45000
+- takeScreenshot: continue-projects
+
+- tapOn: "Open navigation menu"
+- tapOn: "Playground"
+- extendedWaitUntil:
+    visible: "Playground"
+    timeout: 30000
+- takeScreenshot: continue-playground
+
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Classroom Points"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Classroom Points"
+- extendedWaitUntil:
+    visible: "Classroom Points"
+    timeout: 30000
+- tapOn:
+    text: "Tasks"
+    optional: true
+- tapOn:
+    text: "History"
+    optional: true
+- takeScreenshot: continue-points
+
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Trade Center"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Trade Center"
+- extendedWaitUntil:
+    visible: "Trade Center"
+    timeout: 30000
+- tapOn:
+    text: "Trade"
+    optional: true
+- tapOn:
+    text: "Donate"
+    optional: true
+- tapOn:
+    text: "Overview"
+    optional: true
+- takeScreenshot: continue-trade
+
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Calendar"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Calendar"
+- extendedWaitUntil:
+    visible: "Calendar"
+    timeout: 30000
+- tapOn:
+    text: "Jump to today"
+    optional: true
+- takeScreenshot: continue-calendar
+
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Office Hours"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Office Hours"
+- extendedWaitUntil:
+    visible: "Office Hours"
+    timeout: 30000
+- tapOn: "Topic"
+- inputText: "Office hours UI check"
+- tapOn:
+    text: "Urgent"
+    optional: true
+- tapOn:
+    text: "My requests"
+    optional: true
+- takeScreenshot: continue-office
+
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Settings"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Settings"
+- extendedWaitUntil:
+    visible: "Settings"
+    timeout: 20000
+- tapOn:
+    text: "Edit profile"
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true
+- takeScreenshot: continue-settings

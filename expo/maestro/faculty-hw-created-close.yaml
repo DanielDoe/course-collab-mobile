@@ -1,0 +1,6 @@
+appId: com.coursecollab.app
+---
+- tapOn: "OK"
+- waitForAnimationToEnd
+- tapOn: "Close editor"
+- waitForAnimationToEnd

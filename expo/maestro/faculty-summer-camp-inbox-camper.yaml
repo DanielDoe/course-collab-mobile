@@ -1,0 +1,10 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Nader Ghenaim, approved"
+- takeScreenshot: summer-inbox-detail
+- tapOn: "Done"
+- tapOn: "Campers"
+- extendedWaitUntil:
+    visible: "Search campers…|Add summer camper"
+    timeout: 15000
+- takeScreenshot: summer-campers-list

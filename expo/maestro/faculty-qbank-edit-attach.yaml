@@ -1,0 +1,10 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Edit"
+- waitForAnimationToEnd
+- scrollUntilVisible:
+    element: "Attach diagram"
+    direction: DOWN
+    timeout: 8000
+- tapOn: "Attach diagram"
+- waitForAnimationToEnd

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react"
 import { ActivityIndicator, RefreshControl, StyleSheet, Text, View } from "react-native";
 import { AppAlert } from '../../lib/app-alert'
 import { Ionicons } from "@/components/icons/AppIcon"
@@ -54,7 +54,7 @@ const TABS: Array<{ id: StudentDirectoryTab; label: string; icon: keyof typeof I
 export function FacultyStudentsScreen() {
   const { styles: moduleStyles, native, tokens, type } = useModuleTheme()
   const insets = useSafeAreaInsets()
-  const { listScrollPad } = useFacultyStickyHeaderScrollLayout()
+  const { listScrollPad, chromeTop } = useFacultyStickyHeaderScrollLayout()
   const { scope, ready, course } = useFacultyScope()
 
   const [tab, setTab] = useState<StudentDirectoryTab>("students")
@@ -78,17 +78,18 @@ export function FacultyStudentsScreen() {
   const load = useCallback(async () => {
     if (!scope) return
     setError("")
-    const sessionCode = resolveSessionFilterCode(sessions, sessionFilter)
-    const [studentRows, resetRows, requestRows, sessionRes] = await Promise.all([
+    const sessionRes = await instructorApi.getSessions(scope)
+    const nextSessions = sessionRes.sessions ?? []
+    setSessions(nextSessions)
+    const sessionCode = resolveSessionFilterCode(nextSessions, sessionFilter)
+    const [studentRows, resetRows, requestRows] = await Promise.all([
       instructorApi.getStudents(scope, sessionCode),
       instructorApi.getPasswordResets(scope),
       instructorApi.getAccountRequests(scope),
-      instructorApi.getSessions(scope),
     ])
     setStudents(studentRows)
     setResets(resetRows)
     setRequests(requestRows)
-    setSessions(sessionRes.sessions ?? [])
   }, [scope, sessionFilter])
 
   useNotificationModuleRefresh("students", load)
@@ -152,6 +153,7 @@ export function FacultyStudentsScreen() {
     try {
       await instructorApi.rejectPasswordReset(scope, row.id, reason)
       setSelectedReset(null)
+      AppAlert.alert("Declined", "Password reset request declined.")
       await load()
     } catch (err) {
       AppAlert.alert("Could not reject", err instanceof ApiError ? err.message : "Try again.")
@@ -181,6 +183,7 @@ export function FacultyStudentsScreen() {
     try {
       await instructorApi.rejectAccountRequest(scope, row.id, reason)
       setSelectedRequest(null)
+      AppAlert.alert("Declined", "Account request declined.")
       await load()
     } catch (err) {
       AppAlert.alert("Could not reject", err instanceof ApiError ? err.message : "Try again.")
@@ -221,28 +224,28 @@ export function FacultyStudentsScreen() {
       return {
         icon: "key-outline" as const,
         title: "No password resets",
-        body: "Student password reset requests will appear here.",
+        body: "Student password reset requests will appear here. Pull down to refresh.",
       }
     }
     return {
       icon: "mail-outline" as const,
       title: "No account requests",
-      body: "Guest and roster join requests will appear here.",
+      body: "Guest and roster join requests will appear here. Pull down to refresh.",
     }
   }, [loading, tab, students.length])
 
   const renderStudentRow = useCallback(({ item }: { item: StudentListRow }) => {
+    let content: React.ReactNode
     if (item.kind === "student") {
-      return (
+      content = (
         <FacultyStudentDirectoryCard
           student={item.student}
           onPress={() => setSelectedStudent(item.student)}
         />
       )
-    }
-    if (item.kind === "reset") {
+    } else if (item.kind === "reset") {
       const row = item.row
-      return (
+      content = (
         <FacultyStudentRequestCard
           name={row.full_name}
           subtitle={row.student_number ?? row.email ?? ""}
@@ -253,20 +256,22 @@ export function FacultyStudentsScreen() {
           onPress={() => setSelectedReset(row)}
         />
       )
+    } else {
+      const row = item.row
+      content = (
+        <FacultyStudentRequestCard
+          name={row.full_name}
+          subtitle={row.email ?? row.student_id}
+          meta={`${accountRequestKindLabel(row.request_kind)} · ${formatFacultyRelativeTime(row.created_at)}`}
+          badge={row.guest_purpose?.replace(/_/g, " ") ?? row.section}
+          status={row.status}
+          thumbKind="request"
+          seed={row.id}
+          onPress={() => setSelectedRequest(row)}
+        />
+      )
     }
-    const row = item.row
-    return (
-      <FacultyStudentRequestCard
-        name={row.full_name}
-        subtitle={row.email ?? row.student_id}
-        meta={`${accountRequestKindLabel(row.request_kind)} · ${formatFacultyRelativeTime(row.created_at)}`}
-        badge={row.guest_purpose?.replace(/_/g, " ") ?? row.section}
-        status={row.status}
-        thumbKind="request"
-        seed={row.id}
-        onPress={() => setSelectedRequest(row)}
-      />
-    )
+    return <View style={styles.listRowWrap}>{content}</View>
   }, [])
 
   const listHeader = useMemo(
@@ -347,6 +352,7 @@ export function FacultyStudentsScreen() {
             refreshing={refreshing}
             onRefresh={() => void handleRefresh()}
             tintColor={FACULTY_STUDENTS_COLOR.link}
+            {...(chromeTop > 0 ? { progressViewOffset: chromeTop } : {})}
           />
         }
       />
@@ -418,7 +424,8 @@ export function FacultyStudentsScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1},
   scroll: { flex: 1 },
-  content: { padding: NATIVE.pagePadding, gap: 12 },
+  content: { padding: NATIVE.pagePadding },
+  listRowWrap: { marginBottom: 12 },
   center: { flex: 1, justifyContent: "center", padding: 24},
   errorBox: {
     backgroundColor: SYSTEM.red.soft,

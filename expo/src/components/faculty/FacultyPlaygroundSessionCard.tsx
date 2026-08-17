@@ -9,6 +9,7 @@ import {
   playgroundSessionLabel,
   playgroundSessionPhase,
   playgroundSessionStatusLabel,
+  playgroundSessionSubtitle,
 } from "../../lib/faculty-playground-utils"
 import {
   FACULTY_PLAYGROUND_COLOR,
@@ -41,7 +42,7 @@ export function FacultyPlaygroundSessionCard({
       thumb={thumb}
       icon={playgroundPhaseIcon(phase)}
       title={label}
-      description={session.session_code}
+      description={playgroundSessionSubtitle(session)}
       metaLine={`${session.participant_count ?? 0} joined · ${questionCount} questions · ${session.duration_sec ?? 10}s timer${
         hasLeaderboard ? " · Scores available" : ""
       }`}

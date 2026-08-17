@@ -145,6 +145,16 @@ function mergeFacultyChatMessages(
       importedQuestion: message.importedQuestion ?? other.importedQuestion,
       importedQuestionLabel: message.importedQuestionLabel ?? other.importedQuestionLabel,
       actions: message.actions?.length ? message.actions : other.actions,
+      // Prefer whichever side still has confirmation cards / results (don't drop on sync).
+      proposals: message.proposals?.length ? message.proposals : other.proposals,
+      proposalStatusById: {
+        ...(other.proposalStatusById ?? {}),
+        ...(message.proposalStatusById ?? {}),
+      },
+      proposalResultById: {
+        ...(other.proposalResultById ?? {}),
+        ...(message.proposalResultById ?? {}),
+      },
     }
   })
   for (const message of secondary) {
@@ -278,7 +288,14 @@ export function buildFacultyCoraThread(
   existing?: Pick<FacultyCoraChatThread, "createdAt" | "capabilityId" | "title" | "titleIsCustom"> | null,
 ): FacultyCoraChatThread {
   const now = new Date().toISOString()
-  const meaningful = messages.filter((m) => m.content.trim() || m.importedQuestion)
+  const meaningful = messages.filter(
+    (m) =>
+      m.content.trim() ||
+      m.importedQuestion ||
+      (m.proposals?.length ?? 0) > 0 ||
+      Object.keys(m.proposalResultById ?? {}).length > 0 ||
+      Object.keys(m.proposalStatusById ?? {}).length > 0,
+  )
   const autoTitle = deriveThreadTitle(meaningful)
   return {
     id,
@@ -343,9 +360,19 @@ export async function activateFacultyCoraThread(
   instructorId: number,
   courseId: number,
   threadId: string | null,
+  scope?: InstructorScope,
 ): Promise<void> {
   const store = await readStore(instructorId, courseId)
   await writeStore(instructorId, courseId, { ...store, activeThreadId: threadId })
+  if (scope && threadId) {
+    try {
+      await facultyCoraChatApi.setActiveThread(scope, threadId)
+    } catch (err) {
+      if (!isFacultyCoraChatHistoryUnavailable(err)) {
+        console.warn("[FacultyCoraChat] Could not set active thread on server.", err)
+      }
+    }
+  }
 }
 
 export async function deleteFacultyCoraThread(
@@ -435,7 +462,8 @@ export async function archiveFacultyCoraThread(
 
   if (scope) {
     try {
-      await facultyCoraChatApi.deleteThread(scope, threadId)
+      // Keep archived threads on the server (web sync) — do not DELETE.
+      await facultyCoraChatApi.upsertThread(scope, archivedThread, { setActive: false })
     } catch (err) {
       if (!isFacultyCoraChatHistoryUnavailable(err)) {
         console.warn("[FacultyCoraChat] Could not archive thread on server.", err)

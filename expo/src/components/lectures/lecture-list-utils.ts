@@ -13,12 +13,32 @@ export type LectureCardPalette = {
 }
 
 
+function compactCourseToken(value: string): string {
+  return value.replace(/[\s:_-]+/g, "").toLowerCase()
+}
+
 export function formatCourseLabel(session: StudentSession | null): string {
   if (!session) return "Course lectures"
   const code = session.courseCode?.trim()
   const title = session.courseTitle?.trim()
-  if (code && title) return `${code}: ${title}`
+  if (code && title) {
+    const compactCode = compactCourseToken(code)
+    const compactTitle = compactCourseToken(title)
+    if (compactCode === compactTitle || compactTitle.startsWith(compactCode)) return title
+    if (compactCode.startsWith(compactTitle)) return code
+    return `${code} · ${title}`
+  }
   return code || title || session.section || "Course lectures"
+}
+
+/** True when the lecture title already names the course, so a subtitle is noise. */
+export function lectureTitleIncludesCourse(title: string, courseLabel: string): boolean {
+  const compactTitle = compactCourseToken(title)
+  const tokens = courseLabel
+    .split(/[·:,]/)
+    .map((part) => compactCourseToken(part))
+    .filter((part) => part.length >= 4)
+  return tokens.some((token) => compactTitle.includes(token))
 }
 
 export function resolveLectureCardKind(lecture: LectureItem): LectureCardKind {

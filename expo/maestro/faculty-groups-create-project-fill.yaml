@@ -1,0 +1,21 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Leader Beta Tester"
+- takeScreenshot: groups-project-leader
+- scrollUntilVisible:
+    element: "Title"
+    direction: DOWN
+    timeout: 12000
+- tapOn: "Title"
+- eraseText
+- inputText: "QA99 Project"
+- tapOn: "Create project"
+- tapOn: "Summary"
+- eraseText
+- inputText: "Do not submit"
+- tapOn: "Create project"
+- swipe:
+    direction: UP
+- takeScreenshot: groups-project-fields
+- tapOn: "Done"
+- takeScreenshot: groups-after-project

@@ -1,0 +1,14 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Manage project"
+- scrollUntilVisible:
+    element: "Approve"
+    direction: UP
+    timeout: 10000
+    visibilityPercentage: 50
+- tapOn: "Reject"
+- waitForAnimationToEnd
+- tapOn:
+    text: "Cancel"
+    optional: true
+- tapOn: "Approve"

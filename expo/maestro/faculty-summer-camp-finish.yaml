@@ -1,0 +1,26 @@
+appId: com.coursecollab.app
+---
+- tapOn:
+    text: "Done"
+    optional: true
+- extendedWaitUntil:
+    visible: "Search campers…|Search programs…|Inbox|Programs"
+    timeout: 20000
+- tapOn: "Inbox"
+- extendedWaitUntil:
+    visible: "Search requests…|No camper requests"
+    timeout: 12000
+- takeScreenshot: summer-camp-requests
+- tapOn: "Programs"
+- tapOn: "Create summer program"
+- extendedWaitUntil:
+    visible: "New program|Done"
+    timeout: 10000
+- tapOn: "Create"
+- takeScreenshot: summer-camp-program-validation
+- tapOn: "Title"
+- inputText: "QA Summer Program"
+- tapOn: "Start date"
+- inputText: "2026-08-01"
+- tapOn: "Done"
+- takeScreenshot: summer-camp-final

@@ -24,6 +24,7 @@ import { SolidListThumbTile } from "../theme/SolidListThumbTile"
 import { useThemedNative } from "../../context/AppearanceProvider"
 import { useNativeType } from "../../lib/themed-module-theme"
 import { useNotificationModuleRefresh } from "../../lib/notifications/notification-events"
+import { FacultySummerCampDatePicker } from "../faculty/FacultySummerCampDatePicker"
 
 function useStudentSession(): StudentSession | null {
   const { session } = useSession()
@@ -267,17 +268,16 @@ export function RecommendationsScreen() {
           ))}
         </View>
 
-        <TextInput
-          style={[styles.input, { borderColor: native.separator, color: native.label, backgroundColor: native.fill }]}
-          placeholder="Deadline (YYYY-MM-DD)"
-          placeholderTextColor={native.tertiaryLabel}
+        <Text style={[type.sectionHeader, styles.label]}>Deadline</Text>
+        <FacultySummerCampDatePicker
           value={deadline}
-          onChangeText={setDeadline}
-          autoCapitalize="none"
+          onChange={setDeadline}
+          accessibilityLabel="Deadline"
         />
         <TextInput
           style={[styles.input, styles.textArea, { borderColor: native.separator, color: native.label, backgroundColor: native.fill }]}
           placeholder="Brief description for your instructor"
+          accessibilityLabel="Recommendation description"
           placeholderTextColor={native.tertiaryLabel}
           value={description}
           onChangeText={setDescription}

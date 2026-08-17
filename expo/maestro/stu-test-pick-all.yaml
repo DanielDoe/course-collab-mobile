@@ -1,0 +1,11 @@
+appId: com.coursecollab.app
+---
+- tapOn: "New final"
+- tapOn: "AC Power"
+- waitForAnimationToEnd
+- tapOn: "Select all"
+- waitForAnimationToEnd
+- tapOn: "Submit Create final (12)"
+- waitForAnimationToEnd
+- tapOn: "OK"
+- waitForAnimationToEnd

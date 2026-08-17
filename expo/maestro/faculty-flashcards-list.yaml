@@ -1,0 +1,32 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Filter by section, All sections"
+- takeScreenshot: flashcards-section-picker
+- tapOn:
+    text: "Close"
+    optional: true
+- tapOn: "Select question bank topic"
+- takeScreenshot: flashcards-bank-topic-picker
+- tapOn:
+    text: "Close"
+    optional: true
+- tapOn: "Generate deck"
+- takeScreenshot: flashcards-generate-tap
+- tapOn:
+    text: "OK"
+    optional: true
+- tapOn: "First-Order & Op-Amp Review, Published"
+- extendedWaitUntil:
+    visible: "Edit deck|Cancel"
+    timeout: 15000
+- takeScreenshot: flashcards-live-editor
+- tapOn: "Cancel"
+- tapOn: "Delete First-Order & Op-Amp Review"
+- takeScreenshot: flashcards-delete-live-confirm
+- tapOn: "Cancel"
+- tapOn: "AC Analysis Essentials, Published"
+- extendedWaitUntil:
+    visible: "Edit deck|Cancel"
+    timeout: 15000
+- takeScreenshot: flashcards-second-deck
+- tapOn: "Cancel"

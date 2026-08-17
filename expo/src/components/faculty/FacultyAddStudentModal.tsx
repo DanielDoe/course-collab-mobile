@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
-import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { AppAlert } from '../../lib/app-alert'
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { ApiError } from "../../lib/api"
 import { instructorApi, type InstructorSession } from "../../lib/instructor-api"
@@ -11,10 +10,10 @@ import { FACULTY_BRAND } from "../../constants/faculty-theme"
 import { BRAND } from "../../constants"
 import { FacultyFilterSheet } from "./faculty-module-shell"
 import {
-  FacultySheetContainer,
   useCollabSheetStyles,
   FacultySheetChrome,
   FacultySheetField,
+  FacultySheetModal,
   FacultySheetNotice,
   FacultySheetSection
 } from "./faculty-collab-sheet-ui"
@@ -51,6 +50,7 @@ export function FacultyAddStudentModal({
   const [email, setEmail] = useState("")
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState("")
+  const [successMessage, setSuccessMessage] = useState("")
 
   const sessionOptions = useMemo(
     () =>
@@ -71,6 +71,7 @@ export function FacultyAddStudentModal({
       setFullName("")
       setEmail("")
       setError("")
+      setSuccessMessage("")
       return
     }
     const match = sessions.find((s) => s.code === defaultSessionCode)
@@ -99,10 +100,9 @@ export function FacultyAddStudentModal({
             email: email.trim() || undefined},
         ]})
       const { added, updated, skipped } = res.summary
-      AppAlert.alert(
-        "Student saved",
+      setSuccessMessage(
         added > 0
-          ? `${fullName.trim()} was added to ${selectedSession?.code ?? "the section"}. Default password: ${defaultPassword}`
+          ? `${fullName.trim()} was added to ${selectedSession?.code ?? "the section"}. They can sign in with the course default password shown above.`
           : updated > 0
             ? `${fullName.trim()} was updated in the roster.`
             : skipped > 0
@@ -110,7 +110,6 @@ export function FacultyAddStudentModal({
               : "Import completed.",
       )
       onAdded()
-      onClose()
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not add student.")
     } finally {
@@ -119,9 +118,8 @@ export function FacultyAddStudentModal({
   }
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <FacultySheetContainer>
-        <FacultySheetChrome topInset={insets.top} title="Add student" onClose={onClose} />
+    <FacultySheetModal visible={visible} onRequestClose={onClose}>
+      <FacultySheetChrome topInset={insets.top} title="Add student" onClose={onClose} />
 
         <ScrollView
           contentContainerStyle={[collabSheetStyles.scroll, { paddingBottom: insets.bottom + 24 }]}
@@ -145,7 +143,9 @@ export function FacultyAddStudentModal({
                 style={collabSheetStyles.fieldInput}
                 value={studentId}
                 onChangeText={setStudentId}
+                onEndEditing={(e) => setStudentId(e.nativeEvent.text ?? "")}
                 placeholder="PVAMU ID"
+                accessibilityLabel="Student ID"
                 autoCapitalize="characters"
               />
             </FacultySheetField>
@@ -154,7 +154,9 @@ export function FacultyAddStudentModal({
                 style={collabSheetStyles.fieldInput}
                 value={fullName}
                 onChangeText={setFullName}
+                onEndEditing={(e) => setFullName(e.nativeEvent.text ?? "")}
                 placeholder="First Last"
+                accessibilityLabel="Full name"
               />
             </FacultySheetField>
             <FacultySheetField label="Email (optional)">
@@ -162,7 +164,9 @@ export function FacultyAddStudentModal({
                 style={collabSheetStyles.fieldInput}
                 value={email}
                 onChangeText={setEmail}
+                onEndEditing={(e) => setEmail(e.nativeEvent.text ?? "")}
                 placeholder="student@pvamu.edu"
+                accessibilityLabel="Email"
                 autoCapitalize="none"
                 keyboardType="email-address"
               />
@@ -170,14 +174,26 @@ export function FacultyAddStudentModal({
           </FacultySheetSection>
 
           {error ? <Text style={collabSheetStyles.errorText}>{error}</Text> : null}
+          {successMessage ? <Text style={collabSheetStyles.bodyText}>{successMessage}</Text> : null}
 
-          <Pressable style={localStyles.submitBtn} disabled={submitting} onPress={() => void submit()}>
-            {submitting ? (
-              <ActivityIndicator color={BRAND.white} />
-            ) : (
-              <Text style={localStyles.submitText}>Add to roster</Text>
-            )}
-          </Pressable>
+          {successMessage ? (
+            <Pressable
+              style={localStyles.submitBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Done"
+              onPress={onClose}
+            >
+              <Text style={localStyles.submitText}>Done</Text>
+            </Pressable>
+          ) : (
+            <Pressable style={localStyles.submitBtn} disabled={submitting} accessibilityRole="button" accessibilityLabel="Add to roster" onPress={() => void submit()}>
+              {submitting ? (
+                <ActivityIndicator color={BRAND.white} />
+              ) : (
+                <Text style={localStyles.submitText}>Add to roster</Text>
+              )}
+            </Pressable>
+          )}
         </ScrollView>
 
         <FacultyFilterSheet
@@ -189,8 +205,7 @@ export function FacultyAddStudentModal({
           onSelect={(v) => setSessionId(Number(v))}
           onClose={() => setSessionSheetOpen(false)}
         />
-      </FacultySheetContainer>
-    </Modal>
+    </FacultySheetModal>
   )
 }
 

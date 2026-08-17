@@ -1,0 +1,91 @@
+appId: com.coursecollab.app
+---
+# Guest native PaymentSheet smoke — credits + Cora Career (no Safari / no WebView).
+# Guest: danieldoe33@gmail.com / ELEG2026!
+
+- launchApp:
+    clearState: false
+
+- runFlow:
+    when:
+      visible: "Open debugger to view warnings."
+    commands:
+      - tapOn:
+          text: "Dismiss"
+          optional: true
+      - pressKey: Escape
+
+- runFlow:
+    when:
+      visible: "Sign in"
+    commands:
+      - tapOn: "Guest"
+      - tapOn:
+          text: "Email"
+          optional: true
+      - inputText: "danieldoe33@gmail.com"
+      - tapOn:
+          text: "Password"
+          optional: true
+      - inputText: "ELEG2026!"
+      - hideKeyboard
+      - tapOn: "Sign in"
+
+- runFlow:
+    when:
+      visible: "First sign-in"
+    commands:
+      - tapOn:
+          text: "Current password"
+          optional: true
+      - inputText: "ELEG2026!"
+      - tapOn:
+          text: "New password"
+          optional: true
+      - inputText: "ELEG2026!"
+      - tapOn:
+          text: "Confirm new password"
+          optional: true
+      - inputText: "ELEG2026!"
+      - hideKeyboard
+      - tapOn: "Save password & continue"
+
+# Credits checkout → native PaymentSheet
+- openLink: coursecollab://guest/cora-credits/checkout?packId=quick_boost
+- extendedWaitUntil:
+    visible: "Buy Cora Credits"
+    timeout: 60000
+- scrollUntilVisible:
+    element: "Continue to secure checkout"
+    direction: DOWN
+    timeout: 20000
+    speed: 40
+    visibilityPercentage: 60
+- assertVisible: "Continue to secure checkout"
+- tapOn: "Continue to secure checkout"
+- extendedWaitUntil:
+    visible: "Card number"
+    timeout: 60000
+- assertVisible: "Card number"
+- assertVisible: "Pay $2.99"
+- assertNotVisible: "Complete payment in Safari"
+- tapOn: "Close"
+
+# Career checkout → native PaymentSheet
+- openLink: coursecollab://guest/cora-career/checkout
+- extendedWaitUntil:
+    visible: "Upgrade to Cora Career"
+    timeout: 60000
+- scrollUntilVisible:
+    element: "Continue to secure checkout"
+    direction: DOWN
+    timeout: 20000
+    speed: 40
+    visibilityPercentage: 60
+- assertVisible: "Continue to secure checkout"
+- tapOn: "Continue to secure checkout"
+- extendedWaitUntil:
+    visible: "Card number"
+    timeout: 60000
+- assertVisible: "Card number"
+- assertNotVisible: "Complete payment in Safari"

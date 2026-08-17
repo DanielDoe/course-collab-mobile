@@ -1,10 +1,10 @@
 import { Redirect, useLocalSearchParams } from "expo-router"
 import { useSession } from "../../../src/context/SessionProvider"
-import { MembershipWebFlowScreen } from "../../../src/components/support/MembershipWebFlowScreen"
-import { FacultyMembershipWebFlowScreen } from "../../../src/components/support/FacultyMembershipWebFlowScreen"
+import { MembershipCancelScreen } from "../../../src/components/support/MembershipCancelScreen"
+import { FacultyMembershipCancelScreen } from "../../../src/components/support/FacultyMembershipCancelScreen"
 import type { FacultyMembershipTier, MembershipTier } from "../../../src/types/dashboard"
 
-export default function MembershipCancelScreen() {
+export default function MembershipCancelRoute() {
   const { session } = useSession()
   const { plan } = useLocalSearchParams<{ plan?: string }>()
 
@@ -13,7 +13,7 @@ export default function MembershipCancelScreen() {
       plan === "Free" || plan === "Pro" || plan === "Enterprise"
         ? (plan as FacultyMembershipTier)
         : undefined
-    return <FacultyMembershipWebFlowScreen flow="cancel" plan={facultyPlan} />
+    return <FacultyMembershipCancelScreen plan={facultyPlan} />
   }
 
   if (session?.portal !== "student") {
@@ -21,8 +21,7 @@ export default function MembershipCancelScreen() {
   }
 
   return (
-    <MembershipWebFlowScreen
-      flow="cancel"
+    <MembershipCancelScreen
       plan={
         plan === "Explorer" || plan === "Trailblazer"
           ? (plan as MembershipTier)

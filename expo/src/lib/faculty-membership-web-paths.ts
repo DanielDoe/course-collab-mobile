@@ -10,7 +10,7 @@ export function buildFacultyMembershipCheckoutWebPath(
     plan,
     cadence,
   })
-  return appendNativeQuery(`/instructor/membership/checkout?${params.toString()}`)
+  return appendNativeQuery(`/instructor/dashboard-v2/membership/checkout?${params.toString()}`)
 }
 
 export function buildFacultyMembershipSuccessWebPath(options?: {
@@ -21,11 +21,11 @@ export function buildFacultyMembershipSuccessWebPath(options?: {
   if (options?.sessionId) params.set("session_id", options.sessionId)
   if (options?.plan) params.set("plan", options.plan)
   const query = params.toString()
-  return appendNativeQuery(`/instructor/membership/success${query ? `?${query}` : ""}`)
+  return appendNativeQuery(`/instructor/dashboard-v2/membership/success${query ? `?${query}` : ""}`)
 }
 
 export function buildFacultyMembershipManageWebPath(): string {
-  return appendNativeQuery("/instructor/membership/manage")
+  return appendNativeQuery("/instructor/dashboard-v2/membership/manage")
 }
 
 export function buildFacultyMembershipCancelWebPath(plan?: FacultyMembershipTier): string {
@@ -33,7 +33,7 @@ export function buildFacultyMembershipCancelWebPath(plan?: FacultyMembershipTier
   if (plan) params.set("plan", plan)
   params.set("cadence", "semester")
   const query = params.toString()
-  return appendNativeQuery(`/instructor/membership/cancel${query ? `?${query}` : ""}`)
+  return appendNativeQuery(`/instructor/dashboard-v2/membership/cancel${query ? `?${query}` : ""}`)
 }
 
 export function openFacultyMembershipCheckout(

@@ -216,6 +216,62 @@ export function filterSavedReports(reports: SavedInstructorReport[], query: stri
   )
 }
 
+export function filterSavedReportsByDateRange(
+  reports: SavedInstructorReport[],
+  range: ReportDateRange,
+): SavedInstructorReport[] {
+  if (!range.startDate && !range.endDate) return reports
+  return reports.filter((report) => {
+    const when = report.createdAt ?? report.generatedAt
+    if (!when) return true
+    const day = when.slice(0, 10)
+    if (range.startDate && day < range.startDate) return false
+    if (range.endDate && day > range.endDate) return false
+    return true
+  })
+}
+
+export function getReportTableColumns(rows: Record<string, unknown>[]): string[] {
+  if (!rows.length) return []
+  const ordered = Object.keys(rows[0] ?? {})
+  const extra = new Set<string>()
+  for (const row of rows.slice(0, 100)) {
+    for (const key of Object.keys(row)) extra.add(key)
+  }
+  return [...ordered, ...[...extra].filter((key) => !ordered.includes(key))]
+}
+
+export function formatReportColumnLabel(key: string): string {
+  return key
+    .replace(/_/g, " ")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
+export function formatReportCellValue(value: unknown): string {
+  if (value == null || value === "") return "—"
+  if (typeof value === "object") {
+    try {
+      return JSON.stringify(value)
+    } catch {
+      return String(value)
+    }
+  }
+  const text = String(value)
+  return text.length > 240 ? `${text.slice(0, 237)}…` : text
+}
+
+export function filterReportDataRows(
+  rows: Record<string, unknown>[],
+  query: string,
+): Record<string, unknown>[] {
+  const q = query.trim().toLowerCase()
+  if (!q) return rows
+  return rows.filter((row) =>
+    Object.values(row).some((value) => String(value ?? "").toLowerCase().includes(q)),
+  )
+}
+
 export function reportRecordCount(report: SavedInstructorReport): number {
   return report.data?.length ?? 0
 }
@@ -234,18 +290,40 @@ function csvEscape(value: unknown): string {
   return s
 }
 
+function csvCellValue(value: unknown): string {
+  if (value == null || value === "") return ""
+  if (typeof value === "object") {
+    try {
+      return csvEscape(JSON.stringify(value))
+    } catch {
+      return csvEscape(String(value))
+    }
+  }
+  return csvEscape(value)
+}
+
+export function isLocalInstructorReport(report: SavedInstructorReport): boolean {
+  return report.id < 0
+}
+
+export function buildInstructorReportExportFilename(report: SavedInstructorReport, ext: "csv" | "pdf"): string {
+  const stamp = (report.createdAt ?? report.generatedAt ?? new Date().toISOString()).slice(0, 10)
+  const type = report.type.replace(/[^\w.-]+/g, "-").replace(/^-+|-+$/g, "") || "report"
+  return `${type}-report-${stamp}.${ext}`
+}
+
 export function reportToCsv(report: SavedInstructorReport): string {
   const rows = report.data ?? []
   if (!rows.length) return ""
-  const keys = Object.keys(rows[0] ?? {})
-  return [keys.join(","), ...rows.map((row) => keys.map((k) => csvEscape(row[k])).join(","))].join("\n")
+  const keys = getReportTableColumns(rows)
+  return [keys.join(","), ...rows.map((row) => keys.map((k) => csvCellValue(row[k])).join(","))].join("\n")
 }
 
 export async function shareReportCsv(report: SavedInstructorReport): Promise<void> {
   const csv = reportToCsv(report)
   if (!csv) throw new Error("This report has no data to export.")
 
-  const filename = `${report.type}-report-${new Date().toISOString().slice(0, 10)}.csv`
+  const filename = buildInstructorReportExportFilename(report, "csv")
   const { cacheDirectory, writeAsStringAsync, EncodingType } = await import("expo-file-system/legacy")
   if (!cacheDirectory) throw new Error("Could not access file cache on this device.")
   const uri = `${cacheDirectory}${filename}`

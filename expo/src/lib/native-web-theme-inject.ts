@@ -519,6 +519,75 @@ ${qz} .ring-primary {
   border-color: var(--cc-accent-border) !important;
   --tw-ring-color: var(--cc-accent-border) !important;
 }
+
+/* Embedded membership checkout / success / cancel / billing in native WebView */
+body.cc-native-app:has([href*="membership"]) .min-h-screen,
+body.cc-native-app main[data-tour="main-content"]:has(.rounded-2xl) {
+  background: var(--cc-background) !important;
+}
+
+body.cc-native-app header.sticky.top-0.z-40 {
+  display: none !important;
+}
+
+body.cc-native-app .fixed.inset-0.pointer-events-none {
+  display: none !important;
+}
+
+body.cc-native-app .rounded-2xl.border.border-slate-200\\/80,
+body.cc-native-app .rounded-2xl.border.border-slate-200 {
+  border-color: var(--border) !important;
+  background: var(--card) !important;
+  box-shadow: none !important;
+}
+
+body.cc-native-app .text-slate-900,
+body.cc-native-app .text-slate-700,
+body.cc-native-app .text-slate-600,
+body.cc-native-app .text-slate-500,
+body.cc-native-app .text-slate-400,
+body.cc-native-app .text-slate-300 {
+  color: var(--cc-text) !important;
+}
+
+body.cc-native-app .text-slate-600.dark\\:text-slate-400,
+body.cc-native-app .text-slate-600.dark\\:text-slate-300,
+body.cc-native-app .text-slate-500.dark\\:text-slate-400 {
+  color: var(--cc-text-muted) !important;
+}
+
+body.cc-native-app .bg-slate-50\\/50,
+body.cc-native-app .bg-slate-50,
+body.cc-native-app .dark\\:bg-slate-800\\/30,
+body.cc-native-app .dark\\:bg-slate-900\\/50 {
+  background: var(--muted) !important;
+}
+
+body.cc-native-app button.rounded-xl.h-12.font-semibold,
+body.cc-native-app button.rounded-xl.h-12 {
+  background-color: var(--cc-accent) !important;
+  color: #ffffff !important;
+}
+
+body.cc-native-app button.rounded-xl.h-12.font-semibold[style*="582c83"],
+body.cc-native-app button[style*="582c83"] {
+  background-color: var(--cc-accent) !important;
+}
+
+body.cc-native-app .animate-spin[style*="582c83"],
+body.cc-native-app .animate-spin.text-\\[\\#582c83\\] {
+  color: var(--cc-accent) !important;
+}
+
+body.cc-native-app [style*="linear-gradient"][style*="582c83"],
+body.cc-native-app [style*="linear-gradient(135deg, #582c83"] {
+  background: linear-gradient(135deg, var(--cc-accent) 0%, var(--cc-accent-hover) 50%, var(--cc-accent-dark) 100%) !important;
+}
+
+body.cc-native-app svg[style*="582c83"],
+body.cc-native-app .text-\\[\\#582c83\\] {
+  color: var(--cc-accent) !important;
+}
 `.trim()
 }
 

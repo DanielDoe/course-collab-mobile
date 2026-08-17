@@ -4,18 +4,30 @@ import { Ionicons } from "@/components/icons/AppIcon"
 import { instructorAdminApi } from "../../../lib/instructor-admin-api"
 import {
   ASSESSMENT_PRIVILEGE_SOURCES,
-  type AssessmentPrivilegeSource} from "../../../lib/assessment-governance"
+  type AssessmentPrivilegeSource,
+} from "../../../lib/assessment-governance"
 import { useFacultyScope } from "../../../hooks/useFacultyScope"
 import { NATIVE } from "../../../constants/faculty-native-theme"
 import { FACULTY_ADMIN_COLOR } from "../../../lib/faculty-admin-theme"
+import { FacultyModuleTabBar } from "../faculty-module-shell"
 import {
   FacultyAdminCourseGate,
   FacultyAdminScreen,
   FacultyAdminSection,
-  FacultyAdminStatRow,
   FacultyAdminToggleRow,
   useAdminSaveState,
-  useAdminStyles} from "../faculty-admin-ui"
+  useAdminStyles,
+} from "../faculty-admin-ui"
+
+type GovernanceTab = "privileges" | "notice"
+
+const TABS: Array<{ id: GovernanceTab; label: string }> = [
+  { id: "privileges", label: "Privileges" },
+  { id: "notice", label: "Notice" },
+]
+
+const DEFAULT_PRIVILEGE_SOURCE: AssessmentPrivilegeSource = "instructor_only"
+const DEFAULT_SHOW_POLICY_NOTICE = false
 
 const PRIVILEGE_OPTIONS: Array<{
   value: AssessmentPrivilegeSource
@@ -25,15 +37,18 @@ const PRIVILEGE_OPTIONS: Array<{
   {
     value: "instructor_only",
     label: "Instructor Only",
-    subtitle: "Only instructors can grant assessment perks and overrides."},
+    subtitle: "Only instructors can grant assessment perks and overrides.",
+  },
   {
     value: "membership_enabled",
     label: "Membership Enabled",
-    subtitle: "Students with an active membership can access assessment perks."},
+    subtitle: "Students with an active membership can access assessment perks.",
+  },
   {
     value: "hybrid",
     label: "Hybrid",
-    subtitle: "Combine instructor control with membership-based perks."},
+    subtitle: "Combine instructor control with membership-based perks.",
+  },
 ]
 
 export function FacultyAssessmentGovernanceScreen() {
@@ -45,14 +60,14 @@ export function FacultyAssessmentGovernanceScreen() {
 }
 
 function FacultyAssessmentGovernanceContent() {
-  const { scope } = useFacultyScope()
+  const { scope, ready } = useFacultyScope()
   const { dirty, saving, error, successMessage, markDirty, resetDirty, setError, clearError, runSave } =
     useAdminSaveState()
+  const [tab, setTab] = useState<GovernanceTab>("privileges")
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
-  const [privilegeSource, setPrivilegeSource] = useState<AssessmentPrivilegeSource>("instructor_only")
-  const [showPolicyNotice, setShowPolicyNotice] = useState(false)
-  const [studentsImpacted, setStudentsImpacted] = useState<number | undefined>(undefined)
+  const [privilegeSource, setPrivilegeSource] = useState<AssessmentPrivilegeSource>(DEFAULT_PRIVILEGE_SOURCE)
+  const [showPolicyNotice, setShowPolicyNotice] = useState(DEFAULT_SHOW_POLICY_NOTICE)
 
   const load = useCallback(async () => {
     if (!scope) return
@@ -61,7 +76,6 @@ function FacultyAssessmentGovernanceContent() {
       const data = await instructorAdminApi.getAssessmentGovernance(scope)
       setPrivilegeSource(data.assessment_privilege_source)
       setShowPolicyNotice(data.show_course_policy_notice)
-      setStudentsImpacted(data.students_impacted)
       resetDirty()
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load assessment governance.")
@@ -72,21 +86,32 @@ function FacultyAssessmentGovernanceContent() {
   }, [scope, clearError, resetDirty, setError])
 
   useEffect(() => {
+    if (!ready) {
+      setLoading(false)
+      return
+    }
     setLoading(true)
     void load()
-  }, [load])
+  }, [ready, load])
 
   const onRefresh = useCallback(() => {
     setRefreshing(true)
     void load()
   }, [load])
 
+  const handleReset = useCallback(() => {
+    setPrivilegeSource(DEFAULT_PRIVILEGE_SOURCE)
+    setShowPolicyNotice(DEFAULT_SHOW_POLICY_NOTICE)
+    markDirty()
+  }, [markDirty])
+
   const handleSave = useCallback(() => {
     if (!scope) return
     void runSave(async () => {
       await instructorAdminApi.patchAssessmentGovernance(scope, {
         assessment_privilege_source: privilegeSource,
-        show_course_policy_notice: showPolicyNotice})
+        show_course_policy_notice: showPolicyNotice,
+      })
     })
   }, [scope, privilegeSource, showPolicyNotice, runSave])
 
@@ -119,13 +144,26 @@ function FacultyAssessmentGovernanceContent() {
           borderWidth: Platform.OS === "ios" ? StyleSheet.hairlineWidth : 1.5,
           borderColor: native.separatorOpaque,
         },
+        resetRow: {
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 8,
+          minHeight: NATIVE.rowMinHeight,
+          paddingHorizontal: 14,
+          paddingVertical: 12,
+          backgroundColor: native.secondaryGrouped,
+        },
+        resetRowText: {
+          ...type.bodyEmphasis,
+          color: FACULTY_ADMIN_COLOR.link,
+        },
       }),
     [native, type],
   )
 
   return (
     <FacultyAdminScreen
-      title="Assessment Governance"
       loading={loading}
       saving={saving}
       refreshing={refreshing}
@@ -135,69 +173,82 @@ function FacultyAssessmentGovernanceContent() {
       onSave={handleSave}
       onRefresh={onRefresh}
     >
-      {studentsImpacted != null ? (
-        <FacultyAdminStatRow
-          stats={[
-            {
-              label: "Students Impacted",
-              value: String(studentsImpacted),
-              icon: "people-outline"},
-          ]}
-        />
+      <FacultyModuleTabBar tabs={TABS} tab={tab} onChange={setTab} scrollable />
+
+      {tab === "privileges" ? (
+        <FacultyAdminSection
+          title="Assessment Privilege Source"
+          footer="Controls how assessment perks and overrides are granted in this course."
+        >
+          {PRIVILEGE_OPTIONS.map(({ value, label, subtitle }, index) => {
+            const selected = privilegeSource === value
+            const isLast = index === PRIVILEGE_OPTIONS.length - 1
+            return (
+              <Pressable
+                key={value}
+                onPress={() => {
+                  if (ASSESSMENT_PRIVILEGE_SOURCES.includes(value)) {
+                    setPrivilegeSource(value)
+                    markDirty()
+                  }
+                }}
+                android_ripple={{ color: "rgba(0,0,0,0.08)" }}
+                style={({ pressed }) => [
+                  styles.radioRow,
+                  !isLast && styles.radioRowBorder,
+                  pressed && styles.radioRowPressed,
+                ]}
+                accessibilityRole="radio"
+                accessibilityState={{ selected }}
+                accessibilityLabel={label}
+              >
+                <View style={styles.radioCopy}>
+                  <Text style={styles.radioLabel}>{label}</Text>
+                  <Text style={styles.radioSubtitle} numberOfLines={3}>
+                    {subtitle}
+                  </Text>
+                </View>
+                {selected ? (
+                  <Ionicons name="checkmark-circle" size={22} color={FACULTY_ADMIN_COLOR.link} />
+                ) : (
+                  <View style={styles.radioEmpty} />
+                )}
+              </Pressable>
+            )
+          })}
+        </FacultyAdminSection>
+      ) : null}
+
+      {tab === "notice" ? (
+        <FacultyAdminSection
+          title="Student Notice"
+          footer="When enabled, students see assessment policy details before starting an assessment."
+        >
+          <FacultyAdminToggleRow
+            label="Show Course Policy Notice"
+            subtitle="Display assessment policy details to students before they start an assessment."
+            value={showPolicyNotice}
+            onChange={(next) => {
+              setShowPolicyNotice(next)
+              markDirty()
+            }}
+          />
+        </FacultyAdminSection>
       ) : null}
 
       <FacultyAdminSection
-        title="Assessment Privilege Source"
-        footer="Controls how assessment perks and overrides are granted in this course."
+        title="Restore Defaults"
+        footer="Resets every tab to platform defaults. Tap Save Changes to persist."
       >
-        {PRIVILEGE_OPTIONS.map(({ value, label, subtitle }, index) => {
-          const selected = privilegeSource === value
-          const isLast = index === PRIVILEGE_OPTIONS.length - 1
-          return (
-            <Pressable
-              key={value}
-              onPress={() => {
-                if (ASSESSMENT_PRIVILEGE_SOURCES.includes(value)) {
-                  setPrivilegeSource(value)
-                  markDirty()
-                }
-              }}
-              android_ripple={{ color: "rgba(0,0,0,0.08)" }}
-              style={({ pressed }) => [
-                styles.radioRow,
-                !isLast && styles.radioRowBorder,
-                pressed && styles.radioRowPressed,
-              ]}
-              accessibilityRole="radio"
-              accessibilityState={{ selected }}
-              accessibilityLabel={label}
-            >
-              <View style={styles.radioCopy}>
-                <Text style={styles.radioLabel}>{label}</Text>
-                <Text style={styles.radioSubtitle} numberOfLines={3}>
-                  {subtitle}
-                </Text>
-              </View>
-              {selected ? (
-                <Ionicons name="checkmark-circle" size={22} color={FACULTY_ADMIN_COLOR.link} />
-              ) : (
-                <View style={styles.radioEmpty} />
-              )}
-            </Pressable>
-          )
-        })}
-      </FacultyAdminSection>
-
-      <FacultyAdminSection title="Student Notice">
-        <FacultyAdminToggleRow
-          label="Show Course Policy Notice"
-          subtitle="Display assessment policy details to students before they start an assessment."
-          value={showPolicyNotice}
-          onChange={(next) => {
-            setShowPolicyNotice(next)
-            markDirty()
-          }}
-        />
+        <Pressable
+          style={({ pressed }) => [styles.resetRow, pressed && { opacity: NATIVE.pressedOpacity }]}
+          onPress={handleReset}
+          accessibilityRole="button"
+          accessibilityLabel="Reset to defaults"
+        >
+          <Ionicons name="refresh-outline" size={18} color={FACULTY_ADMIN_COLOR.link} />
+          <Text style={styles.resetRowText}>Reset to Defaults</Text>
+        </Pressable>
       </FacultyAdminSection>
     </FacultyAdminScreen>
   )

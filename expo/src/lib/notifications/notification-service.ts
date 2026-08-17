@@ -102,6 +102,14 @@ export async function getStoredPushToken(): Promise<string | null> {
   }
 }
 
+export async function clearStoredPushToken(): Promise<void> {
+  try {
+    await SecureStore.deleteItemAsync(PUSH_TOKEN_KEY)
+  } catch {
+    /* ignore */
+  }
+}
+
 export async function getExpoPushToken(): Promise<string | null> {
   if (!notificationsSupported()) return null
 

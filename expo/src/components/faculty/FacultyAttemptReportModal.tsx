@@ -331,7 +331,8 @@ export function FacultyAttemptReportModal({ visible, scope, result, onClose }: P
     }
     setIsRecalculating(true)
     try {
-      await instructorApi.recalculateAssessmentScore(attemptId, quizId)
+      if (!scope) return
+      await instructorApi.recalculateAssessmentScore(scope, attemptId, quizId)
       await load()
       AppAlert.alert("Score recalculated", "Attempt totals were refreshed from saved answers.")
     } catch (err) {

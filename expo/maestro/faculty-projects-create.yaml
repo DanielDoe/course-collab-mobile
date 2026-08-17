@@ -1,0 +1,23 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Manage"
+- tapOn: "Create group or project"
+- extendedWaitUntil:
+    visible: ".*Create group.*|.*Create project.*"
+    timeout: 10000
+- takeScreenshot: projects-create-menu
+- tapOn:
+    text: ".*Create project.*"
+- extendedWaitUntil:
+    visible: "Create project|Search roster"
+    timeout: 10000
+- takeScreenshot: projects-create-project
+- tapOn: "Done"
+- tapOn: "Create group or project"
+- tapOn:
+    text: ".*Create group.*"
+- extendedWaitUntil:
+    visible: "Create group|Search roster"
+    timeout: 8000
+- takeScreenshot: projects-create-group
+- tapOn: "Done"

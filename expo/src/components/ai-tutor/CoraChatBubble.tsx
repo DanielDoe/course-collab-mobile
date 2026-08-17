@@ -547,12 +547,13 @@ const styles = StyleSheet.create({
   },
   block: {
     width: "100%",
-    marginBottom: 24,
+    marginBottom: 10,
     gap: 8,
   },
   userBlock: {
     width: "100%",
     alignItems: "flex-end",
+    marginTop: 2,
     marginBottom: 8,
     gap: 2,
   },

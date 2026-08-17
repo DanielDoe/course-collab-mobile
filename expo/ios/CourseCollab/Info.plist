@@ -35,7 +35,7 @@
     <key>CFBundleVersion</key>
     <string>1</string>
     <key>LSMinimumSystemVersion</key>
-    <string>12.0</string>
+    <string>15.1</string>
     <key>LSRequiresIPhoneOS</key>
     <true/>
     <key>NSAppTransportSecurity</key>
@@ -43,7 +43,7 @@
       <key>NSAllowsArbitraryLoads</key>
       <false/>
       <key>NSAllowsLocalNetworking</key>
-      <true/>
+      <false/>
     </dict>
     <key>NSCalendarsFullAccessUsageDescription</key>
     <string>CourseCollab adds your recurring class schedule to Apple Calendar.</string>
@@ -54,13 +54,11 @@
     <key>NSFaceIDUsageDescription</key>
     <string>Allow $(PRODUCT_NAME) to access your Face ID biometric data.</string>
     <key>NSMicrophoneUsageDescription</key>
-    <string>Allow $(PRODUCT_NAME) to access your microphone</string>
+    <string>CourseCollab needs microphone access for lecture recording in AI Notetaker and voice dictation in Cora.</string>
     <key>NSPhotoLibraryUsageDescription</key>
     <string>CourseCollab needs photo access for assignment uploads.</string>
-    <key>NSRemindersFullAccessUsageDescription</key>
-    <string>CourseCollab can remind you before each class.</string>
-    <key>NSRemindersUsageDescription</key>
-    <string>CourseCollab can remind you before each class.</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>CourseCollab uses speech recognition for live captions in AI Notetaker and voice dictation in Cora.</string>
     <key>NSUserActivityTypes</key>
     <array>
       <string>$(PRODUCT_BUNDLE_IDENTIFIER).expo.index_route</string>

@@ -90,11 +90,14 @@ export function formatConversationDate(value: string | null | undefined): string
 
 export function formatCreditsLabel(credits: AiTutorCredits | null): string {
   if (!credits) return "Loading…"
-  const limitLabel = String(credits.creditsLimit)
-  if (credits.isUnlimited || limitLabel.toLowerCase() === "unlimited") {
-    return "Unlimited this week"
+  if (credits.coraMode === "lite" || credits.credits <= 0) {
+    return "Cora Lite"
   }
-  return `${credits.credits} of ${limitLabel} credits left this week`
+  const limit = typeof credits.creditsLimit === "number" ? credits.creditsLimit : null
+  if (limit != null && limit > 0) {
+    return `${credits.credits.toLocaleString()} of ${limit.toLocaleString()} credits this month`
+  }
+  return `${credits.credits.toLocaleString()} credits remaining`
 }
 
 export function searchConversationMessages(messages: ChatMessage[], query: string): ChatMessage[] {

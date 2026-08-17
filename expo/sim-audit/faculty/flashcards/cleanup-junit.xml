@@ -1,0 +1,6 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<testsuites>
+  <testsuite name="Test Suite" device="iPhone 17 Pro - iOS 26.0 - 4158A022-1067-455E-BF03-10CA5D80D946" tests="1" failures="0" time="9.0">
+    <testcase id="faculty-flashcards-cleanup" name="faculty-flashcards-cleanup" classname="faculty-flashcards-cleanup" file="maestro/faculty-flashcards-cleanup.yaml" time="9.0" status="SUCCESS"/>
+  </testsuite>
+</testsuites>

@@ -1,0 +1,15 @@
+appId: com.coursecollab.app
+---
+- tapOn:
+    text: "Back"
+    optional: true
+- tapOn: "Open navigation menu"
+- waitForAnimationToEnd
+- tapOn: "Manage Groups"
+- tapOn:
+    text: "Close menu"
+    optional: true
+- extendedWaitUntil:
+    visible: "Search groups, leaders…|Create group or project|No groups"
+    timeout: 35000
+- takeScreenshot: groups-page

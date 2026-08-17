@@ -1,0 +1,16 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Open account menu"
+- waitForAnimationToEnd
+- tapOn: "Notifications"
+- extendedWaitUntil:
+    visible: "Notifications"
+    timeout: 15000
+- tapOn: "New message from Jeslyn Vu"
+- extendedWaitUntil:
+    visible: "AI Summary|Full Message"
+    timeout: 15000
+- takeScreenshot: notif-detail
+- tapOn: "Done"
+- waitForAnimationToEnd
+- takeScreenshot: after-notif-detail

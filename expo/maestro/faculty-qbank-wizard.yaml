@@ -1,0 +1,10 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Create question"
+- waitForAnimationToEnd
+- tapOn: "Fill in the Blank"
+- waitForAnimationToEnd
+- tapOn: "Open manual builder"
+- waitForAnimationToEnd
+- tapOn:
+    id: "question-bank-topic"

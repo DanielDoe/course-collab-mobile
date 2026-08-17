@@ -60,13 +60,40 @@ export function academicTermLabel(term: Pick<InstructorAcademicTerm, "term" | "y
   return `${term.term} ${term.year}`
 }
 
+/** API can return the same course_code more than once; chips should stay unique. */
+export function uniqueTermCourses(
+  courses?: Array<{ id: number; course_code: string; course_title: string }>,
+): Array<{ id: number; course_code: string; course_title: string }> {
+  if (!courses?.length) return []
+  const seen = new Set<string>()
+  return courses.filter((course) => {
+    const key = course.course_code.trim().toUpperCase()
+    if (!key || seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
+/** Parse YYYY-MM-DD as a local calendar date so US timezones do not shift a day. */
+export function parseAcademicCalendarDate(value: string): Date {
+  const match = value.trim().match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (match) {
+    return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
+  }
+  return new Date(value)
+}
+
 export function formatAcademicTermDateRange(
   start?: string | null,
   end?: string | null,
 ): string | null {
   if (!start && !end) return null
   const fmt = (value: string) =>
-    new Date(value).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+    parseAcademicCalendarDate(value).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    })
   if (start && end) return `${fmt(start)} – ${fmt(end)}`
   if (start) return `Starts ${fmt(start)}`
   return `Ends ${fmt(end!)}`
@@ -114,16 +141,37 @@ export function termFormFromRecord(term: InstructorAcademicTerm): AcademicTermNa
     end_date: term.end_date?.slice(0, 10) ?? ""}
 }
 
+export function isAcademicCalendarDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
+  const parsed = parseAcademicCalendarDate(value)
+  if (Number.isNaN(parsed.getTime())) return false
+  const year = Number(value.slice(0, 4))
+  const month = Number(value.slice(5, 7))
+  const day = Number(value.slice(8, 10))
+  return parsed.getFullYear() === year && parsed.getMonth() === month - 1 && parsed.getDate() === day
+}
+
 export function termPayloadFromForm(form: AcademicTermNameForm, isActive?: boolean) {
   const year = Number.parseInt(form.year, 10)
   if (!Number.isFinite(year) || !form.term.trim()) {
     throw new Error("Year and term are required")
   }
+  const start = form.start_date.trim()
+  const end = form.end_date.trim()
+  if (start && !isAcademicCalendarDate(start)) {
+    throw new Error("Start date must be YYYY-MM-DD")
+  }
+  if (end && !isAcademicCalendarDate(end)) {
+    throw new Error("End date must be YYYY-MM-DD")
+  }
+  if (start && end && parseAcademicCalendarDate(start) > parseAcademicCalendarDate(end)) {
+    throw new Error("End date must be on or after the start date")
+  }
   return {
     year,
     term: form.term,
-    start_date: form.start_date.trim() || null,
-    end_date: form.end_date.trim() || null,
+    start_date: start || null,
+    end_date: end || null,
     ...(isActive != null ? { is_active: isActive } : {})}
 }
 

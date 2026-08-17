@@ -1,0 +1,4 @@
+appId: com.coursecollab.app
+---
+- tapOn: "QA16A"
+- takeScreenshot: ann-qa-detail

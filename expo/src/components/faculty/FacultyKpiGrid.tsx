@@ -8,6 +8,7 @@ import {
   FACULTY_DASHBOARD_KPI_THUMBS,
   facultyDashboardKpiThumb,
 } from "../../lib/faculty-dashboard-theme"
+import { DASHBOARD_SURFACE } from "../dashboard/DashboardCard"
 import { SolidListThumbTile } from "../theme/SolidListThumbTile"
 import type { SolidListThumb } from "../../lib/solid-list-thumb"
 
@@ -90,7 +91,7 @@ export function FacultyKpiGrid({ stats }: { stats: InstructorDashboardStats }) {
             <View style={styles.copy}>
               <Text {...kpiLabelTextA11yProps} style={[type.caption, styles.label, { color: native.secondaryLabel }]}>{kpi.label}</Text>
               <Text {...kpiMetricTextA11yProps} style={[type.bodyEmphasis, styles.value, { color: native.label }]}>{kpi.value}</Text>
-              {kpi.sub ? <Text {...kpiLabelTextA11yProps} style={[type.caption, styles.sub, { color: native.tertiaryLabel }]}>{kpi.sub}</Text> : null}
+              {kpi.sub ? <Text {...kpiLabelTextA11yProps} style={[type.caption, styles.sub, { color: native.secondaryLabel }]}>{kpi.sub}</Text> : null}
             </View>
             <SolidListThumbTile thumb={kpi.thumb} icon={kpi.icon} size="compact" style={styles.iconTile} />
           </View>
@@ -116,9 +117,10 @@ const styles = StyleSheet.create({
   },
   label: { fontSize: 12, fontWeight: "600", lineHeight: 16 },
   value: {
-    fontSize: 24,
+    fontSize: DASHBOARD_SURFACE.gridMetricSize,
     fontWeight: "700",
     letterSpacing: -0.3,
+    lineHeight: DASHBOARD_SURFACE.gridMetricLineHeight,
   },
   sub: { fontSize: 11, lineHeight: 15 },
 })

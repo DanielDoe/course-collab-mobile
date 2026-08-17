@@ -68,7 +68,12 @@ function AnimatedPodiumBlock({
 
   return (
     <Animated.View style={[styles.podiumCol, containerStyle]}>
-      <Pressable onPress={onPress} style={styles.podiumPressable}>
+      <Pressable
+        onPress={onPress}
+        style={styles.podiumPressable}
+        accessibilityRole="button"
+        accessibilityLabel={`${entry.title}, rank ${rank}, ${projectScore(entry)} points`}
+      >
         {rank === 1 ? (
           <View style={styles.crownWrap}>
             <Ionicons name="trophy" size={18} color={config.crown} />
@@ -78,7 +83,7 @@ function AnimatedPodiumBlock({
           <Ionicons name={config.icon} size={rank === 1 ? 22 : 18} color={config.iconInk} />
         </View>
         <Text style={[styles.podiumRank, { color: config.color }]}>#{rank}</Text>
-        <Text style={styles.podiumName} numberOfLines={2}>
+        <Text style={styles.podiumName} numberOfLines={3}>
           {entry.title}
         </Text>
         <Text style={styles.podiumGroup} numberOfLines={1}>
@@ -273,7 +278,7 @@ function createLeaderboardStyles(
       paddingHorizontal: 4,
     },
     podiumSpacer: { width: 88 },
-    podiumCol: { flex: 1, alignItems: "center", maxWidth: 112 },
+    podiumCol: { flex: 1, alignItems: "center", minWidth: 0, paddingHorizontal: 2 },
     podiumPressable: { alignItems: "center", gap: 6, width: "100%" },
     crownWrap: { marginBottom: -4 },
     podiumAvatar: {
@@ -287,10 +292,12 @@ function createLeaderboardStyles(
     podiumRank: { fontSize: 12, fontWeight: "600" },
     podiumName: {
       fontSize: 12,
+      lineHeight: 16,
       fontWeight: "600",
       color: native.label,
       textAlign: "center",
-      minHeight: 32,
+      minHeight: 48,
+      width: "100%",
     },
     podiumGroup: {
       fontSize: 10,

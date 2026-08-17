@@ -1,0 +1,7 @@
+appId: com.coursecollab.app
+---
+- tapOn:
+    text: "Dismiss"
+    optional: true
+- tapOn: "Topics"
+- takeScreenshot: course-notes-topics-final

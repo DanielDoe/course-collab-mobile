@@ -1,0 +1,8 @@
+appId: com.coursecollab.app
+---
+- tapOn: "New training track"
+- tapOn: "Create"
+- extendedWaitUntil:
+    visible: "QA16T, Draft|QA16T"
+    timeout: 20000
+- takeScreenshot: summer-qa-track-created

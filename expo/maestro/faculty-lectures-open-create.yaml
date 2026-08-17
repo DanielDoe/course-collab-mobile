@@ -1,0 +1,12 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Add lecture"
+- extendedWaitUntil:
+    visible: "New lecture"
+    timeout: 10000
+- tapOn: "Create"
+- extendedWaitUntil:
+    visible: "Title is required."
+    timeout: 8000
+- tapOn:
+    id: "lecture-title"

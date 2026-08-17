@@ -8,7 +8,7 @@ import { SummerAppShell } from "../../src/components/summer/SummerAppShell"
 import { useAppThemeTokens } from "../../src/context/AppearanceProvider"
 import { useSession } from "../../src/context/SessionProvider"
 import { isPortalSession } from "../../src/lib/portal-shell-utils"
-import { isFacultySetupRoute } from "../../src/lib/navigation-reset"
+import { isFacultySetupRoute, sessionNeedsPasswordChange } from "../../src/lib/navigation-reset"
 
 export default function AppLayout() {
   const pathname = usePathname()
@@ -25,6 +25,12 @@ export default function AppLayout() {
 
   if (!session) {
     return <Redirect href="/(auth)/login" />
+  }
+
+  // Cold start / deep links used to land in (app) with Faculty shell + WebView
+  // showing the web change-password page. Keep first-login on the native auth screen.
+  if (sessionNeedsPasswordChange(session)) {
+    return <Redirect href="/(auth)/change-password" />
   }
 
   const stack = (

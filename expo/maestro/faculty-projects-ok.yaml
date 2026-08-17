@@ -1,0 +1,7 @@
+appId: com.coursecollab.app
+---
+- tapOn: "OK"
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "QA16P|No projects|Manage"
+    timeout: 12000

@@ -16,6 +16,7 @@ import {
   FacultySheetSection
 } from "./faculty-collab-sheet-ui"
 import { SHEET_SECTION } from "./faculty-sheet-semantics"
+import { FacultySummerCampDatePicker } from "./FacultySummerCampDatePicker"
 
 type Scope = { instructorId: number; courseId: number }
 
@@ -197,11 +198,10 @@ export function FacultyOfficeHourCreateModal({ visible, scope, onClose, onCreate
               />
             </FacultySheetField>
             <FacultySheetField label="Preferred date">
-              <TextInput
-                style={collabSheetStyles.fieldInput}
+              <FacultySummerCampDatePicker
                 value={preferredDate}
-                onChangeText={setPreferredDate}
-                placeholder="e.g. Mar 15, 2026 or ISO date"
+                onChange={setPreferredDate}
+                accessibilityLabel="Preferred date"
               />
             </FacultySheetField>
             <View style={localStyles.priorityRow}>

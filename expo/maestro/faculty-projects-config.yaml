@@ -1,0 +1,18 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Add section config"
+- waitForAnimationToEnd
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn:
+    text: "Cancel"
+    optional: true
+- tapOn: "ELEG1301P01"
+- waitForAnimationToEnd
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn: "Grades"
+- waitForAnimationToEnd
+- tapOn: "Manage"

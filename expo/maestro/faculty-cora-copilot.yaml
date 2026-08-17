@@ -1,0 +1,21 @@
+appId: com.coursecollab.app
+---
+- tapOn:
+    text: "Close menu"
+    optional: true
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Cora Copilot"
+    direction: UP
+    timeout: 12000
+- tapOn: "Cora Copilot"
+- tapOn:
+    text: "Close menu"
+    optional: true
+- extendedWaitUntil:
+    visible: "Capabilities|Exit Cora Copilot|Your AI teaching copilot"
+    timeout: 45000
+- takeScreenshot: cora-hub
+- swipe:
+    direction: UP
+- takeScreenshot: cora-hub-scrolled

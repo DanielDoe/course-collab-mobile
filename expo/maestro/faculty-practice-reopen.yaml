@@ -1,0 +1,7 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Manage Practice"
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Topics"
+    timeout: 15000

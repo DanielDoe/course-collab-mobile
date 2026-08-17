@@ -18,6 +18,7 @@ import {
   instructorApi,
   type InstructorBankQuestion,
   type InstructorBankTopic} from "../../lib/instructor-api"
+import type { CustomQuestionTypeRecord } from "../../lib/custom-question-types"
 import { useFacultyScope } from "../../hooks/useFacultyScope"
 import { useNotificationModuleRefresh } from "../../lib/notifications/notification-events"
 import { FacultyEmptyState, FacultyStatusPill } from "./faculty-shared"
@@ -77,18 +78,26 @@ export function FacultyQuestionBankScreen() {
   const [createWizardOpen, setCreateWizardOpen] = useState(false)
   const [coraDrafts, setCoraDrafts] = useState<DraftQuestionBankItem[]>([])
   const [coraDraftModalOpen, setCoraDraftModalOpen] = useState(false)
+  const [customTypes, setCustomTypes] = useState<CustomQuestionTypeRecord[]>([])
 
   const load = useCallback(async () => {
     if (!scope) return
     setError("")
-    const [allQuestions, topicRows, deletedRows] = await Promise.all([
+    const [allQuestions, topicRows, deletedRows, typeRows] = await Promise.all([
       instructorApi.getQuestionBank(scope),
       instructorApi.getQuestionBankTopics(scope),
       instructorApi.getQuestionBankDeleted(scope),
+      instructorApi.getQuestionBankCustomTypes(scope),
     ])
     setQuestions(allQuestions)
     setTopics(topicRows)
-    setDeleted(deletedRows)
+    setDeleted(
+      deletedRows.map((row) => ({
+        ...row,
+        deleted_at: row.deleted_at ?? "deleted",
+      })),
+    )
+    setCustomTypes(typeRows)
   }, [scope])
 
   useNotificationModuleRefresh(["assessments", "question-bank"], load)
@@ -149,6 +158,7 @@ export function FacultyQuestionBankScreen() {
     | { key: string; kind: "question"; question: InstructorBankQuestion; deleted?: boolean }
     | { key: string; kind: "topic"; topic: InstructorBankTopic }
     | { key: string; kind: "type"; type: string; label: string; count: number }
+    | { key: string; kind: "customType"; customType: CustomQuestionTypeRecord }
 
   const listRows = useMemo((): BankListRow[] => {
     if (loading) return []
@@ -170,14 +180,20 @@ export function FacultyQuestionBankScreen() {
     if (tab === "topics") {
       return topics.map((topic) => ({ key: topic.name, kind: "topic", topic }))
     }
-    return typeGroups.map((row) => ({
+    const customTypeRows: BankListRow[] = customTypes.map((ct) => ({
+      key: `custom-${ct.id}`,
+      kind: "customType",
+      customType: ct,
+    }))
+    const builtInTypeRows: BankListRow[] = typeGroups.map((row) => ({
       key: row.type,
       kind: "type",
       type: row.type,
       label: row.label,
       count: row.count,
     }))
-  }, [loading, tab, filteredAll, filteredDeleted, topics, typeGroups])
+    return [...customTypeRows, ...builtInTypeRows]
+  }, [loading, tab, filteredAll, filteredDeleted, topics, typeGroups, customTypes])
 
   const listEmptyMeta = useMemo(() => {
     if (loading) return null
@@ -317,6 +333,9 @@ export function FacultyQuestionBankScreen() {
       if (item.kind === "topic") {
         return <TopicCard topic={item.topic} onPress={() => openTopic(item.topic.name)} />
       }
+      if (item.kind === "customType") {
+        return <CustomTypeCard customType={item.customType} onPress={() => openType(item.customType.typeId)} />
+      }
       return <TypeCard label={item.label} count={item.count} onPress={() => openType(item.type)} />
     },
     [],
@@ -438,9 +457,21 @@ export function FacultyQuestionBankScreen() {
         onClose={() => setSelected(null)}
         onEdit={openEditQuestion}
         onDuplicate={() => void load()}
-        onDelete={selected && !selected.deleted_at ? () => void softDelete(selected) : undefined}
-        onRestore={selected?.deleted_at ? () => void restoreQuestion(selected) : undefined}
-        onPermanentDelete={selected?.deleted_at ? () => void permanentDelete(selected) : undefined}
+        onDelete={selected && !selected.deleted_at && tab !== "deleted" ? () => void softDelete(selected) : undefined}
+        onRestore={
+          selected && (selected.deleted_at || tab === "deleted")
+            ? () => {
+                void restoreQuestion(selected)
+              }
+            : undefined
+        }
+        onPermanentDelete={
+          selected && (selected.deleted_at || tab === "deleted")
+            ? () => {
+                void permanentDelete(selected)
+              }
+            : undefined
+        }
         acting={selected != null && actingId === selected.id}
       />
 
@@ -523,6 +554,26 @@ const TypeCard = memo(function TypeCard({ label, count, onPress }: { label: stri
       icon="grid-outline"
       title={label}
       metaLine={`${count} question${count === 1 ? "" : "s"}`}
+      onPress={onPress}
+    />
+  )
+})
+
+const CustomTypeCard = memo(function CustomTypeCard({
+  customType,
+  onPress,
+}: {
+  customType: CustomQuestionTypeRecord
+  onPress: () => void
+}) {
+  const fieldCount = customType.schema?.fields?.length ?? 0
+  return (
+    <FacultySignatureListCard
+      thumb={facultyQuestionBankTypeThumb()}
+      icon="code-outline"
+      title={customType.label}
+      metaLine={`Custom type · ${fieldCount} field${fieldCount === 1 ? "" : "s"}`}
+      description={customType.description}
       onPress={onPress}
     />
   )

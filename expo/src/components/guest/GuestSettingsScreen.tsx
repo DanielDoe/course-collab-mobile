@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { Pressable, StyleSheet, Text, View } from "react-native";
-import { AppAlert } from '../../lib/app-alert'
+import { Pressable, StyleSheet, Text, View } from "react-native"
+import { AppAlert } from "../../lib/app-alert"
 import { Ionicons } from "@/components/icons/AppIcon"
 import Constants from "expo-constants"
-import { useRouter } from "expo-router"
+import { useLocalSearchParams, useRouter } from "expo-router"
 import { ModuleScreen } from "../modules/ModuleScreen"
+import { NotetakerScreenHeader } from "../notetaker/NotetakerScreenHeader"
+import { AppearanceSettingsContent } from "../settings/AppearanceSettingsScreen"
 import { useSession } from "../../context/SessionProvider"
-import { useAppearance, useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
-import { getAppearanceModeLabel, getThemeLabel } from "../../constants/app-themes"
+import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
 import { NATIVE } from "../../constants/faculty-native-theme"
 import { ApiError } from "../../lib/api"
 import { guestApi } from "../../lib/guest-api"
@@ -37,13 +38,12 @@ function initialsFor(name: string): string {
 
 export function GuestSettingsScreen() {
   const router = useRouter()
+  const { sheet } = useLocalSearchParams<{ sheet?: string }>()
   const { session, signOut } = useSession()
   const guestSession = session?.portal === "guest" ? (session as GuestSession) : null
   const native = useThemedNative()
   const tokens = useAppThemeTokens()
   const type = useNativeType()
-  const { prefs } = useAppearance()
-  const appearanceSummary = `${getThemeLabel(prefs.themeId)} · ${getAppearanceModeLabel(prefs.appearanceMode)}`
 
   const [activeSheet, setActiveSheet] = useState<SheetId>(null)
   const [fullName, setFullName] = useState("")
@@ -59,7 +59,7 @@ export function GuestSettingsScreen() {
   const [error, setError] = useState("")
 
   const purposeLabel =
-    guestSession?.guestAccessPurpose === "recommendation_letter" ? "Recommendation letters" : "Guest access"
+    guestSession?.guestAccessPurpose === "recommendation_letter" ? "Recommendation letters" : "Career Member"
 
   const load = useCallback(async () => {
     if (!guestSession) return
@@ -78,6 +78,12 @@ export function GuestSettingsScreen() {
     setLoading(true)
     load().finally(() => setLoading(false))
   }, [load])
+
+  useEffect(() => {
+    if (sheet === "profile" || sheet === "security") {
+      setActiveSheet(sheet)
+    }
+  }, [sheet])
 
   async function handleSaveProfile() {
     if (!guestSession || !fullName.trim()) {
@@ -152,11 +158,15 @@ export function GuestSettingsScreen() {
   const appVersion = Constants.expoConfig?.version ?? "1.0.0"
 
   return (
-    <>
+    <View style={[styles.screenRoot, { backgroundColor: native.groupedBackground }]}>
+      <NotetakerScreenHeader title="Settings" fallbackHref="/dashboard" />
+      <View style={styles.body}>
       <ModuleScreen
         loading={loading}
         error={error}
         refreshing={refreshing}
+        disableTopInsetAdjustment
+        stackedHeader
         onRefresh={() => {
           setRefreshing(true)
           load().finally(() => setRefreshing(false))
@@ -201,25 +211,24 @@ export function GuestSettingsScreen() {
 
         <GuestSettingsSectionHeader title="Account" />
         <GuestSettingsGroup>
-          <GuestSettingsRow icon="person-outline" label="Profile details" onPress={() => setActiveSheet("profile")} />
+          <GuestSettingsRow icon="person-outline" label="Profile" onPress={() => setActiveSheet("profile")} />
           <GuestSettingsRow
-            icon="lock-closed-outline"
+            icon="key-outline"
             label="Password & security"
             onPress={() => setActiveSheet("security")}
+          />
+          <GuestSettingsRow
+            icon="shield-outline"
+            label="Privacy & security"
+            onPress={() => router.push("/settings/privacy-security" as never)}
             isLast
           />
         </GuestSettingsGroup>
 
-        <GuestSettingsSectionHeader title="Preferences" />
-        <GuestSettingsGroup>
-          <GuestSettingsRow
-            icon="color-palette-outline"
-            label="Appearance & theme"
-            detail={appearanceSummary}
-            onPress={() => router.push("/settings/appearance" as never)}
-            isLast
-          />
-        </GuestSettingsGroup>
+        <GuestSettingsSectionHeader title="Appearance" />
+        <View style={styles.appearanceSection}>
+          <AppearanceSettingsContent compact />
+        </View>
 
         <GuestSettingsSectionHeader title="Session" />
         <GuestSettingsSignOutGroup onPress={handleSignOut} />
@@ -253,11 +262,14 @@ export function GuestSettingsScreen() {
         onSave={() => void handleSavePassword()}
         onClose={() => setActiveSheet(null)}
       />
-    </>
+      </View>
+    </View>
   )
 }
 
 const styles = StyleSheet.create({
+  screenRoot: { flex: 1 },
+  body: { flex: 1 },
   bannerSuccess: {
     flexDirection: "row",
     alignItems: "center",
@@ -286,5 +298,6 @@ const styles = StyleSheet.create({
   },
   profileAvatarText: { fontSize: 18, fontWeight: "700" },
   profileCopy: { flex: 1, gap: 2 },
+  appearanceSection: { marginBottom: 4 },
   footer: { alignItems: "center", paddingVertical: 16 },
 })

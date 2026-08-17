@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { AppAlert } from '../../lib/app-alert'
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
@@ -23,7 +23,8 @@ import { useFacultyModuleNestedHeader } from "../../context/FacultyModuleHeaderC
 import { FacultyEmptyState, FacultyStatusPill } from "./faculty-shared"
 import { useFacultyStickyHeaderScrollLayout, FacultySearchToolbar } from "./faculty-module-shell"
 import { FacultySignatureListCard } from "./FacultyCollabListCards"
-import { useSheetPlaceholderColor } from "./faculty-collab-sheet-ui"
+import { NativeSelect } from "../NativeSelect"
+import { secondsSelectOptions } from "./FacultyNativePickers"
 
 type Scope = { instructorId: number; courseId: number }
 
@@ -49,10 +50,9 @@ export function FacultyPlaygroundQuestionBank({
   const searchDockInset = useSearchDockBottomInset()
   const [view, setView] = useState<"topics" | "questions">("topics")
   const { listScrollPad } = useFacultyStickyHeaderScrollLayout({
-    extraBottom: view === "questions" ? QUESTIONS_FOOTER_HEIGHT + 16 : 24,
+    extraBottom: view === "questions" ? QUESTIONS_FOOTER_HEIGHT + 16 : 88,
     listTopGap: 12,
   })
-  const placeholderColor = useSheetPlaceholderColor()
   const [activeTopic, setActiveTopic] = useState<string | null>(null)
   const [questions, setQuestions] = useState<PlaygroundBankQuestion[]>([])
   const [selectedIds, setSelectedIds] = useState<number[]>([])
@@ -227,7 +227,11 @@ export function FacultyPlaygroundQuestionBank({
               {selectionCount} selected · {filteredQuestions.length} shown
             </Text>
             <View style={localStyles.selectionActions}>
-              <Pressable onPress={allVisibleSelected ? clearSelection : selectAllVisible}>
+              <Pressable
+                onPress={allVisibleSelected ? clearSelection : selectAllVisible}
+                accessibilityRole="button"
+                accessibilityLabel={allVisibleSelected ? "Clear all" : "Select all"}
+              >
                 <Text style={[type.caption, { color: FACULTY_PLAYGROUND_COLOR.link, fontWeight: "600" }]}>
                   {allVisibleSelected ? "Clear all" : "Select all"}
                 </Text>
@@ -257,7 +261,7 @@ export function FacultyPlaygroundQuestionBank({
           filteredTopics.length === 0 ? (
             <FacultyEmptyState
               icon="folder-outline"
-              title={topics.length === 0 ? "No topics yet" : "No matching topics"}
+              title={topics.length === 0 ? "No topics yet" : search.trim() ? "No matches" : "No matching topics"}
               body={
                 topics.length === 0
                   ? "Playground topics will appear once questions are available."
@@ -285,7 +289,7 @@ export function FacultyPlaygroundQuestionBank({
         ) : filteredQuestions.length === 0 ? (
           <FacultyEmptyState
             icon="library-outline"
-            title={questions.length === 0 ? "No questions in this topic" : "No matching questions"}
+            title={questions.length === 0 ? "No questions in this topic" : search.trim() ? "No matches" : "No matching questions"}
             body={
               questions.length === 0
                 ? "This topic does not have any playground questions yet."
@@ -310,6 +314,9 @@ export function FacultyPlaygroundQuestionBank({
                     pressed && moduleStyles.cardPressed,
                   ]}
                   onPress={() => toggleQuestion(question.id)}
+                  accessibilityRole="button"
+                  accessibilityLabel={preview}
+                  accessibilityState={{ selected }}
                 >
                   <View
                     style={[
@@ -362,21 +369,14 @@ export function FacultyPlaygroundQuestionBank({
             <Text style={[type.caption, { color: native.secondaryLabel, fontWeight: "700" }]}>
               Seconds / question
             </Text>
-            <TextInput
-              style={[
-                localStyles.footerInput,
-                {
-                  borderColor: native.separator,
-                  backgroundColor: native.secondaryGrouped,
-                  color: native.label,
-                },
-              ]}
-              value={durationSec}
-              onChangeText={setDurationSec}
-              keyboardType="number-pad"
-              maxLength={3}
-              placeholderTextColor={placeholderColor}
-            />
+            <View style={{ minWidth: 148 }}>
+              <NativeSelect
+                placeholder="10 seconds"
+                value={durationSec}
+                options={secondsSelectOptions(Number(durationSec))}
+                onChange={setDurationSec}
+              />
+            </View>
           </View>
           <Pressable
             style={[
@@ -386,6 +386,10 @@ export function FacultyPlaygroundQuestionBank({
             ]}
             disabled={creating || selectionCount === 0}
             onPress={() => void createSession()}
+            accessibilityRole="button"
+            accessibilityLabel={
+              selectionCount > 0 ? `Create session (${selectionCount})` : "Create session"
+            }
           >
             {creating ? (
               <ActivityIndicator color={FACULTY_PLAYGROUND_COLOR.actionInk} />

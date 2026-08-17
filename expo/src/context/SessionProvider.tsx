@@ -17,7 +17,8 @@ import {
 } from "../lib/session"
 import { persistRememberedLoginPortal } from "../lib/remembered-login-portal"
 import { api } from "../lib/api"
-import { resetAppBootstrapState } from "../lib/post-login-bootstrap"
+import { clearUserLocalState } from "../lib/clear-user-local-state"
+import { subscribeSessionExpired } from "../lib/session-expiry"
 
 type SessionContextValue = {
   session: AppSession | null
@@ -48,6 +49,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const signIn = useCallback(async (data: SignInPayload) => {
+    const previous = await getStoredSession()
+    if (previous) {
+      await clearUserLocalState(previous)
+      try {
+        await api.logout()
+      } catch {
+        /* previous server session revoke is best-effort */
+      }
+    }
     if (data.portal !== "admin") {
       await persistRememberedLoginPortal(data.portal)
     }
@@ -56,7 +66,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const signOut = useCallback(async () => {
-    resetAppBootstrapState()
+    await clearUserLocalState(session)
     await clearStoredSession()
     // Keep remembered login portal, university, and remember-me identifiers across sign-out.
     // Keep MFA device trust — "trust this device for 1 week" should survive sign-out.
@@ -66,11 +76,27 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       // Best-effort — local session is already cleared.
     }
     setSession(null)
-  }, [])
+  }, [session])
 
   const refreshSession = useCallback(async () => {
     const next = await refreshStoredSession()
     setSession(next)
+  }, [])
+
+  useEffect(() => {
+    return subscribeSessionExpired(() => {
+      void (async () => {
+        const current = await getStoredSession()
+        await clearUserLocalState(current)
+        await clearStoredSession()
+        try {
+          await api.logout()
+        } catch {
+          /* already invalid */
+        }
+        setSession(null)
+      })()
+    })
   }, [])
 
   const value = useMemo(

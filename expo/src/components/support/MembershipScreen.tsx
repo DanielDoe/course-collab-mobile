@@ -56,6 +56,10 @@ import {
   membershipTierHeroCardStyle,
   resolveThemedMembershipPlans,
 } from "../../lib/membership-plan-theme"
+import { useCoraBalance } from "../../hooks/useCoraBalance"
+import { CoraUsagePanel } from "../cora/CoraUsagePanel"
+import { CoraCreditPacksPanel } from "../cora/CoraCreditPacksPanel"
+import { CoraCreditBalanceBadge } from "../cora/CoraCreditBalanceBadge"
 
 const TIER_ORDER: MembershipTier[] = ["Trailblazer", "Explorer", "Scholar"]
 const CARD_RADIUS = 20
@@ -237,6 +241,11 @@ function CurrentMembershipSummary({
                     ? `Valid through ${formatMembershipDate(expiresAt)}`
                     : "Active this semester"}
               </Text>
+              {!isFreeTier && semesterCents > 0 ? (
+                <Text style={[styles.currentPrice, { color: hero.subtitle }]}>
+                  {formatSemesterPrice(semesterCents)} · semester access
+                </Text>
+              ) : null}
             </Animated.View>
             <Animated.View
               entering={FadeIn.delay(220).duration(300)}
@@ -245,15 +254,6 @@ function CurrentMembershipSummary({
               <Text style={[styles.currentStatusText, { color: statusColors.text }]}>{status.label}</Text>
             </Animated.View>
           </View>
-
-          {!isFreeTier && semesterCents > 0 ? (
-            <Animated.Text
-              entering={FadeIn.delay(200).duration(300)}
-              style={[styles.currentPrice, { color: hero.subtitle }]}
-            >
-              {formatSemesterPrice(semesterCents)} · semester access
-            </Animated.Text>
-          ) : null}
 
           <Animated.View entering={FadeInUp.delay(260).duration(340).springify()} style={styles.currentActions}>
             <Pressable
@@ -583,19 +583,7 @@ export function MembershipScreen() {
       return
     }
 
-    const semester = formatSemesterPrice(semesterPriceCentsForTier(pricing, plan.id))
-
-    AppAlert.alert(
-      `Upgrade to ${plan.name}`,
-      `${plan.name} is ${semester} (one-time semester access). Continue to secure checkout?`,
-      [
-        { text: "Not now", style: "cancel" },
-        {
-          text: "Continue",
-          onPress: () => openMembershipCheckout(router, plan.id),
-        },
-      ],
-    )
+    openMembershipCheckout(router, plan.id)
   }
 
   const hasPaidMembership = membershipTier === "Explorer" || membershipTier === "Trailblazer"
@@ -607,10 +595,33 @@ export function MembershipScreen() {
     () => resolveThemedMembershipPlans(sortedPlans, tokens),
     [sortedPlans, tokens],
   )
+  const {
+    balance: coraBalance,
+    activity: coraActivity,
+    activityPage: coraActivityPage,
+    activityTotalPages: coraActivityTotalPages,
+    activityTotal: coraActivityTotal,
+    activityLoadingPage: coraActivityLoadingPage,
+    goToActivityPage: goToCoraActivityPage,
+    loading: coraLoading,
+    error: coraError,
+    refresh: refreshCora,
+  } = useCoraBalance({ role: "student", session, enabled: Boolean(session) })
 
   return (
     <View style={[styles.screenRoot, { backgroundColor: native.groupedBackground }]}>
-      <NotetakerScreenHeader title="Plans" fallbackHref="/dashboard" />
+      <NotetakerScreenHeader
+        title="Membership & Plans"
+        fallbackHref="/dashboard"
+        rightSlot={
+          <CoraCreditBalanceBadge
+            balance={coraBalance}
+            onPress={() => {
+              /* stay on membership — usage panel is below */
+            }}
+          />
+        }
+      />
       <ModuleScreen
         loading={loading}
         error={error}
@@ -618,7 +629,9 @@ export function MembershipScreen() {
         disableTopInsetAdjustment
         onRefresh={() => {
           setRefreshing(true)
-          load().finally(() => setRefreshing(false))
+          void Promise.all([load(), refreshCora({ force: true, includeActivity: true })]).finally(() =>
+            setRefreshing(false),
+          )
         }}
       >
         <CurrentMembershipSummary
@@ -630,6 +643,26 @@ export function MembershipScreen() {
           onBilling={() => router.push("/membership/manage" as never)}
           tokens={tokens}
         />
+
+        <Animated.View entering={FadeInDown.delay(120).duration(340)} style={{ marginBottom: 16 }}>
+          <CoraUsagePanel
+            balance={coraBalance}
+            activity={coraActivity}
+            loading={coraLoading}
+            error={coraError}
+            onRefresh={() => void refreshCora({ force: true, includeActivity: true })}
+            activityPage={coraActivityPage}
+            activityTotalPages={coraActivityTotalPages}
+            activityTotal={coraActivityTotal}
+            activityLoadingPage={coraActivityLoadingPage}
+            onActivityPageChange={(page) => void goToCoraActivityPage(page)}
+          />
+          <CoraCreditPacksPanel
+            audience="student"
+            session={session}
+            onPurchased={() => void refreshCora({ force: true, includeActivity: true })}
+          />
+        </Animated.View>
 
         <Animated.Text
           entering={FadeInDown.delay(180).duration(340)}
@@ -696,8 +729,8 @@ const styles = StyleSheet.create({
   screenRoot: { flex: 1 },
   currentCard: {
     borderRadius: CARD_RADIUS,
-    padding: 18,
-    gap: 14,
+    padding: 22,
+    gap: 18,
     marginBottom: 20,
     overflow: "hidden",
   },
@@ -726,13 +759,13 @@ const styles = StyleSheet.create({
     borderRadius: 28,
   },
   currentContent: {
-    gap: 14,
+    gap: 20,
     zIndex: 1,
   },
   currentTop: {
     flexDirection: "row",
     alignItems: "flex-start",
-    gap: 12,
+    gap: 14,
   },
   currentIcon: {
     width: 48,
@@ -741,21 +774,22 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  currentCopy: { flex: 1, gap: 2 },
+  currentCopy: { flex: 1, minWidth: 0, gap: 6 },
   currentEyebrow: {
     ...nativeType.caption,
     fontWeight: "600",
     fontSize: 12,
   },
   currentTitle: {
-    fontSize: 22,
+    fontSize: 26,
     fontWeight: "700",
     letterSpacing: -0.4,
+    lineHeight: 30,
   },
   currentSubtitle: {
     ...nativeType.caption,
-    lineHeight: 18,
-    marginTop: 2,
+    fontSize: 14,
+    lineHeight: 20,
   },
   currentStatusBadge: {
     paddingHorizontal: 10,
@@ -768,21 +802,22 @@ const styles = StyleSheet.create({
   },
   currentPrice: {
     ...nativeType.caption,
-    paddingLeft: 60,
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 2,
   },
   currentActions: {
     flexDirection: "row",
-    gap: 10,
-    paddingLeft: 60,
+    gap: 12,
   },
   currentActionBtn: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 12,
+    paddingVertical: 13,
     borderRadius: 999,
     borderWidth: StyleSheet.hairlineWidth,
-    minHeight: 44,
+    minHeight: 48,
   },
   currentActionText: {
     fontSize: 15,

@@ -1,10 +1,6 @@
 import type { InstructorScope } from "./instructor-content-api"
 import { instructorFlashcardsApi } from "./instructor-content-api"
-import {
-  facultyCoraApi,
-  type FacultyCoraAutomationJob,
-  type FacultyCoraChatResponse,
-} from "./faculty-cora-api"
+import type { FacultyCoraAutomationJob, FacultyCoraChatResponse } from "./faculty-cora-api"
 import type { FacultyCoraCapabilityId } from "./faculty-cora-config"
 import {
   instructorApi,
@@ -76,7 +72,9 @@ export async function buildFacultyCoraAutomateContext(scope: InstructorScope): P
       instructorApi.getLectures(scope).catch(() => [] as InstructorLecture[]),
       instructorApi.getOfficeHours(scope).catch(() => [] as OfficeHourRequest[]),
       instructorApi.getPracticeTopics(scope).then((response) => response.topics ?? []).catch(() => [] as PracticeTopic[]),
-      facultyCoraApi.listAutomations(scope).catch(() => ({ jobs: [] as FacultyCoraAutomationJob[] })),
+      import("./faculty-cora-api")
+        .then(({ facultyCoraApi }) => facultyCoraApi.listAutomations(scope))
+        .catch(() => ({ jobs: [] as FacultyCoraAutomationJob[] })),
     ])
 
   return {

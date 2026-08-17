@@ -1,0 +1,8 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Done"
+- tapOn: "Issues"
+- tapOn: "Deleted"
+- tapOn: "All final exams"
+- tapOn: "Create final"
+- waitForAnimationToEnd

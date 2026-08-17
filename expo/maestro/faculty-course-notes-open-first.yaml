@@ -1,0 +1,5 @@
+appId: com.coursecollab.app
+---
+- tapOn: "[sample-ui] Lab safety reminders, Draft"
+- waitForAnimationToEnd
+- takeScreenshot: course-notes-after-row-tap

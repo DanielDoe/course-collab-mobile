@@ -15,6 +15,7 @@ import { QuestionContentWebView, QuestionMediaView } from "../rewards/QuestionCo
 import { parseQuestionMedia } from "../../lib/classroom-submission"
 import { NotetakerScreenHeader } from "../notetaker/NotetakerScreenHeader"
 import { QuestionPrepareGate } from "../questions/QuestionPrepareGate"
+import { useAssessmentFocusGuard } from "../../hooks/useAssessmentFocusGuard"
 import { extractAssessmentQuizQuestionTexts } from "../../lib/question-prepare"
 import { assessmentQuizApi } from "../../lib/assessment-quiz/assessment-quiz-api"
 import {
@@ -45,6 +46,7 @@ import type {
 import { formatAssessmentType } from "./assessment-config"
 import { exitAssessmentQuiz, openAssessmentResults } from "./assessment-navigation"
 import type { AssessmentTakeAction } from "../../constants/module-web-paths"
+import { WaterBreakDurationDialog, WaterBreakOverlay } from "../flashcards/FlashcardWaterBreak"
 
 function useStudentSession(): StudentSession | null {
   const { session } = useSession()
@@ -75,6 +77,9 @@ export function AssessmentQuizScreen({ quizId, assessmentType, takeAction }: Pro
   const [showQuestionNav, setShowQuestionNav] = useState(false)
   const [showContinueLaterModal, setShowContinueLaterModal] = useState(false)
   const [showExitModal, setShowExitModal] = useState(false)
+  const [waterBreakPickerOpen, setWaterBreakPickerOpen] = useState(false)
+  const [waterBreakActive, setWaterBreakActive] = useState(false)
+  const [waterBreakSeconds, setWaterBreakSeconds] = useState(0)
 
   const [selectedLetter, setSelectedLetter] = useState("")
   const [selectedLetters, setSelectedLetters] = useState<string[]>([])
@@ -187,6 +192,13 @@ export function AssessmentQuizScreen({ quizId, assessmentType, takeAction }: Pro
       questionStartRef.current[currentQuestion.id] = Date.now()
     }
   }, [currentQuestion])
+
+  // Anti-cheat: task-switching out of the app mid-attempt is logged against the attempt.
+  useAssessmentFocusGuard({
+    session,
+    attemptId: quizSession?.attemptId ?? null,
+    enabled: Boolean(quizSession) && !submittingFinal,
+  })
 
   const applySavedSelection = (question: AssessmentQuestion | undefined, saved?: SavedAnswer) => {
     resetSelection(question)
@@ -609,7 +621,7 @@ export function AssessmentQuizScreen({ quizId, assessmentType, takeAction }: Pro
         <View style={[styles.progressFill, { width: `${progressPct}%`, backgroundColor: tokens.accent }]} />
       </View>
 
-      {/* Control bar: Navigator · Continue Later · Exit */}
+      {/* Control bar: Navigator · Water break · Continue Later · Exit */}
       <View style={[styles.controlBar, { borderColor: tokens.border, backgroundColor: tokens.surface }]}>
         <Pressable
           style={[
@@ -621,8 +633,25 @@ export function AssessmentQuizScreen({ quizId, assessmentType, takeAction }: Pro
         >
           <Ionicons name="grid-outline" size={16} color={showQuestionNav ? tokens.accent : SN.secondaryLabel} />
           <Text style={[styles.controlBtnText, { color: showQuestionNav ? tokens.accent : tokens.text }]}>
-            Navigator
+            Nav
           </Text>
+        </Pressable>
+
+        <Pressable
+          style={[
+            styles.controlBtn,
+            {
+              borderColor: hexToRgba("#0d9488", 0.4),
+              backgroundColor: hexToRgba("#0d9488", 0.08),
+              opacity: waterBreakActive ? 0.5 : 1,
+            },
+          ]}
+          onPress={() => setWaterBreakPickerOpen(true)}
+          disabled={waterBreakActive}
+          accessibilityLabel="Water break"
+        >
+          <Ionicons name="water-outline" size={16} color="#0d9488" />
+          <Text style={[styles.controlBtnText, { color: "#0d9488" }]}>Break</Text>
         </Pressable>
 
         <Pressable
@@ -630,7 +659,7 @@ export function AssessmentQuizScreen({ quizId, assessmentType, takeAction }: Pro
           onPress={handleContinueLaterPress}
         >
           <Ionicons name="pause-circle-outline" size={16} color={tokens.accent} />
-          <Text style={[styles.controlBtnText, { color: tokens.accent }]}>Continue</Text>
+          <Text style={[styles.controlBtnText, { color: tokens.accent }]}>Later</Text>
         </Pressable>
 
         <Pressable
@@ -713,7 +742,7 @@ export function AssessmentQuizScreen({ quizId, assessmentType, takeAction }: Pro
 
           <QuestionMediaView media={parseQuestionMedia(currentQuestion.question_media)} embedded />
 
-          <QuestionContentWebView text={currentQuestion.question_text} embedded />
+          <QuestionContentWebView text={currentQuestion.question_text} embedded secure />
 
           {isUnsupported ? (
             <View
@@ -805,7 +834,7 @@ export function AssessmentQuizScreen({ quizId, assessmentType, takeAction }: Pro
                     </Text>
                   </View>
                   <View style={styles.optionTextWrap}>
-                    <QuestionContentWebView text={text} embedded compact />
+                    <QuestionContentWebView text={text} embedded compact secure />
                   </View>
                   {selected ? <Ionicons name="checkmark-circle" size={20} color={tokens.accent} /> : null}
                 </Pressable>
@@ -916,6 +945,28 @@ export function AssessmentQuizScreen({ quizId, assessmentType, takeAction }: Pro
           </Pressable>
         </Pressable>
       </Modal>
+
+      <WaterBreakDurationDialog
+        visible={waterBreakPickerOpen}
+        onDismiss={() => setWaterBreakPickerOpen(false)}
+        description="Step away and hydrate. Your assessment progress stays saved — resume when you’re ready."
+        skipLabel="Cancel"
+        onStart={(minutes) => {
+          setWaterBreakPickerOpen(false)
+          setWaterBreakSeconds(Math.max(60, minutes * 60))
+          setWaterBreakActive(true)
+        }}
+      />
+      {waterBreakActive ? (
+        <WaterBreakOverlay
+          totalSeconds={waterBreakSeconds}
+          onResume={() => setWaterBreakActive(false)}
+          resumeLabel="Resume assessment"
+          activeHint="Take a breather — your answers stay saved while you hydrate."
+          completeHint="Ready to jump back into your assessment?"
+          skipEarlyLabel="Skip break and resume"
+        />
+      ) : null}
 
       {/* Quit modal */}
       <Modal visible={showExitModal} transparent animationType="fade" onRequestClose={() => setShowExitModal(false)}>

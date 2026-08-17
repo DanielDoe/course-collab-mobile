@@ -235,15 +235,24 @@ export function FacultyQuestionBankEditorModal({
     }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ["images"],
-      quality: 0.9})
+      quality: 0.9,
+      preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
+    })
     if (result.canceled || !result.assets[0]) return
     const asset = result.assets[0]
     setUploadingMedia(true)
     try {
+      let name = asset.fileName ?? `diagram-${Date.now()}.jpg`
+      let type = asset.mimeType ?? "image/jpeg"
+      if (/\.heic$|\.heif$/i.test(name) || /heic|heif/i.test(type)) {
+        name = name.replace(/\.(heic|heif)$/i, ".jpg")
+        type = "image/jpeg"
+      }
       const uploaded = await instructorApi.uploadQuestionMedia(scope, {
         uri: asset.uri,
-        name: asset.fileName ?? `diagram-${Date.now()}.jpg`,
-        type: asset.mimeType ?? "image/jpeg"})
+        name,
+        type,
+      })
       setMedia({
         media_enabled: true,
         media_url: uploaded.url,
@@ -370,6 +379,13 @@ export function FacultyQuestionBankEditorModal({
                   value={topic}
                   onChangeText={setTopic}
                   placeholder="e.g. Chapter 8: AC Power"
+                  accessibilityLabel="Topic"
+                  testID="question-bank-topic"
+                  keyboardType="ascii-capable"
+                  autoCorrect={false}
+                  autoComplete="off"
+                  spellCheck={false}
+                  textContentType="none"
                 />
               </FacultySheetField>
 
@@ -381,6 +397,13 @@ export function FacultyQuestionBankEditorModal({
                   value={questionText}
                   onChangeText={setQuestionText}
                   placeholder="Supports Markdown and LaTeX (e.g. \(Z_L\), \[...\])"
+                  accessibilityLabel="Question text"
+                  testID="question-bank-text"
+                  keyboardType="ascii-capable"
+                  autoCorrect={false}
+                  autoComplete="off"
+                  spellCheck={false}
+                  textContentType="none"
                 />
               </FacultySheetField>
 

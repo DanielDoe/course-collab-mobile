@@ -17,6 +17,17 @@ export function playgroundSessionLabel(session: Pick<PlaygroundSession, "selecte
   return lecture ?? topics[0] ?? session.session_code
 }
 
+/** Avoid repeating the session code as both title and subtitle. */
+export function playgroundSessionSubtitle(
+  session: Pick<PlaygroundSession, "selected_topics" | "session_code">,
+): string | undefined {
+  const label = playgroundSessionLabel(session)
+  if (label !== session.session_code) return session.session_code
+  const topics = session.selected_topics ?? []
+  if (topics.length > 1) return `${topics.length} topics`
+  return undefined
+}
+
 export function playgroundSessionStatusLabel(session: Pick<PlaygroundSession, "is_active" | "game_started">): string {
   const phase = playgroundSessionPhase(session)
   if (phase === "live") return "Live"

@@ -7,7 +7,9 @@ import type { StudentSession } from "./session"
 import { mfaTrustRequestHeadersForStudent } from "./mfa-device-trust"
 import { mergeCookieHeaders, persistHttpCookiesFromResponse, studentHttpCookieHeader } from "./student-http-cookies"
 import { API_BASE_URL } from "../constants"
+import { extractApiErrorMessage } from "./api-error-message"
 import { reportMobileApiError } from "./system-log-client"
+import { assertProductionHttpsUrl, createApiAbortSignal, noteApiFailure, sanitizeLogValue } from "./http"
 
 export class ApiError extends Error {
   constructor(
@@ -51,10 +53,12 @@ async function studentWorkspaceRequest<T>(
   path: string,
 ): Promise<T> {
   const url = `${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`
+  assertProductionHttpsUrl(url)
   const response = await fetch(url, {
     credentials: "include",
     cache: "no-store",
     headers: await studentWorkspaceHeaders(session),
+    signal: createApiAbortSignal(),
   })
 
   let body: unknown = null
@@ -68,13 +72,8 @@ async function studentWorkspaceRequest<T>(
   }
 
   if (!response.ok) {
-    const message =
-      typeof body === "object" &&
-      body !== null &&
-      "error" in body &&
-      typeof (body as { error: unknown }).error === "string"
-        ? (body as { error: string }).error
-        : `Request failed (${response.status})`
+    noteApiFailure(path, response.status)
+    const message = extractApiErrorMessage(body, response.status, path)
     throw new ApiError(message, response.status, body)
   }
 
@@ -89,9 +88,11 @@ async function studentRequest<T>(
   init?: RequestInit,
 ): Promise<T> {
   const url = `${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`
+  assertProductionHttpsUrl(url)
   const response = await fetch(url, {
     ...init,
     credentials: "include",
+    signal: createApiAbortSignal(undefined, init?.signal ?? undefined),
     headers: {
       ...(await studentHeaders(session)),
       ...init?.headers,
@@ -109,19 +110,17 @@ async function studentRequest<T>(
   }
 
   if (!response.ok) {
-    const message =
-      typeof body === "object" &&
-      body !== null &&
-      "error" in body &&
-      typeof (body as { error: unknown }).error === "string"
-        ? (body as { error: string }).error
-        : `Request failed (${response.status})`
-    if (__DEV__) {
+    noteApiFailure(path, response.status)
+    const message = extractApiErrorMessage(body, response.status, path)
+    const isExpectedMobilePaymentGap =
+      (response.status === 404 || response.status === 503) &&
+      path.includes("mobile-payment")
+    if (__DEV__ && !isExpectedMobilePaymentGap) {
       console.error("[CourseCollab API]", {
         status: response.status,
         path,
         message,
-        body,
+        body: sanitizeLogValue(body),
       })
     }
     if (!__DEV__ || response.status >= 500) {
@@ -130,7 +129,7 @@ async function studentRequest<T>(
         method: init?.method ?? "GET",
         status: response.status,
         message,
-        body,
+        body: sanitizeLogValue(body),
       })
     }
     throw new ApiError(message, response.status, body)
@@ -577,6 +576,83 @@ export const studentApi = {
       `/api/student/purchases?studentId=${encodeURIComponent(session.databaseId)}`,
     ),
 
+  upgradeMembership: (
+    session: StudentSession,
+    options: {
+      tier: import("../types/dashboard").MembershipTier
+      billingCadence?: "semester" | "monthly"
+      mobileReturn?: boolean
+    },
+  ) =>
+    studentRequest<import("./membership-checkout-api").MembershipUpgradeResponse>(
+      session,
+      "/api/student/membership/upgrade",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          studentId: parseInt(session.databaseId, 10),
+          tier: options.tier,
+          billingCadence: options.billingCadence ?? "semester",
+          redirectCheckout: true,
+          mobileReturn: options.mobileReturn ?? true,
+        }),
+      },
+    ),
+
+  syncMembershipStripe: (session: StudentSession) =>
+    studentRequest<import("./membership-checkout-api").MembershipSyncResponse>(
+      session,
+      "/api/membership/sync-stripe",
+      {
+        method: "POST",
+        body: JSON.stringify({ studentId: parseInt(session.databaseId, 10) }),
+      },
+    ),
+
+  prepareMembershipPaymentSheet: (
+    session: StudentSession,
+    options: {
+      tier: import("../types/dashboard").MembershipTier
+      billingCadence?: "semester" | "monthly"
+    },
+  ) =>
+    studentRequest<import("./membership-payment-api").MobilePaymentSheetResponse>(
+      session,
+      "/api/student/membership/mobile-payment-sheet",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          studentId: parseInt(session.databaseId, 10),
+          tier: options.tier,
+          billingCadence: options.billingCadence ?? "semester",
+        }),
+      },
+    ),
+
+  createMembershipPaymentIntent: (
+    session: StudentSession,
+    options: {
+      tier: import("../types/dashboard").MembershipTier
+      billingCadence?: "semester" | "monthly"
+      paymentMethodId: string
+      shouldSavePaymentMethod: boolean
+    },
+  ) =>
+    studentRequest<import("./membership-payment-api").MobilePaymentIntentResponse>(
+      session,
+      "/api/student/membership/mobile-payment-intent",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          studentId: parseInt(session.databaseId, 10),
+          tier: options.tier,
+          billingCadence: options.billingCadence ?? "semester",
+          paymentMethodId: options.paymentMethodId,
+          shouldSavePaymentMethod: options.shouldSavePaymentMethod,
+        }),
+      },
+    ),
+
   getOfficeHours: (session: StudentSession) =>
     studentRequest<{ requests?: OfficeHoursRequest[] }>(
       session,
@@ -623,6 +699,11 @@ export const studentApi = {
       purpose: string
       deadline?: string
       studentRequestDescription?: string
+      purposeOtherDetail?: string
+      recipientName?: string
+      recipientOrganization?: string
+      recipientAddress?: string
+      letterIsSpecific?: boolean
     },
   ) =>
     studentRequest(session, "/api/student/recommendations", {
@@ -633,7 +714,14 @@ export const studentApi = {
         instructorId: payload.instructorId,
         purpose: payload.purpose,
         deadline: payload.deadline,
-        studentRequestDescription: payload.studentRequestDescription})}),
+        studentRequestDescription: payload.studentRequestDescription,
+        purposeOtherDetail: payload.purposeOtherDetail,
+        recipientName: payload.recipientName,
+        recipientOrganization: payload.recipientOrganization,
+        recipientAddress: payload.recipientAddress,
+        letterIsSpecific: payload.letterIsSpecific,
+      }),
+    }),
 
   getAttendanceRecords: (session: StudentSession) =>
     studentRequest<Record<string, unknown>>(
@@ -746,9 +834,24 @@ export const studentApi = {
       },
     ),
 
+  listSupportTickets: (session: StudentSession, category?: string) => {
+    const query = new URLSearchParams({ studentId: session.databaseId })
+    if (category) query.set("category", category)
+    return studentRequest<{ tickets: import("./support-tickets").SupportTicket[] }>(
+      session,
+      `/api/student/support-tickets?${query.toString()}`,
+    )
+  },
+
   submitSupportTicket: (
     session: StudentSession,
-    payload: { category: string; subject: string; message: string },
+    payload: {
+      category: string
+      subject: string
+      message: string
+      moduleId?: string
+      moduleName?: string
+    },
   ) =>
     studentRequest(session, "/api/student/support-tickets", {
       method: "POST",
@@ -756,7 +859,12 @@ export const studentApi = {
         studentId: session.databaseId,
         category: payload.category,
         subject: payload.subject,
-        message: payload.message})})}
+        description: payload.message,
+        moduleId: payload.moduleId,
+        moduleName: payload.moduleName,
+      }),
+    }),
+}
 
 export type StudentRecommendationRequest = {
   id: number
@@ -776,6 +884,7 @@ export type StudentRecommendationRequest = {
   content_source?: string | null
   selected_draft_id?: number | null
   student_request_description?: string | null
+  delivery_mode?: string | null
   course_code?: string
   course_description?: string | null
   instructor_name?: string

@@ -1,4 +1,4 @@
-import type { InstructorIssue, InstructorQuiz, InstructorRecentActivity, InstructorSession } from "./instructor-api"
+import type { InstructorIssue, InstructorQuiz, InstructorRecentActivity, InstructorSession, InstructorAssessmentResult } from "./instructor-api"
 
 export type AssessmentType = "quiz" | "homework" | "mid_semester" | "final"
 
@@ -206,13 +206,27 @@ export function computeActivityStats(activity: InstructorRecentActivity[]) {
   return { total: activity.length, submitted, inProgress, saved, scored }
 }
 
+/** Keep rows that mention the selected course, or mention no course code at all. */
+export function activityBelongsToCourse(
+  item: InstructorRecentActivity,
+  courseCode?: string | null,
+): boolean {
+  if (!courseCode?.trim()) return true
+  const compact = courseCode.replace(/\s+/g, "").toLowerCase()
+  const mentioned = `${item.title} ${item.message ?? ""}`.match(/\b[A-Z]{2,}\s*\d{3,4}[A-Z]?\b/gi) ?? []
+  if (mentioned.length === 0) return true
+  return mentioned.some((code) => code.replace(/\s+/g, "").toLowerCase() === compact)
+}
+
 export function filterRecentActivity(
   activity: InstructorRecentActivity[],
   status: ActivityStatusFilter,
   search: string,
+  courseCode?: string | null,
 ): InstructorRecentActivity[] {
   const q = search.trim().toLowerCase()
   return activity.filter((item) => {
+    if (!activityBelongsToCourse(item, courseCode)) return false
     if (status !== "ALL" && item.status !== status) return false
     if (!q) return true
     const hay = [item.title, item.message, item.student_name].filter(Boolean).join(" ").toLowerCase()
@@ -226,4 +240,49 @@ export function activityFilterCounts(activity: InstructorRecentActivity[]) {
     submitted: activity.filter((a) => a.status === "submitted").length,
     in_progress: activity.filter((a) => a.status === "in_progress").length,
     saved_for_later: activity.filter((a) => a.status === "saved_for_later").length}
+}
+
+export function activityAttemptId(item: InstructorRecentActivity): number | null {
+  const direct = item.attempt_id
+  if (direct != null && Number.isFinite(Number(direct))) return Number(direct)
+  if (item.type === "quiz_attempt") {
+    const parsed = Number.parseInt(String(item.id), 10)
+    if (Number.isFinite(parsed)) return parsed
+  }
+  return null
+}
+
+export function activityAssessmentTitle(item: InstructorRecentActivity): string {
+  const title = item.title.trim()
+  const patterns = [
+    /^.+ submitted (.+)$/i,
+    /^.+ saved (.+) for later$/i,
+    /^.+ is taking (.+)$/i,
+    /^.+ · (.+)$/i,
+  ]
+  for (const pattern of patterns) {
+    const match = title.match(pattern)
+    if (match?.[1]?.trim()) return match[1].trim()
+  }
+  return title
+}
+
+export function activityToAssessmentResult(item: InstructorRecentActivity): InstructorAssessmentResult | null {
+  const attempt_id = activityAttemptId(item)
+  if (!attempt_id) return null
+  const assessmentTitle = activityAssessmentTitle(item)
+  return {
+    attempt_id,
+    assessment_id: 0,
+    student_name: item.student_name ?? "Student",
+    student_id: "",
+    assessment_title: assessmentTitle,
+    quiz_title: assessmentTitle,
+    score: item.score,
+    percentage: item.percentage,
+    assessment_type: item.assessment_type,
+    completed_at: item.status === "submitted" ? item.created_at : undefined,
+    started_at: item.status === "in_progress" ? item.created_at : undefined,
+    is_in_progress: item.status === "in_progress",
+  }
 }

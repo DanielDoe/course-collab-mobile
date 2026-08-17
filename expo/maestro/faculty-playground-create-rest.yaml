@@ -1,0 +1,15 @@
+appId: com.coursecollab.app
+---
+- tapOn: "AC Power"
+- scrollUntilVisible:
+    element:
+      text: "Create & open lobby"
+    direction: DOWN
+    timeout: 10000
+- takeScreenshot: playground-create-submit
+- tapOn: "Done"
+- tapOn: "Question bank"
+- extendedWaitUntil:
+    visible: "Search topics…|No topics yet|Pick a topic"
+    timeout: 15000
+- takeScreenshot: playground-bank

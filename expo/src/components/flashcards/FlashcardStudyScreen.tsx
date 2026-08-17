@@ -111,6 +111,7 @@ export function FlashcardStudyScreen() {
   const [waterBreakPickerOpen, setWaterBreakPickerOpen] = useState(false)
   const [waterBreakSeconds, setWaterBreakSeconds] = useState(0)
   const [mcqFeedback, setMcqFeedback] = useState<"correct" | "incorrect" | null>(null)
+  const [mcqSelectedId, setMcqSelectedId] = useState<string | null>(null)
   const [mcqLocked, setMcqLocked] = useState(false)
 
   const batches = useMemo(
@@ -186,6 +187,7 @@ export function FlashcardStudyScreen() {
     setWaterBreakPickerOpen(false)
     setWaterBreakSeconds(0)
     setMcqFeedback(null)
+    setMcqSelectedId(null)
     setMcqLocked(false)
   }, [])
 
@@ -237,6 +239,7 @@ export function FlashcardStudyScreen() {
   useEffect(() => {
     setFlipped(false)
     setMcqFeedback(null)
+    setMcqSelectedId(null)
     setMcqLocked(false)
     if (isTimed) setCardTimer(timedModeSeconds)
   }, [current?.id, cardPositionIndex, studyPhase, isTimed, timedModeSeconds])
@@ -329,6 +332,7 @@ export function FlashcardStudyScreen() {
     setQuizIndex(0)
     setFlipped(false)
     setMcqFeedback(null)
+    setMcqSelectedId(null)
     setMcqLocked(false)
   }, [])
 
@@ -518,6 +522,7 @@ export function FlashcardStudyScreen() {
           setCelebration(buildCelebrationPayload(res, nextStreak))
         }
         setMcqFeedback(null)
+        setMcqSelectedId(null)
         setMcqLocked(false)
         setFlipped(false)
 
@@ -532,6 +537,7 @@ export function FlashcardStudyScreen() {
       setStreak(0)
       await recordStudy({ cardId: current.id, outcome: "learning" })
       setMcqFeedback(null)
+      setMcqSelectedId(null)
       setMcqLocked(false)
       if (isLastInBatch) {
         await startNextBatchOrFinish(sessionMastered.size)
@@ -547,6 +553,7 @@ export function FlashcardStudyScreen() {
       if (mcqLocked || !currentMcq) return
       const choice = currentMcq.choices.find((c) => c.id === choiceId)
       if (!choice) return
+      setMcqSelectedId(choiceId)
       setMcqLocked(true)
       setMcqFeedback(choice.isCorrect ? "correct" : "incorrect")
       setTimeout(() => {
@@ -555,7 +562,7 @@ export function FlashcardStudyScreen() {
         } else {
           void answer(choice.isCorrect ? "known" : "learning")
         }
-      }, choice.isCorrect ? 550 : 1400)
+      }, choice.isCorrect ? 700 : 1600)
     },
     [advanceBatchQuiz, answer, batchQuizActive, currentMcq, mcqLocked],
   )
@@ -762,6 +769,7 @@ export function FlashcardStudyScreen() {
             <FlashcardMcqChoices
               mcq={currentMcq}
               feedback={mcqFeedback}
+              selectedChoiceId={mcqSelectedId}
               locked={mcqLocked}
               onSelect={handleMcqAnswer}
             />

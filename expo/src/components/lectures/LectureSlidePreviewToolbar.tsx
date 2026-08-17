@@ -33,7 +33,13 @@ export function LectureSlidePreviewToolbar({
         },
       ]}
     >
-      <Pressable style={styles.backBtn} onPress={onBack} hitSlop={8} accessibilityRole="button">
+      <Pressable
+        style={styles.backBtn}
+        onPress={onBack}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel={`Back to ${backLabel}`}
+      >
         <Ionicons name="chevron-back" size={22} color={tokens.accent} />
         <Text style={[styles.backText, { color: tokens.accent }]}>{backLabel}</Text>
       </Pressable>

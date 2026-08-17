@@ -1,0 +1,6 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Open navigation menu"
+- tapOn: "Final Exams"
+- tapOn: "Close menu"
+- waitForAnimationToEnd

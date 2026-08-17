@@ -73,6 +73,57 @@ export function todayIsoDate(): string {
   return `${y}-${m}-${day}`
 }
 
+const AS_OF_MONTHS: Record<string, string> = {
+  jan: "01",
+  feb: "02",
+  mar: "03",
+  apr: "04",
+  may: "05",
+  jun: "06",
+  jul: "07",
+  aug: "08",
+  sep: "09",
+  oct: "10",
+  nov: "11",
+  dec: "12",
+}
+
+export function normalizeAsOfDate(raw: string | null | undefined, yearHint?: string): string | null {
+  const trimmed = raw?.trim() ?? ""
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed.slice(0, 10))) return trimmed.slice(0, 10)
+  if (!trimmed) return null
+
+  const isoPrefix = trimmed.match(/^(\d{4}-\d{2}-\d{2})/)
+  if (isoPrefix) return isoPrefix[1]
+
+  const weekdayMatch = trimmed.match(/^(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+([A-Za-z]{3})\s+(\d{1,2})/i)
+  if (weekdayMatch) {
+    const month = AS_OF_MONTHS[weekdayMatch[1].slice(0, 3).toLowerCase()]
+    if (month) {
+      const day = String(parseInt(weekdayMatch[2], 10)).padStart(2, "0")
+      const year = yearHint ?? String(new Date().getFullYear())
+      return `${year}-${month}-${day}`
+    }
+  }
+
+  const parsed = new Date(trimmed.includes("T") ? trimmed : `${trimmed}T12:00:00`)
+  if (Number.isNaN(parsed.getTime())) return null
+  const y = parsed.getFullYear()
+  const m = String(parsed.getMonth() + 1).padStart(2, "0")
+  const day = String(parsed.getDate()).padStart(2, "0")
+  return `${y}-${m}-${day}`
+}
+
+export function filterProgressReviewsForAsOfDate<
+  T extends { asOfDate?: string | null },
+>(reviews: T[], asOfDate: string | null): T[] {
+  if (!asOfDate) return reviews
+  const target = normalizeAsOfDate(asOfDate)
+  if (!target) return reviews
+  const yearHint = target.slice(0, 4)
+  return reviews.filter((row) => normalizeAsOfDate(row.asOfDate, yearHint) === target)
+}
+
 export type ProgressReviewBatchPayload = {
   reviewPeriod?: ProgressReviewPeriod
   asOfDate?: string

@@ -1,0 +1,8 @@
+appId: com.coursecollab.app
+---
+- tapOn:
+    id: "logbox_dismiss"
+    optional: true
+- tapOn: "Open navigation menu"
+- tapOn: "Attendance"
+- waitForAnimationToEnd

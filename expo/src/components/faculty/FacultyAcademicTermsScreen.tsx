@@ -21,6 +21,7 @@ import {
   academicTermSeasonVisual,
   formatAcademicTermDateRange,
   termPayloadFromForm,
+  uniqueTermCourses,
   type AcademicTermNameForm} from "../../lib/faculty-academic-term-utils"
 import {
   instructorApi,
@@ -126,6 +127,7 @@ export function FacultyAcademicTermsScreen() {
   }
 
   function openAddTerm() {
+    setError("")
     setTermFormMode("add")
     setTermFormTarget(null)
     setTermFormOpen(true)
@@ -168,7 +170,7 @@ export function FacultyAcademicTermsScreen() {
       setTermFormOpen(false)
       await load()
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not save term.")
+      setError(err instanceof ApiError || err instanceof Error ? err.message : "Could not save term.")
     } finally {
       setSubmitting(false)
     }
@@ -250,7 +252,7 @@ export function FacultyAcademicTermsScreen() {
             accessibilityLabel: "Add academic term"}}
         />
 
-        {error ? (
+        {error && !termFormOpen && !sectionFormOpen ? (
           <View style={styles.errorBox}>
             <Ionicons name="alert-circle-outline" size={16} color={tokens.danger} />
             <Text style={styles.errorText}>{error}</Text>
@@ -310,6 +312,7 @@ export function FacultyAcademicTermsScreen() {
         mode={termFormMode}
         initial={termFormTarget}
         submitting={submitting}
+        error={termFormOpen ? error : ""}
         onClose={() => setTermFormOpen(false)}
         onSubmit={(form) => void handleTermSubmit(form)}
       />
@@ -448,9 +451,15 @@ function TermCard({
 }) {
   const dateRange = formatAcademicTermDateRange(term.start_date, term.end_date)
   const season = academicTermSeasonVisual(term)
+  const courses = uniqueTermCourses(term.courses)
 
   return (
-    <Pressable style={({ pressed }) => [styles.card, pressed && styles.cardPressed]} onPress={onPress}>
+    <Pressable
+      style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${academicTermLabel(term)}${term.is_active ? ", Active" : ""}`}
+    >
       <View style={styles.cardTop}>
         <SolidListThumbTile thumb={season.thumb} icon={season.icon} size="compact" />
         <View style={styles.cardCopy}>
@@ -464,21 +473,21 @@ function TermCard({
       </View>
 
       <View style={termCardStyles.statsRow}>
-        <MetaItem icon="layers-outline" label={`${term.session_count ?? 0} sections`} accent={season.accent} native={native} />
-        <MetaItem icon="people-outline" label={`${term.total_students ?? 0} students`} accent={season.accent} native={native} />
+        <MetaItem icon="layers-outline" label={`${term.session_count ?? 0} ${(term.session_count ?? 0) === 1 ? "section" : "sections"}`} accent={season.accent} native={native} />
+        <MetaItem icon="people-outline" label={`${term.total_students ?? 0} ${(term.total_students ?? 0) === 1 ? "student" : "students"}`} accent={season.accent} native={native} />
       </View>
 
-      {Array.isArray(term.courses) && term.courses.length > 0 ? (
+      {courses.length > 0 ? (
         <View style={styles.cardChips}>
-          {term.courses.slice(0, 3).map((c) => (
+          {courses.slice(0, 3).map((c) => (
             <View key={c.id} style={styles.chip}>
               <Text style={styles.chipText} numberOfLines={1}>
                 {c.course_code}
               </Text>
             </View>
           ))}
-          {term.courses.length > 3 ? (
-            <Text style={styles.moreChip}>+{term.courses.length - 3}</Text>
+          {courses.length > 3 ? (
+            <Text style={styles.moreChip}>+{courses.length - 3}</Text>
           ) : null}
         </View>
       ) : null}

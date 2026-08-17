@@ -1,0 +1,8 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<testsuites>
+  <testsuite name="Test Suite" device="iPhone 17 Pro - iOS 26.0 - 4158A022-1067-455E-BF03-10CA5D80D946" tests="1" failures="1" time="16.0">
+    <testcase id="faculty-groups-create-name" name="faculty-groups-create-name" classname="faculty-groups-create-name" file="expo/maestro/faculty-groups-create-name.yaml" time="16.0" status="ERROR">
+      <failure>No visible element found: "Group name"</failure>
+    </testcase>
+  </testsuite>
+</testsuites>

@@ -1,0 +1,7 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Overview"
+- waitForAnimationToEnd
+- tapOn: "Meetings"
+- waitForAnimationToEnd
+- tapOn: "Roll call"

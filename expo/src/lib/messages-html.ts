@@ -1,3 +1,6 @@
+import { messageCourseImportPreview } from "./message-course-import"
+import { unsentAuditLabel } from "./message-lifecycle"
+
 /** Strip HTML tags for mobile message previews and plain-text display. */
 export function stripMessageHtml(html: string): string {
   return html
@@ -13,9 +16,22 @@ export function stripMessageHtml(html: string): string {
 }
 
 export function messagePreviewText(body: string, max = 120): string {
+  const importPreview = messageCourseImportPreview(body, max)
+  if (importPreview) return importPreview
+
   const text = stripMessageHtml(body) || body.trim()
   if (text.length <= max) return text
   return `${text.slice(0, max)}…`
+}
+
+export function threadMessagePreview(message: {
+  body: string
+  unsent?: boolean
+  isMine?: boolean
+  senderName?: string
+}, max = 120): string {
+  if (message.unsent) return unsentAuditLabel(Boolean(message.isMine), message.senderName)
+  return messagePreviewText(message.body, max)
 }
 
 export function looksLikeHtml(body: string): boolean {

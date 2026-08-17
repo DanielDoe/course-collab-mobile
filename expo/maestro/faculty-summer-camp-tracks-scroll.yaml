@@ -1,0 +1,5 @@
+appId: com.coursecollab.app
+---
+- swipe:
+    direction: UP
+- takeScreenshot: summer-tracks-scrolled

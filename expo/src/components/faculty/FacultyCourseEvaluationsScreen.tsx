@@ -47,6 +47,7 @@ import {
 import { useModuleTheme } from "../../lib/themed-module-shell"
 import { GlassBottomSheetModal } from "../theme/GlassBottomSheetModal"
 import { GlassSheetBackground } from "../theme/GlassSurface"
+import { useSuppressModuleSearchDock } from "../../context/ModuleSearchDockContext"
 import { FacultyEvaluationProofPreview } from "./FacultyEvaluationProofPreview"
 import { FacultyEmptyState, FacultyStatusPill } from "./faculty-shared"
 import {
@@ -182,6 +183,7 @@ function EvaluationRowCard({
 }
 
 function DetailSheet({
+  open,
   evaluation,
   loading,
   note,
@@ -191,6 +193,7 @@ function DetailSheet({
   onReject,
   acting,
 }: {
+  open: boolean
   evaluation: FacultyCourseEvaluationRow | null
   loading: boolean
   note: string
@@ -200,6 +203,7 @@ function DetailSheet({
   onReject: () => void
   acting: boolean
 }) {
+  useSuppressModuleSearchDock(open)
   const insets = useSafeAreaInsets()
   const collabSheetStyles = useCollabSheetStyles()
   const { native, tokens, type } = useModuleTheme()
@@ -228,7 +232,7 @@ function DetailSheet({
 
   return (
     <GlassBottomSheetModal
-      visible={evaluation != null || loading}
+      visible={open}
       onClose={onClose}
       maxHeight="88%"
       keyboardAvoiding
@@ -870,6 +874,7 @@ export function FacultyCourseEvaluationsScreen() {
       </ScrollView>
 
       <DetailSheet
+        open={detailId != null}
         evaluation={detailId != null ? detail : null}
         loading={detailLoading}
         note={note}

@@ -8,7 +8,8 @@ import { API_BASE_URL } from "../../constants"
 import { hexToRgba } from "../../constants/app-themes"
 import { nativeType } from "../../constants/faculty-native-theme"
 import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
-import { appendNativeQuery } from "../../constants/module-web-paths"
+import { appendNativeQuery, isAssessmentTakeWebPath } from "../../constants/module-web-paths"
+import { ASSESSMENT_WEBVIEW_HARDENING_SCRIPT } from "../../lib/assessment-webview-hardening"
 import { tryOpenNativeAssessmentResultsFromUrl } from "../assessments/assessment-navigation"
 import { buildNativeWebThemeInjectScript } from "../../lib/native-web-theme-inject"
 import {
@@ -24,7 +25,19 @@ import { notificationModulesFromWebPath } from "../../lib/notifications/module-n
 import { useNotificationModuleRefresh } from "../../lib/notifications/notification-events"
 import { tryHandleMembershipWebNavigation } from "../../lib/membership-navigation"
 import { tryHandleFacultyMembershipWebNavigation } from "../../lib/faculty-membership-navigation"
+import { isWebChangePasswordUrl, replaceAuthRoute } from "../../lib/navigation-reset"
 import type { FacultySession, GuestSession, StudentSession, SummerSession } from "../../lib/session"
+import {
+  getAllowedWebViewOriginPrefixes,
+  isAllowedWebViewHost,
+  sanitizeNativeNavigateRoute,
+} from "../../lib/trusted-origins"
+
+/** Scheme + host of a URL, lowercased; "" when it has no origin (about:, data:). */
+function urlOrigin(url: string): string {
+  const match = /^([a-z][a-z0-9+.-]*:\/\/[^/?#]+)/i.exec(url.trim())
+  return match ? match[1].toLowerCase() : ""
+}
 
 type Props = {
   webPath: string
@@ -96,10 +109,20 @@ export function WebModuleScreen({
 
   const themeInjectScript = useMemo(() => buildNativeWebThemeInjectScript(tokens), [tokens])
 
+  /** Live quiz / homework / exam page — apply anti-cheat WebView hardening. */
+  const isAssessmentTake = useMemo(() => isAssessmentTakeWebPath(webPath), [webPath])
+  const appOrigin = useMemo(() => urlOrigin(API_BASE_URL), [])
+  const webViewOrigins = useMemo(
+    () => getAllowedWebViewOriginPrefixes({ membershipFlow }),
+    [membershipFlow],
+  )
+
   const combinedInjectScript = useMemo(() => {
-    if (!extraInjectScript?.trim()) return injectScript
-    return `${injectScript}\n${extraInjectScript}`
-  }, [injectScript, extraInjectScript])
+    const parts = [injectScript]
+    if (extraInjectScript?.trim()) parts.push(extraInjectScript)
+    if (isAssessmentTake) parts.push(ASSESSMENT_WEBVIEW_HARDENING_SCRIPT)
+    return parts.join("\n")
+  }, [injectScript, extraInjectScript, isAssessmentTake])
 
   const uri = `${API_BASE_URL}${appendNativeQuery(webPath)}`
 
@@ -172,12 +195,16 @@ export function WebModuleScreen({
           webRef.current?.injectJavaScript(themeInjectScript)
         }}
         onNavigationStateChange={(nav) => {
+          if (nav.url && isWebChangePasswordUrl(nav.url)) {
+            replaceAuthRoute(router, "/change-password")
+            return
+          }
           if (session?.portal === "student" && nav.url) {
             if (tryOpenNativeAssessmentResultsFromUrl(router, nav.url)) {
               webRef.current?.injectJavaScript(themeInjectScript)
               return
             }
-            if (membershipFlow || /\/student\/membership\//i.test(nav.url)) {
+            if (membershipFlow || /\/student\/(?:dashboard-v2\/)?membership\//i.test(nav.url)) {
               if (onMembershipNavigation) {
                 onMembershipNavigation(nav.url)
               } else if (
@@ -189,7 +216,7 @@ export function WebModuleScreen({
             }
           }
           if (session?.portal === "faculty" && nav.url) {
-            if (membershipFlow || /\/instructor\/membership\//i.test(nav.url)) {
+            if (membershipFlow || /\/instructor\/(?:dashboard-v2\/)?membership\//i.test(nav.url)) {
               if (onMembershipNavigation) {
                 onMembershipNavigation(nav.url)
               } else if (
@@ -217,7 +244,8 @@ export function WebModuleScreen({
               return
             }
             if (data.type === "NATIVE_NAVIGATE" && typeof data.route === "string") {
-              router.replace(data.route as never)
+              const route = sanitizeNativeNavigateRoute(data.route)
+              if (route) router.replace(route as never)
             }
           } catch {
             /* ignore */
@@ -238,12 +266,31 @@ export function WebModuleScreen({
           setLoading(false)
           setError("Could not load this module. Check your connection and try again.")
         }}
-        originWhitelist={["*"]}
+        originWhitelist={webViewOrigins}
         applicationNameForUserAgent={NATIVE_APP_UA_SUFFIX}
         sharedCookiesEnabled
         domStorageEnabled
         javaScriptEnabled
         allowsBackForwardNavigationGestures={false}
+        /** Safari / Chrome remote inspection must never be reachable in a release build. */
+        webviewDebuggingEnabled={__DEV__}
+        /** iOS long-press link preview opens a share sheet out of the assessment. */
+        allowsLinkPreview={!isAssessmentTake}
+        onShouldStartLoadWithRequest={(request) => {
+          if (request.isTopFrame === false) return true
+          const raw = request.url?.trim() ?? ""
+          if (!raw || raw === "about:blank") return true
+          if (/^(javascript|data|file|blob):/i.test(raw)) return false
+          const target = urlOrigin(raw)
+          if (!target) return false
+          try {
+            const host = new URL(raw).hostname
+            if (isAssessmentTake) return target === appOrigin
+            return isAllowedWebViewHost(host, { membershipFlow })
+          } catch {
+            return false
+          }
+        }}
         style={styles.webview}
         setSupportMultipleWindows={false}
       />

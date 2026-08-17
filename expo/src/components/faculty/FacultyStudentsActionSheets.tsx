@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native"
+import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import {
   formatFacultyRelativeTime,
@@ -30,10 +30,7 @@ import {
   FacultySheetWorkflow,
 } from "./faculty-collab-sheet-ui"
 import { SHEET_SECTION } from "./faculty-sheet-semantics"
-import { GlassBottomSheetModal } from "../theme/GlassBottomSheetModal"
-import { GlassSheetBackground } from "../theme/GlassSurface"
-import { GlassSheetHandle } from "../theme/GlassActionSheetMenu"
-import { useThemedNative } from "../../context/AppearanceProvider"
+import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
 import { useNativeType } from "../../lib/themed-module-theme"
 import { NATIVE } from "../../constants/faculty-native-theme"
 
@@ -64,7 +61,7 @@ function formatSheetWhen(value?: string | null): string {
   }
 }
 
-function FacultyRejectReasonSheet({
+function FacultySheetRejectOverlay({
   visible,
   title,
   body,
@@ -79,8 +76,8 @@ function FacultyRejectReasonSheet({
   onClose: () => void
   onSubmit: (reason: string) => void
 }) {
-  const insets = useSafeAreaInsets()
   const native = useThemedNative()
+  const tokens = useAppThemeTokens()
   const type = useNativeType()
   const [reason, setReason] = useState("")
 
@@ -88,29 +85,40 @@ function FacultyRejectReasonSheet({
     if (visible) setReason("")
   }, [visible])
 
+  if (!visible) return null
+
   return (
-    <GlassBottomSheetModal
-      visible={visible}
-      onClose={onClose}
-      scrollable={false}
-      accessibilityLabel="Close decline request"
+    <View
+      style={[
+        rejectOverlayStyles.wrap,
+        { backgroundColor: tokens.isDark ? "rgba(0,0,0,0.55)" : "rgba(15,23,42,0.45)" },
+      ]}
     >
-      <GlassSheetBackground style={{ paddingHorizontal: 16, paddingBottom: Math.max(insets.bottom, 12) }}>
-        <GlassSheetHandle />
-        <Text style={[type.sheetTitle, { color: native.label, marginTop: 4 }]}>{title}</Text>
-        <Text style={[type.caption, { color: native.secondaryLabel, lineHeight: 18, marginBottom: 12 }]}>{body}</Text>
+      <View
+        style={[
+          rejectOverlayStyles.card,
+          {
+            backgroundColor: native.secondaryGrouped,
+            borderColor: native.separator,
+          },
+        ]}
+      >
+        <Text style={[type.sheetTitle, { color: native.label }]}>{title}</Text>
+        <Text style={[type.secondary, rejectOverlayStyles.body, { color: native.secondaryLabel }]}>{body}</Text>
         <TextInput
           value={reason}
           onChangeText={setReason}
           placeholder="Reason (optional)"
           placeholderTextColor={native.tertiaryLabel}
           multiline
+          editable={!submitting}
+          accessibilityLabel="Reason (optional)"
           style={[
             localStyles.rejectInput,
             {
               color: native.label,
               borderColor: native.separator,
-              backgroundColor: native.secondaryGrouped,
+              backgroundColor: native.groupedBackground,
             },
           ]}
         />
@@ -118,10 +126,12 @@ function FacultyRejectReasonSheet({
           <Pressable
             style={({ pressed }) => [
               localStyles.rejectBtn,
-              { borderColor: native.separator, opacity: pressed ? 0.8 : 1 },
+              { borderColor: native.separator, opacity: pressed || submitting ? 0.8 : 1 },
             ]}
             disabled={submitting}
             onPress={onClose}
+            accessibilityRole="button"
+            accessibilityLabel="Cancel"
           >
             <Text style={[type.caption, { color: native.label, fontWeight: "700" }]}>Cancel</Text>
           </Pressable>
@@ -129,16 +139,25 @@ function FacultyRejectReasonSheet({
             style={({ pressed }) => [
               localStyles.rejectBtn,
               localStyles.rejectBtnPrimary,
-              { backgroundColor: FACULTY_STUDENTS_COLOR.danger, opacity: pressed || submitting ? 0.85 : 1 },
+              {
+                backgroundColor: FACULTY_STUDENTS_COLOR.danger,
+                opacity: pressed || submitting ? 0.85 : 1,
+              },
             ]}
             disabled={submitting}
             onPress={() => onSubmit(reason.trim())}
+            accessibilityRole="button"
+            accessibilityLabel="Decline"
           >
-            <Text style={[type.caption, { color: "#fff", fontWeight: "700" }]}>Decline</Text>
+            {submitting ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={[type.caption, { color: "#fff", fontWeight: "700" }]}>Decline</Text>
+            )}
           </Pressable>
         </View>
-      </GlassSheetBackground>
-    </GlassBottomSheetModal>
+      </View>
+    </View>
   )
 }
 
@@ -169,76 +188,76 @@ export function FacultyPasswordResetActionSheet({
   if (!row || !thumb) return null
 
   return (
-    <>
-      <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-        <FacultySheetContainer>
-          <FacultySheetChrome
-            topInset={insets.top}
-            title="Password reset"
-            onClose={onClose}
-            accentColor={FACULTY_STUDENTS_COLOR.link}
-          />
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <FacultySheetContainer>
+        <FacultySheetChrome
+          topInset={insets.top}
+          title="Password reset"
+          onClose={onClose}
+          accentColor={FACULTY_STUDENTS_COLOR.link}
+        />
 
+        <View style={sheetBodyStyles.body}>
           <ScrollView
             contentContainerStyle={[collabSheetStyles.scroll, { paddingBottom: insets.bottom + 24 }]}
             showsVerticalScrollIndicator={false}
           >
-            <FacultySheetHero
-              title={row.full_name}
-              subtitle={row.email ?? row.student_number ?? "Student account"}
-              initials={studentInitials(row.full_name)}
-              thumbColor={thumb.fill}
-              pills={
-                <>
-                  {row.section ? <FacultyStatusPill label={row.section} tone="neutral" /> : null}
-                  {statusMeta ? (
-                    <FacultyStatusPill label={statusMeta.label} tone={pending ? "warning" : "live"} />
-                  ) : null}
-                  {row.is_platform_guest ? <FacultyStatusPill label="Platform guest" tone="live" /> : null}
-                </>
-              }
-            />
+          <FacultySheetHero
+            title={row.full_name}
+            subtitle={row.email ?? row.student_number ?? "Student account"}
+            initials={studentInitials(row.full_name)}
+            thumbColor={thumb.fill}
+            pills={
+              <>
+                {row.section ? <FacultyStatusPill label={row.section} tone="neutral" /> : null}
+                {statusMeta ? (
+                  <FacultyStatusPill label={statusMeta.label} tone={pending ? "warning" : "live"} />
+                ) : null}
+                {row.is_platform_guest ? <FacultyStatusPill label="Platform guest" tone="live" /> : null}
+              </>
+            }
+          />
 
-            <FacultySheetSection label="Request details" tone={SHEET_SECTION.roster}>
-              <FacultySheetGroupedList>
-                {row.student_number ? (
-                  <FacultySheetMetricRow icon="id-card-outline" label="Student number" value={row.student_number} />
-                ) : null}
-                {row.email ? (
-                  <FacultySheetMetricRow icon="mail-outline" label="Email" value={row.email} />
-                ) : null}
+          <FacultySheetSection label="Request details" tone={SHEET_SECTION.roster}>
+            <FacultySheetGroupedList>
+              {row.student_number ? (
+                <FacultySheetMetricRow icon="id-card-outline" label="Student number" value={row.student_number} />
+              ) : null}
+              {row.email ? (
+                <FacultySheetMetricRow icon="mail-outline" label="Email" value={row.email} />
+              ) : null}
+              <FacultySheetMetricRow
+                icon="time-outline"
+                label="Requested"
+                value={`${formatSheetWhen(row.requested_at)} · ${formatFacultyRelativeTime(row.requested_at)}`}
+              />
+              {row.reviewed_at ? (
                 <FacultySheetMetricRow
-                  icon="time-outline"
-                  label="Requested"
-                  value={`${formatSheetWhen(row.requested_at)} · ${formatFacultyRelativeTime(row.requested_at)}`}
+                  icon="checkmark-done-outline"
+                  label="Reviewed"
+                  value={formatSheetWhen(row.reviewed_at)}
+                  isLast={!row.admin_notes}
                 />
-                {row.reviewed_at ? (
-                  <FacultySheetMetricRow
-                    icon="checkmark-done-outline"
-                    label="Reviewed"
-                    value={formatSheetWhen(row.reviewed_at)}
-                    isLast={!row.admin_notes}
-                  />
-                ) : null}
-                {row.admin_notes ? (
-                  <FacultySheetMetricRow icon="document-text-outline" label="Notes" value={row.admin_notes} isLast />
-                ) : null}
-              </FacultySheetGroupedList>
-            </FacultySheetSection>
+              ) : null}
+              {row.admin_notes ? (
+                <FacultySheetMetricRow icon="document-text-outline" label="Notes" value={row.admin_notes} isLast />
+              ) : null}
+            </FacultySheetGroupedList>
+          </FacultySheetSection>
 
-            {pending ? (
-              <FacultySheetSection label="Your decision" tone={SHEET_SECTION.workflow}>
-                <FacultySheetWorkflow
-                  title="Pending review"
-                  body="Approving issues a temporary password for the student's next sign-in. They must change it after logging in."
-                  acting={acting}
-                  approveLabel="Approve reset"
-                  rejectLabel="Decline"
-                  onApprove={() => setConfirmApprove(true)}
-                  onReject={() => setRejectOpen(true)}
-                />
-              </FacultySheetSection>
-            ) : null}
+          {pending ? (
+            <FacultySheetSection label="Your decision" tone={SHEET_SECTION.workflow}>
+              <FacultySheetWorkflow
+                title="Pending review"
+                body="Approving issues a temporary password for the student's next sign-in. They must change it after logging in."
+                acting={acting}
+                approveLabel="Approve reset"
+                rejectLabel="Decline"
+                onApprove={() => setConfirmApprove(true)}
+                onReject={() => setRejectOpen(true)}
+              />
+            </FacultySheetSection>
+          ) : null}
           </ScrollView>
 
           {confirmApprove ? (
@@ -254,21 +273,21 @@ export function FacultyPasswordResetActionSheet({
               }}
             />
           ) : null}
-        </FacultySheetContainer>
-      </Modal>
 
-      <FacultyRejectReasonSheet
-        visible={rejectOpen}
-        title="Decline password reset?"
-        body="The student will need to submit a new request if they still cannot sign in."
-        submitting={acting}
-        onClose={() => setRejectOpen(false)}
-        onSubmit={(reason) => {
-          setRejectOpen(false)
-          onReject(reason || undefined)
-        }}
-      />
-    </>
+          <FacultySheetRejectOverlay
+            visible={rejectOpen}
+            title="Decline password reset?"
+            body="The student will need to submit a new request if they still cannot sign in."
+            submitting={acting}
+            onClose={() => setRejectOpen(false)}
+            onSubmit={(reason) => {
+              setRejectOpen(false)
+              onReject(reason || undefined)
+            }}
+          />
+        </View>
+      </FacultySheetContainer>
+    </Modal>
   )
 }
 
@@ -300,62 +319,62 @@ export function FacultyAccountRequestActionSheet({
   if (!row || !thumb) return null
 
   return (
-    <>
-      <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-        <FacultySheetContainer>
-          <FacultySheetChrome
-            topInset={insets.top}
-            title={kindLabel}
-            onClose={onClose}
-            accentColor={FACULTY_STUDENTS_COLOR.link}
-          />
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <FacultySheetContainer>
+        <FacultySheetChrome
+          topInset={insets.top}
+          title={kindLabel}
+          onClose={onClose}
+          accentColor={FACULTY_STUDENTS_COLOR.link}
+        />
 
+        <View style={sheetBodyStyles.body}>
           <ScrollView
             contentContainerStyle={[collabSheetStyles.scroll, { paddingBottom: insets.bottom + 24 }]}
             showsVerticalScrollIndicator={false}
           >
-            <FacultySheetHero
-              title={row.full_name}
-              subtitle={row.email ?? row.student_id}
-              initials={studentInitials(row.full_name)}
-              thumbColor={thumb.fill}
-              pills={
-                <>
-                  <FacultyStatusPill label={kindLabel} tone="live" />
-                  {row.section ? <FacultyStatusPill label={row.section} tone="neutral" /> : null}
-                  {row.guest_purpose ? (
-                    <FacultyStatusPill label={row.guest_purpose.replace(/_/g, " ")} tone="neutral" />
-                  ) : null}
-                  {statusMeta ? (
-                    <FacultyStatusPill label={statusMeta.label} tone={pending ? "warning" : "live"} />
-                  ) : null}
-                </>
-              }
-            />
+          <FacultySheetHero
+            title={row.full_name}
+            subtitle={row.email ?? row.student_id}
+            initials={studentInitials(row.full_name)}
+            thumbColor={thumb.fill}
+            pills={
+              <>
+                <FacultyStatusPill label={kindLabel} tone="live" />
+                {row.section ? <FacultyStatusPill label={row.section} tone="neutral" /> : null}
+                {row.guest_purpose ? (
+                  <FacultyStatusPill label={row.guest_purpose.replace(/_/g, " ")} tone="neutral" />
+                ) : null}
+                {statusMeta ? (
+                  <FacultyStatusPill label={statusMeta.label} tone={pending ? "warning" : "live"} />
+                ) : null}
+              </>
+            }
+          />
 
-            <FacultySheetSection label="Request details" tone={SHEET_SECTION.roster}>
-              <FacultySheetGroupedList>
-                <FacultySheetMetricRow icon="person-outline" label="Student ID" value={row.student_id} />
-                {row.email ? <FacultySheetMetricRow icon="mail-outline" label="Email" value={row.email} /> : null}
-                {row.organization ? (
-                  <FacultySheetMetricRow icon="business-outline" label="Organization" value={row.organization} />
-                ) : null}
+          <FacultySheetSection label="Request details" tone={SHEET_SECTION.roster}>
+            <FacultySheetGroupedList>
+              <FacultySheetMetricRow icon="person-outline" label="Student ID" value={row.student_id} />
+              {row.email ? <FacultySheetMetricRow icon="mail-outline" label="Email" value={row.email} /> : null}
+              {row.organization ? (
+                <FacultySheetMetricRow icon="business-outline" label="Organization" value={row.organization} />
+              ) : null}
+              <FacultySheetMetricRow
+                icon="calendar-outline"
+                label="Submitted"
+                value={`${formatSheetWhen(row.created_at)} · ${formatFacultyRelativeTime(row.created_at)}`}
+                isLast={!row.guest_purpose_detail}
+              />
+              {row.guest_purpose_detail ? (
                 <FacultySheetMetricRow
-                  icon="calendar-outline"
-                  label="Submitted"
-                  value={`${formatSheetWhen(row.created_at)} · ${formatFacultyRelativeTime(row.created_at)}`}
-                  isLast={!row.guest_purpose_detail}
+                  icon="chatbox-ellipses-outline"
+                  label="Purpose detail"
+                  value={row.guest_purpose_detail}
+                  isLast
                 />
-                {row.guest_purpose_detail ? (
-                  <FacultySheetMetricRow
-                    icon="chatbox-ellipses-outline"
-                    label="Purpose detail"
-                    value={row.guest_purpose_detail}
-                    isLast
-                  />
-                ) : null}
-              </FacultySheetGroupedList>
-            </FacultySheetSection>
+              ) : null}
+            </FacultySheetGroupedList>
+          </FacultySheetSection>
 
             {pending ? (
               <FacultySheetSection label="Your decision" tone={SHEET_SECTION.workflow}>
@@ -373,7 +392,18 @@ export function FacultyAccountRequestActionSheet({
                   onReject={() => setRejectOpen(true)}
                 />
               </FacultySheetSection>
-            ) : null}
+            ) : (
+              <FacultySheetSection label="Decision" tone={SHEET_SECTION.workflow}>
+                <FacultySheetGroupedList>
+                  <FacultySheetMetricRow
+                    icon="information-circle-outline"
+                    label="Status"
+                    value={statusMeta?.label ?? row.status}
+                    isLast
+                  />
+                </FacultySheetGroupedList>
+              </FacultySheetSection>
+            )}
           </ScrollView>
 
           {confirmApprove ? (
@@ -389,21 +419,21 @@ export function FacultyAccountRequestActionSheet({
               }}
             />
           ) : null}
-        </FacultySheetContainer>
-      </Modal>
 
-      <FacultyRejectReasonSheet
-        visible={rejectOpen}
-        title="Decline account request?"
-        body="They will not gain access unless they submit a new request."
-        submitting={acting}
-        onClose={() => setRejectOpen(false)}
-        onSubmit={(reason) => {
-          setRejectOpen(false)
-          onReject(reason || undefined)
-        }}
-      />
-    </>
+          <FacultySheetRejectOverlay
+            visible={rejectOpen}
+            title="Decline account request?"
+            body="They will not gain access unless they submit a new request."
+            submitting={acting}
+            onClose={() => setRejectOpen(false)}
+            onSubmit={(reason) => {
+              setRejectOpen(false)
+              onReject(reason || undefined)
+            }}
+          />
+        </View>
+      </FacultySheetContainer>
+    </Modal>
   )
 }
 
@@ -426,6 +456,30 @@ const localStyles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 10,
     borderWidth: StyleSheet.hairlineWidth,
+    minHeight: 44,
   },
   rejectBtnPrimary: { borderWidth: 0 },
+})
+
+const rejectOverlayStyles = StyleSheet.create({
+  wrap: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 24,
+    zIndex: 20,
+  },
+  card: {
+    width: "100%",
+    maxWidth: 420,
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 20,
+    gap: 12,
+  },
+  body: { lineHeight: 20 },
+})
+
+const sheetBodyStyles = StyleSheet.create({
+  body: { flex: 1, position: "relative" },
 })

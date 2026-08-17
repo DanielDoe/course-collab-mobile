@@ -34,7 +34,7 @@ export const AI_TUTOR_MAX_EXCHANGES_TRAILBLAZER = 50
 export const AI_TUTOR_MAX_EXCHANGES = AI_TUTOR_MAX_EXCHANGES_EXPLORER
 
 /** Messages sent to the API as conversation context (matches server window). */
-export const AI_TUTOR_CONTEXT_WINDOW = 10
+export const AI_TUTOR_CONTEXT_WINDOW = 8
 
 export function getMaxExchangesForTier(tier: MembershipTier): number {
   if (tier === "Trailblazer") return AI_TUTOR_MAX_EXCHANGES_TRAILBLAZER
@@ -161,9 +161,13 @@ export function isThreadAtExchangeLimit(messages: ChatMessage[], maxExchanges: n
   return countExchanges(messages) >= maxExchanges
 }
 
-/** Message worth persisting in a thread — text and/or imported course question. */
+/** Message worth persisting — text, imports, pending confirms, or completed-task audit receipts. */
 export function isStorableChatMessage(message: ChatMessage): boolean {
-  return Boolean(message.content.trim() || message.importedQuestion)
+  const hasProposalAudit =
+    (message.proposals?.length ?? 0) > 0 ||
+    Object.keys(message.proposalResultById ?? {}).length > 0 ||
+    Object.keys(message.proposalStatusById ?? {}).length > 0
+  return Boolean(message.content.trim() || message.importedQuestion || hasProposalAudit)
 }
 
 export function buildThread(

@@ -1,0 +1,6 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Delete"
+- waitForAnimationToEnd
+- tapOn: "Delete"
+- waitForAnimationToEnd

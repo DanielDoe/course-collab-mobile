@@ -1,0 +1,7 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Title"
+- waitForAnimationToEnd
+- inputText: "QA16S"
+- tapOn: "New program"
+- takeScreenshot: summer-title-typed

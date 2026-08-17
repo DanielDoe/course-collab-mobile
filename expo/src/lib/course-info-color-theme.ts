@@ -63,6 +63,12 @@ export const COURSE_INFO_OFFICE_HOURS = {
   requests: solidListThumbFixed(COLOR_HUNT_COOL.indigo),
 } as const
 
+export const COURSE_INFO_SCHEDULE_ADJUSTMENT = {
+  list: solidListThumbFixed(COLOR_HUNT_COOL.indigo),
+  poll: solidListThumbFixed(COLOR_HUNT.orange),
+  consent: solidListThumbFixed(COLOR_HUNT.pink),
+} as const
+
 export function courseInfoThemeFromTokens(tokens: AppThemeTokens): SectionTheme {
   const primary = COURSE_INFO_COLOR.primary
   const soft = hexToRgba(primary, tokens.isDark ? 0.24 : 0.14)

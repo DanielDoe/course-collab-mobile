@@ -1,0 +1,76 @@
+appId: com.coursecollab.app
+---
+- openLink: coursecollab://dev-student-login
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 90000
+- openLink: coursecollab:///module/quizzes
+- extendedWaitUntil:
+    visible: "Quizzes"
+    timeout: 45000
+- tapOn: "Search quizzes…"
+- inputText: "Quiz"
+- hideKeyboard
+- tapOn:
+    id: "Open filters"
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn:
+    text: "Quiz 1"
+    optional: true
+- tapOn:
+    text: "Close"
+    optional: true
+- back
+- takeScreenshot: exploratory-quizzes
+- openLink: coursecollab:///module/quiz-history
+- extendedWaitUntil:
+    visible: "History"
+    timeout: 30000
+- tapOn:
+    text: "Search history…"
+    optional: true
+- inputText: "Quiz"
+- hideKeyboard
+- takeScreenshot: exploratory-history
+- openLink: coursecollab:///module/homework
+- extendedWaitUntil:
+    visible: "Homework"
+    timeout: 45000
+- tapOn:
+    text: "Search homework…"
+    optional: true
+- inputText: "HW"
+- hideKeyboard
+- tapOn:
+    text: "Homework"
+    optional: true
+- back
+- takeScreenshot: exploratory-homework
+- openLink: coursecollab:///module/mid-semester-exams
+- extendedWaitUntil:
+    visible: "Mid-Semester"
+    timeout: 30000
+- takeScreenshot: exploratory-midsem
+- openLink: coursecollab:///module/final-exams
+- extendedWaitUntil:
+    visible: "Finals"
+    timeout: 30000
+- takeScreenshot: exploratory-finals
+- openLink: coursecollab:///module/grades
+- extendedWaitUntil:
+    visible: "Grades"
+    timeout: 45000
+- tapOn:
+    text: "Pending"
+    optional: true
+- tapOn:
+    text: "Final"
+    optional: true
+- tapOn:
+    text: "Quizzes"
+    optional: true
+- back
+- takeScreenshot: exploratory-grades

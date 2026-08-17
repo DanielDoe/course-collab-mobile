@@ -1,0 +1,14 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Question Bank"
+- waitForAnimationToEnd
+- tapOn: "Clear search"
+- waitForAnimationToEnd
+- tapOn: "Deleted"
+- waitForAnimationToEnd
+- tapOn: "QA16QB blank test"
+- waitForAnimationToEnd
+- tapOn: "Delete forever"
+- waitForAnimationToEnd
+- tapOn: "Delete forever"
+- waitForAnimationToEnd

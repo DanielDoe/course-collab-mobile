@@ -43,18 +43,9 @@ export function useKpiGridCardStyle(twoColumnWidth: `${number}%` = "48%"): ViewS
 /** Alias for {@link useKpiGridCardStyle} — same hook, clearer name at non-KPI grids. */
 export const useTwoColumnCardStyle = useKpiGridCardStyle
 
-/** Guest dashboard KPI row — stacks on narrow phones, 2-col mid, 3-col wide. */
+/** Guest dashboard KPI row — always 2 columns max so labels stay readable. */
 export function useGuestKpiCardStyle(): ViewStyle {
-  const { width } = useWindowDimensions()
-  return useMemo(() => {
-    if (width < KPI_GRID_SINGLE_COLUMN_MAX_WIDTH) {
-      return { width: "100%" }
-    }
-    if (width < 400) {
-      return { width: "48%", flexGrow: 1 }
-    }
-    return { flex: 1, minWidth: 0 }
-  }, [width])
+  return useKpiGridCardStyle("48%")
 }
 
 /** Theme picker grid cell width (1 or 2 columns). */

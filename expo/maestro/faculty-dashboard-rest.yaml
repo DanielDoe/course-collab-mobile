@@ -1,0 +1,12 @@
+appId: com.coursecollab.app
+---
+- tapOn:
+    text: "View all recent activity"
+    optional: true
+- tapOn:
+    text: "View All"
+    optional: true
+- extendedWaitUntil:
+    visible: "Recent Activity|Search student|Submitted|Instructor"
+    timeout: 20000
+- takeScreenshot: after-view-all

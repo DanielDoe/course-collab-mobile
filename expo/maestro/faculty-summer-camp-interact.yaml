@@ -1,0 +1,47 @@
+appId: com.coursecollab.app
+---
+# Search empty
+- tapOn: "Search programs…"
+- inputText: "zzzqnofind"
+- hideKeyboard
+- takeScreenshot: summer-search-empty
+- tapOn:
+    text: "Clear search"
+    optional: true
+# Search match
+- tapOn: "Search programs…"
+- eraseText
+- inputText: "Summer"
+- hideKeyboard
+- takeScreenshot: summer-search-match
+- tapOn:
+    text: "Clear search"
+    optional: true
+# Open live program (read-only)
+- tapOn: "Summer Camp 2026, Published"
+- takeScreenshot: summer-live-program
+- swipe:
+    direction: UP
+- takeScreenshot: summer-live-program-scroll
+- tapOn: "Done"
+# Open leftover draft via Edit — do not Publish
+- tapOn: "Edit"
+- takeScreenshot: summer-test-camp-edit
+- tapOn: "Done"
+# Tabs
+- tapOn: "Tracks"
+- extendedWaitUntil:
+    visible: "Search training tracks…|No training tracks|Create training track"
+    timeout: 15000
+- takeScreenshot: summer-tracks
+- tapOn: "Campers"
+- extendedWaitUntil:
+    visible: "Search campers…|No campers yet|Add summer camper"
+    timeout: 15000
+- takeScreenshot: summer-campers
+- tapOn: "Inbox"
+- extendedWaitUntil:
+    visible: "Search requests…|No camper requests"
+    timeout: 15000
+- takeScreenshot: summer-inbox
+- tapOn: "Programs"

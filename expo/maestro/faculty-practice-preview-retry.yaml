@@ -1,0 +1,9 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Preview question"
+- waitForAnimationToEnd
+- takeScreenshot: practice-preview-retry
+- extendedWaitUntil:
+    visible: "Question preview|Could not load|Try again|Edit question|Duplicate"
+    timeout: 20000
+- takeScreenshot: practice-preview-open

@@ -1,4 +1,4 @@
-import type { SummerModuleBlock, SummerModuleProgressRecord } from "./summer-camp-api"
+import type { SummerCheckpointSubmission, SummerModuleBlock, SummerModuleProgressRecord } from "./summer-camp-api"
 
 const PASSIVE_BLOCK_TYPES = new Set([
   "hero",
@@ -18,6 +18,8 @@ const INTERACTIVE_BLOCK_TYPES = new Set([
   "feedback",
   "profile_form",
   "checkpoint",
+  "step",
+  "code",
   "module_completion",
 ])
 
@@ -36,11 +38,26 @@ export function getBlockProgressRecords(
   return progress.filter((record) => record.block_id === blockId)
 }
 
+export function getBlockSubmission(
+  blockId: number,
+  submissions: SummerCheckpointSubmission[],
+): SummerCheckpointSubmission | undefined {
+  return submissions.find((submission) => submission.block_id === blockId)
+}
+
 export function isSummerBlockComplete(
   block: SummerModuleBlock,
   progress: SummerModuleProgressRecord[],
+  submissions: SummerCheckpointSubmission[] = [],
 ): boolean {
   const records = getBlockProgressRecords(block.id, progress)
+  if (block.block_type === "checkpoint") {
+    const submission = getBlockSubmission(block.id, submissions)
+    return submission?.status === "submitted" || submission?.status === "approved"
+  }
+  if (block.block_type === "step") {
+    return records.some((record) => record.progress_type === "step_complete")
+  }
   if (block.block_type === "quiz") {
     return records.some((record) => record.progress_type === "quiz_response")
   }
@@ -70,11 +87,12 @@ export function isSummerBlockComplete(
 export function countModuleProgress(
   blocks: SummerModuleBlock[],
   progress: SummerModuleProgressRecord[],
+  submissions: SummerCheckpointSubmission[] = [],
 ): { completed: number; total: number } {
   const actionable = blocks.filter(
     (block) => block.block_type !== "module_completion" && block.block_type !== "hero",
   )
-  const completed = actionable.filter((block) => isSummerBlockComplete(block, progress)).length
+  const completed = actionable.filter((block) => isSummerBlockComplete(block, progress, submissions)).length
   return { completed, total: actionable.length }
 }
 

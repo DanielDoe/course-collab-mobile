@@ -15,6 +15,7 @@ import {
 import { semanticSoft } from "../../lib/themed-module-theme"
 import { useModuleTheme } from "../../lib/themed-module-shell"
 import { NativeSelect } from "../NativeSelect"
+import { EXTRA_ATTEMPT_OPTIONS, HOUR_GRANT_OPTIONS, withCurrentOption } from "./FacultyNativePickers"
 import { FACULTY_SHEET_CHIP_RADIUS } from "./faculty-collab-sheet-ui"
 import {
   EditorNotice,
@@ -234,12 +235,12 @@ export function FacultyAssessmentStudentGrantsPanel({
             loading={studentsLoading}
             disabled={!sessionId}
           />
-          <EditorTextField
+          <NativeSelect
             label="Extension hours"
-            hint="1–72 hours"
+            placeholder="24 hours"
             value={grantHours}
-            onChangeText={setGrantHours}
-            keyboardType="numeric"
+            options={withCurrentOption(HOUR_GRANT_OPTIONS, grantHours, `${grantHours} hours`)}
+            onChange={setGrantHours}
           />
           <Pressable
             style={[styles.primaryBtn, acting && styles.btnDisabled]}
@@ -304,11 +305,12 @@ export function FacultyAssessmentStudentGrantsPanel({
           loading={studentsLoading}
           disabled={!sessionId}
         />
-        <EditorTextField
+        <NativeSelect
           label="Extra attempts"
+          placeholder="1 extra attempt"
           value={extraAttempts}
-          onChangeText={setExtraAttempts}
-          keyboardType="numeric"
+          options={withCurrentOption(EXTRA_ATTEMPT_OPTIONS, extraAttempts)}
+          onChange={setExtraAttempts}
         />
         <EditorTextField
           label="Reason (optional)"

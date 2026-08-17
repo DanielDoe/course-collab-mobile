@@ -278,6 +278,8 @@ function DeletedCard({
           ]}
           onPress={onRestore}
           disabled={acting}
+          accessibilityRole="button"
+          accessibilityLabel="Restore"
         >
           <Ionicons name="refresh-outline" size={16} color={tokens.success} />
           <Text style={[type.caption, { color: tokens.success, fontWeight: "700" }]}>{acting ? "…" : "Restore"}</Text>
@@ -289,6 +291,8 @@ function DeletedCard({
           ]}
           onPress={onDelete}
           disabled={acting}
+          accessibilityRole="button"
+          accessibilityLabel="Delete forever"
         >
           <Ionicons name="trash-outline" size={16} color={tokens.danger} />
           <Text style={[type.caption, { color: tokens.danger, fontWeight: "700" }]}>

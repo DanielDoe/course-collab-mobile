@@ -1,0 +1,12 @@
+appId: com.coursecollab.app
+---
+- tapOn: "QA16G"
+- extendedWaitUntil:
+    visible: "Manage group"
+    timeout: 8000
+- scrollUntilVisible:
+    element: "Delete group"
+    direction: DOWN
+    timeout: 12000
+- tapOn: "Delete group"
+- tapOn: "Delete"

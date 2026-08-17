@@ -1,0 +1,7 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Open navigation menu"
+- tapOn: "Manage Lectures"
+- extendedWaitUntil:
+    visible: "Search lectures…"
+    timeout: 20000

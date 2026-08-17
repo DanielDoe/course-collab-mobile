@@ -1,0 +1,10 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Search lectures…"
+- eraseText
+- inputText: "99"
+- tapOn: "Manage Lectures"
+- extendedWaitUntil:
+    visible: "QA Lecture W99"
+    timeout: 10000
+- tapOn: "QA Lecture W99"

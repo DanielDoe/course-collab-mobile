@@ -1,0 +1,7 @@
+appId: com.coursecollab.app
+---
+- tapOn: "OK"
+- tapOn: "Ece 2202"
+- tapOn: "ECE 2202"
+- tapOn: "Submit Create assignment"
+- waitForAnimationToEnd

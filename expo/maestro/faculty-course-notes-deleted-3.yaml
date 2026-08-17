@@ -1,0 +1,30 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Close"
+- tapOn: "Search deleted notes…"
+- inputText: "zzzqnofind"
+- tapOn: "Course Notes"
+- takeScreenshot: course-notes-deleted-search-empty
+- tapOn: "Search deleted notes…"
+- eraseText
+- tapOn:
+    text: "Clear search"
+    optional: true
+- tapOn: "Course Notes"
+- tapOn: "Select all visible"
+- takeScreenshot: course-notes-deleted-bulk
+- tapOn: "Clear selection"
+- tapOn: "Restore note"
+- tapOn: "All"
+- tapOn: "Search course notes…"
+- eraseText
+- inputText: "QA99"
+- tapOn: "Course Notes"
+- takeScreenshot: course-notes-after-restore
+- tapOn: "Delete QA99 Course NoteQA probe body. Safe to delete."
+- tapOn: "Delete"
+- tapOn: "Deleted"
+- tapOn: "Permanently delete note"
+- takeScreenshot: course-notes-perm-delete-confirm
+- tapOn: "Delete forever"
+- takeScreenshot: course-notes-after-perm-delete

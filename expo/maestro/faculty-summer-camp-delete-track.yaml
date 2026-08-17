@@ -1,0 +1,9 @@
+appId: com.coursecollab.app
+---
+- tapOn: "QA16T, Draft"
+- swipe:
+    direction: UP
+- takeScreenshot: summer-qa-track-sheet
+- tapOn: "Delete track"
+- tapOn: "Delete"
+- takeScreenshot: summer-qa-track-deleted

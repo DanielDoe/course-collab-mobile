@@ -1,0 +1,38 @@
+appId: com.coursecollab.app
+---
+- extendedWaitUntil:
+    visible: "Edit note"
+    timeout: 10000
+- tapOn: "Title"
+- inputText: " QA"
+- tapOn: "Edit note"
+- tapOn: "Topic, General"
+- takeScreenshot: course-notes-topic-picker
+- tapOn: "Close"
+- tapOn: "Section, All sections"
+- takeScreenshot: course-notes-section-picker
+- tapOn: "Close"
+- tapOn: "Published"
+- tapOn: "Published"
+- tapOn: "Show student preview"
+- takeScreenshot: course-notes-student-preview
+- tapOn: "Hide student preview"
+- tapOn: "Handwritten"
+- takeScreenshot: course-notes-handwritten
+- tapOn: "Pen"
+- tapOn: "Highlighter"
+- tapOn: "Eraser"
+- tapOn: "Line"
+- tapOn: "Rectangle"
+- tapOn: "Ellipse"
+- tapOn: "Add page"
+- tapOn: "Typed"
+- tapOn: "Note body"
+- inputText: " QA probe"
+- tapOn: "Edit note"
+- swipe:
+    direction: UP
+- tapOn: "Delete note"
+- takeScreenshot: course-notes-delete-editor-confirm
+- tapOn: "Cancel"
+- tapOn: "Cancel"

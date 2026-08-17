@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   ActivityIndicator,
   RefreshControl,
@@ -6,7 +6,7 @@ import {
   Text,
   View,
 } from "react-native"
-import { useRouter } from "expo-router"
+import { useFocusEffect, useRouter } from "expo-router"
 import { useSession } from "../../context/SessionProvider"
 import {
   messagesApi,
@@ -14,12 +14,12 @@ import {
   type ThreadSummary,
 } from "../../lib/messages-api"
 import { presentApiError, type ApiErrorPresentation } from "../../lib/present-api-error"
-import { applyLocalUnreadToThreads } from "../../lib/messages-local-state"
+import { applyLocalThreadStateToThreads, reconcileLocalThreadReadState } from "../../lib/messages-local-state"
 import { onMessagesRefresh } from "../../lib/notifications/notification-events"
 import { usePresenceTracking } from "../../hooks/usePresenceTracking"
 import { useModuleTheme } from "../../lib/themed-module-shell"
 import { FACULTY_COMMUNICATION_COLOR } from "../../lib/faculty-communication-theme"
-import { useChromeTopInset, useModuleScrollContentPadding } from "../../context/ChromeInsetContext"
+import { useChromeTopInset, useChromeBottomInset } from "../../context/ChromeInsetContext"
 import { CommEmptyState } from "../faculty/faculty-communication-ui"
 import { AppErrorNotice } from "../errors/AppErrorNotice"
 import {
@@ -27,12 +27,19 @@ import {
   StudentSearchToolbar,
   type StudentFilterGroup,
 } from "../student/student-search-toolbar"
+import { messagePreviewText } from "../../lib/messages-html"
 import { MessageThreadRow } from "./messages-ui"
 import { MessagesComposeModal } from "./MessagesComposeModal"
 import { ModuleFlashList } from "../ModuleFlashList"
+import { useSafeAreaInsets } from "react-native-safe-area-context"
 
 type StatusFilter = "all" | "unread"
 type RoleFilter = "all" | "faculty" | "students"
+
+/** Intentional space between the Messages header divider and the first conversation card. */
+const MESSAGES_HEADER_TO_LIST_GAP = 28
+/** Bottom clearance for the floating search dock + home indicator. */
+const MESSAGES_LIST_BOTTOM_EXTRA = 88
 
 export function MessagesInboxScreen() {
   const { session } = useSession()
@@ -45,9 +52,15 @@ export function MessagesInboxScreen() {
     ],
   )
   const router = useRouter()
-  const { styles: moduleStyles, tokens, native, type } = useModuleTheme()
+  const insets = useSafeAreaInsets()
+  const { styles: moduleStyles, type } = useModuleTheme()
   const chromeTop = useChromeTopInset()
-  const scrollPad = useModuleScrollContentPadding(88, 24)
+  const chromeBottom = useChromeBottomInset()
+  // Floating chrome: clear the overlay header, then add the intentional gap.
+  // Stacked chrome: header already occupies layout — only the intentional gap.
+  // Never add safe-area top here; the header owns that inset.
+  const listTopPad = (chromeTop > 0 ? chromeTop : 0) + MESSAGES_HEADER_TO_LIST_GAP
+  const listBottomPad = insets.bottom + MESSAGES_LIST_BOTTOM_EXTRA + chromeBottom
   const [threads, setThreads] = useState<ThreadSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -57,6 +70,7 @@ export function MessagesInboxScreen() {
   const [filterSheetOpen, setFilterSheetOpen] = useState(false)
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all")
   const [roleFilter, setRoleFilter] = useState<RoleFilter>("all")
+  const skipNextFocusRefresh = useRef(true)
 
   const presenceParticipants = useMemo(
     () => threads.map((thread) => ({ kind: thread.otherParticipant.kind, id: thread.otherParticipant.id })),
@@ -68,8 +82,21 @@ export function MessagesInboxScreen() {
     if (!auth) return
     setError(null)
     const data = await messagesApi.listThreads(auth)
-    setThreads(applyLocalUnreadToThreads(data.threads ?? []))
+    const nextThreads = data.threads ?? []
+    reconcileLocalThreadReadState(nextThreads)
+    setThreads(applyLocalThreadStateToThreads(nextThreads))
   }, [auth])
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!auth) return
+      if (skipNextFocusRefresh.current) {
+        skipNextFocusRefresh.current = false
+        return
+      }
+      void load().catch(() => {})
+    }, [auth, load]),
+  )
 
   useEffect(() => {
     if (!auth) {
@@ -90,7 +117,16 @@ export function MessagesInboxScreen() {
   }, [auth, load])
 
   useEffect(() => {
-    return onMessagesRefresh(() => {
+    return onMessagesRefresh((payload) => {
+      if (payload?.threadId != null) {
+        setThreads((prev) =>
+          applyLocalThreadStateToThreads(
+            prev.map((thread) =>
+              thread.id === payload.threadId ? { ...thread, unreadCount: 0 } : thread,
+            ),
+          ),
+        )
+      }
       void load().catch(() => {})
     })
   }, [load])
@@ -157,7 +193,7 @@ export function MessagesInboxScreen() {
         thread.otherParticipant.email ?? "",
         thread.otherParticipant.subtitle,
         thread.subject ?? "",
-        thread.lastMessage?.body ?? "",
+        thread.lastMessage?.body ? messagePreviewText(thread.lastMessage.body, 200) : "",
       ]
         .join(" ")
         .toLowerCase()
@@ -174,7 +210,7 @@ export function MessagesInboxScreen() {
 
   const listHeader = useMemo(
     () => (
-      <>
+      <View style={{ paddingTop: listTopPad }}>
         {unreadTotal > 0 && !showBlockingError ? (
           <Text style={[type.caption, styles.unreadNote, { color: FACULTY_COMMUNICATION_COLOR.link }]}>
             {unreadTotal} unread conversation{unreadTotal === 1 ? "" : "s"}
@@ -189,15 +225,16 @@ export function MessagesInboxScreen() {
             style={styles.inlineError}
           />
         ) : null}
-      </>
+      </View>
     ),
-    [error, handleRefresh, showBlockingError, type.caption, unreadTotal],
+    [error, handleRefresh, listTopPad, showBlockingError, type.caption, unreadTotal],
   )
 
   const renderThreadRow = useCallback(
     ({ item, index }: { item: ThreadSummary; index: number }) => (
       <MessageThreadRow
         thread={item}
+        isFirst={index === 0}
         isLast={index === filtered.length - 1}
         presenceStatus={getStatus(item.otherParticipant.kind, item.otherParticipant.id)}
         onPress={() => router.push(`/messages/${item.id}` as never)}
@@ -253,16 +290,15 @@ export function MessagesInboxScreen() {
         extraData={{ filteredLength: filtered.length, unreadTotal }}
         contentContainerStyle={[
           styles.content,
-          scrollPad,
+          { paddingBottom: listBottomPad },
+          // Only grow when empty/loading — otherwise FlashList paints a tall empty card.
+          (loading || showBlockingError || filtered.length === 0) && styles.contentGrow,
           showBlockingError && styles.contentBlockingError,
-          filtered.length > 0 && [
-            styles.list,
-            { backgroundColor: native.secondaryGrouped, borderColor: native.separator },
-          ],
         ]}
-        contentInsetAdjustmentBehavior={chromeTop > 0 ? "never" : "automatic"}
-        automaticallyAdjustContentInsets={chromeTop <= 0}
-        automaticallyAdjustsScrollIndicatorInsets={chromeTop <= 0}
+        // Header owns the top safe area (stacked or floating). Do not apply it again on the list.
+        contentInsetAdjustmentBehavior="never"
+        automaticallyAdjustContentInsets={false}
+        automaticallyAdjustsScrollIndicatorInsets={false}
         ListHeaderComponent={listHeader}
         ListEmptyComponent={
           loading ? (
@@ -294,6 +330,7 @@ export function MessagesInboxScreen() {
             refreshing={refreshing}
             onRefresh={() => void handleRefresh()}
             tintColor={FACULTY_COMMUNICATION_COLOR.link}
+            {...(chromeTop > 0 ? { progressViewOffset: chromeTop } : {})}
           />
         }
       />
@@ -313,16 +350,12 @@ export function MessagesInboxScreen() {
 }
 
 const styles = StyleSheet.create({
-  content: { gap: 12 },
-  contentBlockingError: { flexGrow: 1, justifyContent: "center" },
-  unreadNote: { paddingHorizontal: 16, fontWeight: "600" },
-  inlineError: { marginHorizontal: 16 },
+  // No container `gap` — it stacked on top of listTopPad and inflated the header-to-card space.
+  content: {},
+  contentGrow: { flexGrow: 1 },
+  contentBlockingError: { justifyContent: "center" },
+  unreadNote: { paddingHorizontal: 16, fontWeight: "600", marginBottom: 8 },
+  inlineError: { marginHorizontal: 16, marginBottom: 8 },
   blockingErrorWrap: { paddingVertical: 12 },
   loadingBox: { paddingVertical: 48, alignItems: "center" },
-  list: {
-    marginHorizontal: 16,
-    borderRadius: 12,
-    overflow: "hidden",
-    borderWidth: StyleSheet.hairlineWidth,
-  },
 })

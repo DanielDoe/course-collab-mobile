@@ -1,0 +1,15 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Announcements"
+    direction: DOWN
+    timeout: 12000
+- tapOn: "Announcements"
+- tapOn:
+    text: "Close menu"
+    optional: true
+- extendedWaitUntil:
+    visible: "Search title, summary, section…|No announcements yet|New announcement"
+    timeout: 30000
+- takeScreenshot: announcements-page

@@ -6,6 +6,7 @@ import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProv
 import { useNativeType } from "../../lib/themed-module-theme"
 import type { SummerCampCamper, SummerCampProgram, SummerCampRequest, SummerCampTraining } from "../../lib/instructor-api"
 import { formatFacultyRelativeTime } from "../../lib/instructor-api"
+import { parseAcademicCalendarDate } from "../../lib/faculty-academic-term-utils"
 import { studentInitials } from "../../lib/faculty-students-utils"
 import {
   FACULTY_SUMMER_CAMP_COLOR,
@@ -22,7 +23,7 @@ import { SolidListThumbTile } from "../theme/SolidListThumbTile"
 function formatDateRange(start?: string | null, end?: string | null): string | null {
   if (!start && !end) return null
   const fmt = (d: string) =>
-    new Date(d).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
+    parseAcademicCalendarDate(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
   if (start && end) return `${fmt(start)} – ${fmt(end)}`
   return start ? `From ${fmt(start)}` : end ? `Until ${fmt(end)}` : null
 }
@@ -96,7 +97,9 @@ function SignatureListCard({
         ) : null}
       </View>
 
-      <Ionicons name="chevron-forward" size={18} color={native.tertiaryLabel} style={styles.chevron} />
+      {onPress ? (
+        <Ionicons name="chevron-forward" size={18} color={native.tertiaryLabel} style={styles.chevron} />
+      ) : null}
     </>
   )
 
@@ -112,6 +115,8 @@ function SignatureListCard({
         <Pressable
           style={({ pressed }) => [styles.row, { opacity: pressed ? NATIVE.pressedOpacity : 1 }]}
           onPress={onPress}
+          accessibilityRole="button"
+          accessibilityLabel={`${title}${status ? `, ${status.label}` : ""}`}
         >
           {body}
         </Pressable>
@@ -143,6 +148,8 @@ function DraftQuickActions({
         style={[styles.quickBtn, { backgroundColor: FACULTY_SUMMER_CAMP_COLOR.action }]}
         disabled={acting}
         onPress={onPublish}
+        accessibilityRole="button"
+        accessibilityLabel={publishLabel}
       >
         <Ionicons name="cloud-upload-outline" size={16} color={FACULTY_SUMMER_CAMP_COLOR.actionInk} />
         <Text style={[type.caption, styles.quickPublishText, { color: FACULTY_SUMMER_CAMP_COLOR.actionInk }]}>
@@ -152,6 +159,8 @@ function DraftQuickActions({
       <Pressable
         style={[styles.quickBtn, { backgroundColor: native.tertiaryGrouped }]}
         onPress={onEdit}
+        accessibilityRole="button"
+        accessibilityLabel="Edit"
       >
         <Ionicons name="create-outline" size={16} color={FACULTY_SUMMER_CAMP_COLOR.link} />
         <Text style={[type.caption, styles.quickReviewText, { color: FACULTY_SUMMER_CAMP_COLOR.link }]}>Edit</Text>
@@ -263,11 +272,16 @@ export function FacultySummerCampRequestCard({
   request,
   acting,
   onApprove,
+  onReject,
+  onPress,
 }: {
   request: SummerCampRequest
   acting: boolean
   onApprove: () => void
+  onReject: () => void
+  onPress?: () => void
 }) {
+  const tokens = useAppThemeTokens()
   const type = useNativeType()
   const isPending = request.status === "pending" || request.status === "requested"
   const meta = `${(request.request_kind ?? "request").replace(/_/g, " ")} · ${formatFacultyRelativeTime(request.created_at)}`
@@ -280,18 +294,36 @@ export function FacultySummerCampRequestCard({
       description={request.email ?? request.student_id}
       metaLine={request.organization ? `${meta} · ${request.organization}` : meta}
       status={facultySummerCampStatus(isPending ? "pending" : request.status)}
+      onPress={onPress}
       footer={
         isPending ? (
-          <Pressable
-            style={[styles.approveBtn, { backgroundColor: FACULTY_SUMMER_CAMP_COLOR.action }]}
-            disabled={acting}
-            onPress={onApprove}
-          >
-            <Ionicons name="checkmark" size={16} color={FACULTY_SUMMER_CAMP_COLOR.actionInk} />
-            <Text style={[type.caption, styles.quickPublishText, { color: FACULTY_SUMMER_CAMP_COLOR.actionInk }]}>
-              Approve
-            </Text>
-          </Pressable>
+          <View style={styles.quickActions}>
+            <Pressable
+              style={[styles.quickBtn, { backgroundColor: FACULTY_SUMMER_CAMP_COLOR.action }]}
+              disabled={acting}
+              onPress={onApprove}
+              accessibilityRole="button"
+              accessibilityLabel={`Approve ${request.full_name}`}
+            >
+              <Ionicons name="checkmark" size={16} color={FACULTY_SUMMER_CAMP_COLOR.actionInk} />
+              <Text style={[type.caption, styles.quickPublishText, { color: FACULTY_SUMMER_CAMP_COLOR.actionInk }]}>
+                Approve
+              </Text>
+            </Pressable>
+            <Pressable
+              style={[
+                styles.quickBtn,
+                { backgroundColor: `${tokens.danger}14`, borderColor: `${tokens.danger}33`, borderWidth: StyleSheet.hairlineWidth },
+              ]}
+              disabled={acting}
+              onPress={onReject}
+              accessibilityRole="button"
+              accessibilityLabel={`Reject ${request.full_name}`}
+            >
+              <Ionicons name="close" size={16} color={tokens.danger} />
+              <Text style={[type.caption, styles.quickReviewText, { color: tokens.danger }]}>Reject</Text>
+            </Pressable>
+          </View>
         ) : undefined
       }
     />
@@ -376,13 +408,5 @@ const styles = StyleSheet.create({
   quickReviewText: {
     fontWeight: "700",
     fontSize: 14,
-  },
-  approveBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    paddingVertical: 10,
-    borderRadius: 10,
   },
 })

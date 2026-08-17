@@ -1,0 +1,32 @@
+appId: com.coursecollab.app
+---
+- tapOn: "AC Power"
+- extendedWaitUntil:
+    visible: "Topic settings"
+    timeout: 15000
+- tapOn: "Preview question 1"
+- extendedWaitUntil:
+    visible: "Question preview"
+    timeout: 8000
+- takeScreenshot: practice-preview
+- tapOn: "Done"
+- tapOn: "Topic settings"
+- extendedWaitUntil:
+    visible: "Practice topic"
+    timeout: 10000
+- takeScreenshot: practice-settings
+- tapOn: "Questions per day"
+- eraseText
+- inputText: "7"
+- tapOn: "Practice topic"
+- tapOn:
+    text: ".*Remove from.*"
+- extendedWaitUntil:
+    visible: "Remove topic?"
+    timeout: 8000
+- takeScreenshot: practice-remove
+- tapOn: "Cancel"
+- tapOn: "Done"
+- extendedWaitUntil:
+    visible: "Search topics…"
+    timeout: 8000

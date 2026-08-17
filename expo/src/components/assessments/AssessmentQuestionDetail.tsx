@@ -19,6 +19,7 @@ import {
   reportAnswerBlockColors,
   reportBadgeColors,
   reportCodeBlockColors,
+  reportOnSolidBadgeColors,
   reportOptionRowColors,
 } from "../../lib/assessment-report-theme"
 import {
@@ -72,9 +73,18 @@ function RichText({ text }: { text: string }) {
   )
 }
 
-function Badge({ label, tone }: { label: string; tone: "good" | "bad" | "info" | "neutral" }) {
+function Badge({
+  label,
+  tone,
+  onSolidInk,
+}: {
+  label: string
+  tone: "good" | "bad" | "info" | "neutral"
+  /** Set when the badge sits on a solid status fill — tone-on-tone would vanish. */
+  onSolidInk?: string
+}) {
   const { tokens } = useAssessmentTheme()
-  const palette = reportBadgeColors(tone, tokens)
+  const palette = onSolidInk ? reportOnSolidBadgeColors(onSolidInk) : reportBadgeColors(tone, tokens)
 
   return (
     <View style={[styles.badge, { backgroundColor: palette.bg, borderColor: palette.border }]}>
@@ -92,12 +102,18 @@ function OptionRow({ letter, text, state }: { letter: string; text: string; stat
       <View style={styles.optionMain}>
         <Text style={[styles.optionLetter, { color: colors.text }]}>{letter}.</Text>
         <View style={styles.optionContent}>
-          <QuestionContentWebView text={text} embedded compact />
+          <QuestionContentWebView
+            text={text}
+            embedded
+            compact
+            textColor={state.isSelected ? colors.text : undefined}
+          />
         </View>
       </View>
       {state.badge ? (
         <Badge
           label={state.badge}
+          onSolidInk={state.isSelected ? colors.text : undefined}
           tone={
             state.isSelected && state.isCorrect
               ? "good"
@@ -248,6 +264,7 @@ export function AssessmentQuestionDetail({ q }: { q: AssessmentResultQuestion })
           badge: state.badge,
           bg: colors.bg,
           border: colors.border,
+          fg: state.isSelected ? colors.text : undefined,
         }
       }),
     [options, q, tokens],

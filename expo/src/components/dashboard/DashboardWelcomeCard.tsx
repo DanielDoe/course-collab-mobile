@@ -3,10 +3,12 @@ import { StyleSheet, Text, View } from "react-native"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { LinearGradient } from "expo-linear-gradient"
 import Animated, {
+  cancelAnimation,
   Easing,
   FadeIn,
   FadeInDown,
   useAnimatedStyle,
+  useReducedMotion,
   useSharedValue,
   withRepeat,
   withSequence,
@@ -28,12 +30,27 @@ function normalizeLabel(value: string): string {
   return value.replace(/\s+/g, "").toLowerCase()
 }
 
-/** Hide subtitle when it repeats the badge (e.g. ECE2202 vs ECE 2202). */
+/** Hide subtitle when it repeats the badge (e.g. ECE2202 vs "ECE 2202 (Review Demo)"). */
 function visibleSubtitle(badge?: string | null, subtitle?: string | null): string | null {
   const trimmed = subtitle?.trim()
   if (!trimmed) return null
   const badgeTrimmed = badge?.trim()
-  if (badgeTrimmed && normalizeLabel(badgeTrimmed) === normalizeLabel(trimmed)) return null
+  if (!badgeTrimmed) return trimmed
+
+  const badgeKey = badgeTrimmed.replace(/[^a-zA-Z0-9]/g, "").toLowerCase()
+  const subKey = trimmed.replace(/[^a-zA-Z0-9]/g, "").toLowerCase()
+  if (badgeKey && (subKey === badgeKey || subKey.startsWith(badgeKey))) {
+    // Drop leading course-code tokens; if only a parenthetical/demo label remains, hide.
+    const remainder = trimmed
+      .replace(new RegExp(`^\\s*${badgeTrimmed.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*`, "i"), "")
+      .replace(/^[A-Za-z]+\s*\d+[A-Za-z0-9]*\s*/i, "")
+      .replace(/^[(\-–—:]\s*/, "")
+      .replace(/\)$/, "")
+      .trim()
+    if (!remainder || /^\([^)]*\)$/.test(remainder) || remainder.length < 3) return null
+  }
+
+  if (normalizeLabel(badgeTrimmed) === normalizeLabel(trimmed)) return null
   return trimmed
 }
 
@@ -62,8 +79,18 @@ function FloatingBubble({
 }) {
   const tx = useSharedValue(0)
   const ty = useSharedValue(0)
+  const reduceMotion = useReducedMotion()
 
   useEffect(() => {
+    // Respect the OS "Reduce Motion" setting, and never leave a -1 repeat
+    // running after unmount — an un-cancelled loop keeps the UI thread busy
+    // for the life of the app even once the dashboard is off screen.
+    if (reduceMotion) {
+      tx.value = 0
+      ty.value = 0
+      return
+    }
+
     tx.value = withRepeat(
       withSequence(
         withTiming(driftX, { duration, easing: Easing.inOut(Easing.sin) }),
@@ -80,7 +107,12 @@ function FloatingBubble({
       -1,
       true,
     )
-  }, [driftX, driftY, duration, tx, ty])
+
+    return () => {
+      cancelAnimation(tx)
+      cancelAnimation(ty)
+    }
+  }, [driftX, driftY, duration, reduceMotion, tx, ty])
 
   const motion = useAnimatedStyle(() => ({
     transform: [{ translateX: tx.value }, { translateY: ty.value }],
@@ -141,8 +173,14 @@ export function DashboardWelcomeCard({
   const avatarRing = tokens.isDark ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.85)"
 
   const avatarPulse = useSharedValue(1)
+  const reduceMotion = useReducedMotion()
 
   useEffect(() => {
+    if (reduceMotion) {
+      avatarPulse.value = 1
+      return
+    }
+
     avatarPulse.value = withRepeat(
       withSequence(
         withTiming(1.03, { duration: 2200, easing: Easing.inOut(Easing.sin) }),
@@ -151,7 +189,9 @@ export function DashboardWelcomeCard({
       -1,
       true,
     )
-  }, [avatarPulse])
+
+    return () => cancelAnimation(avatarPulse)
+  }, [avatarPulse, reduceMotion])
 
   const avatarMotion = useAnimatedStyle(() => ({
     transform: [{ scale: avatarPulse.value }],

@@ -1,0 +1,10 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Types"
+  optional: true
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Custom type|MCQ|Multiple Choice|No question types"
+    timeout: 15000
+- tapOn: "All"
+  optional: true

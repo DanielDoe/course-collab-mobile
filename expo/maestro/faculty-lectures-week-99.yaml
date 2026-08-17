@@ -1,0 +1,7 @@
+appId: com.coursecollab.app
+---
+- tapOn:
+    id: "lecture-week"
+- eraseText
+- inputText: "99"
+- tapOn: "Create"

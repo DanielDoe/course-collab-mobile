@@ -13,6 +13,10 @@ export type WorkspaceConversationMessage = {
   importedQuestionLabel?: string
   versions?: ChatMessageVersion[]
   activeVersionIndex?: number
+  /** Confirm cards — must round-trip through cloud sync or refresh wipes them. */
+  proposals?: ChatMessage["proposals"]
+  proposalStatusById?: ChatMessage["proposalStatusById"]
+  proposalResultById?: ChatMessage["proposalResultById"]
 }
 
 export type WorkspaceConversation = {
@@ -21,6 +25,8 @@ export type WorkspaceConversation = {
   messages: WorkspaceConversationMessage[]
   createdAt: string
   lastUpdated: string
+  archivedAt?: string
+  capabilityId?: string
 }
 
 function normalizeDbRole(role: string): "user" | "assistant" {
@@ -40,6 +46,15 @@ function mapDbMessage(message: WorkspaceConversationMessage & Record<string, unk
   const importedQuestionLabel =
     (typeof message.importedQuestionLabel === "string" ? message.importedQuestionLabel : undefined) ??
     (typeof message.imported_question_label === "string" ? message.imported_question_label : undefined)
+  const proposals = Array.isArray(message.proposals) ? message.proposals : undefined
+  const proposalStatusById =
+    message.proposalStatusById && typeof message.proposalStatusById === "object"
+      ? (message.proposalStatusById as ChatMessage["proposalStatusById"])
+      : undefined
+  const proposalResultById =
+    message.proposalResultById && typeof message.proposalResultById === "object"
+      ? (message.proposalResultById as ChatMessage["proposalResultById"])
+      : undefined
   return {
     id: message.id,
     role: normalizeDbRole(String(message.role)),
@@ -47,6 +62,9 @@ function mapDbMessage(message: WorkspaceConversationMessage & Record<string, unk
     ...(importedQuestion ? { importedQuestion } : {}),
     ...(importedQuestionLabel ? { importedQuestionLabel } : {}),
     ...(message.versions?.length ? { versions: message.versions, activeVersionIndex: message.activeVersionIndex } : {}),
+    ...(proposals?.length ? { proposals } : {}),
+    ...(proposalStatusById ? { proposalStatusById } : {}),
+    ...(proposalResultById ? { proposalResultById } : {}),
   }
 }
 
@@ -58,6 +76,16 @@ function mergeChatMessage(primary: ChatMessage, fallback: ChatMessage): ChatMess
     importedQuestionLabel: primary.importedQuestionLabel ?? fallback.importedQuestionLabel,
     versions: primary.versions?.length ? primary.versions : fallback.versions,
     activeVersionIndex: primary.activeVersionIndex ?? fallback.activeVersionIndex,
+    // Never drop confirm cards when one side synced without them.
+    proposals: primary.proposals?.length ? primary.proposals : fallback.proposals,
+    proposalStatusById: {
+      ...(fallback.proposalStatusById ?? {}),
+      ...(primary.proposalStatusById ?? {}),
+    },
+    proposalResultById: {
+      ...(fallback.proposalResultById ?? {}),
+      ...(primary.proposalResultById ?? {}),
+    },
   }
 }
 
@@ -106,6 +134,8 @@ export function workspaceConversationToThread(conversation: WorkspaceConversatio
     messages,
     createdAt,
     updatedAt,
+    ...(conversation.archivedAt ? { archivedAt: conversation.archivedAt } : {}),
+    ...(conversation.capabilityId ? { capabilityId: conversation.capabilityId as AiTutorChatThread["capabilityId"] } : {}),
   }
 }
 
@@ -116,6 +146,8 @@ export function threadToWorkspaceConversation(thread: AiTutorChatThread): Worksp
     title: thread.title,
     createdAt: thread.createdAt ?? now,
     lastUpdated: thread.updatedAt ?? now,
+    ...(thread.archivedAt ? { archivedAt: thread.archivedAt } : {}),
+    ...(thread.capabilityId ? { capabilityId: thread.capabilityId } : {}),
     messages: thread.messages.map((message) => ({
       id: message.id,
       role: toDbRole(message.role),
@@ -127,6 +159,9 @@ export function threadToWorkspaceConversation(thread: AiTutorChatThread): Worksp
       ...(message.versions?.length
         ? { versions: message.versions, activeVersionIndex: message.activeVersionIndex }
         : {}),
+      ...(message.proposals?.length ? { proposals: message.proposals } : {}),
+      ...(message.proposalStatusById ? { proposalStatusById: message.proposalStatusById } : {}),
+      ...(message.proposalResultById ? { proposalResultById: message.proposalResultById } : {}),
     })),
   }
 }

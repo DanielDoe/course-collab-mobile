@@ -20,6 +20,7 @@ import {
   FACULTY_PROFILE_SETTINGS_LINK,
   FACULTY_SUPPORT_GROUP,
   getFacultyActiveNavItemId,
+  getFacultyNavGroupIdForPath,
   hasFacultyNavAccess,
   type FacultyNavGroup,
   type FacultyNavItem,
@@ -63,8 +64,11 @@ export function FacultyDrawer({ session }: Props) {
   const type = useNativeType()
   const glassChrome = useGlassChromeActive()
   const activeItemId = useMemo(() => getFacultyActiveNavItemId(pathname), [pathname])
+  const activeGroupId = useMemo(() => getFacultyNavGroupIdForPath(pathname), [pathname])
+  const scrollTargetId =
+    activeGroupId === "administration" || activeGroupId === "support" ? null : activeItemId
   const normalizedPathname = useMemo(() => normalizeRoutePathname(pathname), [pathname])
-  const { scrollRef, contentRef, registerRow, unregisterRow } = useDrawerScrollToActive(activeItemId, drawerOpen)
+  const { scrollRef, contentRef, registerRow, unregisterRow } = useDrawerScrollToActive(scrollTargetId, drawerOpen)
 
   const [drawerMounted, setDrawerMounted] = useState(false)
   const [modalVisible, setModalVisible] = useState(false)
@@ -94,7 +98,7 @@ export function FacultyDrawer({ session }: Props) {
     backdropOpacity.value = withTiming(0, { duration: 180 })
     panelOpacity.value = withTiming(0, { duration: 160 })
     panelScale.value = withTiming(0.97, { duration: 160 }, (finished) => {
-      if (finished) runOnJS(finishClose)()
+      runOnJS(finishClose)()
     })
   }, [drawerOpen, backdropOpacity, panelOpacity, panelScale, finishClose])
 
@@ -127,8 +131,8 @@ export function FacultyDrawer({ session }: Props) {
   }
 
   function navigateTo(route: string) {
-    closeDrawer()
     navigateFacultyDrawerRoute(router, pathname, route)
+    closeDrawer()
   }
 
   const tierLabel = membershipTierLoaded ? facultyMembershipTierShortLabel(membershipTier) : "…"
@@ -141,7 +145,12 @@ export function FacultyDrawer({ session }: Props) {
     <Modal visible={modalVisible} transparent animationType="none" onRequestClose={closeDrawer} statusBarTranslucent>
       <View style={styles.root}>
         <Animated.View style={[styles.backdrop, backdropStyle]}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={closeDrawer} accessibilityLabel="Close menu" />
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={closeDrawer}
+            accessible={false}
+            importantForAccessibility="no"
+          />
         </Animated.View>
 
         <Animated.View
@@ -212,6 +221,8 @@ export function FacultyDrawer({ session }: Props) {
                 style={[styles.closeBtn, { backgroundColor: drawerTheme.closeBtnBg }]}
                 onPress={closeDrawer}
                 hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Close menu"
               >
                 <Ionicons name="close" size={18} color={drawerTheme.secondaryLabel} />
               </Pressable>
@@ -428,6 +439,8 @@ function NavRowComponent({
       onPressOut={() => {
         press.value = withSpring(1, { damping: 14, stiffness: 320 })
       }}
+      accessibilityRole="button"
+      accessibilityLabel={item.label}
       accessibilityState={{ selected: active }}
       accessibilityHint={locked ? `Requires ${item.minTier ?? "Pro"} plan` : undefined}
     >
@@ -508,9 +521,9 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   closeBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: "center",
     justifyContent: "center",
   },

@@ -1,0 +1,19 @@
+appId: com.coursecollab.app
+---
+- tapOn:
+    text: "Clear search"
+    optional: true
+- tapOn: "Open filters"
+- extendedWaitUntil:
+    visible: "All statuses|Filter projects"
+    timeout: 8000
+- tapOn: "Pending"
+- tapOn: "Open filters"
+- tapOn: "Approved"
+- tapOn: "Open filters"
+- tapOn: "Rejected"
+- tapOn: "Open filters"
+- tapOn: "All statuses"
+- tapOn: "Create group or project"
+- waitForAnimationToEnd
+- tapOn: "Create group"

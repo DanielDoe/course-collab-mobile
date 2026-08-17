@@ -1,0 +1,8 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Code submission"
+- tapOn: "New assignment"
+- tapOn: "Submit Create assignment"
+- waitForAnimationToEnd
+- tapOn: "OK"
+- waitForAnimationToEnd

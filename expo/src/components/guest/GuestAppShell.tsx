@@ -2,6 +2,7 @@ import type { ReactNode } from "react"
 import { useEffect } from "react"
 import { useLocalSearchParams, usePathname, useRouter } from "expo-router"
 import { resolveGuestNativeRouteFromWebPath } from "../../constants/guest-nav"
+import { GuestEntitlementsProvider } from "../../context/GuestEntitlementsProvider"
 import { PortalShellProvider } from "../../context/PortalShellContext"
 import { GuestShellProvider } from "../../context/GuestShellContext"
 import { useThemedNative } from "../../context/AppearanceProvider"
@@ -10,6 +11,7 @@ import { AppShellFrame } from "../shell/AppShellFrame"
 import { PortalProfileMenu } from "../shell/PortalProfileMenu"
 import { PortalNotificationShellSync } from "../shell/PortalNotificationShellSync"
 import { PortalNotificationsSheet } from "../shell/NotificationsSheetHost"
+import { useGuestCheckoutReturnRefresh } from "../../lib/use-guest-checkout-return"
 import { GuestDrawer } from "./GuestDrawer"
 import { GuestTopBar } from "./GuestTopBar"
 
@@ -23,7 +25,16 @@ function GuestAppShellInner({ session, children }: Props) {
   const pathname = usePathname()
   const router = useRouter()
   const { path: webPathParam } = useLocalSearchParams<{ path?: string }>()
-  const immersive = /^\/messages\//.test(pathname)
+  useGuestCheckoutReturnRefresh(session)
+  const immersive =
+    /^\/messages\//.test(pathname) ||
+    /^\/recommendation\//.test(pathname) ||
+    /^\/module\/cora-/.test(pathname) ||
+    /^\/membership/.test(pathname) ||
+    /^\/guest\/cora-career/.test(pathname) ||
+    /^\/guest\/cora-credits/.test(pathname) ||
+    pathname === "/settings" ||
+    pathname.startsWith("/settings/")
 
   useEffect(() => {
     if (pathname !== "/web") return
@@ -54,7 +65,9 @@ export function GuestAppShell({ session, children }: Props) {
   return (
     <PortalShellProvider>
       <GuestShellProvider>
-        <GuestAppShellInner session={session}>{children}</GuestAppShellInner>
+        <GuestEntitlementsProvider session={session}>
+          <GuestAppShellInner session={session}>{children}</GuestAppShellInner>
+        </GuestEntitlementsProvider>
       </GuestShellProvider>
     </PortalShellProvider>
   )

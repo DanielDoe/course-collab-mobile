@@ -1,0 +1,6 @@
+appId: com.coursecollab.app
+---
+- tapOn: "QA16CP"
+- tapOn: "Delete assignment"
+- tapOn: "Delete"
+- waitForAnimationToEnd

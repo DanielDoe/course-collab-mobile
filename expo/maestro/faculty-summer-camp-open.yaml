@@ -1,0 +1,25 @@
+appId: com.coursecollab.app
+---
+- tapOn:
+    text: "Dismiss"
+    optional: true
+- tapOn:
+    text: "OK"
+    optional: true
+- tapOn:
+    text: "Open debugger to view warnings."
+    optional: true
+- tapOn: "Open navigation menu"
+- waitForAnimationToEnd
+- scrollUntilVisible:
+    element: "Summer Camp"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "Summer Camp"
+- tapOn:
+    text: "Close menu"
+    optional: true
+- extendedWaitUntil:
+    visible: "Search programs…|No summer programs|Create summer program|Programs"
+    timeout: 35000
+- takeScreenshot: summer-camp-page

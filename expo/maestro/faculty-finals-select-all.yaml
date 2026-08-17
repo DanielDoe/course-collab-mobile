@@ -1,0 +1,5 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Select all"
+- tapOn: "Submit Create final"
+- waitForAnimationToEnd

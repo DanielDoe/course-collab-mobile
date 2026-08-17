@@ -97,8 +97,8 @@ export function StudentDrawer({ session }: Props) {
 
     backdropOpacity.value = withTiming(0, { duration: 180 })
     panelOpacity.value = withTiming(0, { duration: 160 })
-    panelScale.value = withTiming(0.97, { duration: 160 }, (finished) => {
-      if (finished) runOnJS(finishClose)()
+    panelScale.value = withTiming(0.97, { duration: 160 }, () => {
+      runOnJS(finishClose)()
     })
   }, [drawerOpen, backdropOpacity, panelOpacity, panelScale, finishClose])
 

@@ -1,0 +1,24 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Tracks"
+- extendedWaitUntil:
+    visible: "Search training tracks…|AI & Edge Computing, Published"
+    timeout: 15000
+- tapOn: "AI & Edge Computing, Published"
+- extendedWaitUntil:
+    visible: "Training track|Done"
+    timeout: 15000
+- takeScreenshot: summer-camp-track-sheet
+- tapOn: "Title"
+- tapOn: "Done"
+- tapOn: "XR, Eye Tracking, and AI Research Training, Published"
+- extendedWaitUntil:
+    visible: "Training track|Done"
+    timeout: 15000
+- takeScreenshot: summer-camp-track-2
+- tapOn: "Done"
+- tapOn: "Campers"
+- extendedWaitUntil:
+    visible: "Search campers…|No campers yet"
+    timeout: 12000
+- takeScreenshot: summer-camp-campers

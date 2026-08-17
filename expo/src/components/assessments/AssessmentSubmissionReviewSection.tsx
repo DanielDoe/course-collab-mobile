@@ -69,7 +69,13 @@ function SubmissionFilePreview({
         </Pressable>
         <Modal visible={zoomOpen} animationType="fade" transparent onRequestClose={() => setZoomOpen(false)}>
           <View style={styles.zoomBackdrop}>
-            <Pressable style={styles.zoomClose} onPress={() => setZoomOpen(false)}>
+            <Pressable
+              style={styles.zoomClose}
+              onPress={() => setZoomOpen(false)}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Close image"
+            >
               <Ionicons name="close" size={28} color="#ffffff" />
             </Pressable>
             {!failed ? (

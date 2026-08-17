@@ -60,7 +60,12 @@ export function FacultyAssessmentCard({
         { backgroundColor: native.secondaryGrouped, borderColor: tokens.border },
       ]}
     >
-      <Pressable style={({ pressed }) => [{ opacity: pressed ? NATIVE.pressedOpacity : 1 }]} onPress={onOpen}>
+      <Pressable
+        style={({ pressed }) => [{ opacity: pressed ? NATIVE.pressedOpacity : 1 }]}
+        onPress={onOpen}
+        accessibilityRole="button"
+        accessibilityLabel={quiz.title}
+      >
         <View style={styles.headRow}>
           <SolidListThumbTile thumb={thumb} icon="clipboard-outline" size="compact" />
           <View style={styles.headCopy}>
@@ -145,6 +150,8 @@ function CardAction({
         pressed && { opacity: 0.85 },
       ]}
       onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
     >
       <Ionicons name={icon} size={15} color={accent} />
       <Text style={[type.caption, { fontWeight: "700", color: danger ? accent : native.label }]}>{label}</Text>

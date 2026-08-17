@@ -1,0 +1,11 @@
+appId: com.coursecollab.app
+---
+- swipe:
+    direction: DOWN
+    duration: 400
+- swipe:
+    direction: DOWN
+    duration: 400
+- tapOn:
+    id: "group-name"
+- eraseText

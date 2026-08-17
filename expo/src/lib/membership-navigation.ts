@@ -29,7 +29,7 @@ export function parseMembershipWebPath(input: string): {
   const path = pathOnly?.toLowerCase() ?? ""
   const params = queryPart ? new URLSearchParams(queryPart) : null
 
-  if (/\/student\/membership\/success/i.test(path)) {
+  if (/\/student\/(?:dashboard-v2\/)?membership\/success/i.test(path)) {
     return {
       flow: "success",
       plan: (params?.get("plan") as MembershipTier | null) ?? undefined,
@@ -37,18 +37,18 @@ export function parseMembershipWebPath(input: string): {
     }
   }
 
-  if (/\/student\/membership\/cancel/i.test(path)) {
+  if (/\/student\/(?:dashboard-v2\/)?membership\/cancel/i.test(path)) {
     return {
       flow: "cancel",
       plan: (params?.get("plan") as MembershipTier | null) ?? undefined,
     }
   }
 
-  if (/\/student\/membership\/manage/i.test(path)) {
+  if (/\/student\/(?:dashboard-v2\/)?membership\/manage/i.test(path)) {
     return { flow: "manage" }
   }
 
-  if (/\/student\/membership\/checkout/i.test(path)) {
+  if (/\/student\/(?:dashboard-v2\/)?membership\/checkout/i.test(path)) {
     return {
       flow: "checkout",
       plan: (params?.get("plan") as MembershipTier | null) ?? undefined,
@@ -97,13 +97,8 @@ export function tryHandleMembershipFlowExitNavigation(
     return true
   }
 
-  if (/\/student\/membership\/cancel/i.test(pathOnly)) {
-    const parsed = parseMembershipWebPath(full)
-    router.replace({
-      pathname: "/membership/cancel",
-      params: parsed?.plan ? { plan: parsed.plan } : {},
-    } as never)
-    return true
+  if (/\/student\/(?:dashboard-v2\/)?membership\/cancel/i.test(pathOnly)) {
+    return false
   }
 
   return false
@@ -137,6 +132,14 @@ export function tryHandleMembershipWebNavigation(
     router.replace({
       pathname: "/membership/checkout",
       params: { plan: membershipPath.plan },
+    } as never)
+    return true
+  }
+
+  if (membershipPath?.flow === "cancel") {
+    router.replace({
+      pathname: "/membership/cancel",
+      params: membershipPath.plan ? { plan: membershipPath.plan } : {},
     } as never)
     return true
   }

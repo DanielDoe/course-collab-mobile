@@ -248,7 +248,13 @@ export function FacultyDrawerAccordion({ session }: Props) {
                   </View>
                 </View>
               </View>
-              <Pressable style={[styles.closeBtn, { backgroundColor: drawerTheme.closeBtnBg }]} onPress={closeDrawer} hitSlop={8}>
+              <Pressable
+                style={[styles.closeBtn, { backgroundColor: drawerTheme.closeBtnBg }]}
+                onPress={closeDrawer}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Close menu"
+              >
                 <Ionicons name="close" size={18} color={drawerTheme.secondaryLabel} />
               </Pressable>
             </View>
@@ -425,6 +431,8 @@ function NavRow({
       onPressOut={() => {
         press.value = withSpring(1, { damping: 14, stiffness: 320 })
       }}
+      accessibilityRole="button"
+      accessibilityLabel={item.label}
       accessibilityState={{ selected: active }}
     >
       {active ? (

@@ -1,0 +1,24 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Search students…"
+- eraseText: 40
+- inputText: "Alvin"
+- tapOn: "Students"
+- extendedWaitUntil:
+    visible: "Alvin Pulickal Reni"
+    timeout: 8000
+- takeScreenshot: practice-students-match
+- tapOn: "Clear search"
+- tapOn: "Open filters"
+- extendedWaitUntil:
+    visible: "All students"
+    timeout: 10000
+- takeScreenshot: practice-student-filters
+- tapOn: "Section ECE2202"
+- tapOn: "Open filters"
+- tapOn: "All students"
+- tapOn: "Alvin Pulickal Reni"
+- extendedWaitUntil:
+    visible: "Practice progress"
+    timeout: 10000
+- takeScreenshot: practice-student-alvin

@@ -4,9 +4,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { ChromeInsetProvider } from "../../context/ChromeInsetContext"
 import { useSearchDockBottomInset } from "../../context/ModuleSearchDockContext"
 import { ModuleSearchDockProvider } from "../../context/ModuleSearchDockProvider"
-import {
-  useGlassChromeActive,
-} from "../theme/GlassSurface"
+import { useGlassChromeActive } from "../theme/GlassSurface"
 import { NATIVE_HEADER_BAR_HEIGHT } from "./shell-shared"
 
 type Props = {
@@ -20,6 +18,9 @@ type Props = {
 /**
  * Stacks or floats the top chrome bar. Floating mode lets scroll content pass
  * under native Liquid Glass / blur so the material is visible.
+ *
+ * Nav chrome is always shown when `immersive` is false — independent of sheet
+ * theming (`useThemedGlassSheets` in faculty-collab-sheet-ui only).
  */
 export function AppShellFrame({
   backgroundColor,
@@ -50,8 +51,8 @@ function AppShellFrameInner({
   overlays,
 }: Props) {
   const insets = useSafeAreaInsets()
-  const floatingGlass = useGlassChromeActive()
-  const floatChrome = !immersive && floatingGlass
+  const showTopBar = !immersive
+  const floatChrome = showTopBar && useGlassChromeActive()
   const topInset = floatChrome ? insets.top + NATIVE_HEADER_BAR_HEIGHT : 0
   const searchDockInset = useSearchDockBottomInset()
   const floatSearchDock = searchDockInset > 0
@@ -59,11 +60,9 @@ function AppShellFrameInner({
   return (
     <ChromeInsetProvider topInset={topInset} bottomInset={floatSearchDock ? searchDockInset : 0}>
       <View style={[styles.root, { backgroundColor }]}>
-        {!immersive && !floatChrome ? topBar : null}
-        <View style={styles.content}>
-          {children}
-        </View>
-        {!immersive && floatChrome ? (
+        {showTopBar && !floatChrome ? topBar : null}
+        <View style={styles.content}>{children}</View>
+        {showTopBar && floatChrome ? (
           <View style={styles.floatingChrome} pointerEvents="box-none">
             {topBar}
           </View>
@@ -83,5 +82,9 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 20,
+    ...Platform.select({
+      android: { elevation: 8 },
+      default: {},
+    }),
   },
 })

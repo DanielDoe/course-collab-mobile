@@ -27,6 +27,7 @@ export const MODULE_WEB_PATHS: Record<string, string> = {
   syllabus: "/student/dashboard-v2/syllabus",
   calendar: "/student/dashboard-v2/calendar",
   "office-hours": "/student/dashboard-v2/office-hours",
+  "schedule-adjustment": "/student/dashboard-v2/schedule-adjustment",
   "course-policies": "/student/dashboard-v2/course-info/policies",
   "course-evaluation": "/student/dashboard-v2/course-info/course-evaluation",
   recommendations: "/student/dashboard-v2/recommendations",
@@ -55,6 +56,7 @@ export const NATIVE_MODULE_IDS = new Set([
   "projects",
   "calendar",
   "office-hours",
+  "schedule-adjustment",
   "progress-review",
   "syllabus",
   "course-policies",
@@ -147,6 +149,12 @@ export function buildAssessmentTakePath(
   if (!qs) return withNative
   const pathOnly = withNative.split("?")[0]
   return `${pathOnly}?${qs}`
+}
+
+/** True for live assessment-taking web paths (quiz / homework / mid-semester / final). */
+export function isAssessmentTakeWebPath(webPath: string): boolean {
+  const pathOnly = decodeURIComponent(webPath).split("?")[0]?.toLowerCase() ?? ""
+  return /^\/student\/(quiz|homework|mid-semester|midsem|final)\/\d+/.test(pathOnly)
 }
 
 export function buildAssessmentResultsPath(attemptId: number, assessmentType?: string): string {

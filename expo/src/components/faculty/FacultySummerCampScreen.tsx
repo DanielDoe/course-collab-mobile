@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import {
   ActivityIndicator,
-  Modal,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -12,7 +11,9 @@ import {
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { ApiError } from "../../lib/api"
+import { AppAlert } from "../../lib/app-alert"
 import { instructorApi,
+  formatFacultyRelativeTime,
   type SummerCampCamper,
   type SummerCampProgram,
   type SummerCampRequest,
@@ -31,9 +32,19 @@ import { useFacultyStickyHeaderScrollLayout,
 import { FacultyStudentDetailModal } from "./FacultyStudentDetailModal"
 import {
   FacultySummerCampProgramActionSheet,
+  FacultySummerCampRejectReasonSheet,
+  FacultySummerCampRequestActionSheet,
   FacultySummerCampTrainingActionSheet} from "./FacultySummerCampActionSheets"
-import { FacultySheetChrome, FacultySheetContainer } from "./faculty-collab-sheet-ui"
+import {
+  FacultySheetChrome,
+  FacultySheetConfirm,
+  FacultySheetField,
+  FacultySheetModal,
+  FacultySheetSection,
+} from "./faculty-collab-sheet-ui"
 import { FacultyAddCamperModal } from "./FacultyAddCamperModal"
+import { FacultySummerCampDatePicker } from "./FacultySummerCampDatePicker"
+import { campDatePayload } from "../../lib/faculty-summer-camp-utils"
 import {
   FacultySummerCampCamperCard,
   FacultySummerCampProgramCard,
@@ -45,6 +56,7 @@ export type SummerCampTab = "programs" | "tracks" | "campers" | "requests"
 
 type Props = {
   initialTab?: SummerCampTab
+  visibleTabs?: SummerCampTab[]
 }
 
 function camperToProfileStudent(camper: SummerCampCamper) {
@@ -66,12 +78,12 @@ const SUMMER_CAMP_TABS: Array<{
   { id: "programs", label: "Programs", icon: "sunny-outline" },
   { id: "tracks", label: "Tracks", icon: "git-branch-outline" },
   { id: "campers", label: "Campers", icon: "people-outline" },
-  { id: "requests", label: "Requests", icon: "mail-outline" },
+  { id: "requests", label: "Inbox", icon: "mail-outline" },
 ]
 
-export function FacultySummerCampScreen({ initialTab = "programs" }: Props) {
+export function FacultySummerCampScreen({ initialTab = "programs", visibleTabs }: Props) {
   const insets = useSafeAreaInsets()
-  const { listScrollPad } = useFacultyStickyHeaderScrollLayout()
+  const { listScrollPad } = useFacultyStickyHeaderScrollLayout({ extraBottom: 88 })
   const tokens = useAppThemeTokens()
   const native = useThemedNative()
   const styles = useFacultyModuleStyles()
@@ -93,6 +105,10 @@ export function FacultySummerCampScreen({ initialTab = "programs" }: Props) {
   const [selectedTraining, setSelectedTraining] = useState<SummerCampTraining | null>(null)
   const [selectedCamper, setSelectedCamper] = useState<SummerCampCamper | null>(null)
 
+  const [selectedRequest, setSelectedRequest] = useState<SummerCampRequest | null>(null)
+  const [quickApproveRequest, setQuickApproveRequest] = useState<SummerCampRequest | null>(null)
+  const [quickRejectRequest, setQuickRejectRequest] = useState<SummerCampRequest | null>(null)
+  const [confirmApproveAll, setConfirmApproveAll] = useState(false)
   const [formOpen, setFormOpen] = useState(false)
   const [addCamperOpen, setAddCamperOpen] = useState(false)
   const [formKind, setFormKind] = useState<"camp" | "training">("camp")
@@ -102,6 +118,7 @@ export function FacultySummerCampScreen({ initialTab = "programs" }: Props) {
   const [startDate, setStartDate] = useState("")
   const [endDate, setEndDate] = useState("")
   const [submitting, setSubmitting] = useState(false)
+  const [formError, setFormError] = useState("")
 
   const load = useCallback(async () => {
     if (!scope) return
@@ -204,27 +221,35 @@ export function FacultySummerCampScreen({ initialTab = "programs" }: Props) {
     setDescription("")
     setStartDate("")
     setEndDate("")
+    setFormError("")
     setFormOpen(true)
   }
 
   async function submitCreate() {
     if (!scope || !title.trim()) {
-      setError("Title is required.")
+      setFormError("Title is required.")
       return
     }
     setSubmitting(true)
-    setError("")
+    setFormError("")
     try {
       if (formKind === "camp") {
+        let dates: { start_date?: string; end_date?: string }
+        try {
+          dates = campDatePayload(startDate, endDate)
+        } catch (err) {
+          setFormError(err instanceof Error ? err.message : "Check the program dates.")
+          return
+        }
         await instructorApi.createSummerCamp(scope, {
           title: title.trim(),
           description: description.trim() || undefined,
-          start_date: startDate.trim() || undefined,
-          end_date: endDate.trim() || undefined})
+          ...dates,
+        })
       } else {
         const campId = formCampId ?? selectedCamp?.id ?? ownedCamps[0]?.id
         if (!campId) {
-          setError("Create a program first, then add a training track.")
+          setFormError("Create a program first, then add a training track.")
           return
         }
         await instructorApi.createSummerCampTraining(scope, {
@@ -235,7 +260,7 @@ export function FacultySummerCampScreen({ initialTab = "programs" }: Props) {
       setFormOpen(false)
       await load()
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not create item.")
+      setFormError(err instanceof ApiError ? err.message : "Could not create item.")
     } finally {
       setSubmitting(false)
     }
@@ -275,6 +300,34 @@ export function FacultySummerCampScreen({ initialTab = "programs" }: Props) {
     } finally {
       setActing(false)
     }
+  }
+
+  function openRequest(request: SummerCampRequest) {
+    setSelectedRequest(request)
+  }
+
+  function closeRequest() {
+    setSelectedRequest(null)
+  }
+
+  async function approveRequest(request: SummerCampRequest) {
+    if (!scope) return
+    await runAction(async () => {
+      await instructorApi.approveSummerCampRequest(scope, request.id)
+      closeRequest()
+      setQuickApproveRequest(null)
+    })
+  }
+
+  async function rejectRequest(request: SummerCampRequest, reason?: string) {
+    if (!scope) return
+    const name = request.full_name.trim() || "Camper request"
+    await runAction(async () => {
+      await instructorApi.rejectSummerCampRequest(scope, request.id, reason)
+      closeRequest()
+      setQuickRejectRequest(null)
+      AppAlert.alert("Request rejected", `${name} was rejected.`)
+    })
   }
 
   async function quickPublishCamp(camp: SummerCampProgram) {
@@ -333,10 +386,11 @@ export function FacultySummerCampScreen({ initialTab = "programs" }: Props) {
 
   const tabItems = useMemo(
     () =>
-      SUMMER_CAMP_TABS.map((item) => ({
+      SUMMER_CAMP_TABS.filter((item) => !visibleTabs || visibleTabs.includes(item.id)).map((item) => ({
         ...item,
-        count: item.id === "requests" ? pendingRequests : undefined})),
-    [pendingRequests],
+        count: item.id === "requests" ? pendingRequests : undefined,
+      })),
+    [pendingRequests, visibleTabs],
   )
 
   if (!ready) {
@@ -372,7 +426,7 @@ export function FacultySummerCampScreen({ initialTab = "programs" }: Props) {
         />
 
         {tab === "tracks" && ownedCamps.length === 0 ? (
-          <Pressable
+            <Pressable
             style={[
               localStyles.nudgeBanner,
               {
@@ -380,6 +434,8 @@ export function FacultySummerCampScreen({ initialTab = "programs" }: Props) {
                 borderColor: `${tokens.warning}33`},
             ]}
             onPress={() => setTab("programs")}
+            accessibilityRole="button"
+            accessibilityLabel="Create a program before adding training tracks"
           >
             <Ionicons name="information-circle-outline" size={18} color={tokens.warning} />
             <Text style={[type.caption, localStyles.nudgeText, { color: tokens.warning }]}>
@@ -398,6 +454,8 @@ export function FacultySummerCampScreen({ initialTab = "programs" }: Props) {
                 borderColor: `${tokens.warning}33`},
             ]}
             onPress={() => setTab("requests")}
+            accessibilityRole="button"
+            accessibilityLabel={`${pendingRequests} camper request${pendingRequests === 1 ? "" : "s"} awaiting review`}
           >
             <Ionicons name="mail-outline" size={18} color={tokens.warning} />
             <Text style={[type.caption, localStyles.nudgeText, { color: tokens.warning }]}>
@@ -521,9 +579,9 @@ export function FacultySummerCampScreen({ initialTab = "programs" }: Props) {
                   <Pressable
                     style={[localStyles.approveAllBtn, { backgroundColor: FACULTY_SUMMER_CAMP_COLOR.action }]}
                     disabled={acting}
-                    onPress={() =>
-                      void runAction(() => instructorApi.approveAllSummerCampRequests(scope!))
-                    }
+                    accessibilityRole="button"
+                    accessibilityLabel={`Approve all pending (${pendingRequests})`}
+                    onPress={() => setConfirmApproveAll(true)}
                   >
                     <Ionicons name="checkmark-done-outline" size={18} color={FACULTY_SUMMER_CAMP_COLOR.actionInk} />
                     <Text style={[localStyles.approveAllText, { color: FACULTY_SUMMER_CAMP_COLOR.actionInk }]}>
@@ -536,9 +594,9 @@ export function FacultySummerCampScreen({ initialTab = "programs" }: Props) {
                     key={request.id}
                     request={request}
                     acting={acting}
-                    onApprove={() =>
-                      void runAction(() => instructorApi.approveSummerCampRequest(scope!, request.id))
-                    }
+                    onPress={() => openRequest(request)}
+                    onApprove={() => setQuickApproveRequest(request)}
+                    onReject={() => setQuickRejectRequest(request)}
                   />
                 ))}
               </View>
@@ -581,18 +639,69 @@ export function FacultySummerCampScreen({ initialTab = "programs" }: Props) {
 
       <FacultyAddCamperModal
         visible={addCamperOpen}
+        scope={scope}
         onClose={() => setAddCamperOpen(false)}
         onCreated={() => void handleRefresh()}
       />
 
-      <Modal visible={formOpen} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setFormOpen(false)}>
-        <FacultySheetContainer>
+      <FacultySummerCampRequestActionSheet
+        visible={selectedRequest != null}
+        request={selectedRequest}
+        acting={acting}
+        onClose={closeRequest}
+        onApprove={() => selectedRequest && void approveRequest(selectedRequest)}
+        onReject={(reason) => selectedRequest && void rejectRequest(selectedRequest, reason)}
+      />
+
+      {quickApproveRequest ? (
+        <FacultySheetConfirm
+          title="Approve camper request?"
+          body={`${quickApproveRequest.full_name} will be able to sign in with the credentials from this request.`}
+          confirmLabel="Approve"
+          danger={false}
+          onCancel={() => setQuickApproveRequest(null)}
+          onConfirm={() => void approveRequest(quickApproveRequest)}
+        />
+      ) : null}
+
+      {confirmApproveAll ? (
+        <FacultySheetConfirm
+          title="Approve all pending?"
+          body={
+            pendingRequests === 1
+              ? "This approves 1 camper request. They will be able to sign in."
+              : `This approves ${pendingRequests} camper requests. They will be able to sign in.`
+          }
+          confirmLabel={pendingRequests === 1 ? "Approve 1" : `Approve ${pendingRequests}`}
+          danger={false}
+          onCancel={() => setConfirmApproveAll(false)}
+          onConfirm={() => {
+            setConfirmApproveAll(false)
+            void runAction(() => instructorApi.approveAllSummerCampRequests(scope!))
+          }}
+        />
+      ) : null}
+
+      <FacultySummerCampRejectReasonSheet
+        visible={quickRejectRequest != null}
+        submitting={acting}
+        onClose={() => setQuickRejectRequest(null)}
+        onSubmit={(reason) => quickRejectRequest && void rejectRequest(quickRejectRequest, reason || undefined)}
+      />
+
+      <FacultySheetModal visible={formOpen} onRequestClose={() => setFormOpen(false)}>
           <FacultySheetChrome
             topInset={insets.top}
             title={formKind === "camp" ? "New program" : "New training track"}
-            onClose={() => setFormOpen(false)}
+            onClose={() => {
+              setFormError("")
+              setFormOpen(false)
+            }}
           />
           <ScrollView contentContainerStyle={localStyles.sheetBody} keyboardShouldPersistTaps="handled">
+            {formError ? (
+              <Text style={[type.caption, { color: tokens.danger, fontWeight: "600" }]}>{formError}</Text>
+            ) : null}
             {formKind === "training" ? (
               <>
                 <Text style={[type.caption, localStyles.fieldLabel]}>Program</Text>
@@ -605,48 +714,57 @@ export function FacultySummerCampScreen({ initialTab = "programs" }: Props) {
                 </View>
               </>
             ) : null}
-            <Text style={[type.caption, localStyles.fieldLabel]}>Title</Text>
+            <Text style={[type.caption, localStyles.fieldLabel]} accessible={false}>Title</Text>
             <TextInput
               style={[localStyles.input, { color: native.label, backgroundColor: native.fill }]}
               value={title}
-              onChangeText={setTitle}
+              onChangeText={(v) => {
+                setTitle(v)
+                if (formError) setFormError("")
+              }}
               placeholder={formKind === "camp" ? "Summer Camp 2026" : "AI & Edge Computing"}
+              accessibilityLabel="Title"
               placeholderTextColor={native.tertiaryLabel}
+              autoCorrect={false}
+              autoCapitalize="none"
+              spellCheck={false}
+              keyboardType="ascii-capable"
+              testID="summer-camp-title"
             />
-            <Text style={[type.caption, localStyles.fieldLabel]}>Description</Text>
+            <Text style={[type.caption, localStyles.fieldLabel]} accessible={false}>Description</Text>
             <TextInput
               style={[localStyles.input, localStyles.textArea, { color: native.label, backgroundColor: native.fill }]}
               value={description}
               onChangeText={setDescription}
               multiline
               placeholder="Optional overview for campers and staff"
+              accessibilityLabel="Description"
               placeholderTextColor={native.tertiaryLabel}
+              autoCorrect={false}
+              autoCapitalize="none"
+              spellCheck={false}
             />
             {formKind === "camp" ? (
               <>
-                <Text style={[type.caption, localStyles.fieldLabel]}>Start date</Text>
-                <TextInput
-                  style={[localStyles.input, { color: native.label, backgroundColor: native.fill }]}
+                <Text style={[type.caption, localStyles.fieldLabel]} accessible={false}>Start date</Text>
+                <FacultySummerCampDatePicker
                   value={startDate}
-                  onChangeText={setStartDate}
-                  placeholder="YYYY-MM-DD"
-                  placeholderTextColor={native.tertiaryLabel}
-                  autoCapitalize="none"
+                  onChange={setStartDate}
+                  accessibilityLabel="Start date"
                 />
-                <Text style={[type.caption, localStyles.fieldLabel]}>End date</Text>
-                <TextInput
-                  style={[localStyles.input, { color: native.label, backgroundColor: native.fill }]}
+                <Text style={[type.caption, localStyles.fieldLabel]} accessible={false}>End date</Text>
+                <FacultySummerCampDatePicker
                   value={endDate}
-                  onChangeText={setEndDate}
-                  placeholder="YYYY-MM-DD"
-                  placeholderTextColor={native.tertiaryLabel}
-                  autoCapitalize="none"
+                  onChange={setEndDate}
+                  accessibilityLabel="End date"
                 />
               </>
             ) : null}
             <Pressable
               style={[localStyles.primaryBtn, { backgroundColor: FACULTY_SUMMER_CAMP_COLOR.action }]}
               disabled={submitting}
+              accessibilityRole="button"
+              accessibilityLabel="Create"
               onPress={() => void submitCreate()}
             >
               {submitting ? (
@@ -656,8 +774,7 @@ export function FacultySummerCampScreen({ initialTab = "programs" }: Props) {
               )}
             </Pressable>
           </ScrollView>
-        </FacultySheetContainer>
-      </Modal>
+      </FacultySheetModal>
     </View>
   )
 }
@@ -696,6 +813,8 @@ function TabEmptyPanel({
         <Pressable
           style={[localStyles.emptyAction, { backgroundColor: FACULTY_SUMMER_CAMP_COLOR.action }]}
           onPress={onAction}
+          accessibilityRole="button"
+          accessibilityLabel={actionLabel}
         >
           <Ionicons name="add" size={18} color={FACULTY_SUMMER_CAMP_COLOR.actionInk} />
           <Text style={[localStyles.emptyActionText, { color: FACULTY_SUMMER_CAMP_COLOR.actionInk }]}>

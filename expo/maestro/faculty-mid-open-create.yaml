@@ -1,0 +1,6 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Create mid-sem"
+- waitForAnimationToEnd
+- tapOn:
+    id: "assessment-title"

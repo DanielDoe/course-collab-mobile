@@ -1,0 +1,13 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Students"
+- tapOn:
+    text: "Clear search"
+    optional: true
+- tapOn:
+    text: "Alvin Pulickal Reni"
+    optional: true
+- extendedWaitUntil:
+    visible: "Practice progress|Alvin Pulickal Reni|No matches"
+    timeout: 8000
+- takeScreenshot: practice-students-after-kb

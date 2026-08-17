@@ -1,0 +1,16 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Winter 2026"
+- extendedWaitUntil:
+    visible: "Academic term"
+    timeout: 10000
+- scrollUntilVisible:
+    element: "Add section. Link a new section to this term"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Add section. Link a new section to this term"
+- extendedWaitUntil:
+    visible: "Section code"
+    timeout: 8000
+- tapOn:
+    id: "section-code"

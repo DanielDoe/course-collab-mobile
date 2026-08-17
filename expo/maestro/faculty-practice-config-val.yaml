@@ -1,0 +1,8 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Daily question limit"
+- eraseText
+- eraseText
+- inputText: "0"
+- tapOn: "Practice settings"
+- takeScreenshot: practice-config-zero

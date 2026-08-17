@@ -54,7 +54,7 @@ function handleNotificationResponse(
   }
 
   const route = resolveRouteFromNotificationData(data)
-  if (route) {
+  if (route && session) {
     router.push(route as never)
   }
 }

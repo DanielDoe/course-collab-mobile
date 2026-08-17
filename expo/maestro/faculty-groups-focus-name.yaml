@@ -1,0 +1,8 @@
+appId: com.coursecollab.app
+---
+- tapOn:
+    text: "Leader Beta Tester"
+    optional: true
+- tapOn:
+    id: "group-name"
+- waitForAnimationToEnd

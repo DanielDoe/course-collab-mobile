@@ -1,0 +1,15 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Manage Groups"
+    direction: UP
+    timeout: 12000
+    visibilityPercentage: 50
+- tapOn: "Manage Groups"
+- tapOn:
+    text: "Close menu"
+    optional: true
+- extendedWaitUntil:
+    visible: "Search groups…|QA16P|No groups"
+    timeout: 20000

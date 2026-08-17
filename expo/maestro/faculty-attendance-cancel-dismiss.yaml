@@ -1,0 +1,7 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Back"
+- tapOn:
+    text: "Take roll ECE 2202 — Circuit Analysis II"
+    index: 1
+- waitForAnimationToEnd

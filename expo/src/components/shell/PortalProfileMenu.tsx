@@ -25,6 +25,7 @@ import {
   ProfileDropdownPresenceBlock,
   ProfileRoleWithStatus,
 } from "../presence/ProfilePresenceChrome"
+import { GuestProfileMenuRows } from "../guest/GuestProfileMenuRows"
 
 type Props = {
   session: PortalSession
@@ -115,13 +116,18 @@ export function PortalProfileMenu({ session }: Props) {
         <ProfileDropdownPresenceBlock />
 
         <GlassMenuList>
-          {session.portal === "guest" && session.guestAccessPurpose === "recommendation_letter" ? (
-            <GlassMenuRow
-              icon="folder-open-outline"
-              label="My letters"
-              onPress={() => go("/module/recommendations")}
-              showSeparator
-            />
+          {session.portal === "guest" ? (
+            <>
+              {session.guestAccessPurpose === "recommendation_letter" ? (
+                <GlassMenuRow
+                  icon="folder-open-outline"
+                  label="All requests"
+                  onPress={() => go("/module/recommendations")}
+                  showSeparator
+                />
+              ) : null}
+              <GuestProfileMenuRows onNavigate={go} />
+            </>
           ) : null}
           <GlassMenuRow
             icon="notifications-outline"
@@ -133,13 +139,15 @@ export function PortalProfileMenu({ session }: Props) {
             }}
             showSeparator
           />
-          <GlassMenuRow
-            icon="color-palette-outline"
-            label="Appearance"
-            detail={themeLabel}
-            onPress={() => go("/settings/appearance")}
-            showSeparator
-          />
+          {session.portal !== "guest" ? (
+            <GlassMenuRow
+              icon="color-palette-outline"
+              label="Appearance"
+              detail={themeLabel}
+              onPress={() => go("/settings/appearance")}
+              showSeparator
+            />
+          ) : null}
           <GlassMenuRow icon="settings-outline" label="Settings" onPress={() => go("/settings")} />
           <GlassMenuSectionGap />
           <GlassMenuRow icon="log-out-outline" label="Sign out" destructive onPress={() => void handleSignOut()} />

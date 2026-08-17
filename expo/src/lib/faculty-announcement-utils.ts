@@ -1,25 +1,38 @@
-import type { InstructorAnnouncement } from "./instructor-api"
-import { announcementPlainText } from "./announcement-content"
-
 export type FacultyAnnouncementFilter = "all" | "high" | "active"
 
-export function facultyAnnouncementHaystack(item: InstructorAnnouncement): string {
+function searchPreviewText(content: string): string {
+  return content.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim()
+}
+
+/** List-row fields used by faculty search, filters, and audience chips. */
+export type FacultyAnnouncementListItem = {
+  title: string
+  content?: string
+  type?: string
+  priority?: string
+  target_session?: string
+  ai_summary?: string | null
+  pinned?: boolean
+  is_active?: boolean
+}
+
+export function facultyAnnouncementHaystack(item: FacultyAnnouncementListItem): string {
   return [
     item.title,
     item.ai_summary,
     item.type,
     item.target_session,
-    announcementPlainText(item.content ?? "", 2000),
+    searchPreviewText(item.content ?? "").slice(0, 2000),
   ]
     .filter(Boolean)
     .join(" ")
     .toLowerCase()
 }
 
-export function filterFacultyAnnouncements(
-  items: InstructorAnnouncement[],
+export function filterFacultyAnnouncements<T extends FacultyAnnouncementListItem>(
+  items: T[],
   filter: FacultyAnnouncementFilter,
-): InstructorAnnouncement[] {
+): T[] {
   switch (filter) {
     case "high":
       return items.filter((item) => item.priority === "high" || item.pinned === true)
@@ -30,25 +43,25 @@ export function filterFacultyAnnouncements(
   }
 }
 
-export function searchFacultyAnnouncements(
-  items: InstructorAnnouncement[],
+export function searchFacultyAnnouncements<T extends FacultyAnnouncementListItem>(
+  items: T[],
   query: string,
-): InstructorAnnouncement[] {
+): T[] {
   const q = query.trim().toLowerCase()
   if (!q) return items
   return items.filter((item) => facultyAnnouncementHaystack(item).includes(q))
 }
 
-export function applyFacultyAnnouncementQuery(
-  items: InstructorAnnouncement[],
+export function applyFacultyAnnouncementQuery<T extends FacultyAnnouncementListItem>(
+  items: T[],
   options: { search: string; filter: FacultyAnnouncementFilter },
-): InstructorAnnouncement[] {
+): T[] {
   const searched = searchFacultyAnnouncements(items, options.search)
   return filterFacultyAnnouncements(searched, options.filter)
 }
 
 export function countFacultyAnnouncementsByFilter(
-  items: InstructorAnnouncement[],
+  items: FacultyAnnouncementListItem[],
 ): Record<FacultyAnnouncementFilter, number> {
   return {
     all: items.length,
@@ -86,3 +99,10 @@ export const ANNOUNCEMENT_PRIORITY_OPTIONS = [
   { id: "medium", label: "Medium" },
   { id: "high", label: "High" },
 ] as const
+
+/** Audience chip for faculty detail — section target when set, otherwise course-wide. */
+export function facultyAnnouncementAudienceLabel(targetSession?: string): string {
+  const session = targetSession?.trim()
+  if (!session || session.toLowerCase() === "all") return "Course-wide"
+  return session
+}

@@ -1,0 +1,4 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Create assignment"
+- waitForAnimationToEnd

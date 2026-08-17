@@ -1,10 +1,12 @@
 import { ApiError, api } from "./api"
 import type {
   MfaEnrollStartResponse,
+  MfaSettingsEnrollStartResponse,
   MfaStatusResponse,
   MfaUserType,
 } from "./mfa-types"
 import {
+  clearMfaDeviceTrust,
   instructorMfaLoginKey,
   mfaTrustRequestHeaders,
   persistMfaDeviceTrustFromLogin,
@@ -45,14 +47,64 @@ async function mfaStatusRequest<T>(
 }
 
 export const mfaApi = {
+  /** @deprecated Login-time enroll — MFA setup belongs in Settings. */
   enrollStart: (challengeToken: string) =>
     mfaPost<MfaEnrollStartResponse>("/api/auth/mfa/enroll/start", { challengeToken }),
 
+  /** @deprecated Login-time enroll confirm — use settingsEnrollConfirm. */
   enrollConfirm: (challengeToken: string, code: string) =>
     mfaPost<Record<string, unknown>>("/api/auth/mfa/enroll/confirm", {
       challengeToken,
       code,
     }),
+
+  settingsEnrollStart: (params: {
+    userType: MfaUserType
+    userId: number | string
+    accountName: string
+    issuer?: string
+  }) =>
+    mfaPost<MfaSettingsEnrollStartResponse>("/api/auth/mfa/settings/enroll/start", {
+      issuer: "CourseCollab",
+      ...params,
+      userId: Number(params.userId) || params.userId,
+    }),
+
+  settingsEnrollConfirm: (params: {
+    userType: MfaUserType
+    userId: number | string
+    enrollmentToken: string
+    code: string
+  }) =>
+    mfaPost<{
+      enabled: true
+      recoveryCodes: string[]
+      trustDurationDays?: number
+      message?: string
+    }>("/api/auth/mfa/settings/enroll/confirm", {
+      ...params,
+      userId: Number(params.userId) || params.userId,
+      code: params.code.trim(),
+    }),
+
+  settingsDisable: async (params: {
+    userType: MfaUserType
+    userId: number | string
+    code: string
+    loginKey?: string | null
+  }) => {
+    const data = await mfaPost<{ enabled: false; message?: string }>(
+      "/api/auth/mfa/settings/disable",
+      {
+        userType: params.userType,
+        userId: Number(params.userId) || params.userId,
+        code: params.code.trim(),
+      },
+    )
+    if (params.loginKey) await clearMfaDeviceTrust(params.loginKey)
+    else await clearMfaDeviceTrust()
+    return data
+  },
 
   verify: (payload: VerifyPayload) =>
     mfaPost<Record<string, unknown>>("/api/auth/mfa/verify", {
@@ -86,7 +138,7 @@ export const mfaApi = {
       },
       loginKey,
     )
-    if (loginKey && data.mfaDeviceTrustToken && data.mfaDeviceTrustExpiresAt) {
+    if (loginKey && data.mfaDeviceTrustToken) {
       await persistMfaDeviceTrustFromLogin({
         userType,
         loginKey,
@@ -106,6 +158,10 @@ export function mfaStatusLoginKey(params: {
   if (params.userType === "student") {
     if (params.universityId == null || !params.authIdentifier?.trim()) return null
     return studentMfaLoginKey(params.universityId, params.authIdentifier)
+  }
+  if (params.userType === "admin") {
+    const id = (params.authIdentifier ?? params.username)?.trim()
+    return id ? `admin:${id.toLowerCase()}` : null
   }
   const id = (params.authIdentifier ?? params.username)?.trim()
   return id ? instructorMfaLoginKey(id) : null

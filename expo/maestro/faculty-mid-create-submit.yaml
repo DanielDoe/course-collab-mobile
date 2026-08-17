@@ -1,0 +1,15 @@
+appId: com.coursecollab.app
+---
+- tapOn: "New mid-sem"
+- waitForAnimationToEnd
+- tapOn: "AC Power"
+- waitForAnimationToEnd
+- tapOn: "Select all"
+- waitForAnimationToEnd
+- tapOn:
+    text: "Submit Create mid-sem.*"
+- waitForAnimationToEnd
+- tapOn: "OK"
+- waitForAnimationToEnd
+- tapOn: "Close editor"
+- waitForAnimationToEnd

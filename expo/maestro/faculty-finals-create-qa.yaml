@@ -1,0 +1,10 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Submit Create final"
+- tapOn: "OK"
+- tapOn:
+    id: "assessment-title"
+- inputText: "QA16F"
+- hideKeyboard
+- tapOn: "AC Power"
+- waitForAnimationToEnd

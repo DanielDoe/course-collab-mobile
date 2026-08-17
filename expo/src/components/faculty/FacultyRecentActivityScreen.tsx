@@ -5,15 +5,18 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  View} from "react-native"
-import { useSafeAreaInsets } from "react-native-safe-area-context"
+  View,
+} from "react-native"
 import { Ionicons } from "@/components/icons/AppIcon"
 import {
+  activityBelongsToCourse,
   activityFilterCounts,
   filterRecentActivity,
-  type ActivityStatusFilter} from "../../lib/faculty-assessment-utils"
-import { instructorApi, type InstructorRecentActivity } from "../../lib/instructor-api"
+  type ActivityStatusFilter,
+} from "../../lib/faculty-assessment-utils"
+import { instructorApi, type InstructorAssessmentResult, type InstructorRecentActivity } from "../../lib/instructor-api"
 import { useFacultyScope } from "../../hooks/useFacultyScope"
+import { useSuppressModuleSearchDock } from "../../context/ModuleSearchDockContext"
 import { FacultyEmptyState } from "./faculty-shared"
 import {
   FacultyRecentActivityCard,
@@ -21,10 +24,14 @@ import {
 } from "./FacultyAnalyticsListCards"
 import { FACULTY_ACTIVITY_COLOR } from "../../lib/faculty-recent-activity-theme"
 import { useModuleTheme } from "../../lib/themed-module-shell"
-import { useFacultyStickyHeaderScrollLayout,
+import {
+  useFacultyStickyHeaderScrollLayout,
   FacultyModuleStickyHeader,
   FacultyModuleTabBar,
-  FacultySearchToolbar} from "./faculty-module-shell"
+  FacultySearchToolbar,
+} from "./faculty-module-shell"
+import { FacultyRecentActivityActionSheet } from "./FacultyRecentActivityActionSheet"
+import { FacultyAttemptReportModal } from "./FacultyAttemptReportModal"
 
 const ACTIVITY_TABS: Array<{ id: ActivityStatusFilter; label: string; icon: keyof typeof Ionicons.glyphMap }> = [
   { id: "ALL", label: "All", icon: "layers-outline" },
@@ -42,9 +49,8 @@ function activityTabLabel(id: ActivityStatusFilter): string {
 
 export function FacultyRecentActivityScreen() {
   const { styles: moduleStyles, native, tokens, type } = useModuleTheme()
-  const insets = useSafeAreaInsets()
   const { listScrollPad } = useFacultyStickyHeaderScrollLayout()
-  const { scope, ready } = useFacultyScope()
+  const { scope, ready, course } = useFacultyScope()
 
   const [activity, setActivity] = useState<InstructorRecentActivity[]>([])
   const [filter, setFilter] = useState<ActivityStatusFilter>("ALL")
@@ -52,6 +58,10 @@ export function FacultyRecentActivityScreen() {
   const [refreshing, setRefreshing] = useState(false)
   const [search, setSearch] = useState("")
   const [error, setError] = useState("")
+  const [selectedActivity, setSelectedActivity] = useState<InstructorRecentActivity | null>(null)
+  const [selectedResult, setSelectedResult] = useState<InstructorAssessmentResult | null>(null)
+
+  useSuppressModuleSearchDock(selectedActivity != null || selectedResult != null)
 
   const load = useCallback(async () => {
     if (!scope) return
@@ -79,8 +89,15 @@ export function FacultyRecentActivityScreen() {
     }
   }
 
-  const counts = useMemo(() => activityFilterCounts(activity), [activity])
-  const filtered = useMemo(() => filterRecentActivity(activity, filter, search), [activity, filter, search])
+  const courseActivity = useMemo(
+    () => activity.filter((item) => activityBelongsToCourse(item, course?.course_code)),
+    [activity, course?.course_code],
+  )
+  const counts = useMemo(() => activityFilterCounts(courseActivity), [courseActivity])
+  const filtered = useMemo(
+    () => filterRecentActivity(courseActivity, filter, search),
+    [courseActivity, filter, search],
+  )
 
   const tabs = ACTIVITY_TABS.map((t) => ({
     ...t,
@@ -126,7 +143,7 @@ export function FacultyRecentActivityScreen() {
         showsVerticalScrollIndicator={false}
       >
         <FacultyRecentActivityKpiRow
-          total={activity.length}
+          total={courseActivity.length}
           submitted={counts.submitted}
           inProgress={counts.in_progress}
         />
@@ -144,9 +161,9 @@ export function FacultyRecentActivityScreen() {
       ) : filtered.length === 0 ? (
         <FacultyEmptyState
           icon="pulse-outline"
-          title={activity.length === 0 ? "No activity yet" : "No matches"}
+          title={courseActivity.length === 0 ? "No activity yet" : "No matches"}
           body={
-            activity.length === 0
+            courseActivity.length === 0
               ? "Student assessment events will appear here."
               : "Try a different filter or search term."
           }
@@ -154,11 +171,31 @@ export function FacultyRecentActivityScreen() {
       ) : (
         <View style={styles.list}>
           {filtered.map((item) => (
-            <FacultyRecentActivityCard key={item.id} item={item} />
+            <FacultyRecentActivityCard
+              key={item.id}
+              item={item}
+              onPress={() => setSelectedActivity(item)}
+            />
           ))}
         </View>
       )}
       </ScrollView>
+
+      <FacultyRecentActivityActionSheet
+        visible={selectedActivity != null}
+        item={selectedActivity}
+        courseActivity={courseActivity}
+        scope={scope}
+        onClose={() => setSelectedActivity(null)}
+        onViewReport={(result) => setSelectedResult(result)}
+      />
+
+      <FacultyAttemptReportModal
+        visible={selectedResult != null}
+        scope={scope}
+        result={selectedResult}
+        onClose={() => setSelectedResult(null)}
+      />
     </View>
   )
 }

@@ -21,9 +21,9 @@ import {
   FacultySheetOutlineButton,
   FacultySheetSection,
   FacultySheetSubmitButton,
-  FacultySheetTextInput,
   FacultySheetToggleRow
 } from "./faculty-collab-sheet-ui"
+import { FacultySummerCampDatePicker } from "./FacultySummerCampDatePicker"
 import { SHEET_SECTION } from "./faculty-sheet-semantics"
 import { FacultyModuleTabBar } from "./faculty-module-shell"
 
@@ -119,6 +119,17 @@ export function FacultyProgressReviewRunSheet({
       }
       setLastResult(res.result)
       onComplete()
+      const title = payload.dryRun
+        ? payload.deliverSaved
+          ? "Reviews delivered"
+          : "Reviews saved"
+        : payload.deliverSaved
+          ? "Saved reviews delivered"
+          : "Progress reviews sent"
+      const detail = payload.dryRun
+        ? `Saved ${res.result.dispatched} review(s) for ${res.result.total} student(s) — no emails sent.`
+        : `${res.result.emailsSent} email(s), ${res.result.dispatched} review(s) for ${res.result.total} student(s).`
+      AppAlert.alert(title, detail)
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not run progress reviews.")
     } finally {
@@ -192,12 +203,10 @@ export function FacultyProgressReviewRunSheet({
             <Text style={styles.periodHint}>{periodCfg.description}</Text>
             {period === "custom" ? (
               <FacultySheetField label="As-of date">
-                <FacultySheetTextInput
+                <FacultySummerCampDatePicker
                   value={asOfDate}
-                  onChangeText={onAsOfDateChange}
-                  placeholder="YYYY-MM-DD"
-                  autoCapitalize="none"
-                  autoCorrect={false}
+                  onChange={onAsOfDateChange}
+                  accessibilityLabel="As-of date"
                 />
               </FacultySheetField>
             ) : null}

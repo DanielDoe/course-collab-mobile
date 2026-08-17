@@ -60,6 +60,14 @@ export function CoraPreferencesTab({
         ))}
       </View>
 
+      <ModuleSection title="How Cora works">
+        <View style={[styles.hero, { backgroundColor: native.secondaryGrouped, borderColor: native.separator, marginBottom: 0 }]}>
+          <Text style={[type.caption, { color: SN.secondaryLabel, lineHeight: 20 }]}>
+            Cora picks a capability for each task. You will see Cora, Cora Lite, or Advanced Reasoning — never provider names. Your instructor can allow or cap Advanced Reasoning for this course.
+          </Text>
+        </View>
+      </ModuleSection>
+
       <ModuleSection title="Learning Memory">
         <View style={[styles.toggleRow, { borderBottomColor: native.separator }]}>
           <View style={styles.toggleCopy}>

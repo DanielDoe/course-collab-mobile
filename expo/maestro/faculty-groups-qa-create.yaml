@@ -1,0 +1,8 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Create group or project"
+- tapOn: "Create group. Set up a team with a student as leader"
+- tapOn: "Search roster"
+- tapOn: "Create group"
+- tapOn: "Leader Beta Tester"
+- waitForAnimationToEnd

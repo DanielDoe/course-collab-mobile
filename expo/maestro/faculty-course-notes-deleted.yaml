@@ -1,0 +1,28 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Course Notes"
+- tapOn: "Preview QA99 Course NoteQA probe body. Safe to delete."
+- extendedWaitUntil:
+    visible: "Deleted note"
+    timeout: 10000
+- takeScreenshot: course-notes-deleted-preview
+- tapOn: "Close"
+- tapOn: "Select note"
+- takeScreenshot: course-notes-deleted-selected
+- tapOn: "Restore selected notes"
+- extendedWaitUntil:
+    visible: "No deleted notes|No matches"
+    timeout: 15000
+- tapOn: "All"
+- tapOn: "Search course notes…"
+- eraseText
+- inputText: "QA99"
+- tapOn: "Course Notes"
+- takeScreenshot: course-notes-qa-restored
+- tapOn: "Delete QA99 Course NoteQA probe body. Safe to delete."
+- tapOn: "Delete"
+- tapOn: "Deleted"
+- tapOn: "Permanently delete note"
+- takeScreenshot: course-notes-perm-delete-confirm
+- tapOn: "Delete forever"
+- takeScreenshot: course-notes-perm-deleted

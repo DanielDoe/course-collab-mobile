@@ -1,0 +1,14 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Mid-Semester Exams"
+    direction: DOWN
+    timeout: 12000
+- tapOn: "Mid-Semester Exams"
+- tapOn:
+    text: "Close menu"
+    optional: true
+- extendedWaitUntil:
+    visible: "Mid-Semester Exams|All mid-semester|Search mid-semester|Create mid-sem"
+    timeout: 25000

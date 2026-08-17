@@ -1,4 +1,5 @@
 import { SYSTEM } from "../constants/faculty-native-theme"
+import { COLOR_HUNT_COOL } from "./codebench-badge-theme"
 import type { FlashcardDeck } from "./flashcards-api"
 
 export type FlashcardDeckCardKind = "empty" | "completed" | "in_progress" | "available"
@@ -44,7 +45,7 @@ export function flashcardDeckStatusColor(
     case "in_progress":
       return SYSTEM.orange.color
     default:
-      return accentColor
+      return COLOR_HUNT_COOL.cyan
   }
 }
 

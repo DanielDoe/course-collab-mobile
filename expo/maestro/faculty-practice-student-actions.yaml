@@ -1,0 +1,24 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Manage Practice"
+- tapOn: "Daniel Doe"
+- extendedWaitUntil:
+    visible: "View full report. Attempts, answers, and topic breakdown"
+    timeout: 10000
+- tapOn: "View full report. Attempts, answers, and topic breakdown"
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Practice report|No practice data|Try again"
+    timeout: 12000
+- tapOn: "Done"
+- tapOn: "Daniel Doe"
+- scrollUntilVisible:
+    element: "Reset all practice progress. Clears all practice data for this student"
+    direction: DOWN
+    timeout: 8000
+- tapOn: "Reset all practice progress. Clears all practice data for this student"
+- tapOn: "Cancel"
+- tapOn: "Done"
+- tapOn: "Clear search"
+- tapOn: "Open filters"
+- tapOn: "Done"

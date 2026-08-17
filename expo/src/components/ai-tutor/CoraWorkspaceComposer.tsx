@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { startTransition, useEffect, useState } from "react"
 import {
   Modal,
   Platform,
@@ -86,13 +86,36 @@ export function CoraWorkspaceComposer({
   const SN = useThemedStudentNative()
   const type = useNativeType()
   const [goalSheetOpen, setGoalSheetOpen] = useState(false)
+  const [text, setText] = useState(value)
+
+  useEffect(() => {
+    setText(value)
+  }, [value])
+
+  function handleChangeText(next: string) {
+    setText(next)
+    // Keep the TextInput hot; defer parent chat list re-renders.
+    startTransition(() => onChangeText(next))
+  }
 
   const selectedGoal =
     CORA_LEARNING_GOALS.find((g) => g.id === selectedGoalId) ?? CORA_LEARNING_GOALS[1]
   const shellBg = tokens.isDark ? native.secondaryGrouped : "#ffffff"
-  const sendActive = canSend && !streaming
+  const hasDraft = text.trim().length > 0 || attachments.length > 0 || !!importedQuestion
+  const sendActive = hasDraft && !streaming && !disabled
   const showStop = streaming && !!onStop
   const accent = tokens.accent
+
+  function handleSendPress() {
+    if (showStop) {
+      onStop?.()
+      return
+    }
+    if (!sendActive) return
+    // Flush latest draft before parent send reads `input`.
+    onChangeText(text)
+    onSend()
+  }
   const resolvedPlaceholder =
     placeholder ??
     (hasMessages
@@ -167,8 +190,8 @@ export function CoraWorkspaceComposer({
             <TextInput
               {...nativeTextA11yProps}
               style={[styles.input, styles.inputStacked, { color: native.label }]}
-              value={value}
-              onChangeText={onChangeText}
+              value={text}
+              onChangeText={handleChangeText}
               placeholder={resolvedPlaceholder}
               placeholderTextColor={SN.secondaryLabel}
               multiline
@@ -204,7 +227,7 @@ export function CoraWorkspaceComposer({
                   },
                 ]}
                 accessibilityRole="button"
-                accessibilityLabel={`${modePill.label}${modePill.hint ? `, ${modePill.hint}` : ""}`}
+                accessibilityLabel={`Change AI mode, ${modePill.label}${modePill.hint ? `, ${modePill.hint}` : ""}`}
               >
                 <Text style={[type.caption, styles.modeLabel, { color: SN.accent }]} numberOfLines={1}>
                   {modePill.label}
@@ -237,7 +260,7 @@ export function CoraWorkspaceComposer({
 
                 <ComposerSendButton
                   active={sendActive}
-                  onPress={showStop ? onStop! : onSend}
+                  onPress={handleSendPress}
                   disabled={showStop ? false : !sendActive}
                   stop={showStop}
                   size={40}
@@ -265,8 +288,8 @@ export function CoraWorkspaceComposer({
           <TextInput
             {...nativeTextA11yProps}
             style={[styles.input, { color: native.label }]}
-            value={value}
-            onChangeText={onChangeText}
+            value={text}
+            onChangeText={handleChangeText}
             placeholder={resolvedPlaceholder}
             placeholderTextColor={SN.secondaryLabel}
             multiline
@@ -323,7 +346,7 @@ export function CoraWorkspaceComposer({
 
               <ComposerSendButton
                 active={sendActive}
-                onPress={showStop ? onStop! : onSend}
+                onPress={handleSendPress}
                 disabled={showStop ? false : !sendActive}
                 stop={showStop}
                 size={40}

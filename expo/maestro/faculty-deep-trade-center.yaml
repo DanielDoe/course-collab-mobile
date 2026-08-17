@@ -1,0 +1,142 @@
+appId: com.coursecollab.app
+---
+- tapOn:
+    text: "Close menu"
+    optional: true
+- tapOn:
+    id: "open-navigation-menu"
+- waitForAnimationToEnd
+- scrollUntilVisible:
+    element: "Trade Center"
+    direction: DOWN
+    timeout: 30000
+- tapOn: "Trade Center"
+- tapOn:
+    text: "Close menu"
+    optional: true
+- extendedWaitUntil:
+    visible: "Overview|Conversion Rules|Trade center actions"
+    timeout: 45000
+- takeScreenshot: trade-landing
+
+# Overview tab + search
+- tapOn: "Overview tab"
+- tapOn: "Filter students by name, ID, or section…"
+- inputText: "daniel"
+- hideKeyboard
+- takeScreenshot: trade-overview-search
+- tapOn:
+    text: "Clear search"
+    optional: true
+- swipe:
+    direction: UP
+
+# Action sheet
+- tapOn: "Trade center actions"
+- extendedWaitUntil:
+    visible: "Refresh all data|Review donations|Conversion rules"
+    timeout: 10000
+- takeScreenshot: trade-actions
+- tapOn: "Refresh all data"
+- takeScreenshot: trade-refreshed
+
+# All tabs
+- tapOn: "Conversion Rules tab"
+- extendedWaitUntil:
+    visible: "Conversion|Save|Trading"
+    timeout: 20000
+- takeScreenshot: trade-config
+- swipe:
+    direction: UP
+- tapOn:
+    text: "Save"
+    optional: true
+- tapOn:
+    text: "Cancel"
+    optional: true
+
+- tapOn: "Student Analytics tab"
+- extendedWaitUntil:
+    visible: "Filter top traders…|Analytics"
+    timeout: 20000
+- tapOn: "Filter top traders…"
+- inputText: "a"
+- hideKeyboard
+- takeScreenshot: trade-analytics
+- tapOn:
+    text: "Clear search"
+    optional: true
+
+- tapOn: "Donations tab"
+- extendedWaitUntil:
+    visible: "Filter donation|Donation|Point request|QA Donor"
+    timeout: 20000
+- takeScreenshot: trade-donations
+- tapOn: "QA Donor One"
+- extendedWaitUntil:
+    visible: "Donation request|Approve|Decline|Request details"
+    timeout: 15000
+- takeScreenshot: trade-donation-sheet
+- tapOn: "Decline"
+- tapOn: "Reason (optional)"
+- inputText: "QA decline probe"
+- tapOn: "Decline"
+- tapOn: "QA Donor Two"
+- extendedWaitUntil:
+    visible: "Donation request|Approve"
+    timeout: 15000
+- tapOn: "Approve"
+- tapOn: "Approve"
+- tapOn: "QA Point Request"
+- extendedWaitUntil:
+    visible: "Point request|Approve|Decline"
+    timeout: 15000
+- tapOn: "Decline"
+- tapOn: "Cancel"
+- tapOn: "Filter donation & point requests…"
+
+- tapOn: "Trade log tab"
+- extendedWaitUntil:
+    visible: "Filter trade log|Trade log"
+    timeout: 20000
+- takeScreenshot: trade-log
+- tapOn: "Filter trade log entries…"
+- inputText: "trade"
+- hideKeyboard
+
+- tapOn: "Rollover Trades tab"
+- extendedWaitUntil:
+    visible: "Filter rollover|Daniel Doe|Quiz 3"
+    timeout: 20000
+- takeScreenshot: trade-rollover
+- tapOn: "Daniel Doe"
+- extendedWaitUntil:
+    visible: "Rollover trade|Assignment|Rollover details"
+    timeout: 15000
+- takeScreenshot: trade-rollover-sheet
+- tapOn: "Done"
+- tapOn: "Filter rollover trades…"
+- inputText: "qa"
+- hideKeyboard
+
+- tapOn: "Activity Settings tab"
+- extendedWaitUntil:
+    visible: "Activity|Practice|Playground"
+    timeout: 20000
+- takeScreenshot: trade-activity
+- swipe:
+    direction: UP
+- tapOn:
+    text: "Save"
+    optional: true
+- tapOn:
+    text: "Cancel"
+    optional: true
+
+# Pending nudge banner if visible
+- tapOn:
+    text: "pending request"
+    optional: true
+- tapOn:
+    text: "Donations"
+    optional: true

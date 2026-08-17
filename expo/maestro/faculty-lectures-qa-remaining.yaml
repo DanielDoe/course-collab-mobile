@@ -1,0 +1,40 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Back to Lectures"
+- tapOn: "QA Lecture W99"
+- scrollUntilVisible:
+    element: "Sample practice. In-lecture MCQ drills on slides"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Sample practice. In-lecture MCQ drills on slides"
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Done"
+    timeout: 10000
+- tapOn: "Done"
+- waitForAnimationToEnd
+- tapOn: "QA Lecture W99"
+- scrollUntilVisible:
+    element: "Workspace problems. Ink workspace & step-by-step solutions"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Workspace problems. Ink workspace & step-by-step solutions"
+- waitForAnimationToEnd
+- tapOn: "Done"
+- waitForAnimationToEnd
+- tapOn: "QA Lecture W99"
+- scrollUntilVisible:
+    element: "Slide deck & settings. Upload PDF/PPT, allow download, section access"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Slide deck & settings. Upload PDF/PPT, allow download, section access"
+- waitForAnimationToEnd
+- tapOn: "Done"
+- waitForAnimationToEnd
+- tapOn: "QA Lecture W99"
+- scrollUntilVisible:
+    element: "Delete lecture. Permanently removes this week"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Delete lecture. Permanently removes this week"
+- tapOn: "Delete"

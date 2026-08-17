@@ -1,0 +1,9 @@
+appId: com.coursecollab.app
+---
+- tapOn: "return"
+- swipe:
+    direction: DOWN
+    duration: 300
+- swipe:
+    direction: DOWN
+    duration: 300

@@ -1,0 +1,5 @@
+appId: com.coursecollab.app
+---
+- tapOn: "[sample-ui] Unit conversions cheat sheet, Published"
+- takeScreenshot: notes-second-live
+- tapOn: "Cancel"

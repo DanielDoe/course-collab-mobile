@@ -8,7 +8,7 @@ import {
   useState,
   type ReactNode,
 } from "react"
-import { Platform } from "react-native"
+import { Keyboard, Platform } from "react-native"
 import { AppAlertModal, type AppAlertTone } from "../components/errors/AppAlertModal"
 import { logAppError } from "../lib/log-app-error"
 
@@ -56,13 +56,25 @@ type AppAlertRenderContextValue = {
 const AppAlertContext = createContext<AppAlertContextValue | null>(null)
 const AppAlertRenderContext = createContext<AppAlertRenderContextValue | null>(null)
 
-function inferTone(title: string, message?: string, explicit?: AppAlertTone): AppAlertTone {
+function inferTone(
+  title: string,
+  message?: string,
+  explicit?: AppAlertTone,
+  buttons?: AppAlertButton[],
+): AppAlertTone {
   if (explicit) return explicit
+  // Questions and destructive actions are confirms — "cannot be undone" is not an error.
+  if (title.trim().endsWith("?")) return "warning"
+  if (buttons?.some((button) => button.style === "destructive")) return "warning"
   const haystack = `${title} ${message ?? ""}`.toLowerCase()
-  if (/success|saved|complete|sent|copied|reset|started|updated/.test(haystack) && !/fail|error|couldn't|cannot|invalid/.test(haystack)) {
+  if (/fail|error|invalid|denied|couldn't|unable/.test(haystack)) return "error"
+  if (/\bcannot\b/.test(haystack) && !/cannot be undone/.test(haystack)) return "error"
+  if (
+    /\b(success|successfully|saved|complete|completed|sent|copied|updated)\b/.test(haystack) &&
+    !/fail|error|couldn't|cannot|invalid/.test(haystack)
+  ) {
     return "success"
   }
-  if (/fail|error|invalid|denied|couldn't|cannot|unable/.test(haystack)) return "error"
   if (/delete|remove|reset|clear|end session|stop|destructive|confirm/.test(haystack)) return "warning"
   return "info"
 }
@@ -153,7 +165,8 @@ export function AppAlertProvider({ children }: { children: ReactNode }) {
       buttons?: AppAlertButton[],
       options?: AppAlertOptions,
     ) => {
-      const tone = inferTone(title, message, options?.tone)
+      Keyboard.dismiss()
+      const tone = inferTone(title, message, options?.tone, buttons)
       if (options?.logError !== false && tone === "error") {
         logAppError(new Error(message || title), {
           feature: options?.feature,
@@ -201,7 +214,12 @@ export function AppAlertProvider({ children }: { children: ReactNode }) {
     return () => setInlineHostCount((count) => Math.max(0, count - 1))
   }, [])
 
-  const tone = inferTone(current?.title ?? "", current?.message, current?.options?.tone)
+  const tone = inferTone(
+    current?.title ?? "",
+    current?.message,
+    current?.options?.tone,
+    current?.buttons,
+  )
   const alertValue = useMemo(() => ({ alert }), [alert])
   const renderValue = useMemo(
     () => ({

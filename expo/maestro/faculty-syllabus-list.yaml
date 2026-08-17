@@ -1,0 +1,76 @@
+appId: com.coursecollab.app
+---
+- tapOn:
+    text: "Done"
+    optional: true
+- takeScreenshot: syllabus-list
+- tapOn:
+    id: "module-search"
+- inputText: "zzz"
+- tapOn:
+    text: "Syllabus"
+    optional: true
+- pressKey: Enter
+- takeScreenshot: syllabus-search-empty
+- tapOn:
+    id: "module-search"
+- eraseText
+- inputText: "Instructor"
+- pressKey: Enter
+- takeScreenshot: syllabus-search-match
+- tapOn:
+    id: "module-search"
+- eraseText
+- pressKey: Enter
+
+- tapOn:
+    text: ".*Course Header.*|.*Course Information.*|.*General Course.*"
+    optional: true
+- tapOn:
+    text: ".*Objectives.*|.*Required Materials.*|.*Grading.*"
+    optional: true
+- takeScreenshot: syllabus-second-sheet
+- swipe:
+    direction: UP
+- tapOn:
+    text: ".*Full editor.*"
+    optional: true
+- takeScreenshot: syllabus-second-editor
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true
+
+- tapOn: "Add syllabus section"
+- extendedWaitUntil:
+    visible: "Edit section|Section title|Additional Section"
+    timeout: 10000
+- tapOn: "Section title"
+- eraseText
+- inputText: "QA Syllabus Section"
+- pressKey: Enter
+- tapOn:
+    text: "Section text"
+    optional: true
+- inputText: "QA probe — do not publish."
+- pressKey: Enter
+- takeScreenshot: syllabus-add-editor
+- tapOn: "Save"
+- takeScreenshot: syllabus-after-add
+# Local only until Save draft — do not publish
+- tapOn:
+    text: ".*QA Syllabus Section.*"
+    optional: true
+- swipe:
+    direction: UP
+- tapOn:
+    text: ".*Delete section.*"
+    optional: true
+- takeScreenshot: syllabus-delete-confirm
+- tapOn: "Delete"
+- tapOn:
+    text: "Done"
+    optional: true
+- takeScreenshot: syllabus-after-delete

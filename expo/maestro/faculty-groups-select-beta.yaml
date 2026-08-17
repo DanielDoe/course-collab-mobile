@@ -1,0 +1,8 @@
+appId: com.coursecollab.app
+---
+- swipe:
+    direction: DOWN
+- swipe:
+    direction: DOWN
+- tapOn: "Search roster"
+- waitForAnimationToEnd

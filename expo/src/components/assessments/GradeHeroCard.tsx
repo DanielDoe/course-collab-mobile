@@ -8,6 +8,7 @@ import {
   gradeLetterStyle,
   gradePerformanceColor,
   gradePerformanceSoft,
+  gradesHeroGradient,
   gradesHeroMutedInk,
   gradesProvisionalCallout,
   type GradeLens,
@@ -67,14 +68,22 @@ export function GradeHeroCard({
   const { main: pctMainSize, symbol: pctSymbolSize } = gaugePercentTypography(pctText)
   const trackColor = SN.fill
   const gaugeFill = gradePerformanceSoft(pct, tokens.isDark ? 0.22 : 0.14)
+  const heroWash = gradesHeroGradient(tokens.isDark)
 
   return (
     <LinearGradient
-      colors={tokens.hero.gradientSoft}
-      locations={[0, 0.55, 1]}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={[styles.card, { borderColor: hexToRgba(arc, 0.22), borderWidth: StyleSheet.hairlineWidth }]}
+      colors={heroWash}
+      locations={[0, 0.48, 1]}
+      start={{ x: 0.5, y: 0 }}
+      end={{ x: 0.5, y: 1 }}
+      style={[
+        styles.card,
+        {
+          backgroundColor: heroWash[2],
+          borderColor: hexToRgba(arc, tokens.isDark ? 0.28 : 0.2),
+          borderWidth: StyleSheet.hairlineWidth,
+        },
+      ]}
     >
       <Text style={[type.sheetTitle, styles.eyebrow]}>
         {gradeIsProvisional ? "Grade so far" : "Overall grade"}

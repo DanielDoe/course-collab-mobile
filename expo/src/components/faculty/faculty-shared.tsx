@@ -302,6 +302,8 @@ export function FacultyListRow({
     <Pressable
       style={({ pressed }) => [pressed && { opacity: NATIVE.pressedOpacity }]}
       onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={title}
       android_ripple={Platform.OS === "android" ? { color: "rgba(0,0,0,0.08)" } : undefined}
     >
       {content}

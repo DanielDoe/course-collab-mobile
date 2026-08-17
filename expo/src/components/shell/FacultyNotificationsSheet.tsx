@@ -54,10 +54,6 @@ export function FacultyNotificationsSheet({ session }: Props) {
 
   useEffect(() => onNotificationsRefresh(() => void load()), [load])
 
-  useEffect(() => {
-    if (!notificationsOpen) setDetailOpen(false)
-  }, [notificationsOpen])
-
   const unread = useMemo(() => notifications.filter((n) => !n.is_read).length, [notifications])
 
   async function markRead(item: InstructorNotification) {
@@ -71,9 +67,15 @@ export function FacultyNotificationsSheet({ session }: Props) {
   }
 
   async function handleOpen(item: InstructorNotification) {
-    const next = await markRead(item)
-    setSelected(next)
+    setSelected(item)
+    closeNotifications()
     setDetailOpen(true)
+    try {
+      const next = await markRead(item)
+      setSelected(next)
+    } catch (err) {
+      console.warn("[FacultyNotificationsSheet] mark read failed", err)
+    }
   }
 
   function handleOpenRelated(item: InstructorNotification) {
@@ -119,11 +121,27 @@ export function FacultyNotificationsSheet({ session }: Props) {
           <GlassSheetHandle />
           <View style={styles.head}>
             <Text style={[type.sheetTitle, styles.title, { color: chrome.label }]}>Notifications</Text>
-            {unread > 0 ? (
-              <Pressable onPress={() => void handleMarkAllRead()} hitSlop={8} accessibilityRole="button">
-                <Text style={[styles.markAll, { color: tokens.accent }]}>Mark All Read</Text>
+            <View style={styles.headActions}>
+              {unread > 0 ? (
+                <Pressable
+                  onPress={() => void handleMarkAllRead()}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel="Mark all notifications read"
+                >
+                  <Text style={[styles.markAll, { color: tokens.accent }]}>Mark All Read</Text>
+                </Pressable>
+              ) : null}
+              <Pressable
+                onPress={closeNotifications}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Close notifications"
+                style={styles.doneHit}
+              >
+                <Text style={[styles.done, { color: tokens.accent }]}>Done</Text>
               </Pressable>
-            ) : null}
+            </View>
           </View>
 
           {loading ? (
@@ -165,8 +183,11 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: 12,
   },
-  title: { letterSpacing: -0.4 },
+  title: { letterSpacing: -0.4, flexShrink: 1 },
+  headActions: { flexDirection: "row", alignItems: "center", gap: 14 },
   markAll: { fontSize: 17, fontWeight: "400" },
+  done: { fontSize: 17, fontWeight: "600" },
+  doneHit: { minWidth: 44, minHeight: 44, justifyContent: "center", alignItems: "flex-end" },
   loading: { marginTop: 24, marginBottom: 16 },
   empty: { paddingVertical: 12 },
 })

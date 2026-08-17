@@ -1,0 +1,24 @@
+appId: com.coursecollab.app
+---
+- swipe:
+    direction: UP
+- takeScreenshot: projects-config-bottom
+- tapOn: "Location"
+- eraseText
+- inputText: "QA do not save"
+- tapOn: "Edit ELEG1301P01"
+- takeScreenshot: projects-config-location
+- tapOn: "Done"
+- tapOn: "Add section config"
+- extendedWaitUntil:
+    visible: "New configuration|All sessions configured"
+    timeout: 8000
+- takeScreenshot: projects-config-add
+- tapOn:
+    text: "OK"
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn: "Grades"
+- takeScreenshot: projects-tab-grades

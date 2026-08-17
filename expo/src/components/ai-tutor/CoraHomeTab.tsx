@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View } from "react-native"
+import { Pressable, StyleSheet, Text, View } from "react-native"
 import { LinearGradient } from "expo-linear-gradient"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useRouter } from "expo-router"
@@ -77,6 +77,8 @@ export function CoraHomeTab({
   session,
   stats,
   creditsLabel,
+  creditsSubtitle = "Monthly Cora Credits",
+  onCreditsPress,
   recommendations,
   loading,
   refreshing,
@@ -88,6 +90,8 @@ export function CoraHomeTab({
   session: StudentSession
   stats: AiTutorStats | null
   creditsLabel: string
+  creditsSubtitle?: string
+  onCreditsPress?: () => void
   recommendations: AiTutorRecommendation[]
   loading: boolean
   refreshing: boolean
@@ -178,7 +182,7 @@ export function CoraHomeTab({
       </ModuleSection>
 
       <ModuleSection title="Credits">
-        <View style={styles.creditsPanel}>
+        <Pressable onPress={onCreditsPress} style={styles.creditsPanel}>
           <SolidListThumbTile
             thumb={CORA_HOME_CREDITS_THUMB}
             icon="sparkles-outline"
@@ -188,10 +192,10 @@ export function CoraHomeTab({
           <View style={styles.creditsCopy}>
             <Text style={[type.bodyEmphasis, styles.creditsValue]}>{creditsLabel}</Text>
             <Text style={[type.caption, styles.creditsSubtitle, { color: SN.secondaryLabel }]}>
-              Weekly message allowance
+              {creditsSubtitle}
             </Text>
           </View>
-        </View>
+        </Pressable>
       </ModuleSection>
 
       <ModuleSection title="Your Activity">

@@ -57,6 +57,7 @@ export function FacultyRecommendationsScreen() {
   const [tab, setTab] = useState<RecommendationTab>(tabParam === "guest-requests" ? "guest-requests" : "all")
   const [requests, setRequests] = useState<InstructorRecommendationRequest[]>([])
   const [selectedId, setSelectedId] = useState<number | null>(null)
+  const [workspaceTab, setWorkspaceTab] = useState<"overview" | "letter" | "questionnaire" | "activity">("overview")
   const [search, setSearch] = useState("")
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -97,9 +98,15 @@ export function FacultyRecommendationsScreen() {
   useEffect(() => {
     const openId = Number(open)
     if (Number.isFinite(openId) && openId > 0) {
+      setWorkspaceTab("letter")
       setSelectedId(openId)
     }
   }, [open])
+
+  function openLetterWorkspace(requestId: number) {
+    setWorkspaceTab("letter")
+    setSelectedId(requestId)
+  }
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true)
@@ -230,7 +237,7 @@ export function FacultyRecommendationsScreen() {
         ) : (
           <View style={localStyles.list}>
             {filtered.map((item) => (
-              <FacultyRecommendationLetterCard key={item.id} item={item} onPress={() => setSelectedId(item.id)} />
+              <FacultyRecommendationLetterCard key={item.id} item={item} onPress={() => openLetterWorkspace(item.id)} />
             ))}
           </View>
         )}
@@ -240,7 +247,11 @@ export function FacultyRecommendationsScreen() {
         visible={selectedId != null}
         scope={scope}
         requestId={selectedId}
-        onClose={() => setSelectedId(null)}
+        initialTab={workspaceTab}
+        onClose={() => {
+          setSelectedId(null)
+          setWorkspaceTab("overview")
+        }}
         onUpdated={() => void handleRefresh()}
       />
 

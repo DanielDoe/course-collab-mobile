@@ -230,7 +230,7 @@ export function GradeSummaryCard({
         ) : null}
 
         {!locked && correctAnswers != null && !showPnd ? (
-          <View style={[styles.correctRow, { backgroundColor: correctPill.backgroundColor, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, alignSelf: "flex-start" }]}>
+          <View style={[styles.correctRow, { backgroundColor: correctPill.backgroundColor }]}>
             <Ionicons name="checkmark-circle-outline" size={16} color={correctPill.color} />
             <Text style={[styles.correctText, { color: correctPill.color }]}>
               {correctAnswers} / {totalQuestions} correct
@@ -278,12 +278,20 @@ export function GradeSummaryCard({
               return (
                 <Pressable
                   key={section.title}
-                  style={[
+                  style={({ pressed }) => [
                     styles.sectionCard,
                     { backgroundColor: theme.bg, borderColor: theme.border },
                     selected && styles.sectionCardSelected,
+                    pressed && styles.sectionCardPressed,
                   ]}
                   onPress={() => onSectionPress?.(section.title)}
+                  disabled={!onSectionPress}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
+                  accessibilityLabel={`${section.title}: ${formatPct(section.sectionPercentage)}, ${formatPts(section.earned)} of ${formatPts(section.max)} points`}
+                  accessibilityHint={
+                    selected ? "Clears the section filter" : "Filters question review to this section"
+                  }
                 >
                   <Text style={[styles.sectionCardTitle, { color: theme.title }]} numberOfLines={2}>
                     {section.title}
@@ -445,7 +453,12 @@ const styles = StyleSheet.create({
   correctRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6},
+    alignSelf: "flex-start",
+    gap: 6,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
   correctText: {
     fontSize: 13,
     fontWeight: "700",
@@ -485,12 +498,12 @@ const styles = StyleSheet.create({
     gap: 10},
   sectionCard: {
     borderRadius: 16,
-    borderWidth: 1,
+    borderWidth: 2,
     padding: 14,
     gap: 6,
   },
+  sectionCardPressed: { opacity: 0.9 },
   sectionCardSelected: {
-    borderWidth: 2,
     borderColor: REPORT_SOLID.selectedRing,
     shadowColor: "#000000",
     shadowOpacity: 0.12,

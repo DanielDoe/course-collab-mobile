@@ -126,6 +126,6 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   label: { fontSize: 12, fontWeight: "600", lineHeight: 16 },
-  value: { fontSize: 24, fontWeight: "800", letterSpacing: -0.4 },
+  value: { fontSize: 24, fontWeight: "800", letterSpacing: -0.4, lineHeight: 28 },
   sub: { fontSize: 11, lineHeight: 15, fontWeight: "600" },
 })

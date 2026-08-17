@@ -1,8 +1,9 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native"
 import { Ionicons } from "@/components/icons/AppIcon"
-import { NATIVE } from "../../constants/faculty-native-theme"
 import { useAppThemeTokens } from "../../context/AppearanceProvider"
+import { hexToRgba } from "../../constants/app-themes"
 import type { CoraActionProposal, CoraConfirmActionResult } from "../../lib/cora/types"
+import { activityToolLabel } from "../../lib/cora/activity-store"
 
 type Props = {
   proposal: CoraActionProposal
@@ -30,12 +31,31 @@ function iconForEntity(entityType: string): keyof typeof Ionicons.glyphMap {
       return "document-text-outline"
     case "calendar_events":
       return "calendar-outline"
+    case "practice_quiz":
+      return "school-outline"
+    case "study_plan":
+      return "map-outline"
+    case "syllabus":
+      return "book-outline"
+    case "lecture":
+      return "easel-outline"
+    case "account":
+      return "person-circle-outline"
     default:
       return "sparkles-outline"
   }
 }
 
-/** Native confirmation card for consequential Cora mutations. */
+function isProposalExpired(proposal: CoraActionProposal): boolean {
+  const expires = Date.parse(proposal.expiresAt)
+  return Number.isFinite(expires) && expires < Date.now()
+}
+
+/**
+ * Pending: Confirm / Cancel.
+ * Completed: audit receipt only — never re-runs; Open module when a route exists.
+ * Expired (not confirmed): read-only notice — ask Cora again.
+ */
 export function CoraActionCard({
   proposal,
   status = "idle",
@@ -46,58 +66,73 @@ export function CoraActionCard({
   result,
 }: Props) {
   const tokens = useAppThemeTokens()
+  const native = tokens.native
   const preview = proposal.preview
-  const isDone = status === "done"
-  const isError = status === "error"
+  const isDone = status === "done" || Boolean(result?.success)
+  const isError = status === "error" && !isDone
   const isBusy = status === "confirming"
+  const expired = !isDone && !isBusy && isProposalExpired(proposal)
+  const actionable = !isDone && !expired && (status === "idle" || status === "error")
+
+  const accent = tokens.accent
+  const success = "#34C759"
+  const danger = "#FF3B30"
+  const statusColor = isDone ? success : isError || expired ? danger : accent
+  const openRoute = result?.entity?.route
+  const taskTitle =
+    result?.entity?.title?.trim() ||
+    preview.title ||
+    (result?.tool ? activityToolLabel(result.tool) : "Cora task")
 
   return (
     <View
       style={[
         styles.card,
         {
-          backgroundColor: tokens.isDark ? NATIVE.secondaryGrouped : "#FFFFFF",
-          borderColor: tokens.isDark ? NATIVE.separator : "rgba(0,0,0,0.08)",
+          backgroundColor: native.secondaryGrouped,
+          borderColor: native.separator,
+          shadowColor: tokens.isDark ? "#000000" : "#101828",
+          shadowOpacity: tokens.isDark ? 0.45 : 0.12,
         },
       ]}
+      accessibilityRole="summary"
+      accessibilityLabel={
+        isDone ? `Completed: ${taskTitle}` : expired ? `Expired: ${preview.title}` : preview.title
+      }
     >
       <View style={styles.header}>
-        <View
-          style={[
-            styles.iconTile,
-            {
-              backgroundColor: isDone
-                ? "rgba(52, 199, 89, 0.14)"
-                : isError
-                  ? "rgba(255, 59, 48, 0.12)"
-                  : "rgba(0, 122, 255, 0.12)",
-            },
-          ]}
-        >
+        <View style={[styles.iconTile, { backgroundColor: hexToRgba(statusColor, tokens.isDark ? 0.22 : 0.12) }]}>
           <Ionicons
-            name={isDone ? "checkmark-circle" : iconForEntity(preview.entityType)}
+            name={isDone ? "checkmark-circle" : expired ? "time-outline" : iconForEntity(preview.entityType)}
             size={20}
-            color={isDone ? "#34C759" : isError ? "#FF3B30" : "#007AFF"}
+            color={statusColor}
           />
         </View>
         <View style={styles.headerText}>
-          <Text style={[styles.title, { color: tokens.native.label }]} numberOfLines={2}>
-            {isDone ? "Done" : preview.title}
+          {isDone ? (
+            <Text style={[styles.badge, { color: success }]}>Completed</Text>
+          ) : expired ? (
+            <Text style={[styles.badge, { color: danger }]}>Expired</Text>
+          ) : null}
+          <Text style={[styles.title, { color: native.label }]} numberOfLines={2}>
+            {isDone ? taskTitle : preview.title}
           </Text>
-          <Text style={[styles.summary, { color: tokens.native.secondaryLabel }]} numberOfLines={3}>
-            {isDone ? resultMessage || result?.message || preview.summary : preview.summary}
+          <Text style={[styles.summary, { color: native.secondaryLabel }]} numberOfLines={4}>
+            {isDone
+              ? resultMessage || result?.message || preview.summary
+              : expired
+                ? "This confirmation expired. Ask Cora again if you still want to run it — it was not executed."
+                : preview.summary}
           </Text>
         </View>
       </View>
 
-      {!isDone ? (
-        <View style={styles.fields}>
+      {(isDone || actionable || isError) && preview.fields.length > 0 ? (
+        <View style={[styles.fields, { borderTopColor: native.separator }]}>
           {preview.fields.map((field) => (
             <View key={`${field.label}-${field.value}`} style={styles.fieldRow}>
-              <Text style={[styles.fieldLabel, { color: tokens.native.secondaryLabel }]}>
-                {field.label}
-              </Text>
-              <Text style={[styles.fieldValue, { color: tokens.native.label }]} numberOfLines={3}>
+              <Text style={[styles.fieldLabel, { color: native.tertiaryLabel }]}>{field.label}</Text>
+              <Text style={[styles.fieldValue, { color: native.label }]} numberOfLines={3}>
                 {field.value}
               </Text>
             </View>
@@ -105,37 +140,58 @@ export function CoraActionCard({
         </View>
       ) : null}
 
-      {isError && resultMessage ? (
-        <Text style={styles.errorText}>{resultMessage}</Text>
+      {isError && (resultMessage || result?.error === "in_progress") ? (
+        <Text style={[styles.errorText, { color: danger }]}>
+          {result?.error === "in_progress"
+            ? "This action is already being confirmed."
+            : resultMessage}
+        </Text>
       ) : null}
 
       <View style={styles.actions}>
         {isDone ? (
-          <>
-            {result?.entity?.route ? (
-              <Pressable
-                onPress={() => onOpen?.(String(result.entity!.route))}
-                style={[styles.btn, styles.btnPrimary]}
-                accessibilityRole="button"
-              >
-                <Text style={styles.btnPrimaryText}>Open</Text>
-              </Pressable>
-            ) : null}
-          </>
+          openRoute ? (
+            <Pressable
+              onPress={() => onOpen?.(String(openRoute))}
+              style={[styles.btn, styles.btnPrimary, { backgroundColor: accent }]}
+              accessibilityRole="button"
+              accessibilityLabel="Open module"
+            >
+              <Text style={styles.btnPrimaryText}>Open module</Text>
+            </Pressable>
+          ) : (
+            <Text style={[styles.auditHint, { color: native.tertiaryLabel }]}>
+              Already executed — kept for your records
+            </Text>
+          )
+        ) : expired ? (
+          <Text style={[styles.auditHint, { color: native.tertiaryLabel }]}>Not executed</Text>
         ) : (
           <>
             <Pressable
               onPress={onCancel}
               disabled={isBusy}
-              style={[styles.btn, styles.btnGhost, { borderColor: tokens.native.separator }]}
+              style={[
+                styles.btn,
+                styles.btnGhost,
+                {
+                  borderColor: native.separator,
+                  backgroundColor: tokens.isDark ? hexToRgba("#FFFFFF", 0.06) : hexToRgba("#000000", 0.03),
+                },
+              ]}
               accessibilityRole="button"
             >
-              <Text style={[styles.btnGhostText, { color: tokens.native.label }]}>Cancel</Text>
+              <Text style={[styles.btnGhostText, { color: native.label }]}>Cancel</Text>
             </Pressable>
             <Pressable
               onPress={onConfirm}
-              disabled={isBusy}
-              style={[styles.btn, styles.btnPrimary, isBusy && styles.btnDisabled]}
+              disabled={isBusy || !actionable}
+              style={[
+                styles.btn,
+                styles.btnPrimary,
+                { backgroundColor: accent },
+                (isBusy || !actionable) && styles.btnDisabled,
+              ]}
               accessibilityRole="button"
             >
               {isBusy ? (
@@ -153,12 +209,16 @@ export function CoraActionCard({
 
 const styles = StyleSheet.create({
   card: {
-    marginTop: 10,
+    marginTop: 8,
     marginBottom: 4,
+    marginHorizontal: 4,
     borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
     padding: 14,
     gap: 12,
+    // Avoid scroll-slice artifacts from shadowed cells under clipping parents.
+    shadowOpacity: 0,
+    elevation: 0,
   },
   header: {
     flexDirection: "row",
@@ -176,6 +236,12 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 2,
   },
+  badge: {
+    fontSize: 12,
+    fontWeight: "700",
+    letterSpacing: 0.2,
+    marginBottom: 2,
+  },
   title: {
     fontSize: 16,
     fontWeight: "600",
@@ -186,8 +252,9 @@ const styles = StyleSheet.create({
     lineHeight: 19,
   },
   fields: {
-    gap: 8,
-    paddingTop: 2,
+    gap: 10,
+    paddingTop: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
   fieldRow: {
     gap: 2,
@@ -195,19 +262,24 @@ const styles = StyleSheet.create({
   fieldLabel: {
     fontSize: 12,
     fontWeight: "500",
-    textTransform: "none",
   },
   fieldValue: {
     fontSize: 14,
     lineHeight: 19,
   },
   errorText: {
-    color: "#FF3B30",
     fontSize: 13,
+  },
+  auditHint: {
+    fontSize: 13,
+    fontWeight: "500",
+    alignSelf: "flex-end",
+    paddingVertical: 8,
   },
   actions: {
     flexDirection: "row",
     justifyContent: "flex-end",
+    alignItems: "center",
     gap: 8,
     paddingTop: 2,
   },
@@ -220,14 +292,12 @@ const styles = StyleSheet.create({
   },
   btnGhost: {
     borderWidth: StyleSheet.hairlineWidth,
-    backgroundColor: "transparent",
   },
   btnGhostText: {
     fontSize: 14,
     fontWeight: "600",
   },
   btnPrimary: {
-    backgroundColor: "#007AFF",
     minWidth: 120,
   },
   btnPrimaryText: {

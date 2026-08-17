@@ -152,7 +152,7 @@ export function FacultyFlashcardsDeletedPanel({ scope, decks, cards, onChanged }
                   {deck.title}
                 </Text>
                 <Text style={[type.caption, { color: native.secondaryLabel }]}>
-                  Deck{deck.topic ? ` · ${deck.topic}` : ""} · {deck.cardCount} cards
+                  Deck{deck.topic ? ` · ${deck.topic}` : ""} · {deck.cardCount === 1 ? "1 card" : `${deck.cardCount} cards`}
                 </Text>
               </View>
               <View style={localStyles.actions}>
@@ -160,6 +160,7 @@ export function FacultyFlashcardsDeletedPanel({ scope, decks, cards, onChanged }
                   onPress={() => void restoreDecks([deck.id])}
                   disabled={busy}
                   style={localStyles.actionBtn}
+                  accessibilityRole="button"
                   accessibilityLabel="Restore deck"
                 >
                   <Ionicons name="arrow-undo-outline" size={20} color={FACULTY_FLASHCARD_COLOR.link} />
@@ -168,7 +169,8 @@ export function FacultyFlashcardsDeletedPanel({ scope, decks, cards, onChanged }
                   onPress={() => confirmPermanentDelete([deck.id])}
                   disabled={busy}
                   style={localStyles.actionBtn}
-                  accessibilityLabel="Permanently delete deck"
+                  accessibilityRole="button"
+                  accessibilityLabel={`Permanently delete ${deck.title}`}
                 >
                   <Ionicons name="trash-outline" size={20} color={tokens.danger} />
                 </Pressable>
@@ -202,6 +204,7 @@ export function FacultyFlashcardsDeletedPanel({ scope, decks, cards, onChanged }
                 onPress={() => void restoreCards([card.id])}
                 disabled={busy}
                 style={localStyles.actionBtn}
+                accessibilityRole="button"
                 accessibilityLabel="Restore card"
               >
                 <Ionicons name="arrow-undo-outline" size={20} color={FACULTY_FLASHCARD_COLOR.link} />
@@ -225,8 +228,8 @@ const localStyles = StyleSheet.create({
   copy: { flex: 1, gap: 4 },
   actions: { flexDirection: "row", alignItems: "center", gap: 4 },
   actionBtn: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 10,

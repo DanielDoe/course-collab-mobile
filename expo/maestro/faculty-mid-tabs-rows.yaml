@@ -1,0 +1,28 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Issues"
+- waitForAnimationToEnd
+- tapOn: "Deleted"
+- waitForAnimationToEnd
+- tapOn:
+    text: "All mid-se.*"
+- waitForAnimationToEnd
+- tapOn: "ECE 2202 - Mid-Semester Exam 2"
+- waitForAnimationToEnd
+- tapOn: "Done"
+- waitForAnimationToEnd
+- tapOn: "ECE 2202 - Mid-Semester Exam 1"
+- waitForAnimationToEnd
+- scrollUntilVisible:
+    element: "Delete"
+    direction: DOWN
+    timeout: 12000
+- tapOn: "Delete"
+- waitForAnimationToEnd
+- tapOn: "Cancel"
+- waitForAnimationToEnd
+- tapOn: "Done"
+- waitForAnimationToEnd
+- tapOn: "Preview"
+- waitForAnimationToEnd
+- tapOn: "Close preview"

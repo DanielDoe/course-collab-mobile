@@ -1,0 +1,9 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Course Evaluations"
+    direction: DOWN
+    timeout: 20000
+- tapOn: "Course Evaluations"
+- waitForAnimationToEnd

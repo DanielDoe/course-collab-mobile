@@ -1,0 +1,11 @@
+appId: com.coursecollab.app
+---
+- tapOn: "New quiz"
+- tapOn: "AC Power"
+- waitForAnimationToEnd
+- tapOn: "Select all"
+- waitForAnimationToEnd
+- tapOn: "Submit Create quiz (12)"
+- waitForAnimationToEnd
+- tapOn: "OK"
+- waitForAnimationToEnd

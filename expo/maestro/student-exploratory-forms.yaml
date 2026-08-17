@@ -1,0 +1,64 @@
+appId: com.coursecollab.app
+---
+- openLink: coursecollab://dev-student-login
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 90000
+- openLink: coursecollab:///module/office-hours
+- extendedWaitUntil:
+    visible: "Office Hours"
+    timeout: 25000
+- tapOn:
+    text: "Topic"
+    optional: true
+- inputText: "Nodal analysis review"
+- tapOn:
+    text: "Area of concern"
+    optional: true
+- inputText: "Circuits"
+- tapOn:
+    text: "Description"
+    optional: true
+- inputText: "Need help before the next quiz."
+- tapOn:
+    text: "High"
+    optional: true
+- tapOn:
+    text: "Submit request"
+    optional: true
+- takeScreenshot: exploratory-office-submit
+- openLink: coursecollab:///module/messages
+- extendedWaitUntil:
+    visible: "Messages"
+    timeout: 20000
+- tapOn:
+    text: "New message"
+    optional: true
+- tapOn:
+    text: "Cancel"
+    optional: true
+- tapOn:
+    text: "Close"
+    optional: true
+- takeScreenshot: exploratory-messages
+- openLink: coursecollab:///module/report-bug
+- extendedWaitUntil:
+    visible: "Report a Bug|Bug report|Submit bug report"
+    timeout: 20000
+- tapOn:
+    text: "Submit bug report"
+- tapOn:
+    text: "OK"
+    optional: true
+- takeScreenshot: exploratory-bug-validation
+- openLink: coursecollab:///module/lectures
+- extendedWaitUntil:
+    visible: "Lectures"
+    timeout: 20000
+- tapOn:
+    text: "Thevenin"
+    optional: true
+- tapOn:
+    text: "Completed"
+    optional: true
+- takeScreenshot: exploratory-lecture-open

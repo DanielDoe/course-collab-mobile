@@ -5,6 +5,7 @@ export type MfaLoginState = {
   requiresSetup: boolean
 }
 
+/** Legacy login-challenge enroll (should not be used when MFA is optional). */
 export type MfaEnrollStartResponse = {
   qrDataUrl: string
   manualKey: string
@@ -12,8 +13,18 @@ export type MfaEnrollStartResponse = {
   issuer: string
 }
 
+/** Settings → Security enrollment start. */
+export type MfaSettingsEnrollStartResponse = {
+  enrollmentToken: string
+  qrDataUrl: string
+  manualKey: string
+  accountName?: string
+  issuer?: string
+}
+
 export type MfaStatusResponse = {
   enabled: boolean
+  /** Always false — MFA is optional product-wide. */
   required: boolean
   unusedRecoveryCodes: number
   trustDurationDays: number

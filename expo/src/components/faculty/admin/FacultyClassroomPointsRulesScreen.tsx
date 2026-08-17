@@ -4,20 +4,30 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  View} from "react-native"
+  View,
+} from "react-native"
+import { Ionicons } from "@/components/icons/AppIcon"
 import { instructorAdminApi } from "../../../lib/instructor-admin-api"
-import { parseRewardsPolicy, type RewardsPolicy } from "../../../lib/course-policy-settings"
+import {
+  DEFAULT_REWARDS_POLICY,
+  parseRewardsPolicy,
+  type RewardsPolicy,
+} from "../../../lib/course-policy-settings"
 import { useFacultyScope } from "../../../hooks/useFacultyScope"
 import { NATIVE } from "../../../constants/faculty-native-theme"
 import { FACULTY_ADMIN_COLOR, FACULTY_ADMIN_CHIP_RADIUS } from "../../../lib/faculty-admin-theme"
+import { FacultyModuleTabBar } from "../faculty-module-shell"
 import {
   FacultyAdminCourseGate,
   FacultyAdminScreen,
   FacultyAdminSection,
   FacultyAdminToggleRow,
-  FacultyAdminNumberField,
+  FacultyAdminChoiceField,
   useAdminSaveState,
-  useAdminStyles} from "../faculty-admin-ui"
+  useAdminStyles,
+} from "../faculty-admin-ui"
+import { POINTS_CAP_OPTIONS } from "../FacultyNativePickers"
+import { AppAlert } from "../../../lib/app-alert"
 
 type RewardsForm = {
   show_code_assignments: boolean
@@ -32,6 +42,13 @@ type RewardsForm = {
 }
 
 type SubmissionPreset = "code" | "solution" | "both"
+type RulesTab = "blocks" | "approval" | "points"
+
+const TABS: Array<{ id: RulesTab; label: string }> = [
+  { id: "blocks", label: "Blocks" },
+  { id: "approval", label: "Approval" },
+  { id: "points", label: "Points" },
+]
 
 const SUBMISSION_PRESETS: Array<{ id: SubmissionPreset; label: string }> = [
   { id: "code", label: "Code only" },
@@ -49,7 +66,8 @@ function policyToForm(policy: RewardsPolicy): RewardsForm {
     duplicate_detection_enabled: policy.duplicate_detection_enabled,
     blur_leaderboard_peer_names: policy.blur_leaderboard_peer_names,
     points_for_full_grade: String(policy.points_for_full_grade),
-    max_daily_submission_points: String(policy.max_daily_submission_points)}
+    max_daily_submission_points: String(policy.max_daily_submission_points),
+  }
 }
 
 function formToPolicy(form: RewardsForm): RewardsPolicy {
@@ -62,7 +80,8 @@ function formToPolicy(form: RewardsForm): RewardsPolicy {
     duplicate_detection_enabled: form.duplicate_detection_enabled,
     blur_leaderboard_peer_names: form.blur_leaderboard_peer_names,
     points_for_full_grade: Number(form.points_for_full_grade),
-    max_daily_submission_points: Number(form.max_daily_submission_points)})
+    max_daily_submission_points: Number(form.max_daily_submission_points),
+  })
 }
 
 function activePreset(form: RewardsForm | null): SubmissionPreset {
@@ -82,7 +101,7 @@ export function FacultyClassroomPointsRulesScreen() {
 }
 
 function FacultyClassroomPointsRulesContent() {
-  const { scope } = useFacultyScope()
+  const { scope, ready } = useFacultyScope()
   const {
     dirty,
     saving,
@@ -93,7 +112,9 @@ function FacultyClassroomPointsRulesContent() {
     setError,
     clearError,
     runSave,
-    showSuccess} = useAdminSaveState()
+    showSuccess,
+  } = useAdminSaveState()
+  const [tab, setTab] = useState<RulesTab>("blocks")
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [backfilling, setBackfilling] = useState(false)
@@ -115,9 +136,13 @@ function FacultyClassroomPointsRulesContent() {
   }, [scope, clearError, resetDirty, setError])
 
   useEffect(() => {
+    if (!ready) {
+      setLoading(false)
+      return
+    }
     setLoading(true)
     void load()
-  }, [load])
+  }, [ready, load])
 
   const onRefresh = useCallback(() => {
     setRefreshing(true)
@@ -144,6 +169,11 @@ function FacultyClassroomPointsRulesContent() {
     },
     [patchForm],
   )
+
+  const handleReset = useCallback(() => {
+    setForm(policyToForm(DEFAULT_REWARDS_POLICY))
+    markDirty()
+  }, [markDirty])
 
   const handleSave = useCallback(() => {
     if (!scope || !form) return
@@ -205,26 +235,31 @@ function FacultyClassroomPointsRulesContent() {
         },
         presetChipText: { ...type.callout, fontWeight: "600", color: native.secondaryLabel },
         presetChipTextActive: { color: FACULTY_ADMIN_COLOR.link },
-        backfillBtn: {
-          flex: 1,
+        actionRow: {
+          flexDirection: "row",
           alignItems: "center",
           justifyContent: "center",
-          borderRadius: NATIVE.sectionRadius,
-          paddingVertical: 14,
-          minHeight: 48,
-          borderWidth: StyleSheet.hairlineWidth,
-          borderColor: native.separator,
+          gap: 8,
+          minHeight: NATIVE.rowMinHeight,
+          paddingHorizontal: 14,
+          paddingVertical: 12,
           backgroundColor: native.secondaryGrouped,
         },
-        backfillBtnDisabled: { opacity: 0.55 },
-        backfillBtnText: { ...type.bodyEmphasis, color: FACULTY_ADMIN_COLOR.link },
+        actionRowDisabled: { opacity: 0.55 },
+        actionRowText: {
+          ...type.bodyEmphasis,
+          color: FACULTY_ADMIN_COLOR.link,
+        },
+        resetRowText: {
+          ...type.bodyEmphasis,
+          color: FACULTY_ADMIN_COLOR.link,
+        },
       }),
     [native, type],
   )
 
   return (
     <FacultyAdminScreen
-      title="Classroom Points Rules"
       loading={loading}
       saving={saving}
       refreshing={refreshing}
@@ -233,10 +268,127 @@ function FacultyClassroomPointsRulesContent() {
       successMessage={successMessage}
       onSave={handleSave}
       onRefresh={onRefresh}
-      footerExtra={
+    >
+      <FacultyModuleTabBar tabs={TABS} tab={tab} onChange={setTab} scrollable />
+
+      {tab === "blocks" ? (
+        <FacultyAdminSection
+          title="Student Submission Blocks"
+          footer="Choose which assignment types appear on the student classroom points page."
+        >
+          <View style={styles.presetRow}>
+            {SUBMISSION_PRESETS.map(({ id, label }) => {
+              const active = preset === id
+              return (
+                <Pressable
+                  key={id}
+                  style={({ pressed }) => [
+                    styles.presetChip,
+                    active && styles.presetChipActive,
+                    pressed && { opacity: NATIVE.pressedOpacity },
+                  ]}
+                  android_ripple={{ color: "rgba(0,0,0,0.08)" }}
+                  onPress={() => applyPreset(id)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active }}
+                >
+                  <Text style={[styles.presetChipText, active && styles.presetChipTextActive]}>
+                    {label}
+                  </Text>
+                </Pressable>
+              )
+            })}
+          </View>
+          <FacultyAdminToggleRow
+            label="Show Code Assignments"
+            value={form?.show_code_assignments ?? false}
+            onChange={(next) => patchForm({ show_code_assignments: next })}
+          />
+          <FacultyAdminToggleRow
+            label="Show Solution Assignments"
+            value={form?.show_solution_assignments ?? false}
+            onChange={(next) => patchForm({ show_solution_assignments: next })}
+          />
+        </FacultyAdminSection>
+      ) : null}
+
+      {tab === "approval" ? (
+        <FacultyAdminSection
+          title="Submissions & Approval"
+          footer="Auto-approve runs AI feedback before crediting points immediately."
+        >
+          <FacultyAdminToggleRow
+            label="Allow Student Submissions"
+            value={form?.allow_student_submissions ?? false}
+            onChange={(next) => patchForm({ allow_student_submissions: next })}
+          />
+          <FacultyAdminToggleRow
+            label="Auto-Approve Submissions"
+            subtitle="Classroom code/solution submissions receive AI feedback then credit immediately."
+            value={form?.auto_approve_submissions ?? false}
+            onChange={(next) => patchForm({ auto_approve_submissions: next })}
+          />
+          <FacultyAdminToggleRow
+            label="Auto-Approve Practice"
+            subtitle="Practice Hub uploads receive AI feedback then credit immediately."
+            value={form?.auto_approve_practice_submissions ?? false}
+            onChange={(next) => patchForm({ auto_approve_practice_submissions: next })}
+          />
+          <FacultyAdminToggleRow
+            label="Duplicate Detection"
+            subtitle="Flag likely duplicate submissions for review."
+            value={form?.duplicate_detection_enabled ?? false}
+            onChange={(next) => patchForm({ duplicate_detection_enabled: next })}
+          />
+        </FacultyAdminSection>
+      ) : null}
+
+      {tab === "points" ? (
+        <FacultyAdminSection
+          title="Points & Privacy"
+          footer="Points for full grade sets the classroom points cap. Daily max limits per-student accrual."
+        >
+          <FacultyAdminChoiceField
+            label="Points for Full Grade"
+            value={form?.points_for_full_grade ?? ""}
+            options={POINTS_CAP_OPTIONS}
+            onChange={(text) => patchForm({ points_for_full_grade: text })}
+          />
+          <FacultyAdminChoiceField
+            label="Max Daily Submission Points"
+            value={form?.max_daily_submission_points ?? ""}
+            options={POINTS_CAP_OPTIONS}
+            onChange={(text) => patchForm({ max_daily_submission_points: text })}
+          />
+          <FacultyAdminToggleRow
+            label="Blur Leaderboard Peer Names"
+            subtitle="Hide peer names and points on student leaderboards for privacy."
+            value={form?.blur_leaderboard_peer_names ?? false}
+            onChange={(next) => patchForm({ blur_leaderboard_peer_names: next })}
+          />
+        </FacultyAdminSection>
+      ) : null}
+
+      <FacultyAdminSection
+        title="Maintenance"
+        footer="Backfill evaluates pending submissions with AI feedback. Does not change saved rules."
+      >
         <Pressable
-          style={[styles.backfillBtn, backfilling && styles.backfillBtnDisabled]}
-          onPress={() => void handleBackfill()}
+          style={({ pressed }) => [
+            styles.actionRow,
+            (backfilling || loading) && styles.actionRowDisabled,
+            pressed && !backfilling && !loading && { opacity: NATIVE.pressedOpacity },
+          ]}
+          onPress={() => {
+            AppAlert.alert(
+              "Run AI feedback backfill?",
+              "Evaluates up to 25 existing submissions for this course. Approved points are preserved.",
+              [
+                { text: "Cancel", style: "cancel" },
+                { text: "Run backfill", onPress: () => void handleBackfill() },
+              ],
+            )
+          }}
           disabled={backfilling || loading}
           accessibilityRole="button"
           accessibilityLabel="Run AI feedback backfill"
@@ -244,93 +396,27 @@ function FacultyClassroomPointsRulesContent() {
           {backfilling ? (
             <ActivityIndicator size="small" color={FACULTY_ADMIN_COLOR.link} />
           ) : (
-            <Text style={styles.backfillBtnText}>Run AI Feedback Backfill</Text>
+            <>
+              <Ionicons name="sparkles-outline" size={18} color={FACULTY_ADMIN_COLOR.link} />
+              <Text style={styles.actionRowText}>Run AI Feedback Backfill</Text>
+            </>
           )}
         </Pressable>
-      }
-    >
+      </FacultyAdminSection>
+
       <FacultyAdminSection
-        title="Student Submission Blocks"
-        footer="Choose which assignment types appear on the student classroom points page."
+        title="Restore Defaults"
+        footer="Resets every tab to platform defaults. Tap Save Changes to persist."
       >
-        <View style={styles.presetRow}>
-          {SUBMISSION_PRESETS.map(({ id, label }) => {
-            const active = preset === id
-            return (
-              <Pressable
-                key={id}
-                style={({ pressed }) => [
-                  styles.presetChip,
-                  active && styles.presetChipActive,
-                  pressed && { opacity: NATIVE.pressedOpacity },
-                ]}
-                android_ripple={{ color: "rgba(0,0,0,0.08)" }}
-                onPress={() => applyPreset(id)}
-                accessibilityRole="button"
-                accessibilityState={{ selected: active }}
-              >
-                <Text style={[styles.presetChipText, active && styles.presetChipTextActive]}>
-                  {label}
-                </Text>
-              </Pressable>
-            )
-          })}
-        </View>
-        <FacultyAdminToggleRow
-          label="Show Code Assignments"
-          value={form?.show_code_assignments ?? false}
-          onChange={(next) => patchForm({ show_code_assignments: next })}
-        />
-        <FacultyAdminToggleRow
-          label="Show Solution Assignments"
-          value={form?.show_solution_assignments ?? false}
-          onChange={(next) => patchForm({ show_solution_assignments: next })}
-        />
-      </FacultyAdminSection>
-
-      <FacultyAdminSection title="Submissions & Approval">
-        <FacultyAdminToggleRow
-          label="Allow Student Submissions"
-          value={form?.allow_student_submissions ?? false}
-          onChange={(next) => patchForm({ allow_student_submissions: next })}
-        />
-        <FacultyAdminToggleRow
-          label="Auto-Approve Submissions"
-          subtitle="Classroom code/solution submissions receive AI feedback then credit immediately."
-          value={form?.auto_approve_submissions ?? false}
-          onChange={(next) => patchForm({ auto_approve_submissions: next })}
-        />
-        <FacultyAdminToggleRow
-          label="Auto-Approve Practice Submissions"
-          subtitle="Practice Hub uploads receive AI feedback then credit immediately."
-          value={form?.auto_approve_practice_submissions ?? false}
-          onChange={(next) => patchForm({ auto_approve_practice_submissions: next })}
-        />
-        <FacultyAdminToggleRow
-          label="Duplicate Detection"
-          subtitle="Flag likely duplicate submissions for review."
-          value={form?.duplicate_detection_enabled ?? false}
-          onChange={(next) => patchForm({ duplicate_detection_enabled: next })}
-        />
-      </FacultyAdminSection>
-
-      <FacultyAdminSection title="Points & Privacy">
-        <FacultyAdminNumberField
-          label="Points for Full Grade"
-          value={form?.points_for_full_grade ?? ""}
-          onChangeText={(text) => patchForm({ points_for_full_grade: text })}
-        />
-        <FacultyAdminNumberField
-          label="Max Daily Submission Points"
-          value={form?.max_daily_submission_points ?? ""}
-          onChangeText={(text) => patchForm({ max_daily_submission_points: text })}
-        />
-        <FacultyAdminToggleRow
-          label="Blur Leaderboard Peer Names"
-          subtitle="Hide peer names and points on student leaderboards for privacy."
-          value={form?.blur_leaderboard_peer_names ?? false}
-          onChange={(next) => patchForm({ blur_leaderboard_peer_names: next })}
-        />
+        <Pressable
+          style={({ pressed }) => [styles.actionRow, pressed && { opacity: NATIVE.pressedOpacity }]}
+          onPress={handleReset}
+          accessibilityRole="button"
+          accessibilityLabel="Reset to defaults"
+        >
+          <Ionicons name="refresh-outline" size={18} color={FACULTY_ADMIN_COLOR.link} />
+          <Text style={styles.resetRowText}>Reset to Defaults</Text>
+        </Pressable>
       </FacultyAdminSection>
     </FacultyAdminScreen>
   )

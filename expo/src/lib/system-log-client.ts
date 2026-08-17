@@ -6,6 +6,7 @@ import Constants from "expo-constants"
 import { Dimensions, Platform } from "react-native"
 import { API_BASE_URL } from "../constants"
 import type { AppSession } from "./session"
+import { sanitizeLogValue } from "./http"
 
 export const MOBILE_APP_PLATFORM = "mobile-app" as const
 
@@ -241,8 +242,8 @@ export function reportMobileApiError(input: {
     metadata: {
       responsePreview:
         typeof input.body === "string"
-          ? input.body.slice(0, 500)
-          : JSON.stringify(input.body ?? null).slice(0, 500),
+          ? input.body.slice(0, 200)
+          : JSON.stringify(sanitizeLogValue(input.body) ?? null).slice(0, 200),
     },
   })
 }

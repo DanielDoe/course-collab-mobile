@@ -1,0 +1,4 @@
+appId: com.coursecollab.app
+---
+- tapOn:
+    point: "18%,71%"

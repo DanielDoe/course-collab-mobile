@@ -5,6 +5,8 @@ import { ApiError } from "../../lib/api"
 import { instructorApi, type InstructorLecture } from "../../lib/instructor-api"
 import { useFacultyScope } from "../../hooks/useFacultyScope"
 import { FacultyStatusPill } from "./faculty-shared"
+import { NativeSelect } from "../NativeSelect"
+import { WEEK_OPTIONS } from "./FacultyNativePickers"
 import {
   FacultySheetContainer,
   useCollabSheetStyles,
@@ -176,14 +178,18 @@ export function FacultyLectureActionSheet({
               />
             </FacultySheetField>
             <FacultySheetField label="Week">
-              <TextInput
-                style={collabSheetStyles.fieldInput}
+              <NativeSelect
+                placeholder="Week"
                 value={week}
-                onChangeText={(v) => {
+                options={
+                  WEEK_OPTIONS.some((option) => option.value === week)
+                    ? WEEK_OPTIONS
+                    : [...WEEK_OPTIONS, { value: week, label: `Week ${week}` }]
+                }
+                onChange={(v) => {
                   setWeek(v)
                   setDirty(true)
                 }}
-                keyboardType="number-pad"
               />
             </FacultySheetField>
             <FacultySheetField label="Description">
@@ -229,7 +235,7 @@ export function FacultyLectureActionSheet({
             <FacultySheetActionRow
               icon="cloud-upload-outline"
               label="Slide deck & settings"
-              subtitle="Upload PDF/PPT, allow download, section access"
+              subtitle="Upload PDF/PPT and allow student download"
               accent={SHEET_LECTURE.slideDeck}
               onPress={() => onOpenEditor(lecture)}
             />

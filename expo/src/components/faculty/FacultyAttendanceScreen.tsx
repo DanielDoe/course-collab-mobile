@@ -62,6 +62,7 @@ const MAIN_TABS: Array<{ id: AttendanceTab; label: string; icon: keyof typeof Io
   { id: "overview", label: "Overview", icon: "grid-outline" },
   { id: "roll", label: "Roll call", icon: "people-outline" },
   { id: "meetings", label: "Meetings", icon: "calendar-outline" },
+  { id: "log", label: "Log", icon: "list-outline" },
 ]
 
 function useAttendanceTheme() {
@@ -369,8 +370,9 @@ export function FacultyAttendanceScreen() {
 
   const filteredMeetings = useMemo(() => {
     const scoped = filterSessionsBySection(meetings, scopedSectionCode)
+    if (tab !== "meetings") return scoped
     return filterMeetingsBySearch(scoped, search)
-  }, [meetings, scopedSectionCode, search])
+  }, [meetings, scopedSectionCode, search, tab])
   const selectedMeeting = useMemo(
     () => filteredMeetings.find((m) => m.id === selectedMeetingId) ?? null,
     [filteredMeetings, selectedMeetingId],
@@ -435,10 +437,28 @@ export function FacultyAttendanceScreen() {
     setAnalytics(analyticsRes)
     setMeetings(meetingsRes)
 
-    const logSection = sectionCode ?? sections[0]?.code
-    if (logSection) {
-      const recordsRes = await instructorApi.getAttendanceRecords(scope, { section: logSection })
-      setRecords(recordsRes)
+    const logSections = sectionCode
+      ? [sectionCode]
+      : [...new Set(sections.map((s) => s.code?.trim()).filter((code): code is string => Boolean(code)))]
+    if (logSections.length > 0) {
+      const batches = await Promise.all(
+        logSections.map((code) => instructorApi.getAttendanceRecords(scope, { section: code })),
+      )
+      const seen = new Set<number>()
+      const merged: AttendanceRecord[] = []
+      for (const batch of batches) {
+        for (const record of batch) {
+          if (seen.has(record.id)) continue
+          seen.add(record.id)
+          merged.push(record)
+        }
+      }
+      merged.sort((a, b) => {
+        const aTime = a.timestamp ? Date.parse(String(a.timestamp)) : 0
+        const bTime = b.timestamp ? Date.parse(String(b.timestamp)) : 0
+        return bTime - aTime
+      })
+      setRecords(merged)
     } else {
       setRecords([])
     }
@@ -549,6 +569,21 @@ export function FacultyAttendanceScreen() {
     }
     setMarkingId(student.studentId)
     try {
+      const current = sessionMarks[student.studentId]
+      if (current === status) {
+        const existing = sessionRecords.find((r) => r.studentId === student.studentId)
+        if (existing) {
+          await instructorApi.deleteAttendanceRecord(scope, existing.id)
+          setSessionMarks((prev) => {
+            const next = { ...prev }
+            delete next[student.studentId]
+            return next
+          })
+          await loadSessionMarks()
+          void loadRoster(rosterSection)
+        }
+        return
+      }
       await instructorApi.markAttendanceManual(scope, {
         sessionId: selectedMeeting.id,
         studentId: student.studentId,
@@ -1126,6 +1161,7 @@ function RollCallStudentRow({
           current={current}
           busy={busy}
           disabled={disabled}
+          studentName={student.fullName}
           onMark={(status) => onMark(student, status)}
           compact={false}
         />
@@ -1171,11 +1207,25 @@ function MeetingsTab({
             onPress={() => onSelect(m)}
             footer={
               <View style={styles.meetingActions}>
-                <Pressable style={styles.meetingActionBtn} onPress={() => onSelect(m)}>
+                <Pressable
+                  style={styles.meetingActionBtn}
+                  onPress={() => onSelect(m)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Take roll ${m.class_title || "Class meeting"}`}
+                >
                   <Ionicons name="create-outline" size={16} color={FACULTY_ATTENDANCE_COLOR.link} />
                   <Text style={styles.meetingActionText}>Take roll</Text>
                 </Pressable>
-                <Pressable style={styles.meetingActionBtn} onPress={() => onToggleCancel(m)}>
+                <Pressable
+                  style={styles.meetingActionBtn}
+                  onPress={() => onToggleCancel(m)}
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    m.is_cancelled
+                      ? `Restore ${m.class_title || "Class meeting"}`
+                      : `Cancel class ${m.class_title || "Class meeting"}`
+                  }
+                >
                   <Ionicons
                     name={m.is_cancelled ? "refresh-outline" : "close-circle-outline"}
                     size={16}
@@ -1250,7 +1300,13 @@ function LogTab({
       {records.length === 0 ? (
         <FacultyEmptyState icon="list-outline" title="No records" body="Attendance marks and QR check-ins appear here." />
       ) : (
-        records.slice(0, 80).map((record) => (
+        <>
+        {records.length > 80 ? (
+          <Text style={{ color: native.secondaryLabel, fontSize: 12, fontWeight: "600" }}>
+            Showing the 80 most recent of {records.length} records.
+          </Text>
+        ) : null}
+        {records.slice(0, 80).map((record) => (
           <FacultySignatureListCard
             key={record.id}
             thumb={facultyAttendanceStudentThumb(record.studentId)}
@@ -1272,12 +1328,14 @@ function LogTab({
                     ? record.status
                     : undefined
                 }
+                studentName={record.studentName}
                 onMark={(status) => onUpdateStatus(record, status)}
                 compact
               />
             }
           />
-        ))
+        ))}
+        </>
       )}
     </View>
   )
@@ -1287,12 +1345,14 @@ function AttendanceMarkRow({
   current,
   busy = false,
   disabled = false,
+  studentName,
   onMark,
   compact = false,
 }: {
   current?: AttendanceStatus
   busy?: boolean
   disabled?: boolean
+  studentName?: string
   onMark: (status: AttendanceStatus) => void
   compact?: boolean
 }) {
@@ -1316,6 +1376,13 @@ function AttendanceMarkRow({
             ]}
             disabled={busy || disabled}
             onPress={() => onMark(opt.value)}
+            accessibilityRole="button"
+            accessibilityLabel={
+              studentName
+                ? `Mark ${studentName} ${attendanceStatusLabel(opt.value)}`
+                : `Mark ${attendanceStatusLabel(opt.value)}`
+            }
+            accessibilityState={{ selected: active, disabled: busy || disabled }}
           >
             <Text
               style={[
@@ -1345,7 +1412,7 @@ function QuickAction({
 }) {
   const { styles, tokens } = useAttendanceTheme()
   return (
-    <Pressable style={styles.quickAction} onPress={onPress}>
+    <Pressable style={styles.quickAction} onPress={onPress} accessibilityRole="button" accessibilityLabel={label}>
       <View style={styles.quickIcon}>
         <Ionicons name={icon} size={20} color={FACULTY_ATTENDANCE_COLOR.link} />
       </View>

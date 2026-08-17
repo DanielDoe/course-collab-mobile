@@ -1,0 +1,31 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Students"
+- takeScreenshot: practice-tab-students
+- tapOn: "Stats"
+- takeScreenshot: practice-tab-stats
+- tapOn: "Activity"
+- takeScreenshot: practice-tab-activity
+- tapOn: "Topics"
+- takeScreenshot: practice-tab-topics
+
+- tapOn: "Search topics…"
+- inputText: "zzz"
+- tapOn: "Manage Practice"
+- extendedWaitUntil:
+    visible: "No topics|No matches"
+    timeout: 8000
+- takeScreenshot: practice-search-empty
+- tapOn: "Clear search"
+- tapOn: "Search topics…"
+- eraseText
+- inputText: "AC"
+- tapOn: "Manage Practice"
+- takeScreenshot: practice-search-ac
+- tapOn: "Clear search"
+
+- tapOn: "Open filters"
+- extendedWaitUntil:
+    visible: "Topic scope|All sections"
+    timeout: 8000
+- takeScreenshot: practice-filters

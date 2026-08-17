@@ -77,8 +77,8 @@ export function FacultyIssuesScreen({
   async function handleUpdated() {
     if (!scope) return
     const [open, closed] = await Promise.all([
-      instructorApi.getIssues(scope, "open"),
-      instructorApi.getIssues(scope, "closed"),
+      instructorApi.getIssues(scope, "open", assessmentType),
+      instructorApi.getIssues(scope, "closed", assessmentType),
     ])
     setOpenIssues(open)
     setClosedIssues(closed)

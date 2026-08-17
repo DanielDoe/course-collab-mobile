@@ -1,5 +1,5 @@
+import { memo, useEffect, useMemo, useState } from "react"
 import { Linking, Pressable, StyleSheet, Text, View } from "react-native"
-import { memo, useEffect } from "react"
 import Animated, { useAnimatedStyle, useSharedValue, withSequence, withSpring } from "react-native-reanimated"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
@@ -16,8 +16,16 @@ import {
   looksLikeHtml,
   messageInitials,
   messagePreviewText,
+  resolveMessageDeliveryStatus,
   stripMessageHtml,
 } from "../../lib/messages-html"
+import {
+  incompleteCourseImportLabel,
+  parseCourseImportFromMessage,
+  stripCourseImportMarkup,
+} from "../../lib/message-course-import"
+import { unsentAuditLabel } from "../../lib/message-lifecycle"
+import { CoraImportedQuestionPreview } from "../ai-tutor/CoraImportedQuestionPreview"
 
 export function MessageAvatar({
   name,
@@ -57,11 +65,13 @@ export function MessageAvatar({
 export const MessageThreadRow = memo(function MessageThreadRow({
   thread,
   onPress,
+  isFirst,
   isLast,
   presenceStatus,
 }: {
   thread: ThreadSummary
   onPress: () => void
+  isFirst?: boolean
   isLast?: boolean
   presenceStatus?: PresenceStatus
 }) {
@@ -77,8 +87,27 @@ export const MessageThreadRow = memo(function MessageThreadRow({
     <Pressable
       style={({ pressed }) => [
         styles.threadRow,
-        { backgroundColor: native.secondaryGrouped },
-        !isLast && { borderBottomColor: native.separator, borderBottomWidth: StyleSheet.hairlineWidth },
+        {
+          backgroundColor: native.secondaryGrouped,
+          borderColor: native.separator,
+          marginHorizontal: 16,
+          borderLeftWidth: StyleSheet.hairlineWidth,
+          borderRightWidth: StyleSheet.hairlineWidth,
+        },
+        isFirst
+          ? {
+              borderTopLeftRadius: 12,
+              borderTopRightRadius: 12,
+              borderTopWidth: StyleSheet.hairlineWidth,
+            }
+          : null,
+        isLast
+          ? {
+              borderBottomLeftRadius: 12,
+              borderBottomRightRadius: 12,
+              borderBottomWidth: StyleSheet.hairlineWidth,
+            }
+          : { borderBottomColor: native.separator, borderBottomWidth: StyleSheet.hairlineWidth },
         pressed && { opacity: 0.85 },
       ]}
       onPress={onPress}
@@ -145,12 +174,52 @@ export const MessageBubble = memo(function MessageBubble({
   const native = useThemedNative()
   const tokens = useAppThemeTokens()
   const type = useNativeType()
-  const body = looksLikeHtml(message.body) ? stripMessageHtml(message.body) : message.body.trim()
+  const [editHistoryOpen, setEditHistoryOpen] = useState(false)
+  const courseImport = useMemo(
+    () => (message.unsent ? null : parseCourseImportFromMessage(message.body)),
+    [message.body, message.unsent],
+  )
+  const incompleteImportLabel = useMemo(
+    () => (message.unsent || courseImport ? null : incompleteCourseImportLabel(message.body)),
+    [courseImport, message.body, message.unsent],
+  )
+  const plainBody = useMemo(() => {
+    if (courseImport) return courseImport.userNote
+    if (incompleteImportLabel) return stripCourseImportMarkup(message.body)
+    return looksLikeHtml(message.body) ? stripMessageHtml(message.body) : message.body.trim()
+  }, [courseImport, incompleteImportLabel, message.body])
+  const editVersions = message.editHistory ?? []
+  const hasEditHistory = editVersions.length > 0
+
+  if (message.unsent) {
+    return (
+      <View style={[styles.auditRow, message.isMine ? styles.auditRowMine : styles.auditRowOther]}>
+        <Text style={[type.caption, styles.auditText, { color: native.secondaryLabel }]}>
+          {unsentAuditLabel(message.isMine, message.senderName)}
+        </Text>
+      </View>
+    )
+  }
+
+  const metaPrefix = message.isMine
+    ? pendingStatus
+      ? `${deliveryStatusLabel(pendingStatus)} · `
+      : `${deliveryStatusLabel(message.deliveryStatus ?? resolveMessageDeliveryStatus(message.createdAt, otherLastReadAt))} · `
+    : ""
+
+  const editedSuffix =
+    message.edited && hasEditHistory
+      ? editHistoryOpen
+        ? "Hide Edits"
+        : "Edited"
+      : message.edited
+        ? "Edited"
+        : null
 
   return (
     <View style={[styles.bubbleRow, message.isMine ? styles.bubbleRowMine : styles.bubbleRowOther]}>
       {!message.isMine ? <MessageAvatar name={message.senderName} presenceStatus={senderPresence} /> : null}
-      <View style={styles.bubbleCol}>
+      <View style={[styles.bubbleCol, courseImport && styles.bubbleColCourseImport]}>
         {!message.isMine ? (
           onPressSender ? (
             <Pressable onPress={onPressSender} hitSlop={4}>
@@ -164,47 +233,105 @@ export const MessageBubble = memo(function MessageBubble({
             </Text>
           )
         ) : null}
+        {editHistoryOpen && hasEditHistory
+          ? editVersions.map((version, index) => (
+              <View
+                key={`${message.id}-edit-${index}`}
+                style={[
+                  styles.bubble,
+                  styles.editHistoryBubble,
+                  {
+                    backgroundColor: message.isMine ? tokens.accentSoft : native.fill,
+                    borderColor: native.separator,
+                    borderWidth: StyleSheet.hairlineWidth,
+                    opacity: 0.72,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    type.body,
+                    styles.bubbleText,
+                    { color: message.isMine ? tokens.accent : native.secondaryLabel },
+                  ]}
+                >
+                  {looksLikeHtml(version.body) ? stripMessageHtml(version.body) : version.body.trim()}
+                </Text>
+              </View>
+            ))
+          : null}
         <View
           style={[
             styles.bubble,
-            message.isMine
-              ? { backgroundColor: tokens.accent }
-              : { backgroundColor: native.secondaryGrouped, borderColor: native.separator, borderWidth: StyleSheet.hairlineWidth },
+            courseImport ? styles.bubbleCourseImport : null,
+            courseImport
+              ? {
+                  backgroundColor: native.secondaryGrouped,
+                  borderColor: message.isMine ? tokens.accentBorder : native.separator,
+                  borderWidth: StyleSheet.hairlineWidth,
+                }
+              : message.isMine
+                ? { backgroundColor: tokens.accent }
+                : { backgroundColor: native.secondaryGrouped, borderColor: native.separator, borderWidth: StyleSheet.hairlineWidth },
           ]}
         >
-          {body ? (
+          {courseImport ? (
+            <CoraImportedQuestionPreview
+              label={courseImport.label}
+              problem={courseImport.problem}
+              compact
+              chatTurn
+            />
+          ) : incompleteImportLabel ? (
             <Text
               style={[
-                type.body,
+                type.bodyEmphasis,
                 styles.bubbleText,
                 { color: message.isMine ? "#ffffff" : native.label },
               ]}
             >
-              {body}
+              {incompleteImportLabel === "Course question"
+                ? incompleteImportLabel
+                : `Course question: ${incompleteImportLabel}`}
+            </Text>
+          ) : null}
+          {plainBody ? (
+            <Text
+              style={[
+                type.body,
+                styles.bubbleText,
+                courseImport && styles.bubbleTextAfterImport,
+                { color: courseImport || !message.isMine ? native.label : "#ffffff" },
+              ]}
+            >
+              {plainBody}
             </Text>
           ) : null}
           {message.attachments.map((attachment) => (
-            <AttachmentChip key={attachment.id} attachment={attachment} mine={message.isMine} />
+            <AttachmentChip
+              key={attachment.id}
+              attachment={attachment}
+              mine={message.isMine && !courseImport}
+            />
           ))}
         </View>
-        <Text
-          style={[
-            type.caption,
-            styles.bubbleTime,
-            { color: native.tertiaryLabel },
-            message.isMine && styles.bubbleTimeMine,
-          ]}
-        >
-          {message.isMine
-            ? pendingStatus
-              ? `${deliveryStatusLabel(pendingStatus)} · ${formatMessageWhen(message.createdAt)}`
-              : formatMessageMetaLine(message.createdAt, {
-                  deliveryStatus: message.deliveryStatus,
-                  otherLastReadAt,
-                  showReceipt: true,
-                })
-            : formatMessageWhen(message.createdAt)}
-        </Text>
+        <View style={[styles.metaRow, message.isMine && styles.metaRowMine]}>
+          <Text style={[type.caption, styles.bubbleTime, { color: native.tertiaryLabel }]}>
+            {metaPrefix}
+            {formatMessageWhen(message.createdAt)}
+          </Text>
+          {editedSuffix ? (
+            <Pressable
+              onPress={() => hasEditHistory && setEditHistoryOpen((open) => !open)}
+              hitSlop={6}
+              disabled={!hasEditHistory}
+            >
+              <Text style={[type.caption, styles.editedLabel, { color: native.tertiaryLabel }]}>
+                {editedSuffix}
+              </Text>
+            </Pressable>
+          ) : null}
+        </View>
         {message.reactions.length > 0 ? (
           <View style={styles.reactionRow}>
             {message.reactions.map((reaction) => (
@@ -319,15 +446,48 @@ const styles = StyleSheet.create({
   bubbleRowMine: { justifyContent: "flex-end" },
   bubbleRowOther: { justifyContent: "flex-start" },
   bubbleCol: { maxWidth: "82%", gap: 2 },
+  bubbleColCourseImport: { maxWidth: "92%" },
   bubble: {
     borderRadius: 18,
     paddingHorizontal: 14,
     paddingVertical: 10,
     gap: 8,
   },
+  bubbleCourseImport: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    gap: 6,
+  },
   bubbleText: { lineHeight: 20 },
+  bubbleTextAfterImport: { marginTop: 2 },
   bubbleTime: { marginTop: 2, marginHorizontal: 4 },
   bubbleTimeMine: { textAlign: "right" },
+  metaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 2,
+    marginHorizontal: 4,
+  },
+  metaRowMine: { justifyContent: "flex-end" },
+  editedLabel: { fontWeight: "500" },
+  auditRow: {
+    marginBottom: 10,
+    paddingHorizontal: 16,
+    alignItems: "center",
+  },
+  auditRowMine: {},
+  auditRowOther: {},
+  auditText: {
+    fontStyle: "italic",
+    textAlign: "center",
+  },
+  editHistoryBubble: {
+    marginBottom: 4,
+  },
+  editHistoryBubbleMine: {
+    alignSelf: "flex-end",
+  },
   attachmentChip: {
     flexDirection: "row",
     alignItems: "center",

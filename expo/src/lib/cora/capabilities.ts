@@ -43,6 +43,11 @@ export const QuestionBankCapability = {
     "select_all",
     "fill_blank",
     "code_problem",
+    "code_write",
+    "code_write_plot",
+    "code_explain",
+    "debug_code",
+    "trace_output",
     "multi_part",
     "circuit_submission",
   ] as const,
@@ -96,6 +101,26 @@ export const PersonalCalendarCapability = {
   resourceClass: "student_owned" as const,
 } as const
 
+export const PersonalPracticeQuizCapability = {
+  module: "practice",
+  version: 1,
+  tools: ["propose_practice_quiz"] as const,
+  roles: ["student"] as const,
+  confirmation: "required" as const,
+  servicePath: "personalPracticeQuiz.create",
+  resourceClass: "student_owned" as const,
+} as const
+
+export const PersonalStudyPlanCapability = {
+  module: "progress-review",
+  version: 1,
+  tools: ["propose_study_plan"] as const,
+  roles: ["student"] as const,
+  confirmation: "required" as const,
+  servicePath: "personalStudyPlan.create",
+  resourceClass: "student_owned" as const,
+} as const
+
 export const AssessmentIntegrityCapability = {
   module: "quizzes",
   version: 1,
@@ -115,6 +140,8 @@ export const CORA_MODULE_CAPABILITIES = {
   flashcards: PersonalFlashcardsCapability,
   notes: PersonalNotesCapability,
   calendar: PersonalCalendarCapability,
+  practice: PersonalPracticeQuizCapability,
+  "progress-review": PersonalStudyPlanCapability,
   quizzes: AssessmentIntegrityCapability,
 } as const
 

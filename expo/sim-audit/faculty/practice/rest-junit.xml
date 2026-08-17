@@ -1,0 +1,8 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<testsuites>
+  <testsuite name="Test Suite" device="iPhone 17 Pro - iOS 26.0 - 4158A022-1067-455E-BF03-10CA5D80D946" tests="1" failures="1" time="13.0">
+    <testcase id="faculty-practice-rest" name="faculty-practice-rest" classname="faculty-practice-rest" file="expo/maestro/faculty-practice-rest.yaml" time="13.0" status="ERROR">
+      <failure>Assertion is false: "Question preview" is visible</failure>
+    </testcase>
+  </testsuite>
+</testsuites>

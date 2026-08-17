@@ -1,0 +1,12 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Programs"
+- swipe:
+    direction: UP
+- tapOn: "QA16S, Draft"
+- swipe:
+    direction: UP
+- takeScreenshot: summer-qa-program-delete
+- tapOn: "Delete program"
+- tapOn: "Delete"
+- takeScreenshot: summer-qa-program-deleted

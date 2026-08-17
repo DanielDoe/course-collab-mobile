@@ -1,0 +1,22 @@
+appId: com.coursecollab.app
+---
+- extendedWaitUntil:
+    visible: "New note"
+    timeout: 8000
+- tapOn: "New note"
+- tapOn:
+    text: ".*Note body.*"
+- inputText: "QA probe body. Safe to delete."
+- tapOn: "New note"
+- tapOn: "Topic"
+- tapOn:
+    text: "General"
+    optional: true
+- tapOn:
+    text: "Close"
+    optional: true
+- tapOn: "Save"
+- extendedWaitUntil:
+    visible: "QA99 Course Note"
+    timeout: 20000
+- takeScreenshot: course-notes-qa-created

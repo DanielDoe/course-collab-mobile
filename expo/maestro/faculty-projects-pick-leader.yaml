@@ -1,0 +1,9 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Create group"
+- scrollUntilVisible:
+    element: "Leader Beta Tester"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "Leader Beta Tester"
+- tapOn: "Group name"

@@ -1,0 +1,37 @@
+appId: com.coursecollab.app
+---
+- tapOn:
+    text: "OK"
+    optional: true
+- tapOn:
+    text: "Keep waiting"
+    optional: true
+- tapOn:
+    text: "Stop generating"
+    optional: true
+- extendedWaitUntil:
+    visible: "Send message"
+    timeout: 90000
+    optional: true
+- takeScreenshot: cora-chat-reply-done
+
+- tapOn: "Open chat menu"
+- tapOn: "New chat"
+- takeScreenshot: cora-new-chat-confirm
+- tapOn:
+    text: "Cancel"
+    optional: true
+- tapOn:
+    text: "OK"
+    optional: true
+- tapOn:
+    text: "Close chat menu"
+    optional: true
+
+- tapOn: "Exit to Cora"
+- extendedWaitUntil:
+    visible: "Capabilities|Exit Cora Copilot"
+    timeout: 15000
+- swipe:
+    direction: UP
+- takeScreenshot: cora-hub-scrolled

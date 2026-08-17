@@ -29,6 +29,9 @@ export function FlashcardDifficultyPicker({ value, onChange }: Props) {
             <Pressable
               key={level}
               onPress={() => onChange(level)}
+              accessibilityRole="button"
+              accessibilityState={{ selected }}
+              accessibilityLabel={`Difficulty ${flashcardDifficultyLabel(level)}`}
               style={[
                 styles.chip,
                 {

@@ -16,6 +16,7 @@ export function FacultyPracticeListCard({
   meta,
   pills,
   trailing,
+  accessibilityLabel,
   onPress,
 }: {
   thumb: SolidListThumb
@@ -26,6 +27,7 @@ export function FacultyPracticeListCard({
   meta?: string
   pills?: ReactNode
   trailing?: ReactNode
+  accessibilityLabel?: string
   onPress?: () => void
 }) {
   const native = useThemedNative()
@@ -51,7 +53,7 @@ export function FacultyPracticeListCard({
           </Text>
         ) : null}
         {meta ? (
-          <Text style={[type.caption, styles.meta, { color: native.tertiaryLabel }]} numberOfLines={1}>
+          <Text style={[type.caption, styles.meta, { color: native.tertiaryLabel }]} numberOfLines={2}>
             {meta}
           </Text>
         ) : null}
@@ -72,6 +74,8 @@ export function FacultyPracticeListCard({
         <Pressable
           style={({ pressed }) => [styles.press, { opacity: pressed ? NATIVE.pressedOpacity : 1 }]}
           onPress={onPress}
+          accessibilityRole="button"
+          accessibilityLabel={accessibilityLabel ?? title}
         >
           {body}
         </Pressable>

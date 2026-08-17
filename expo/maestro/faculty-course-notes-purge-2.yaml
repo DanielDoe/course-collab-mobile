@@ -1,0 +1,15 @@
+appId: com.coursecollab.app
+---
+- waitForAnimationToEnd
+- tapOn: "Delete QA99 Course NoteQA probe body. Safe to delete."
+- takeScreenshot: course-notes-qa-delete-confirm-2
+- tapOn: "Delete"
+- tapOn: "Deleted"
+- tapOn: "Permanently delete note"
+- takeScreenshot: course-notes-perm-delete-confirm
+- tapOn: "Delete forever"
+- takeScreenshot: course-notes-after-perm-delete
+- tapOn: "Topics"
+- takeScreenshot: course-notes-topics
+- tapOn: "Config"
+- takeScreenshot: course-notes-config

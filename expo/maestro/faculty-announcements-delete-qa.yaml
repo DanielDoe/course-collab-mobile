@@ -1,0 +1,5 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Delete announcement"
+- tapOn: "Delete"
+- takeScreenshot: ann-qa-deleted

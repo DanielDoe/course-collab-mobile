@@ -1,0 +1,6 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<testsuites>
+  <testsuite name="Test Suite" device="iPhone 17 Pro - iOS 26.0 - 4158A022-1067-455E-BF03-10CA5D80D946" tests="1" failures="0" time="40.0">
+    <testcase id="faculty-summer-camp-campers" name="faculty-summer-camp-campers" classname="faculty-summer-camp-campers" file="maestro/faculty-summer-camp-campers.yaml" time="40.0" status="SUCCESS"/>
+  </testsuite>
+</testsuites>

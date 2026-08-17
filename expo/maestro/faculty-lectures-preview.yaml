@@ -1,0 +1,10 @@
+appId: com.coursecollab.app
+---
+- scrollUntilVisible:
+    element: "Preview lecture. Native slide deck preview — same PDF students see"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Preview lecture. Native slide deck preview — same PDF students see"
+- extendedWaitUntil:
+    visible: "Back|Lecture preview|No slide deck|Open slide deck"
+    timeout: 12000

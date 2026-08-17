@@ -1,0 +1,15 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Done"
+- tapOn:
+    text: "Show more tabs"
+    optional: true
+- tapOn: "Slots"
+- takeScreenshot: projects-slots-now
+- tapOn:
+    text: "Rate my student"
+    optional: true
+- extendedWaitUntil:
+    visible: "Presentation|Notes|Delete presentation|No presentations|Slots"
+    timeout: 10000
+- takeScreenshot: projects-slot-detail

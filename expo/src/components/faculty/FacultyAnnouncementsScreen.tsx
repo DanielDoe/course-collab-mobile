@@ -38,7 +38,7 @@ const FILTER_OPTIONS: Array<{
 
 export function FacultyAnnouncementsScreen() {
   const insets = useSafeAreaInsets()
-  const scrollPad = useFacultyModuleScrollPadding(24)
+  const scrollPad = useFacultyModuleScrollPadding(88)
   const tokens = useAppThemeTokens()
   const styles = useFacultyModuleStyles()
   const { styles: moduleStyles } = useModuleTheme()
@@ -58,13 +58,27 @@ export function FacultyAnnouncementsScreen() {
   const [composerInitialDraft, setComposerInitialDraft] = useState<ComposerDraft | null>(null)
   const [editing, setEditing] = useState<InstructorAnnouncement | null>(null)
   const [selected, setSelected] = useState<InstructorAnnouncement | null>(null)
+  const [sessionOptions, setSessionOptions] = useState<Array<{ value: string; label: string }>>([])
 
   const load = useCallback(async () => {
     if (!scope) return
     setError("")
     try {
-      const items = await instructorApi.getAnnouncements(scope)
+      const [items, sessionsRes] = await Promise.all([
+        instructorApi.getAnnouncements(scope),
+        instructorApi.getSessions(scope).catch(() => ({ sessions: [] })),
+      ])
       setAnnouncements(items)
+      const seen = new Set<string>()
+      setSessionOptions(
+        (sessionsRes.sessions ?? [])
+          .filter((session) => {
+            if (!session.code || seen.has(session.code)) return false
+            seen.add(session.code)
+            return true
+          })
+          .map((session) => ({ value: session.code, label: session.code })),
+      )
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not load announcements.")
     }
@@ -109,6 +123,11 @@ export function FacultyAnnouncementsScreen() {
           title: pending.title,
           content: pending.content,
           pinned: false,
+          type: "info",
+          priority: "medium",
+          target_session: "all",
+          expires_at: "",
+          attachments: [],
         })
         setEditing(null)
         setComposerOpen(true)
@@ -138,7 +157,13 @@ export function FacultyAnnouncementsScreen() {
       const payload = {
         title: draft.title.trim(),
         content,
-        pinned: draft.pinned}
+        pinned: draft.pinned,
+        type: draft.type,
+        priority: draft.pinned ? "high" : draft.priority,
+        target_session: draft.target_session || "all",
+        expires_at: draft.expires_at || null,
+        attachments: draft.attachments,
+      }
       if (editing) {
         await instructorApi.updateAnnouncement(scope, editing.id, payload)
       } else {
@@ -250,6 +275,8 @@ export function FacultyAnnouncementsScreen() {
                 setFilter("all")
               }}
               hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Clear search and filters"
             >
               <Text style={styles.clearBtn}>Clear</Text>
             </Pressable>
@@ -292,6 +319,8 @@ export function FacultyAnnouncementsScreen() {
         initialDraft={composerInitialDraft}
         courseCode={course?.course_code}
         submitting={submitting}
+        sessionOptions={sessionOptions}
+        onUploadAttachment={(file) => instructorApi.uploadAnnouncementAttachment(scope!, file)}
         onClose={() => {
           setComposerOpen(false)
           setEditing(null)

@@ -1,0 +1,13 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Preview question 1"
+- extendedWaitUntil:
+    visible: "Question preview"
+    timeout: 8000
+- takeScreenshot: practice-preview
+- tapOn: "Done"
+- tapOn: "Topic settings"
+- extendedWaitUntil:
+    visible: "Practice topic"
+    timeout: 10000
+- takeScreenshot: practice-settings

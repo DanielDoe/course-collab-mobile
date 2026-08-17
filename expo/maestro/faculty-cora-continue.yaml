@@ -1,0 +1,84 @@
+appId: com.coursecollab.app
+---
+# Hub is already open
+- tapOn:
+    text: ".*Peak Cora usage.*"
+- extendedWaitUntil:
+    visible: "Try asking|Open chat|Insights|Peak"
+    timeout: 12000
+- swipe:
+    direction: UP
+- takeScreenshot: cora-insight-sheet
+- tapOn: "Done"
+
+- tapOn:
+    text: "Create: Build course content"
+- extendedWaitUntil:
+    visible: "Try asking|Build course content"
+    timeout: 12000
+- swipe:
+    direction: UP
+- takeScreenshot: cora-create-sheet
+- tapOn: "Done"
+
+- tapOn:
+    text: "Improve: Refine what you have"
+- swipe:
+    direction: UP
+- takeScreenshot: cora-improve-sheet
+- tapOn: "Done"
+
+- tapOn:
+    text: "Analyze: Discover course patterns"
+- swipe:
+    direction: UP
+- takeScreenshot: cora-analyze-sheet
+- tapOn: "Done"
+
+- tapOn:
+    text: "Explain: Clarify concepts and trends"
+- swipe:
+    direction: UP
+- takeScreenshot: cora-explain-sheet
+- tapOn: "Done"
+
+- swipe:
+    direction: UP
+- tapOn:
+    text: "Automate: Save repetitive work"
+- swipe:
+    direction: UP
+- takeScreenshot: cora-automate-sheet
+- tapOn: "Done"
+
+- swipe:
+    direction: UP
+- tapOn:
+    text: "Review: Quality-check your course"
+- swipe:
+    direction: UP
+- takeScreenshot: cora-review-sheet
+- tapOn: "Done"
+
+- swipe:
+    direction: UP
+- tapOn:
+    text: "Insights: Proactive recommendations"
+- swipe:
+    direction: UP
+- takeScreenshot: cora-insights-cap
+- tapOn: "Done"
+
+- swipe:
+    direction: UP
+- tapOn:
+    text: "Assistant: Ask anything about your course"
+- swipe:
+    direction: UP
+- takeScreenshot: cora-assistant-sheet
+- tapOn:
+    text: ".*Open chat with Cora.*"
+- extendedWaitUntil:
+    visible: "Ask Cora about your course…|Ask a follow-up…|Open chat menu|Exit to Cora"
+    timeout: 20000
+- takeScreenshot: cora-chat

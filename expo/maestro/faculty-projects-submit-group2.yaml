@@ -1,0 +1,11 @@
+appId: com.coursecollab.app
+---
+- scroll
+- scroll
+- scroll
+- scrollUntilVisible:
+    element: "Submit create group"
+    direction: DOWN
+    timeout: 20000
+    visibilityPercentage: 40
+- tapOn: "Submit create group"

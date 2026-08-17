@@ -93,7 +93,18 @@ export function FacultyCoursePicker({ session }: Props) {
     >
       <GlassSheetBackground style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 16) }]}>
         <GlassSheetHandle />
-        <Text style={[type.sheetTitle, { color: native.label }]}>Switch course</Text>
+        <View style={styles.head}>
+          <Text style={[type.sheetTitle, { color: native.label, flex: 1 }]}>Switch course</Text>
+          <Pressable
+            onPress={closeCoursePicker}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Close course picker"
+            style={styles.doneHit}
+          >
+            <Text style={[type.bodyEmphasis, { color: FACULTY_COLLAB_COLOR.link }]}>Done</Text>
+          </Pressable>
+        </View>
         <Text style={[type.caption, styles.subtitle, { color: native.secondaryLabel }]}>
           All of your courses, grouped by term. Mobile tools stay scoped to one course at a time.
         </Text>
@@ -165,6 +176,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 8,
     gap: 8,
+  },
+  head: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  doneHit: {
+    minWidth: 44,
+    minHeight: 44,
+    justifyContent: "center",
+    alignItems: "flex-end",
   },
   subtitle: {
     marginBottom: 4,

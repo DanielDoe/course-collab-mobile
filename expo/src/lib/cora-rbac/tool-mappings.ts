@@ -18,7 +18,7 @@ export function coraToolFlowToRbac(toolId: CoraToolFlowId): CoraToolId {
   const map: Record<CoraToolFlowId, CoraToolId> = {
     summarize: "learn_concepts",
     glossary: "learn_concepts",
-    flashcards: "create_flashcards",
+    flashcards: "personal_flashcards",
     quiz: "learn_concepts",
     explain: "learn_concepts",
     "review-work": "learn_concepts",
@@ -70,7 +70,7 @@ export function coraComposerToolToRbac(toolKey: string): CoraToolId {
     return "code_assistant"
   }
   if (toolKey.includes("circuit")) return "circuit_assistant"
-  if (toolKey.includes("flashcard")) return "create_flashcards"
+  if (toolKey.includes("flashcard")) return "personal_flashcards"
   if (toolKey.includes("exam") || toolKey.includes("quiz")) return "learn_concepts"
   return "learn_concepts"
 }

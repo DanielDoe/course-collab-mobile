@@ -1,0 +1,14 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Manage Quizzes"
+    direction: DOWN
+    timeout: 12000
+- tapOn: "Manage Quizzes"
+- tapOn:
+    text: "Close menu"
+    optional: true
+- extendedWaitUntil:
+    visible: "Manage Quizzes|All quizzes|Search quizzes|Create quiz"
+    timeout: 25000

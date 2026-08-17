@@ -1,0 +1,12 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Clear search"
+- extendedWaitUntil:
+    visible: "Summer Camp 2026, Published|Faculty Test Camp 2026, Draft"
+    timeout: 12000
+- takeScreenshot: summer-camp-list-cleared
+- tapOn: "Summer Camp 2026, Published"
+- extendedWaitUntil:
+    visible: "Summer program|Done"
+    timeout: 12000
+- takeScreenshot: summer-camp-program-sheet

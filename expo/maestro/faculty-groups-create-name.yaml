@@ -1,0 +1,14 @@
+appId: com.coursecollab.app
+---
+- scrollUntilVisible:
+    element: "Group name"
+    direction: DOWN
+    timeout: 12000
+- tapOn: "Group name"
+- eraseText
+- inputText: "QA99 Groups"
+- tapOn: "Create group"
+- takeScreenshot: groups-create-named
+- swipe:
+    direction: UP
+- takeScreenshot: groups-create-members

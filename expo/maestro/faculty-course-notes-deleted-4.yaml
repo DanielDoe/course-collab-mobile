@@ -1,0 +1,11 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Select note"
+- takeScreenshot: course-notes-deleted-row-selected
+- tapOn: "Restore selected notes"
+- tapOn: "All"
+- tapOn: "Search course notes…"
+- eraseText
+- inputText: "QA99"
+- tapOn: "Course Notes"
+- takeScreenshot: course-notes-restored

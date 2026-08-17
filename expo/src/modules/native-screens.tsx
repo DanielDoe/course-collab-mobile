@@ -16,6 +16,7 @@ import { TradeCenterScreen } from "../components/rewards/TradeCenterScreen"
 import { AnnouncementsScreen } from "../components/course-info/AnnouncementsScreen"
 import { CalendarScreen } from "../components/course-info/CalendarScreen"
 import { OfficeHoursScreen } from "../components/course-info/OfficeHoursScreen"
+import { ScheduleAdjustmentScreen } from "../components/course-info/ScheduleAdjustmentScreen"
 import { SettingsScreen } from "../components/settings/SettingsScreen"
 import { HelpCenterScreen } from "../components/support/HelpCenterScreen"
 import { MembershipScreen } from "../components/support/MembershipScreen"
@@ -121,7 +122,7 @@ function ListModuleScreen({
               onPress={() => openWebModule(router, webId)}
             >
               <View style={styles.rowBody}>
-                <Text style={styles.rowTitle}>{mapped.title}</Text>
+                <Text style={[styles.rowTitle, { color: tokens.text }]}>{mapped.title}</Text>
                 {mapped.meta ? (
                   <Text style={[styles.rowMeta, { color: tokens.textMuted }]}>{mapped.meta}</Text>
                 ) : null}
@@ -197,6 +198,8 @@ export const PoliciesModuleScreen = () => <PoliciesScreen />
 
 export const OfficeHoursModuleScreen = () => <OfficeHoursScreen />
 
+export const ScheduleAdjustmentModuleScreen = () => <ScheduleAdjustmentScreen />
+
 export const SettingsModuleScreen = () => <SettingsScreen />
 
 export const MembershipModuleScreen = () => <MembershipScreen />
@@ -222,11 +225,11 @@ const styles = StyleSheet.create({
     borderRadius: NATIVE.sectionRadius,
     padding: 14},
   rowBody: { flex: 1, gap: 2 },
-  rowTitle: { fontSize: 15, fontWeight: "600", color: "#0f172a" },
+  rowTitle: { fontSize: 15, fontWeight: "600" },
   rowMeta: { fontSize: 12 },
   rowScore: { fontSize: 13, fontWeight: "600" },
   heroValue: { fontSize: 32, fontWeight: "600" },
-  bodyText: { fontSize: 14, lineHeight: 21, color: "#334155" },
+  bodyText: { fontSize: 14, lineHeight: 21 },
   primaryBtn: {
     borderRadius: 999,
     paddingVertical: 14,

@@ -1,6 +1,19 @@
 import { router as rootRouter, type Router } from "expo-router"
+import type { AppSession } from "./session"
 
-const AUTH_ROUTES = new Set(["/login", "/signing-in", "/appearance-setup"])
+const AUTH_ROUTES = new Set(["/login", "/signing-in", "/appearance-setup", "/change-password"])
+
+/** Review / first-login accounts must use the native change-password screen — not web. */
+export function sessionNeedsPasswordChange(session: AppSession | null | undefined): boolean {
+  if (!session) return false
+  if (session.portal !== "student" && session.portal !== "faculty") return false
+  return Boolean(session.requiresPasswordChange)
+}
+
+/** Web change-password URLs that must bounce to native `/(auth)/change-password`. */
+export function isWebChangePasswordUrl(urlOrPath: string): boolean {
+  return /\/(?:student|faculty|instructor)\/change-password(?:\/|\?|#|$)/i.test(urlOrPath)
+}
 
 /** Auth/onboarding screens live under the `(auth)` stack group. */
 export function toAuthHref(href: string): string {

@@ -1,0 +1,176 @@
+appId: com.coursecollab.app
+---
+- openLink: coursecollab://dev-student-login
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 90000
+- takeScreenshot: exploratory-dashboard
+- tapOn:
+    text: "Overall grade"
+    optional: true
+- tapOn:
+    text: "Grade trend"
+    optional: true
+- tapOn:
+    text: "You vs class average"
+    optional: true
+- tapOn:
+    text: "View all"
+    optional: true
+- back
+- openLink: coursecollab:///module/lectures
+- extendedWaitUntil:
+    visible: "Lectures"
+    timeout: 45000
+- tapOn: "Search lectures…"
+- inputText: "Thevenin"
+- hideKeyboard
+- tapOn:
+    id: "Open filters"
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn:
+    text: "Cancel"
+    optional: true
+- tapOn:
+    text: "Lecture 1"
+    optional: true
+- tapOn:
+    text: "Tools"
+    optional: true
+- tapOn:
+    text: "Close"
+    optional: true
+- back
+- takeScreenshot: exploratory-lectures
+- openLink: coursecollab:///module/notes
+- extendedWaitUntil:
+    visible: "My Notes"
+    timeout: 30000
+- tapOn: "Search my notes"
+- inputText: "Exam"
+- hideKeyboard
+- tapOn:
+    text: "Course Notes"
+    optional: true
+- tapOn:
+    text: "My Notes"
+    optional: true
+- tapOn:
+    point: "92%,92%"
+    optional: true
+- tapOn:
+    text: "Cancel"
+    optional: true
+- tapOn:
+    text: "Close"
+    optional: true
+- back
+- takeScreenshot: exploratory-notes
+- openLink: coursecollab:///module/flashcards
+- extendedWaitUntil:
+    visible: "Flashcards"
+    timeout: 30000
+- tapOn: "Search decks…"
+- inputText: "AC"
+- hideKeyboard
+- tapOn:
+    text: "Course"
+    optional: true
+- tapOn:
+    text: "Mine"
+    optional: true
+- tapOn:
+    text: "Stats"
+    optional: true
+- tapOn:
+    text: "All"
+    optional: true
+- tapOn:
+    text: "First-Order"
+    optional: true
+- tapOn:
+    text: "Show answer"
+    optional: true
+- tapOn:
+    text: "Known"
+    optional: true
+- back
+- takeScreenshot: exploratory-flashcards
+- openLink: coursecollab:///module/practice
+- extendedWaitUntil:
+    visible: "Practice Hub"
+    timeout: 45000
+- tapOn:
+    text: "Leaderboard"
+    optional: true
+- tapOn:
+    text: "Practice"
+    optional: true
+- tapOn: "Search topics…"
+- inputText: "circuit"
+- hideKeyboard
+- takeScreenshot: exploratory-practice
+- openLink: coursecollab:///module/ai-notetaker
+- extendedWaitUntil:
+    visible: "AI Notetaker"
+    timeout: 30000
+- tapOn: "Search notes…"
+- inputText: "Lecture"
+- hideKeyboard
+- tapOn:
+    text: "Record audio"
+    optional: true
+- tapOn:
+    text: "Don’t Allow"
+    optional: true
+- tapOn:
+    text: "Cancel"
+    optional: true
+- tapOn:
+    text: "Close"
+    optional: true
+- back
+- tapOn:
+    text: "Upload audio"
+    optional: true
+- tapOn:
+    text: "Cancel"
+    optional: true
+- tapOn:
+    text: "Close"
+    optional: true
+- back
+- takeScreenshot: exploratory-notetaker
+- openLink: coursecollab:///module/ai-tutor
+- extendedWaitUntil:
+    visible: "Cora|Good evening|Capabilities"
+    timeout: 45000
+- tapOn:
+    text: "Explain a Problem"
+    optional: true
+- tapOn:
+    text: "Close"
+    optional: true
+- tapOn:
+    text: "Cancel"
+    optional: true
+- tapOn:
+    point: "88%,78%"
+    optional: true
+- tapOn:
+    text: "Ask Cora"
+    optional: true
+- inputText: "What is nodal analysis?"
+- tapOn:
+    text: "Send"
+    optional: true
+- back
+- takeScreenshot: exploratory-cora
+- openLink: coursecollab:///module/codebench
+- extendedWaitUntil:
+    visible: "CodeBench|Upgrade|Trailblazer|Locked"
+    timeout: 30000
+- takeScreenshot: exploratory-codebench

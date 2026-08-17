@@ -1,0 +1,10 @@
+appId: com.coursecollab.app
+---
+- tapOn: "All statuses"
+- tapOn: "Present"
+- tapOn: "Present"
+- tapOn: "Late"
+- tapOn: "Late"
+- tapOn: "All statuses"
+- tapOn: "Meetings"
+- waitForAnimationToEnd

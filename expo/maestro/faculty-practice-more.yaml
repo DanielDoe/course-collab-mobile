@@ -1,0 +1,30 @@
+appId: com.coursecollab.app
+---
+- tapOn:
+    text: "Chapter 0.*"
+- extendedWaitUntil:
+    visible: "Topic settings|Search questions…"
+    timeout: 15000
+- takeScreenshot: practice-chapter0
+- tapOn: "Done"
+- tapOn: "Configure practice"
+- extendedWaitUntil:
+    visible: "Practice settings"
+    timeout: 10000
+- takeScreenshot: practice-configure
+- tapOn: "Daily question limit"
+- eraseText
+- inputText: "0"
+- tapOn: "Save settings"
+- extendedWaitUntil:
+    visible: "Daily limit must be at least 1."
+    timeout: 8000
+- takeScreenshot: practice-configure-invalid
+- tapOn: "ECE2202"
+- tapOn: "All sections"
+- tapOn: "Done"
+- tapOn: "Students"
+- extendedWaitUntil:
+    visible: "Search students…"
+    timeout: 10000
+- takeScreenshot: practice-students

@@ -1,0 +1,8 @@
+appId: com.coursecollab.app
+---
+- tapOn:
+    text: ".*Create group.*"
+- extendedWaitUntil:
+    visible: "Create group|Search roster|Group name"
+    timeout: 12000
+- takeScreenshot: groups-create-group

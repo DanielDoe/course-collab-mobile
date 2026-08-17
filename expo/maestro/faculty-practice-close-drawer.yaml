@@ -1,0 +1,6 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Close menu"
+- extendedWaitUntil:
+    visible: "Search topics…"
+    timeout: 10000

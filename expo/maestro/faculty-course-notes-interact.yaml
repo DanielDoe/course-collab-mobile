@@ -1,0 +1,17 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Course Notes"
+- tapOn:
+    text: "Clear search"
+    optional: true
+- tapOn: "[sample-ui] Lab safety reminders, Draft"
+- takeScreenshot: notes-live-editor
+- tapOn: "Cancel"
+- tapOn: "Topics"
+- takeScreenshot: notes-topics
+- tapOn: "Config"
+- takeScreenshot: notes-config
+- tapOn: "Deleted"
+- takeScreenshot: notes-deleted
+- tapOn: "All"
+- tapOn: "Create note"

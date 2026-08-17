@@ -1,0 +1,8 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Thu, Jul 30, ECE 2202 — Circuit Analysis II"
+- tapOn: "Meetings"
+- tapOn: "Search meetings…"
+- inputText: "zzz"
+- hideKeyboard
+- waitForAnimationToEnd

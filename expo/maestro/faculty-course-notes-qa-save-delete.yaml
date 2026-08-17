@@ -1,0 +1,25 @@
+appId: com.coursecollab.app
+---
+- extendedWaitUntil:
+    visible: "Edit note"
+    timeout: 8000
+- tapOn: "Title"
+- eraseText
+- inputText: "QA99 Course Note"
+- tapOn: "Edit note"
+- tapOn: "Save"
+- extendedWaitUntil:
+    visible: "QA99 Course Note, Draft|QA99 Course Note, Published"
+    timeout: 20000
+- tapOn:
+    text: "QA99 Course Note, Draft|QA99 Course Note, Published"
+- extendedWaitUntil:
+    visible: "Edit note"
+    timeout: 15000
+- tapOn: "Delete note"
+- takeScreenshot: course-notes-qa-delete-confirm
+- tapOn: "Delete"
+- extendedWaitUntil:
+    visible: "Search course notes…|No course notes|Create note"
+    timeout: 15000
+- takeScreenshot: course-notes-qa-deleted

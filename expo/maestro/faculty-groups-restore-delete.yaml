@@ -1,0 +1,12 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Clear search"
+- tapOn: "Trash"
+- tapOn: "QA16G"
+- extendedWaitUntil:
+    visible: "Restore group"
+    timeout: 8000
+- tapOn: "Restore group"
+- tapOn: "All"
+- tapOn: "Search groups, leaders…"
+- eraseText

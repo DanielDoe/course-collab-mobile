@@ -1,0 +1,7 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Config"
+- tapOn: "AC Analysis all sections"
+- takeScreenshot: flashcards-config-all-restored
+- tapOn: "All"
+- takeScreenshot: flashcards-ready-for-qa

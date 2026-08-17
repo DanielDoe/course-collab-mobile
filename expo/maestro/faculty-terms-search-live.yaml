@@ -1,0 +1,35 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Search terms…"
+- eraseText
+- inputText: "zzz"
+- tapOn: "Academic Terms"
+- extendedWaitUntil:
+    visible: "No matching terms"
+    timeout: 8000
+- tapOn: "Clear search"
+- tapOn: "Search terms…"
+- inputText: "Summer"
+- tapOn: "Academic Terms"
+- extendedWaitUntil:
+    visible: "Summer 2026, Active"
+    timeout: 8000
+- tapOn: "Clear search"
+- tapOn: "Open filters"
+- tapOn: "Active only"
+- tapOn: "Open filters"
+- tapOn: "All terms"
+- tapOn: "Summer 2026, Active"
+- extendedWaitUntil:
+    visible: "Academic term"
+    timeout: 10000
+- scrollUntilVisible:
+    element: "Delete term. Permanently removes this academic term"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Delete term. Permanently removes this academic term"
+- tapOn: "Cancel"
+- tapOn: "Edit term"
+- tapOn: "Done"
+- tapOn: "Spring 2026"
+- tapOn: "Done"

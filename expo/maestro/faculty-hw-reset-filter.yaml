@@ -1,0 +1,9 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Open filters"
+- waitForAnimationToEnd
+- tapOn: "All"
+- waitForAnimationToEnd
+- tapOn:
+    text: "Done"
+    optional: true

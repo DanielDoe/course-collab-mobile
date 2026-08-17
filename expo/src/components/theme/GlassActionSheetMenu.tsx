@@ -61,12 +61,16 @@ export function GlassMenuRow({
     ? "rgba(120, 120, 128, 0.16)"
     : native.fill
 
+  const a11yLabel = detail ? `${label}, ${detail}` : label
+
   if (destructive) {
     return (
       <Pressable
         style={({ pressed }) => [styles.row, styles.rowDestructive, pressed && { backgroundColor: pressedBg }]}
         onPress={onPress}
+        accessible
         accessibilityRole="button"
+        accessibilityLabel={label}
       >
         <Text style={[type.destructive, styles.rowLabelDanger]}>{label}</Text>
       </Pressable>
@@ -78,7 +82,9 @@ export function GlassMenuRow({
       <Pressable
         style={({ pressed }) => [styles.row, pressed && { backgroundColor: pressedBg }]}
         onPress={onPress}
+        accessible
         accessibilityRole="button"
+        accessibilityLabel={a11yLabel}
       >
         {icon ? (
           <View style={styles.rowIconWrap}>
@@ -133,6 +139,7 @@ export function GlassFilterOptionRow({
         style={({ pressed }) => [styles.filterRow, pressed && { backgroundColor: pressedBg }]}
         onPress={onPress}
         accessibilityRole="button"
+        accessibilityLabel={label}
         accessibilityState={{ selected: active }}
       >
         <Text

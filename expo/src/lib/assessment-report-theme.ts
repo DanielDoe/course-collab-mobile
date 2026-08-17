@@ -26,6 +26,7 @@ export const REPORT_SOLID = {
   onDark: "#FFFFFF",
   onDarkMuted: "rgba(255,255,255,0.86)",
   badgeWash: "rgba(255,255,255,0.24)",
+  badgeWashBorder: "rgba(255,255,255,0.38)",
   selectedRing: "rgba(255,255,255,0.92)",
 } as const
 
@@ -226,6 +227,18 @@ export function reportBadgeColors(
         text: REPORT_SOLID.skippedInk,
         border: REPORT_SOLID.skipped,
       }
+  }
+}
+
+/**
+ * Badge palette for a badge sitting *on* a solid status fill (selected option rows,
+ * section cards). A tone-colored badge on a same-tone row is invisible — wash it instead.
+ */
+export function reportOnSolidBadgeColors(ink: string) {
+  return {
+    bg: REPORT_SOLID.badgeWash,
+    text: ink,
+    border: REPORT_SOLID.badgeWashBorder,
   }
 }
 

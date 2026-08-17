@@ -1,11 +1,9 @@
 import { useEffect, useState } from "react"
 import {
   Modal,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View} from "react-native"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { ApiError } from "../../lib/api"
@@ -19,9 +17,12 @@ import {
   FacultySheetChrome,
   FacultySheetField,
   FacultySheetSection,
-  FacultySheetSubmitButton
+  FacultySheetSubmitButton,
 } from "./faculty-collab-sheet-ui"
+import { useSuppressModuleSearchDock } from "../../context/ModuleSearchDockContext"
 import { SHEET_SECTION } from "./faculty-sheet-semantics"
+import { NativeSelect } from "../NativeSelect"
+import { DAILY_LIMIT_OPTIONS } from "./FacultyNativePickers"
 import { useModuleTheme } from "../../lib/themed-module-shell"
 import { FACULTY_PRACTICE_COLOR } from "../../lib/faculty-practice-theme"
 import { NATIVE } from "../../constants/faculty-native-theme"
@@ -114,6 +115,7 @@ export function FacultyPracticeConfigureModal({
   acting,
   onClose,
   onSaved }: ConfigureProps) {
+  useSuppressModuleSearchDock(visible)
   const collabSheetStyles = useCollabSheetStyles()
   const insets = useSafeAreaInsets()
   const [session, setSession] = useState(selectedSession)
@@ -141,8 +143,7 @@ export function FacultyPracticeConfigureModal({
       await instructorApi.savePracticeConfig(scope, {
         session,
         dailyLimit: limit,
-        difficultyDistribution: { easy: 0.3, medium: 0.5, hard: 0.2 },
-        topicWeights: {}})
+      })
       onSaved()
       onClose()
     } catch (err) {
@@ -181,11 +182,11 @@ export function FacultyPracticeConfigureModal({
             tone={SHEET_SECTION.edit}
           >
             <FacultySheetField label="Daily question limit">
-              <TextInput
-                style={collabSheetStyles.fieldInput}
+              <NativeSelect
+                placeholder="20 questions / day"
                 value={dailyLimit}
-                onChangeText={setDailyLimit}
-                keyboardType="number-pad"
+                options={DAILY_LIMIT_OPTIONS}
+                onChange={setDailyLimit}
               />
             </FacultySheetField>
           </FacultySheetSection>

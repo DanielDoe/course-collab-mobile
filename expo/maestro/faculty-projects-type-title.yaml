@@ -1,0 +1,18 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Create project"
+- scrollUntilVisible:
+    element: "Title"
+    direction: UP
+    timeout: 10000
+    visibilityPercentage: 50
+- tapOn: "Title"
+- eraseText: 40
+- inputText: "QA16P"
+- tapOn: "Create project"
+- scrollUntilVisible:
+    element: "Submit Create project"
+    direction: DOWN
+    timeout: 12000
+    visibilityPercentage: 40
+- tapOn: "Submit Create project"

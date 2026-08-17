@@ -1,0 +1,7 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Open navigation menu"
+- tapOn: "Manage Practice"
+- extendedWaitUntil:
+    visible: "Manage Practice|Practice|Topics"
+    timeout: 20000

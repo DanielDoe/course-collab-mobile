@@ -1,0 +1,9 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Delete section ECE2202 · QA16"
+- tapOn: "Delete"
+- extendedWaitUntil:
+    visible: "No sections linked to this term yet."
+    timeout: 12000
+- tapOn: "Delete term. Permanently removes this academic term"
+- tapOn: "Delete"

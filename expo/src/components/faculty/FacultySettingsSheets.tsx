@@ -191,7 +191,7 @@ export function FacultySecuritySettingsSheet({
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <FacultySheetContainer>
-        <FacultySheetChrome topInset={insets.top} title="Password & security" onClose={onClose} accentColor={FACULTY_SETTINGS_COLOR.secondary} />
+        <FacultySheetChrome topInset={insets.top} title="Password & security" onClose={onClose} />
         <ScrollView
           contentContainerStyle={[collabSheetStyles.scroll, { paddingBottom: insets.bottom + 24 }]}
           keyboardShouldPersistTaps="handled"

@@ -1,0 +1,9 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Attendance"
+- tapOn:
+    text: "Close menu"
+    optional: true
+- extendedWaitUntil:
+    visible: "Overview|Roll call|Search students or meetings…"
+    timeout: 20000

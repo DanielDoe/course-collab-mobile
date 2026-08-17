@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { ActivityIndicator, Modal, Pressable, ScrollView, Text, View } from "react-native";
 import { AppAlert } from '../../lib/app-alert'
+import { AppAlertHost } from "../../context/AppAlertProvider"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { ApiError } from "../../lib/api"
@@ -20,6 +21,7 @@ import {
   useCollabSheetStyles,
 
 } from "./faculty-collab-sheet-ui"
+import { useSuppressModuleSearchDock } from "../../context/ModuleSearchDockContext"
 import { SHEET_SECTION } from "./faculty-sheet-semantics"
 
 type Scope = { instructorId: number; courseId: number }
@@ -40,6 +42,7 @@ function studentInitials(name: string): string {
 }
 
 export function FacultyProjectCreateModal({ visible, scope, onClose, onCreated }: Props) {
+  useSuppressModuleSearchDock(visible)
   const collabSheetStyles = useCollabSheetStyles()
   const tokens = useAppThemeTokens()
   const native = useThemedNative()
@@ -101,7 +104,10 @@ export function FacultyProjectCreateModal({ visible, scope, onClose, onCreated }
         setGroups(leaderGroups)
         setGroupId(leaderGroups.length === 1 ? leaderGroups[0].id : null)
       })
-      .catch(() => setGroups([]))
+      .catch((err) => {
+        setGroups([])
+        setError(err instanceof ApiError ? err.message : "Could not load approved groups.")
+      })
       .finally(() => setLoadingGroups(false))
   }, [visible, scope, leaderId])
 
@@ -145,9 +151,15 @@ export function FacultyProjectCreateModal({ visible, scope, onClose, onCreated }
         targetPlatform: targetPlatform.trim() || undefined,
         projectLink: projectLink.trim() || undefined,
       })
-      AppAlert.alert("Project created", `Project "${title.trim()}" was created for ${leader.full_name}.`)
-      onCreated()
-      onClose()
+      AppAlert.alert("Project created", `Project "${title.trim()}" was created for ${leader.full_name}.`, [
+        {
+          text: "OK",
+          onPress: () => {
+            onCreated()
+            onClose()
+          },
+        },
+      ])
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not create project.")
     } finally {
@@ -172,6 +184,9 @@ export function FacultyProjectCreateModal({ visible, scope, onClose, onCreated }
                 value={studentSearch}
                 onChangeText={setStudentSearch}
                 placeholder="Search by name or ID…"
+                accessibilityLabel="Search roster"
+                keyboardType="ascii-capable"
+                testID="project-leader-search"
               />
             </FacultySheetField>
             {loadingStudents ? (
@@ -193,6 +208,8 @@ export function FacultyProjectCreateModal({ visible, scope, onClose, onCreated }
                         },
                       ]}
                       onPress={() => setLeaderId(student.id)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Leader ${student.full_name}`}
                     >
                       <View style={collabSheetStyles.memberAvatar}>
                         <Text style={collabSheetStyles.memberAvatarText}>{studentInitials(student.full_name)}</Text>
@@ -237,6 +254,8 @@ export function FacultyProjectCreateModal({ visible, scope, onClose, onCreated }
                           },
                         ]}
                         onPress={() => setGroupId(group.id)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Group ${group.name}`}
                       >
                         <View style={[collabSheetStyles.memberAvatar, { backgroundColor: `${FACULTY_PROJECTS_COLOR.link}18` }]}>
                           <Ionicons name="people" size={18} color={FACULTY_PROJECTS_COLOR.link} />
@@ -266,7 +285,14 @@ export function FacultyProjectCreateModal({ visible, scope, onClose, onCreated }
 
           <FacultySheetSection label="Project details" tone={SHEET_SECTION.edit}>
             <FacultySheetField label="Title">
-              <FacultySheetTextInput value={title} onChangeText={setTitle} placeholder="Project title" />
+              <FacultySheetTextInput
+                value={title}
+                onChangeText={setTitle}
+                placeholder="Project title"
+                accessibilityLabel="Title"
+                keyboardType="ascii-capable"
+                testID="project-title"
+              />
             </FacultySheetField>
             <FacultySheetField label="Summary">
               <FacultySheetTextInput
@@ -274,6 +300,9 @@ export function FacultyProjectCreateModal({ visible, scope, onClose, onCreated }
                 onChangeText={setSummary}
                 placeholder="Brief overview"
                 multiline
+                accessibilityLabel="Summary"
+                keyboardType="ascii-capable"
+                testID="project-summary"
               />
             </FacultySheetField>
             <FacultySheetField label="Deliverables">
@@ -282,6 +311,9 @@ export function FacultyProjectCreateModal({ visible, scope, onClose, onCreated }
                 onChangeText={setDeliverables}
                 placeholder="What the team will produce"
                 multiline
+                accessibilityLabel="Deliverables"
+                keyboardType="ascii-capable"
+                testID="project-deliverables"
               />
             </FacultySheetField>
             <FacultySheetField label="Target platform">
@@ -289,6 +321,9 @@ export function FacultyProjectCreateModal({ visible, scope, onClose, onCreated }
                 value={targetPlatform}
                 onChangeText={setTargetPlatform}
                 placeholder="Web, iOS, Android…"
+                accessibilityLabel="Target platform"
+                keyboardType="ascii-capable"
+                testID="project-platform"
               />
             </FacultySheetField>
             <FacultySheetField label="Project link">
@@ -298,6 +333,7 @@ export function FacultyProjectCreateModal({ visible, scope, onClose, onCreated }
                 placeholder="https://"
                 autoCapitalize="none"
                 keyboardType="url"
+                accessibilityLabel="Project link"
               />
             </FacultySheetField>
           </FacultySheetSection>
@@ -306,11 +342,14 @@ export function FacultyProjectCreateModal({ visible, scope, onClose, onCreated }
 
           <FacultySheetSubmitButton
             label="Create project"
+            accessibilityLabel="Submit create project"
+            testID="project-create-submit"
             onPress={() => void submit()}
             disabled={submitting || !leaderId || !groupId || !title.trim()}
             loading={submitting}
           />
         </ScrollView>
+        <AppAlertHost />
       </FacultySheetContainer>
     </Modal>
   )

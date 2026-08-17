@@ -1,0 +1,41 @@
+appId: com.coursecollab.app
+---
+# Instructor Information sheet is open
+- swipe:
+    direction: UP
+- takeScreenshot: syllabus-sheet-scrolled
+- tapOn:
+    text: "Office Hours"
+    optional: true
+- tapOn:
+    text: "Office Location"
+    optional: true
+- inputText: " QA"
+- hideKeyboard
+- takeScreenshot: syllabus-quick-edit
+# Do not tap Save — discard live instructor edits
+- tapOn:
+    text: "Shown to students"
+    optional: true
+- tapOn:
+    text: "Hidden from students"
+    optional: true
+- takeScreenshot: syllabus-visibility
+# Restore visible if we hid it
+- tapOn:
+    text: "Hidden from students"
+    optional: true
+- tapOn:
+    text: ".*Full editor.*"
+- extendedWaitUntil:
+    visible: "Edit section|Section settings|Save"
+    timeout: 10000
+- swipe:
+    direction: UP
+- takeScreenshot: syllabus-full-editor
+- tapOn: "Done"
+- tapOn: "Done"
+- extendedWaitUntil:
+    visible: "Search syllabus sections…|Save draft"
+    timeout: 15000
+- takeScreenshot: syllabus-list

@@ -1,0 +1,8 @@
+appId: com.coursecollab.app
+---
+- scrollUntilVisible:
+    element: "Attendance"
+    direction: DOWN
+    timeout: 20000
+- tapOn: "Attendance"
+- waitForAnimationToEnd

@@ -1,0 +1,185 @@
+appId: com.coursecollab.app
+---
+- tapOn:
+    text: "Back to Lectures"
+    optional: true
+- tapOn:
+    text: "Lectures"
+    optional: true
+- tapOn:
+    text: "Open navigation menu"
+    optional: true
+- tapOn:
+    text: "Dashboard"
+    optional: true
+- extendedWaitUntil:
+    visible: "Open navigation menu"
+    timeout: 20000
+- takeScreenshot: c3-ready
+
+- tapOn: "Open navigation menu"
+- tapOn: "Quizzes"
+- extendedWaitUntil:
+    visible: "Quizzes"
+    timeout: 30000
+- takeScreenshot: c3-quizzes
+
+- tapOn: "Open navigation menu"
+- tapOn: "Homework"
+- extendedWaitUntil:
+    visible: "Homework"
+    timeout: 30000
+- takeScreenshot: c3-homework
+
+- tapOn: "Open navigation menu"
+- tapOn: "Grades"
+- extendedWaitUntil:
+    visible: "Grades"
+    timeout: 30000
+- tapOn:
+    text: "Final"
+    optional: true
+- tapOn:
+    text: "Pending"
+    optional: true
+- takeScreenshot: c3-grades
+
+- tapOn: "Open navigation menu"
+- tapOn: "Forum Hub"
+- extendedWaitUntil:
+    visible: "Forum Hub"
+    timeout: 45000
+- tapOn:
+    text: "Tutoring"
+    optional: true
+- tapOn:
+    text: "Discussions"
+    optional: true
+- takeScreenshot: c3-forum
+
+- tapOn: "Open navigation menu"
+- tapOn: "Messages"
+- extendedWaitUntil:
+    visible: "Messages"
+    timeout: 30000
+- tapOn:
+    text: "New message"
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true
+- takeScreenshot: c3-messages
+
+- tapOn: "Open navigation menu"
+- tapOn: "Groups"
+- extendedWaitUntil:
+    visible: "Groups"
+    timeout: 45000
+- tapOn:
+    text: "Join"
+    optional: true
+- tapOn:
+    text: "All"
+    optional: true
+- takeScreenshot: c3-groups
+
+- tapOn: "Open navigation menu"
+- tapOn: "Projects"
+- extendedWaitUntil:
+    visible: "Projects"
+    timeout: 45000
+- takeScreenshot: c3-projects
+
+- tapOn: "Open navigation menu"
+- tapOn: "Playground"
+- extendedWaitUntil:
+    visible: "Playground"
+    timeout: 30000
+- takeScreenshot: c3-playground
+
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Classroom Points"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Classroom Points"
+- extendedWaitUntil:
+    visible: "Classroom Points"
+    timeout: 30000
+- tapOn:
+    text: "Tasks"
+    optional: true
+- tapOn:
+    text: "History"
+    optional: true
+- takeScreenshot: c3-points
+
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Trade Center"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Trade Center"
+- extendedWaitUntil:
+    visible: "Trade Center"
+    timeout: 30000
+- tapOn:
+    text: "Trade"
+    optional: true
+- tapOn:
+    text: "Donate"
+    optional: true
+- tapOn:
+    text: "Overview"
+    optional: true
+- takeScreenshot: c3-trade
+
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Calendar"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Calendar"
+- extendedWaitUntil:
+    visible: "Calendar"
+    timeout: 30000
+- tapOn:
+    text: "Jump to today"
+    optional: true
+- takeScreenshot: c3-calendar
+
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Office Hours"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Office Hours"
+- extendedWaitUntil:
+    visible: "Office Hours"
+    timeout: 30000
+- tapOn: "Topic"
+- inputText: "Office hours UI check"
+- tapOn:
+    text: "Urgent"
+    optional: true
+- tapOn:
+    text: "My requests"
+    optional: true
+- takeScreenshot: c3-office
+
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Settings"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Settings"
+- extendedWaitUntil:
+    visible: "Settings"
+    timeout: 20000
+- tapOn:
+    text: "Edit profile"
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true
+- takeScreenshot: c3-settings

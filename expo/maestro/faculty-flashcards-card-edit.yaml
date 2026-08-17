@@ -1,0 +1,13 @@
+appId: com.coursecollab.app
+---
+- tapOn:
+    text: "Cancel card edit"
+    optional: true
+- tapOn:
+    text: "Save card"
+    optional: true
+- tapOn: "Save"
+- extendedWaitUntil:
+    visible: "QA Flashcards Deck 16|Untitled deck|QA disposable deck"
+    timeout: 20000
+- takeScreenshot: flashcards-qa-saved-list

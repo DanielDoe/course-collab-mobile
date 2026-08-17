@@ -1,0 +1,11 @@
+appId: com.coursecollab.app
+---
+- scrollUntilVisible:
+    element: "Delete lecture. Permanently removes this week"
+    direction: DOWN
+    timeout: 12000
+- tapOn: "Delete lecture. Permanently removes this week"
+- tapOn: "Cancel"
+- tapOn: "Done"
+- tapOn: "ECE 2202: Circuit Analysis II — Lecture 2: Node Voltage and Mesh Current Methods"
+- tapOn: "Done"

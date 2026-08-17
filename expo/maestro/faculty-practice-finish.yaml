@@ -1,0 +1,20 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Done"
+- tapOn: "Search topics…"
+- eraseText
+- inputText: "0"
+- tapOn: "Manage Practice"
+- extendedWaitUntil:
+    visible: "Chapter 0: Engineering Units and SI Prefixes"
+    timeout: 8000
+- tapOn: "Clear search"
+- tapOn: "Chapter 0: Engineering Units and SI Prefixes"
+- tapOn: "Preview question 1"
+- tapOn: "Done"
+- tapOn: "Done"
+- tapOn: "Students"
+- tapOn: "Search students…"
+- eraseText
+- inputText: "Doe"
+- tapOn: "Manage Practice"

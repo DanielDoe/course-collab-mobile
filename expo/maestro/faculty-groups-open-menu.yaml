@@ -1,0 +1,5 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Create group or project"
+- waitForAnimationToEnd
+- takeScreenshot: groups-menu

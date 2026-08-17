@@ -1,0 +1,6 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Search course notes…"
+- inputText: "QA99"
+- tapOn: "Course Notes"
+- takeScreenshot: course-notes-search-qa

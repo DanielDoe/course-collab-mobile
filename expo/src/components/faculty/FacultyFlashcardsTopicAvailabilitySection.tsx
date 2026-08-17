@@ -34,10 +34,17 @@ export function FacultyFlashcardsTopicAvailabilitySection({ config, onToggle, di
   const [search, setSearch] = useState("")
   const switchTrack = facultyFlashcardSwitchTrack(tokens)
 
-  const sectionKeys = useMemo(
-    () => ["ALL", ...config.sections.map((s) => s.code)],
-    [config.sections],
-  )
+  const sectionKeys = useMemo(() => {
+    const seen = new Set<string>()
+    const codes = config.sections
+      .map((s) => s.code)
+      .filter((code) => {
+        if (seen.has(code)) return false
+        seen.add(code)
+        return true
+      })
+    return ["ALL", ...codes]
+  }, [config.sections])
 
   const filteredTopics = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -152,6 +159,7 @@ function TopicAvailabilityCard({
               value={enabled}
               disabled={disabled}
               onValueChange={(next) => void onToggle(topic.name, code, next)}
+              accessibilityLabel={`${topic.name} ${isAll ? "all sections" : code}`}
               trackColor={switchTrack}
               thumbColor={
                 Platform.OS === "android"

@@ -1,0 +1,25 @@
+appId: com.coursecollab.app
+---
+- tapOn: "ZipScoot"
+- extendedWaitUntil:
+    visible: "Presentation|Notes|Delete presentation"
+    timeout: 10000
+- takeScreenshot: projects-slot-zipscoot
+- tapOn: "Notes"
+- eraseText
+- inputText: "QA do not save"
+- tapOn: "Presentation"
+- tapOn: "Delete presentation"
+- extendedWaitUntil:
+    visible: "Delete presentation?|Cancel"
+    timeout: 8000
+- takeScreenshot: projects-slot-delete
+- tapOn: "Cancel"
+- tapOn: "Done"
+- tapOn: "Clear search"
+- tapOn: "Study App"
+- extendedWaitUntil:
+    visible: "Presentation"
+    timeout: 8000
+- takeScreenshot: projects-slot-study
+- tapOn: "Done"

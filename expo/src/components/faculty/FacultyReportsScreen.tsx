@@ -6,18 +6,21 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  View} from "react-native"
-import { useSafeAreaInsets } from "react-native-safe-area-context"
+  View,
+} from "react-native"
 import { ApiError } from "../../lib/api"
 import { instructorApi } from "../../lib/instructor-api"
 import {
   dateRangeForPreset,
   filterReportTemplates,
   filterSavedReports,
+  filterSavedReportsByDateRange,
+  isLocalInstructorReport,
   REPORT_DATE_PRESETS,
   type DateRangePreset,
   type ReportTemplateConfig,
-  type SavedInstructorReport} from "../../lib/instructor-reports-utils"
+  type SavedInstructorReport,
+} from "../../lib/instructor-reports-utils"
 import { FACULTY_REPORTS_COLOR } from "../../lib/faculty-reports-theme"
 import {
   FacultyReportSavedCard,
@@ -31,14 +34,12 @@ import { useFacultyStickyHeaderScrollLayout, FacultyAdaptiveSegmentNav, FacultyM
 import { FacultyReportDetailSheet } from "./FacultyReportDetailSheet"
 import { FacultyReportGenerateSheet } from "./FacultyReportGenerateSheet"
 import { FacultyStudentReportSheet } from "./FacultyStudentReportSheet"
-import { FacultySheetTextInput } from "./faculty-collab-sheet-ui"
 import { useModuleTheme } from "../../lib/themed-module-shell"
 
 type ReportsTab = "templates" | "generated"
 
 export function FacultyReportsScreen() {
   const { styles: moduleStyles, native, tokens, type } = useModuleTheme()
-  const insets = useSafeAreaInsets()
   const { listScrollPad } = useFacultyStickyHeaderScrollLayout()
   const { scope, ready } = useFacultyScope()
 
@@ -46,6 +47,7 @@ export function FacultyReportsScreen() {
   const [search, setSearch] = useState("")
   const [datePreset, setDatePreset] = useState<DateRangePreset>("all")
   const [savedReports, setSavedReports] = useState<SavedInstructorReport[]>([])
+  const [localReports, setLocalReports] = useState<SavedInstructorReport[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState("")
@@ -53,7 +55,6 @@ export function FacultyReportsScreen() {
   const [generateTemplate, setGenerateTemplate] = useState<ReportTemplateConfig | null>(null)
   const [selectedReport, setSelectedReport] = useState<SavedInstructorReport | null>(null)
 
-  const [studentQuery, setStudentQuery] = useState("")
   const [studentHits, setStudentHits] = useState<
     Array<{ id: number; fullName: string; email: string; section: string | null }>
   >([])
@@ -80,9 +81,16 @@ export function FacultyReportsScreen() {
       .finally(() => setLoading(false))
   }, [ready, loadSaved])
 
+  const searchPlaceholder = useMemo(() => {
+    if (selectedReport) return "Search report rows…"
+    if (studentReportId != null) return "Search attempts…"
+    if (tab === "templates") return "Search templates or students…"
+    return "Search saved reports…"
+  }, [selectedReport, studentReportId, tab])
+
   useEffect(() => {
-    const q = studentQuery.trim()
-    if (!scope || q.length < 2) {
+    const q = search.trim()
+    if (!scope || tab !== "templates" || selectedReport || studentReportId != null || q.length < 2) {
       setStudentHits([])
       return
     }
@@ -95,7 +103,7 @@ export function FacultyReportsScreen() {
         .finally(() => setStudentSearchLoading(false))
     }, 320)
     return () => clearTimeout(timer)
-  }, [scope, studentQuery])
+  }, [scope, search, tab, selectedReport, studentReportId])
 
   async function handleRefresh() {
     setRefreshing(true)
@@ -109,7 +117,11 @@ export function FacultyReportsScreen() {
   }
 
   const filteredTemplates = useMemo(() => filterReportTemplates(search), [search])
-  const filteredSaved = useMemo(() => filterSavedReports(savedReports, search), [savedReports, search])
+  const filteredSaved = useMemo(() => {
+    const merged = [...localReports, ...savedReports]
+    const inRange = filterSavedReportsByDateRange(merged, dateRange)
+    return filterSavedReports(inRange, search)
+  }, [localReports, savedReports, search, dateRange])
 
   if (!ready) {
     return (
@@ -134,6 +146,12 @@ export function FacultyReportsScreen() {
           tab={tab}
           onChange={setTab}
         />
+        <FacultySearchToolbar
+          value={search}
+          onChange={setSearch}
+          placeholder={searchPlaceholder}
+          showFilter={false}
+        />
       </FacultyModuleStickyHeader>
 
       <ScrollView
@@ -150,13 +168,6 @@ export function FacultyReportsScreen() {
             <Text style={moduleStyles.errorText}>{error}</Text>
           </View>
         ) : null}
-
-        <FacultySearchToolbar
-          value={search}
-          onChange={setSearch}
-          placeholder={tab === "templates" ? "Search templates…" : "Search saved reports…"}
-          showFilter={false}
-        />
 
         <View style={styles.dateRow}>
           {REPORT_DATE_PRESETS.map((preset) => {
@@ -190,34 +201,30 @@ export function FacultyReportsScreen() {
 
         {tab === "templates" ? (
           <>
-            <View style={styles.sectionBlock}>
-              <Text style={[type.sectionHeader, { color: native.label, paddingHorizontal: 4 }]}>Individual student</Text>
-              <FacultySheetTextInput
-                style={styles.studentSearch}
-                value={studentQuery}
-                onChangeText={setStudentQuery}
-                placeholder="Search by name, email, or ID…"
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-              {studentSearchLoading ? (
-                <ActivityIndicator color={FACULTY_REPORTS_COLOR.link} style={{ marginTop: 8 }} />
-              ) : studentHits.length > 0 ? (
-                <View style={styles.cardList}>
-                  {studentHits.map((student) => (
-                    <FacultyReportStudentHitCard
-                      key={student.id}
-                      student={student}
-                      onPress={() => setStudentReportId(student.id)}
-                    />
-                  ))}
-                </View>
-              ) : studentQuery.trim().length >= 2 ? (
-                <Text style={[type.caption, { color: native.tertiaryLabel, fontWeight: "600", paddingHorizontal: 4 }]}>
-                  No students match that search.
+            {search.trim().length >= 2 ? (
+              <View style={styles.sectionBlock}>
+                <Text style={[type.sectionHeader, { color: native.label, paddingHorizontal: 4 }]}>
+                  Individual student
                 </Text>
-              ) : null}
-            </View>
+                {studentSearchLoading ? (
+                  <ActivityIndicator color={FACULTY_REPORTS_COLOR.link} style={{ marginTop: 8 }} />
+                ) : studentHits.length > 0 ? (
+                  <View style={styles.cardList}>
+                    {studentHits.map((student) => (
+                      <FacultyReportStudentHitCard
+                        key={student.id}
+                        student={student}
+                        onPress={() => setStudentReportId(student.id)}
+                      />
+                    ))}
+                  </View>
+                ) : (
+                  <Text style={[type.caption, { color: native.tertiaryLabel, fontWeight: "600", paddingHorizontal: 4 }]}>
+                    No students match that search.
+                  </Text>
+                )}
+              </View>
+            ) : null}
 
             {loading ? (
               <View style={styles.loadingBox}>
@@ -247,11 +254,13 @@ export function FacultyReportsScreen() {
         ) : filteredSaved.length === 0 ? (
           <FacultyEmptyState
             icon="folder-open-outline"
-            title={savedReports.length === 0 ? "No generated reports yet" : "No matches"}
+            title={savedReports.length === 0 && localReports.length === 0 ? "No generated reports yet" : "No matches"}
             body={
-              savedReports.length === 0
+              savedReports.length === 0 && localReports.length === 0
                 ? "Generate a report from Templates — it will appear here for export and review."
-                : "Try another search term."
+                : datePreset !== "all"
+                  ? "No saved reports in this date range. Try All time or generate a new report."
+                  : "Try another search term."
             }
           />
         ) : (
@@ -276,8 +285,14 @@ export function FacultyReportsScreen() {
         template={generateTemplate}
         dateRange={dateRange}
         onClose={() => setGenerateTemplate(null)}
-        onComplete={() => {
-          void loadSaved()
+        onComplete={(report, synced) => {
+          if (!synced) {
+            setLocalReports((prev) => [report, ...prev.filter((item) => item.id !== report.id)])
+          } else {
+            setLocalReports((prev) => prev.filter((item) => item.id !== report.id))
+            void loadSaved()
+          }
+          setSelectedReport(report)
           setTab("generated")
         }}
       />
@@ -286,14 +301,22 @@ export function FacultyReportsScreen() {
         visible={selectedReport != null}
         scope={scope}
         report={selectedReport}
+        rowSearch={search}
         onClose={() => setSelectedReport(null)}
-        onDeleted={() => void loadSaved()}
+        onDeleted={() => {
+          if (selectedReport && isLocalInstructorReport(selectedReport)) {
+            setLocalReports((prev) => prev.filter((item) => item.id !== selectedReport.id))
+          } else {
+            void loadSaved()
+          }
+        }}
       />
 
       <FacultyStudentReportSheet
         visible={studentReportId != null}
         scope={scope}
         studentId={studentReportId}
+        attemptSearch={search}
         onClose={() => setStudentReportId(null)}
       />
     </View>
@@ -312,5 +335,4 @@ const styles = StyleSheet.create({
   },
   sectionBlock: { gap: 8 },
   cardList: { gap: 12 },
-  studentSearch: { marginBottom: 4 },
 })

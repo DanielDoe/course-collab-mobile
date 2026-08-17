@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { ActivityIndicator, Modal, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Keyboard, Modal, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 import { AppAlert } from '../../lib/app-alert'
 import { Ionicons } from "@/components/icons/AppIcon"
 import { ApiError } from "../../lib/api"
@@ -14,6 +14,7 @@ import { FlashcardQuizPreview } from "../flashcards/FlashcardQuizPreview"
 import { FlashcardDifficultyPicker } from "../flashcards/FlashcardDifficultyPicker"
 import type { FlashcardDifficulty } from "../../lib/flashcard-difficulty"
 import { useFacultyScope } from "../../hooks/useFacultyScope"
+import { useSuppressModuleSearchDock } from "../../context/ModuleSearchDockContext"
 import { consumeFacultyCoraPending } from "../../lib/faculty-cora-pending"
 import { useModuleTheme } from "../../lib/themed-module-shell"
 import { FacultyEmptyState } from "./faculty-shared"
@@ -33,8 +34,8 @@ import {
   facultyFlashcardSwitchTrack,
 } from "../../lib/faculty-flashcard-theme"
 import { NativeSelect } from "../NativeSelect"
+import { BATCH_SIZE_OPTIONS } from "./FacultyNativePickers"
 import {
-  FacultyAdminNumberField,
   FacultyAdminSection,
   FacultyAdminStatRow,
   FacultyAdminToggleRow,
@@ -55,15 +56,23 @@ function formatDeckCardMeta(deckCount: number, cardCount: number): string {
   return `${formatUnitCount(deckCount, "deck")} · ${formatUnitCount(cardCount, "card")}`
 }
 
+function flashcardErrorMessage(err: unknown, fallback: string): string {
+  if (err instanceof ApiError || err instanceof Error) {
+    const message = err.message.trim()
+    if (message) return message
+  }
+  return fallback
+}
+
 const TABS: Array<{ id: Tab; label: string; icon: keyof typeof Ionicons.glyphMap }> = [
-  { id: "all", label: "All Flashcards", icon: "layers-outline" },
+  { id: "all", label: "All", icon: "layers-outline" },
   { id: "topics", label: "Topics", icon: "folder-outline" },
-  { id: "configuration", label: "Configuration", icon: "options-outline" },
+  { id: "configuration", label: "Config", icon: "options-outline" },
   { id: "deleted", label: "Deleted", icon: "trash-outline" },
 ]
 
 export function FacultyFlashcardsScreen() {
-  const { listScrollPad } = useFacultyStickyHeaderScrollLayout()
+  const { listScrollPad } = useFacultyStickyHeaderScrollLayout({ extraBottom: 88 })
   const { scope, ready } = useFacultyScope()
   const { tokens, native, styles: moduleStyles, type } = useModuleTheme()
 
@@ -83,6 +92,7 @@ export function FacultyFlashcardsScreen() {
   const [deckSessionFilter, setDeckSessionFilter] = useState("")
 
   const [deckEditorOpen, setDeckEditorOpen] = useState(false)
+  useSuppressModuleSearchDock(deckEditorOpen)
   const [editingDeck, setEditingDeck] = useState<FlashcardDeck | null>(null)
   const [cards, setCards] = useState<FlashcardCard[]>([])
   const [title, setTitle] = useState("")
@@ -136,7 +146,9 @@ export function FacultyFlashcardsScreen() {
     if (!ready || !scope) return
     setLoading(true)
     load()
-      .catch((err) => setError(err instanceof ApiError ? err.message : "Could not load flashcards."))
+      .catch((err) =>
+        setError(err instanceof ApiError || err instanceof Error ? err.message : "Could not load flashcards."),
+      )
       .finally(() => setLoading(false))
   }, [ready, scope, load])
 
@@ -219,32 +231,39 @@ export function FacultyFlashcardsScreen() {
 
   async function openDeck(deck: FlashcardDeck) {
     if (!scope) return
-    setEditingDeck(deck)
-    setTitle(deck.title)
-    setDescription(deck.description)
-    setTopic(deck.topic ?? "")
-    setSessionCode(deck.session ?? "")
-    setShowInPracticeHub(deck.isPublished ? deck.showInPracticeHub : false)
-    setIsPublished(deck.isPublished)
-    setRequireMcqValidation(deck.requireMcqValidation !== false)
-    setCardsBeforeQuiz(String(deck.cardsBeforeQuiz ?? DEFAULT_FLASHCARD_BATCH_SIZE))
-    setExpandedCardId(null)
-    setDistractorDrafts({})
-    setPreviewCardId(null)
-    setShowQuizPreview(false)
-    setEditingCardId(null)
+    Keyboard.dismiss()
     try {
       const res = await instructorFlashcardsApi.getDeck(scope, deck.id)
+      setEditingDeck(deck)
+      setTitle(deck.title)
+      setDescription(deck.description)
+      setTopic(deck.topic ?? "")
+      setSessionCode(deck.session ?? "")
+      setShowInPracticeHub(deck.isPublished ? deck.showInPracticeHub : false)
+      setIsPublished(deck.isPublished)
+      setRequireMcqValidation(deck.requireMcqValidation !== false)
+      setCardsBeforeQuiz(String(deck.cardsBeforeQuiz ?? DEFAULT_FLASHCARD_BATCH_SIZE))
+      setExpandedCardId(null)
+      setDistractorDrafts({})
+      setPreviewCardId(null)
+      setShowQuizPreview(false)
+      setEditingCardId(null)
       setCards(res.cards ?? [])
-    } catch {
+      setDeckEditorOpen(true)
+    } catch (err) {
+      setEditingDeck(null)
       setCards([])
+      setDeckEditorOpen(false)
+      AppAlert.alert(
+        "Could not load deck",
+        err instanceof ApiError ? err.message : "Failed to load cards for this deck.",
+      )
     }
-    setDeckEditorOpen(true)
   }
 
   function openCreate() {
     setEditingDeck(null)
-    setTitle("Untitled deck")
+    setTitle("")
     setDescription("")
     setTopic("")
     setSessionCode("")
@@ -297,7 +316,7 @@ export function FacultyFlashcardsScreen() {
       setCards((prev) => prev.map((row) => (row.id === editingCardId ? res.card : row)))
       cancelEditCard()
     } catch (err) {
-      AppAlert.alert("Save failed", err instanceof ApiError ? err.message : "Try again.")
+      AppAlert.alert("Save failed", flashcardErrorMessage(err, "Try again."))
     } finally {
       setSaving(false)
     }
@@ -322,7 +341,7 @@ export function FacultyFlashcardsScreen() {
         return next.sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
       })
     } catch (err) {
-      AppAlert.alert("Reorder failed", err instanceof ApiError ? err.message : "Try again.")
+      AppAlert.alert("Reorder failed", flashcardErrorMessage(err, "Try again."))
     } finally {
       setSaving(false)
     }
@@ -344,7 +363,7 @@ export function FacultyFlashcardsScreen() {
               setEditingDeck(null)
               await load()
             } catch (err) {
-              AppAlert.alert("Delete failed", err instanceof ApiError ? err.message : "Try again.")
+              AppAlert.alert("Delete failed", flashcardErrorMessage(err, "Try again."))
             }
           })()
         },
@@ -354,6 +373,10 @@ export function FacultyFlashcardsScreen() {
 
   async function saveDeck() {
     if (!scope || saving) return
+    if (!title.trim()) {
+      AppAlert.alert("Missing title", "Enter a deck title.")
+      return
+    }
     setSaving(true)
     try {
       const payload = {
@@ -374,7 +397,7 @@ export function FacultyFlashcardsScreen() {
       setDeckEditorOpen(false)
       await load()
     } catch (err) {
-      AppAlert.alert("Save failed", err instanceof ApiError ? err.message : "Try again.")
+      AppAlert.alert("Save failed", flashcardErrorMessage(err, "Try again."))
     } finally {
       setSaving(false)
     }
@@ -398,20 +421,31 @@ export function FacultyFlashcardsScreen() {
       setFrontText("")
       setBackText("")
     } catch (err) {
-      AppAlert.alert("Add failed", err instanceof ApiError ? err.message : "Try again.")
+      AppAlert.alert("Add failed", flashcardErrorMessage(err, "Try again."))
     } finally {
       setSaving(false)
     }
   }
 
-  async function deleteCard(card: FlashcardCard) {
+  function deleteCard(card: FlashcardCard) {
     if (!scope) return
-    try {
-      await instructorFlashcardsApi.deleteCard(scope, card.id)
-      setCards((prev) => prev.filter((row) => row.id !== card.id))
-    } catch (err) {
-      AppAlert.alert("Delete failed", err instanceof ApiError ? err.message : "Try again.")
-    }
+    AppAlert.alert("Delete card?", card.frontText.trim() || "This card", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: () => {
+          void (async () => {
+            try {
+              await instructorFlashcardsApi.deleteCard(scope, card.id)
+              setCards((prev) => prev.filter((row) => row.id !== card.id))
+            } catch (err) {
+              AppAlert.alert("Delete failed", flashcardErrorMessage(err, "Try again."))
+            }
+          })()
+        },
+      },
+    ])
   }
 
   function deleteDeck(deck: FlashcardDeck) {
@@ -427,7 +461,7 @@ export function FacultyFlashcardsScreen() {
               await instructorFlashcardsApi.deleteDeck(scope, deck.id)
               await load()
             } catch (err) {
-              AppAlert.alert("Delete failed", err instanceof ApiError ? err.message : "Try again.")
+              AppAlert.alert("Delete failed", flashcardErrorMessage(err, "Try again."))
             }
           })()
         },
@@ -445,7 +479,7 @@ export function FacultyFlashcardsScreen() {
       setCards((prev) => prev.map((row) => (row.id === cardId ? res.card : row)))
       AppAlert.alert("Saved", "Custom distractors updated.")
     } catch (err) {
-      AppAlert.alert("Save failed", err instanceof ApiError ? err.message : "Try again.")
+      AppAlert.alert("Save failed", flashcardErrorMessage(err, "Try again."))
     } finally {
       setSaving(false)
     }
@@ -462,7 +496,7 @@ export function FacultyFlashcardsScreen() {
       setConfig((prev) => (prev ? { ...prev, requireMcqValidation: res.requireMcqValidation } : prev))
       await load()
     } catch (err) {
-      AppAlert.alert("Update failed", err instanceof ApiError ? err.message : "Try again.")
+      AppAlert.alert("Update failed", flashcardErrorMessage(err, "Try again."))
     } finally {
       setConfigSaving(false)
     }
@@ -479,7 +513,7 @@ export function FacultyFlashcardsScreen() {
       setConfig((prev) => (prev ? { ...prev, cardsBeforeQuiz: res.cardsBeforeQuiz } : prev))
       await load()
     } catch (err) {
-      AppAlert.alert("Update failed", err instanceof ApiError ? err.message : "Try again.")
+      AppAlert.alert("Update failed", flashcardErrorMessage(err, "Try again."))
     } finally {
       setConfigSaving(false)
     }
@@ -497,7 +531,7 @@ export function FacultyFlashcardsScreen() {
       await instructorFlashcardsApi.toggleTopic(scope, topicName, session, isAvailable)
       await load()
     } catch (err) {
-      AppAlert.alert("Update failed", err instanceof ApiError ? err.message : "Try again.")
+      AppAlert.alert("Update failed", flashcardErrorMessage(err, "Try again."))
     }
   }
 
@@ -519,7 +553,7 @@ export function FacultyFlashcardsScreen() {
       await load()
       if (res.deck) await openDeck(res.deck)
     } catch (err) {
-      AppAlert.alert("Generate failed", err instanceof ApiError ? err.message : "Try again.")
+      AppAlert.alert("Generate failed", flashcardErrorMessage(err, "Try again."))
     } finally {
       setGenerating(false)
     }
@@ -617,12 +651,14 @@ export function FacultyFlashcardsScreen() {
                 ) : null}
                 <Pressable
                   onPress={() => void generateFromBank()}
-                  disabled={generating || !generateTopic.trim()}
+                  disabled={generating}
+                  accessibilityRole="button"
+                  accessibilityLabel="Generate deck"
                   style={[
                     localStyles.generateBtn,
                     {
                       backgroundColor: FACULTY_FLASHCARD_COLOR.action,
-                      opacity: generating || !generateTopic.trim() ? 0.55 : 1,
+                      opacity: generating ? 0.55 : 1,
                     },
                   ]}
                 >
@@ -682,6 +718,7 @@ export function FacultyFlashcardsScreen() {
                       <Switch
                         value={enabled}
                         onValueChange={(value) => void toggleTopic(row.name, topicSession, value)}
+                        accessibilityLabel={`${row.name} available`}
                         trackColor={switchTrack}
                         thumbColor={
                           Platform.OS === "android"
@@ -712,17 +749,21 @@ export function FacultyFlashcardsScreen() {
                   onChange={(value) => void saveCourseMcqToggle(value)}
                   disabled={configSaving}
                   isLast={config.requireMcqValidation === false}
+                  activeTrackColor={FACULTY_FLASHCARD_COLOR.action}
                 />
                 {config.requireMcqValidation !== false ? (
-                  <FacultyAdminNumberField
-                    label="Cards before quiz"
-                    value={configBatchSize}
-                    onChangeText={setConfigBatchSize}
-                    onBlur={() => void saveCourseBatchSize(configBatchSize)}
-                    suffix="cards"
-                    placeholder="10"
-                    isLast
-                  />
+                  <View style={{ paddingHorizontal: 14, paddingVertical: 8 }}>
+                    <NativeSelect
+                      label="Cards before quiz"
+                      placeholder="10 cards"
+                      value={configBatchSize}
+                      options={BATCH_SIZE_OPTIONS}
+                      onChange={(value) => {
+                        setConfigBatchSize(value)
+                        void saveCourseBatchSize(value)
+                      }}
+                    />
+                  </View>
                 ) : null}
               </FacultyAdminSection>
 
@@ -765,13 +806,28 @@ export function FacultyFlashcardsScreen() {
       <Modal visible={deckEditorOpen} animationType="slide" presentationStyle="pageSheet">
         <View style={[localStyles.editorRoot, { backgroundColor: native.groupedBackground }]}>
           <View style={[localStyles.editorHeader, { borderBottomColor: native.separator }]}>
-            <Pressable onPress={() => setDeckEditorOpen(false)}>
+            <Pressable
+              onPress={() => setDeckEditorOpen(false)}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel"
+            >
               <Text style={[type.bodyEmphasis, { color: FACULTY_FLASHCARD_COLOR.link }]}>Cancel</Text>
             </Pressable>
-            <Text style={[type.sheetTitle, { color: native.label }]}>
-              {editingDeck ? "Edit deck" : "New deck"}
-            </Text>
-            <Pressable onPress={() => void saveDeck()} disabled={saving}>
+            <Pressable
+              onPress={() => Keyboard.dismiss()}
+              accessibilityRole="header"
+              accessibilityLabel={editingDeck ? "Edit deck" : "New deck"}
+            >
+              <Text style={[type.sheetTitle, { color: native.label }]}>
+                {editingDeck ? "Edit deck" : "New deck"}
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => void saveDeck()}
+              disabled={saving}
+              accessibilityRole="button"
+              accessibilityLabel="Save"
+            >
               <Text style={[type.bodyEmphasis, { color: FACULTY_FLASHCARD_COLOR.action }]}>
                 {saving ? "…" : "Save"}
               </Text>
@@ -782,6 +838,7 @@ export function FacultyFlashcardsScreen() {
               value={title}
               onChangeText={setTitle}
               placeholder="Deck title"
+              accessibilityLabel="Deck title"
               placeholderTextColor={native.tertiaryLabel}
               style={[localStyles.input, { color: native.label, borderColor: native.separator, backgroundColor: native.secondaryGrouped }]}
             />
@@ -789,6 +846,7 @@ export function FacultyFlashcardsScreen() {
               value={description}
               onChangeText={setDescription}
               placeholder="Description"
+              accessibilityLabel="Description"
               placeholderTextColor={native.tertiaryLabel}
               style={[localStyles.input, { color: native.label, borderColor: native.separator, backgroundColor: native.secondaryGrouped }]}
             />
@@ -810,6 +868,7 @@ export function FacultyFlashcardsScreen() {
               <Switch
                 value={isPublished}
                 onValueChange={handlePublishedChange}
+                accessibilityLabel="Published"
                 trackColor={switchTrack}
                 thumbColor={Platform.OS === "android" ? (isPublished ? FACULTY_FLASHCARD_COLOR.action : native.switchAndroidThumbOff) : undefined}
                 ios_backgroundColor={native.switchIosOffBackground}
@@ -828,6 +887,7 @@ export function FacultyFlashcardsScreen() {
                 value={showInPracticeHub}
                 onValueChange={setShowInPracticeHub}
                 disabled={!isPublished}
+                accessibilityLabel="Show in Practice Hub"
                 trackColor={switchTrack}
                 thumbColor={Platform.OS === "android" ? (showInPracticeHub ? FACULTY_FLASHCARD_COLOR.action : native.switchAndroidThumbOff) : undefined}
                 ios_backgroundColor={native.switchIosOffBackground}
@@ -846,6 +906,7 @@ export function FacultyFlashcardsScreen() {
                   <Switch
                     value={requireMcqValidation}
                     onValueChange={setRequireMcqValidation}
+                    accessibilityLabel="Quiz-check mode"
                     trackColor={switchTrack}
                     thumbColor={
                       Platform.OS === "android"
@@ -860,13 +921,14 @@ export function FacultyFlashcardsScreen() {
                 {requireMcqValidation ? (
                   <View style={localStyles.configSettingRow}>
                     <Text style={[type.body, { color: native.label }]}>Cards before quiz</Text>
-                    <TextInput
-                      value={cardsBeforeQuiz}
-                      onChangeText={setCardsBeforeQuiz}
-                      keyboardType="number-pad"
-                      placeholderTextColor={native.tertiaryLabel}
-                      style={[localStyles.input, localStyles.batchInput, { color: native.label, borderColor: native.separator, backgroundColor: native.secondaryGrouped }]}
-                    />
+                    <View style={{ minWidth: 140 }}>
+                      <NativeSelect
+                        placeholder="10 cards"
+                        value={cardsBeforeQuiz}
+                        options={BATCH_SIZE_OPTIONS}
+                        onChange={setCardsBeforeQuiz}
+                      />
+                    </View>
                   </View>
                 ) : null}
 
@@ -874,6 +936,8 @@ export function FacultyFlashcardsScreen() {
                   <View style={[localStyles.previewBox, { borderColor: native.separator }]}>
                     <Pressable
                       onPress={() => setShowQuizPreview((v) => !v)}
+                      accessibilityRole="button"
+                      accessibilityLabel={showQuizPreview ? "Hide quiz preview" : "Show quiz preview"}
                       style={localStyles.previewToggle}
                     >
                       <Text style={[type.bodyEmphasis, { color: FACULTY_FLASHCARD_COLOR.link }]}>
@@ -929,7 +993,7 @@ export function FacultyFlashcardsScreen() {
                         setShowQuizPreview(true)
                         setExpandedCardId(expanded ? null : card.id)
                       }}
-                      onDelete={() => void deleteCard(card)}
+                      onDelete={() => deleteCard(card)}
                     >
                       {expanded && requireMcqValidation ? (
                         <View style={[localStyles.distractorBox, { borderTopColor: native.separator, backgroundColor: native.secondaryGrouped, borderColor: tokens.border }]}>
@@ -946,6 +1010,7 @@ export function FacultyFlashcardsScreen() {
                                 setDistractorDrafts((prev) => ({ ...prev, [card.id]: next }))
                               }}
                               placeholder={`Custom distractor ${di + 1}`}
+                              accessibilityLabel={`Custom distractor ${di + 1}`}
                               placeholderTextColor={native.tertiaryLabel}
                               style={[localStyles.input, localStyles.distractorInput, { color: native.label, borderColor: native.separator, backgroundColor: native.groupedBackground }]}
                             />
@@ -953,6 +1018,8 @@ export function FacultyFlashcardsScreen() {
                           <Pressable
                             onPress={() => void saveDistractors(card.id)}
                             disabled={saving}
+                            accessibilityRole="button"
+                            accessibilityLabel="Save distractors"
                             style={[localStyles.generateBtn, { backgroundColor: FACULTY_FLASHCARD_COLOR.action }]}
                           >
                             <Text style={[localStyles.generateBtnText, { color: FACULTY_FLASHCARD_COLOR.actionInk }]}>
@@ -966,30 +1033,49 @@ export function FacultyFlashcardsScreen() {
                 })}
                 </View>
                 <FlashcardDifficultyPicker value={cardDifficulty} onChange={setCardDifficulty} />
+                <Text
+                  style={[type.caption, localStyles.sectionLabel, { color: native.secondaryLabel }]}
+                  accessible={false}
+                >
+                  New card
+                </Text>
                 <TextInput
                   value={frontText}
                   onChangeText={setFrontText}
                   placeholder="Front"
+                  accessibilityLabel="New card front"
+                  autoCorrect={false}
+                  autoCapitalize="none"
                   placeholderTextColor={native.tertiaryLabel}
-                  style={[localStyles.input, { color: native.label, borderColor: native.separator, backgroundColor: native.secondaryGrouped }]}
+                  style={[localStyles.input, { color: native.label, borderColor: native.separator, backgroundColor: native.secondaryGrouped, minHeight: 44 }]}
                 />
                 <TextInput
                   value={backText}
                   onChangeText={setBackText}
                   placeholder="Back"
+                  accessibilityLabel="New card back"
+                  autoCorrect={false}
+                  autoCapitalize="none"
                   placeholderTextColor={native.tertiaryLabel}
-                  style={[localStyles.input, { color: native.label, borderColor: native.separator, backgroundColor: native.secondaryGrouped }]}
+                  style={[localStyles.input, { color: native.label, borderColor: native.separator, backgroundColor: native.secondaryGrouped, minHeight: 44 }]}
                 />
                 <Pressable
                   onPress={() => void addCard()}
                   disabled={saving}
+                  accessibilityRole="button"
+                  accessibilityLabel="Add card"
                   style={[localStyles.generateBtn, { backgroundColor: FACULTY_FLASHCARD_COLOR.action }]}
                 >
                   <Text style={[localStyles.generateBtnText, { color: FACULTY_FLASHCARD_COLOR.actionInk }]}>
                     Add card
                   </Text>
                 </Pressable>
-                <Pressable onPress={deleteDeckFromEditor} style={localStyles.deleteLink}>
+                <Pressable
+                  onPress={deleteDeckFromEditor}
+                  accessibilityRole="button"
+                  accessibilityLabel="Delete deck"
+                  style={localStyles.deleteLink}
+                >
                   <Text style={[type.bodyEmphasis, { color: tokens.danger }]}>Delete deck</Text>
                 </Pressable>
               </>
@@ -1020,7 +1106,7 @@ const localStyles = StyleSheet.create({
   cardHead: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
   cardCopy: { flex: 1, gap: 4 },
   cardTitleRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  deleteLink: { marginTop: 8, alignSelf: "flex-start" },
+  deleteLink: { marginTop: 8, alignSelf: "flex-start", minHeight: 44, justifyContent: "center" },
   topicRow: { flexDirection: "row", alignItems: "center", gap: 12 },
   configSettingRow: { marginTop: 12, gap: 8 },
   batchInput: { maxWidth: 96, alignSelf: "flex-start" },

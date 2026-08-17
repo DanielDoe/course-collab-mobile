@@ -1,0 +1,6 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Create homework"
+- waitForAnimationToEnd
+- tapOn:
+    id: "assessment-title"

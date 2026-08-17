@@ -39,19 +39,20 @@ import {
   FacultyProjectStudentGradesPanel,
 } from "./FacultyProjectsModulePanels"
 import type { ProjectLeaderboardEntry, ProjectLeaderboardStats } from "../../lib/instructor-api"
+import { filterRowsToCourseSessions } from "../../lib/faculty-projects-module-utils"
 
 type ProjectModuleTab = "overview" | "score" | "leaderboard" | "manage" | "presentations" | "config" | "grades"
 type StatusFilter = "all" | "pending" | "approved" | "rejected"
 type PresentationStatusFilter = "all" | "scheduled" | "completed" | "cancelled"
 
-const PROJECT_MODULE_TABS: Array<{ id: ProjectModuleTab; label: string; icon: keyof typeof Ionicons.glyphMap }> = [
-  { id: "overview", label: "Scores Overview", icon: "stats-chart-outline" },
-  { id: "score", label: "Score Projects", icon: "star-outline" },
-  { id: "leaderboard", label: "Leaderboard", icon: "trophy-outline" },
-  { id: "manage", label: "Manage Projects", icon: "folder-open-outline" },
-  { id: "presentations", label: "Presentations", icon: "calendar-outline" },
-  { id: "config", label: "Configuration", icon: "settings-outline" },
-  { id: "grades", label: "Student Grades", icon: "people-outline" },
+const PROJECT_MODULE_TABS: Array<{ id: ProjectModuleTab; label: string }> = [
+  { id: "overview", label: "Overview" },
+  { id: "score", label: "Score" },
+  { id: "leaderboard", label: "Board" },
+  { id: "manage", label: "Manage" },
+  { id: "presentations", label: "Slots" },
+  { id: "config", label: "Config" },
+  { id: "grades", label: "Grades" },
 ]
 
 const PRESENTATION_STATUS_OPTIONS: FacultyFilterOption[] = [
@@ -69,7 +70,7 @@ const STATUS_OPTIONS: FacultyFilterOption[] = [
 ]
 
 export function FacultyProjectsScreen() {
-  const { listScrollPad } = useFacultyStickyHeaderScrollLayout()
+  const { listScrollPad } = useFacultyStickyHeaderScrollLayout({ extraBottom: 88 })
   const tokens = useAppThemeTokens()
   const styles = useFacultyModuleStyles()
   const type = useNativeType()
@@ -97,13 +98,15 @@ export function FacultyProjectsScreen() {
   const [selected, setSelected] = useState<InstructorProject | null>(null)
   const [selectedLeaderboardEntry, setSelectedLeaderboardEntry] = useState<ProjectLeaderboardEntry | null>(null)
 
-  const sessionOptions: FacultyFilterOption[] = useMemo(
-    () => [
-      { value: "all", label: "All sections" },
-      ...sessions.map((s) => ({ value: s.code, label: s.code })),
-    ],
-    [sessions],
-  )
+  const sessionOptions: FacultyFilterOption[] = useMemo(() => {
+    const seen = new Set<string>()
+    const unique = sessions.filter((s) => {
+      if (seen.has(s.code)) return false
+      seen.add(s.code)
+      return true
+    })
+    return [{ value: "all", label: "All sections" }, ...unique.map((s) => ({ value: s.code, label: s.code }))]
+  }, [sessions])
 
   const pendingCount = useMemo(
     () => projects.filter((p) => p.status === "pending" || p.status === "pending_update").length,
@@ -120,19 +123,33 @@ export function FacultyProjectsScreen() {
           ? statusFilter
           : undefined
     const boardSession = tab === "leaderboard" && sessionFilter !== "all" ? sessionFilter : undefined
-    const [projectRows, board, sessionData] = await Promise.all([
+    const warnings: string[] = []
+    const [projectResult, boardResult, sessionResult] = await Promise.allSettled([
       instructorApi.getProjects(scope, { session, status }),
       tab === "leaderboard"
-        ? instructorApi.getProjectLeaderboard(scope, { session: boardSession, limit: 50 }).catch(() => ({
-            leaderboard: [] as ProjectLeaderboardEntry[],
-            stats: undefined}))
+        ? instructorApi.getProjectLeaderboard(scope, { session: boardSession, limit: 50 })
         : Promise.resolve({ leaderboard: [] as ProjectLeaderboardEntry[], stats: undefined }),
-      instructorApi.getSessions(scope).catch(() => ({ sessions: [] as InstructorSession[] })),
+      instructorApi.getSessions(scope),
     ])
-    setProjects(projectRows)
-    setLeaderboard(board.leaderboard)
-    setLeaderboardStats(board.stats ?? null)
-    setSessions((sessionData.sessions ?? []).filter((s) => s.code.toUpperCase() !== "BETA"))
+    if (projectResult.status === "rejected") {
+      throw projectResult.reason
+    }
+    setProjects(projectResult.value)
+    if (boardResult.status === "fulfilled") {
+      setLeaderboard(boardResult.value.leaderboard)
+      setLeaderboardStats(boardResult.value.stats ?? null)
+    } else {
+      setLeaderboard([])
+      setLeaderboardStats(null)
+      warnings.push("Could not load the leaderboard.")
+    }
+    if (sessionResult.status === "fulfilled") {
+      setSessions((sessionResult.value.sessions ?? []).filter((s) => s.code.toUpperCase() !== "BETA"))
+    } else {
+      setSessions([])
+      warnings.push("Could not load sections.")
+    }
+    setError(warnings.join(" "))
   }, [scope, sessionFilter, statusFilter, tab])
 
   useEffect(() => {
@@ -161,10 +178,30 @@ export function FacultyProjectsScreen() {
     )
   }, [projects, search, tab])
 
+  const courseSessionCodes = useMemo(
+    () => sessions.map((session) => session.code),
+    [sessions],
+  )
+
+  const filteredLeaderboard = useMemo(() => {
+    const scoped = filterRowsToCourseSessions(leaderboard, (entry) => entry.session, courseSessionCodes)
+    if (!search.trim()) return scoped
+    const q = search.trim().toLowerCase()
+    return scoped.filter(
+      (entry) =>
+        entry.title.toLowerCase().includes(q) ||
+        (entry.groupName ?? "").toLowerCase().includes(q) ||
+        (entry.leaderName ?? "").toLowerCase().includes(q) ||
+        (entry.session ?? "").toLowerCase().includes(q),
+    )
+  }, [leaderboard, search, courseSessionCodes])
+
   const handleRefresh = useCallback(async () => {
     setRefreshing(true)
     try {
       await load()
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not refresh projects.")
     } finally {
       setRefreshing(false)
     }
@@ -242,10 +279,7 @@ export function FacultyProjectsScreen() {
               id: "status",
               title: "Status",
               value: statusFilter,
-              options: [
-                ...STATUS_OPTIONS,
-                { value: "pending", label: "Pending only" },
-              ],
+              options: STATUS_OPTIONS,
             },
             {
               id: "section",
@@ -324,6 +358,8 @@ export function FacultyProjectsScreen() {
               },
             ]}
             onPress={() => setStatusFilter("pending")}
+            accessibilityRole="button"
+            accessibilityLabel={`${pendingCount} project${pendingCount === 1 ? "" : "s"} awaiting review`}
           >
             <Ionicons name="time-outline" size={18} color={FACULTY_COLLAB_COLOR.nudge} />
             <Text style={[type.caption, localStyles.nudgeText, { color: FACULTY_COLLAB_COLOR.nudge }]}>
@@ -368,31 +404,42 @@ export function FacultyProjectsScreen() {
             scope={scope}
             search={search}
             statusFilter={presentationStatusFilter}
+            sessionCodes={courseSessionCodes}
           />
         ) : tab === "config" && scope ? (
-          <FacultyProjectPresentationConfigPanel scope={scope} />
+          <FacultyProjectPresentationConfigPanel scope={scope} sessionCodes={courseSessionCodes} />
         ) : tab === "grades" && scope ? (
           <FacultyProjectStudentGradesPanel scope={scope} search={search} sessionFilter={sessionFilter} />
         ) : tab === "leaderboard" ? (
-          leaderboard.length === 0 ? (
-            <FacultyEmptyState icon="trophy-outline" title="No scores yet" body="Leaderboard fills in as projects are scored." />
+          filteredLeaderboard.length === 0 ? (
+            <FacultyEmptyState
+              icon={search.trim() ? "search-outline" : "trophy-outline"}
+              title={search.trim() ? "No matches" : "No scores yet"}
+              body={
+                search.trim()
+                  ? "Try a different search or reset your filters."
+                  : "Leaderboard fills in as projects are scored."
+              }
+            />
           ) : (
             <FacultyProjectLeaderboard
-              entries={leaderboard}
+              entries={filteredLeaderboard}
               stats={leaderboardStats}
               onSelect={setSelectedLeaderboardEntry}
             />
           )
         ) : tab === "manage" && filtered.length === 0 ? (
-          <FacultyEmptyState
-            icon="folder-open-outline"
-            title="No projects"
-            body={
-              statusFilter === "pending"
-                ? "No projects waiting for approval."
-                : "Student team projects will appear here."
-            }
-          />
+            <FacultyEmptyState
+              icon="folder-open-outline"
+              title={search.trim() ? "No matches" : "No projects"}
+              body={
+                search.trim()
+                  ? "Try a different search or reset your filters."
+                  : statusFilter === "pending"
+                    ? "No projects waiting for approval."
+                    : "Student team projects will appear here."
+              }
+            />
         ) : tab === "manage" ? (
           <View style={localStyles.list}>
             {filtered.map((project, index) => (

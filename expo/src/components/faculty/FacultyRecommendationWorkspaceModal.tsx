@@ -29,6 +29,11 @@ import {
   recommendationStatusLabel,
   recommendationStatusTone} from "../../lib/faculty-recommendations-utils"
 import { FACULTY_RECOMMENDATIONS_COLOR } from "../../lib/faculty-recommendations-theme"
+import {
+  buildInstructorRecommendationPdfSource,
+  instructorCanPreviewRecommendationLetter,
+  type RecommendationPdfSource,
+} from "../../lib/recommendation-letter-url"
 import { useThemedNative } from "../../context/AppearanceProvider"
 import { FacultyStatusPill } from "./faculty-shared"
 import { FacultyModuleTabBar } from "./faculty-module-shell"
@@ -50,6 +55,8 @@ import {
   FacultySheetStatRow,
   FacultySheetWorkflow
 } from "./faculty-collab-sheet-ui"
+import { FacultySummerCampDatePicker } from "./FacultySummerCampDatePicker"
+import { GuestLetterPdfSheet } from "../guest/GuestLetterPdfSheet"
 
 type Scope = { instructorId: number; courseId: number }
 
@@ -66,6 +73,7 @@ type Props = {
   visible: boolean
   scope: Scope | null
   requestId: number | null
+  initialTab?: WorkspaceTab
   onClose: () => void
   onUpdated: () => void
 }
@@ -74,6 +82,7 @@ export function FacultyRecommendationWorkspaceModal({
   visible,
   scope,
   requestId,
+  initialTab = "overview",
   onClose,
   onUpdated}: Props) {
   const collabSheetStyles = useCollabSheetStyles()
@@ -101,6 +110,7 @@ export function FacultyRecommendationWorkspaceModal({
   const [rejectReason, setRejectReason] = useState("")
   const [infoNote, setInfoNote] = useState("")
   const [revisionNote, setRevisionNote] = useState("")
+  const [pdfPreviewSource, setPdfPreviewSource] = useState<RecommendationPdfSource | null>(null)
 
   const req = bundle?.request
   const status = req?.status ?? ""
@@ -121,9 +131,9 @@ export function FacultyRecommendationWorkspaceModal({
 
   useEffect(() => {
     if (!visible || requestId == null) return
-    setTab("overview")
+    setTab(initialTab)
     void load()
-  }, [visible, requestId, load])
+  }, [visible, requestId, initialTab, load])
 
   useEffect(() => {
     if (!req) return
@@ -146,6 +156,7 @@ export function FacultyRecommendationWorkspaceModal({
       setRejectReason("")
       setInfoNote("")
       setRevisionNote("")
+      setPdfPreviewSource(null)
       letterTextDirtyRef.current = false
       letterHeadingDirtyRef.current = false
     }
@@ -170,7 +181,29 @@ export function FacultyRecommendationWorkspaceModal({
     return formatRecommendationReLine(studentName, letterPurpose, letterPurposeOther)
   }, [req, letterPurpose, letterPurposeOther])
 
-  const pdfUrl = req?.latest_pdf_url ?? bundle?.files?.[0]?.file_url ?? null
+  const canPreviewLetterPdf = useMemo(
+    () => instructorCanPreviewRecommendationLetter(req, finalText),
+    [req, finalText],
+  )
+
+  async function openLetterPdfPreview() {
+    if (!scope || requestId == null) return
+    if (!instructorCanPreviewRecommendationLetter(req, finalText)) {
+      setError("Add letter text before previewing the PDF.")
+      return
+    }
+    setBusy("pdf")
+    setError("")
+    try {
+      if (letterHeadingDirtyRef.current) await saveLetterHeading()
+      if (letterTextDirtyRef.current) await saveLetter(false)
+      setPdfPreviewSource(buildInstructorRecommendationPdfSource(scope, requestId))
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not prepare PDF preview.")
+    } finally {
+      setBusy(null)
+    }
+  }
 
   async function runPatch(action: string, body: Record<string, unknown> = {}) {
     if (!scope || requestId == null) return
@@ -508,12 +541,14 @@ export function FacultyRecommendationWorkspaceModal({
                     </FacultySheetSection>
                   ) : null}
 
-                  {pdfUrl ? (
+                  {canPreviewLetterPdf ? (
                     <FacultySheetActionRow
                       icon="document-outline"
-                      label="Open PDF"
-                      subtitle="Latest generated letter"
-                      onPress={() => void Linking.openURL(pdfUrl)}
+                      label="Preview letter PDF"
+                      subtitle="Letterhead layout — same as the student download"
+                      loading={busy === "pdf"}
+                      disabled={!!busy && busy !== "pdf"}
+                      onPress={() => void openLetterPdfPreview()}
                     />
                   ) : null}
 
@@ -528,16 +563,14 @@ export function FacultyRecommendationWorkspaceModal({
                         />
                       }
                     >
-                      <FacultySheetField label="Deadline (YYYY-MM-DD)">
-                        <TextInput
-                          style={collabSheetStyles.fieldInput}
+                      <FacultySheetField label="Deadline">
+                        <FacultySummerCampDatePicker
                           value={deadline}
-                          onChangeText={(v) => {
+                          onChange={(v) => {
                             letterHeadingDirtyRef.current = true
                             setDeadline(v)
                           }}
-                          placeholder="2026-03-15"
-                          autoCapitalize="none"
+                          accessibilityLabel="Deadline"
                         />
                       </FacultySheetField>
                       <FacultySheetField label="Student context">
@@ -661,6 +694,17 @@ export function FacultyRecommendationWorkspaceModal({
                       ) : null}
 
                       <FacultySheetSection label="Letter actions">
+                        {canPreviewLetterPdf ? (
+                          <FacultySheetActionRow
+                            icon="document-text-outline"
+                            label="Preview letter PDF"
+                            subtitle="Uses your saved letter text and letterhead settings"
+                            loading={busy === "pdf"}
+                            disabled={!!busy && busy !== "pdf"}
+                            onPress={() => void openLetterPdfPreview()}
+                          />
+                        ) : null}
+
                         <FacultySheetActionRow
                           icon="sparkles-outline"
                           label="AI suggest letter"
@@ -734,7 +778,13 @@ export function FacultyRecommendationWorkspaceModal({
                               label={file.file_name ?? `Attachment ${file.id}`}
                               subtitle={file.file_type}
                               onPress={() => {
-                                if (file.file_url) void Linking.openURL(file.file_url)
+                                if (!file.file_url) return
+                                const name = String(file.file_type ?? file.file_name ?? "").toLowerCase()
+                                if (name.includes("pdf")) {
+                                  setPdfPreviewSource({ uri: file.file_url })
+                                  return
+                                }
+                                void Linking.openURL(file.file_url)
                               }}
                             />
                           ))}
@@ -776,6 +826,15 @@ export function FacultyRecommendationWorkspaceModal({
           </>
         )}
       </FacultySheetContainer>
+
+      {pdfPreviewSource ? (
+        <GuestLetterPdfSheet
+          visible={pdfPreviewSource != null}
+          pdfSource={pdfPreviewSource}
+          title="Recommendation letter"
+          onClose={() => setPdfPreviewSource(null)}
+        />
+      ) : null}
     </Modal>
   )
 }

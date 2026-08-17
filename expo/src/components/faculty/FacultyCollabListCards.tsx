@@ -113,6 +113,8 @@ function SignatureListCard({
         <Pressable
           style={({ pressed }) => [{ opacity: pressed ? NATIVE.pressedOpacity : 1 }]}
           onPress={onPress}
+          accessibilityRole="button"
+          accessibilityLabel={title}
         >
           <View style={styles.row}>{body}</View>
           {footer ? <View style={[styles.footer, { borderTopColor: native.separator }]}>{footer}</View> : null}
@@ -161,6 +163,8 @@ function PendingReviewFooter({
         style={[styles.quickBtn, { backgroundColor: FACULTY_COLLAB_COLOR.action }]}
         disabled={acting}
         onPress={onApprove}
+        accessibilityRole="button"
+        accessibilityLabel="Approve"
       >
         <Ionicons name="checkmark" size={16} color={FACULTY_COLLAB_COLOR.actionInk} />
         <Text style={[type.caption, styles.quickActionText, { color: FACULTY_COLLAB_COLOR.actionInk }]}>
@@ -178,6 +182,8 @@ function PendingReviewFooter({
         ]}
         disabled={acting}
         onPress={onSecondary}
+        accessibilityRole="button"
+        accessibilityLabel={secondaryLabel}
       >
         <Ionicons name={secondaryIcon} size={16} color={secondary} />
         <Text style={[type.caption, styles.quickActionText, { color: secondary }]}>{secondaryLabel}</Text>

@@ -6,17 +6,22 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  View} from "react-native"
+  View,
+} from "react-native"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { ApiError } from "../../lib/api"
 import { filterProgressReviews } from "../../lib/faculty-analytics-utils"
 import {
   formatAsOfLabel,
+  filterProgressReviewsForAsOfDate,
   getReviewPeriodConfig,
+  normalizeAsOfDate,
   REVIEW_PERIOD_OPTIONS,
   todayIsoDate,
-  type ProgressReviewPeriod} from "../../lib/progress-review-utils"
+  type ProgressReviewPeriod,
+} from "../../lib/progress-review-utils"
+import { useSuppressModuleSearchDock } from "../../context/ModuleSearchDockContext"
 import {
   instructorApi,
   type InstructorProgressReviewRow,
@@ -36,7 +41,7 @@ import { useFacultyStickyHeaderScrollLayout,
   FacultySearchToolbar} from "./faculty-module-shell"
 import { FacultyProgressReviewDetailModal } from "./FacultyProgressReviewDetailModal"
 import { FacultyProgressReviewRunSheet } from "./FacultyProgressReviewRunSheet"
-import { FacultySheetTextInput } from "./faculty-collab-sheet-ui"
+import { FacultySummerCampDatePicker } from "./FacultySummerCampDatePicker"
 import { useModuleTheme } from "../../lib/themed-module-shell"
 
 export function FacultyProgressReviewsScreen() {
@@ -59,16 +64,37 @@ export function FacultyProgressReviewsScreen() {
   const [runSheetOpen, setRunSheetOpen] = useState(false)
 
   const periodCfg = getReviewPeriodConfig(period)
+  const customAsOfDate = period === "custom" ? normalizeAsOfDate(asOfDate) : null
 
   const load = useCallback(async () => {
     if (!scope) return
     setError("")
-    const res = await instructorApi.getProgressReviews(scope, { reviewPeriod: period })
-    setReviews(res.reviews ?? [])
-    setSavedCount(res.savedReviewCount ?? res.reviews?.length ?? 0)
-    setMissingCount(res.missingReviewCount ?? 0)
-    setEnrolledCount(res.enrolledStudentCount ?? res.studentCount ?? 0)
-  }, [scope, period])
+    if (period === "custom" && !customAsOfDate) {
+      setReviews([])
+      setSavedCount(0)
+      setMissingCount(0)
+      setEnrolledCount(0)
+      return
+    }
+    const res = await instructorApi.getProgressReviews(scope, {
+      reviewPeriod: period,
+      ...(customAsOfDate ? { asOfDate: customAsOfDate } : {}),
+    })
+    const enrolled = res.enrolledStudentCount ?? res.studentCount ?? 0
+    let list = res.reviews ?? []
+    if (period === "custom" && customAsOfDate) {
+      list = filterProgressReviewsForAsOfDate(list, customAsOfDate)
+    }
+    setReviews(list)
+    if (period === "custom" && customAsOfDate) {
+      setSavedCount(list.length)
+      setMissingCount(Math.max(0, enrolled - list.length))
+    } else {
+      setSavedCount(res.savedReviewCount ?? list.length)
+      setMissingCount(res.missingReviewCount ?? 0)
+    }
+    setEnrolledCount(enrolled)
+  }, [scope, period, customAsOfDate])
 
   useEffect(() => {
     if (!ready) {
@@ -93,6 +119,8 @@ export function FacultyProgressReviewsScreen() {
   }, [load])
 
   useNotificationModuleRefresh("progress-review", handleRefresh)
+
+  useSuppressModuleSearchDock(runSheetOpen || selectedReview != null)
 
   const filtered = useMemo(() => filterProgressReviews(reviews, search), [reviews, search])
 
@@ -121,11 +149,22 @@ export function FacultyProgressReviewsScreen() {
                 ? ("school-outline" as const)
                 : opt.id === "final"
                   ? ("ribbon-outline" as const)
-                  : ("calendar-outline" as const)}))}
+                  : ("calendar-outline" as const),
+          }))}
           tab={period}
           onChange={(next) => {
             setPeriod(next)
             if (next === "custom" && !asOfDate.trim()) setAsOfDate(todayIsoDate())
+          }}
+        />
+        <FacultySearchToolbar
+          value={search}
+          onChange={setSearch}
+          placeholder="Search students…"
+          showFilter={false}
+          trailingAction={{
+            onPress: () => setRunSheetOpen(true),
+            accessibilityLabel: "Generate progress reviews",
           }}
         />
       </FacultyModuleStickyHeader>
@@ -152,12 +191,10 @@ export function FacultyProgressReviewsScreen() {
         {period === "custom" ? (
           <View style={styles.dateRow}>
             <Text style={[type.sectionHeader, { color: native.label }]}>Snapshot date</Text>
-            <FacultySheetTextInput
+            <FacultySummerCampDatePicker
               value={asOfDate}
-              onChangeText={setAsOfDate}
-              placeholder="YYYY-MM-DD"
-              autoCapitalize="none"
-              autoCorrect={false}
+              onChange={setAsOfDate}
+              accessibilityLabel="Snapshot date"
             />
             {asOfDate.trim() ? (
               <Text style={[type.caption, { color: native.tertiaryLabel }]}>
@@ -172,16 +209,6 @@ export function FacultyProgressReviewsScreen() {
             <Text style={moduleStyles.errorText}>{error}</Text>
           </View>
         ) : null}
-
-        <FacultySearchToolbar
-          value={search}
-          onChange={setSearch}
-          placeholder="Search students…"
-          showFilter={false}
-          trailingAction={{
-            onPress: () => setRunSheetOpen(true),
-            accessibilityLabel: "Generate progress reviews"}}
-        />
 
         <Pressable
           style={[
@@ -212,11 +239,19 @@ export function FacultyProgressReviewsScreen() {
         ) : filtered.length === 0 ? (
           <FacultyEmptyState
             icon="sparkles-outline"
-            title={reviews.length === 0 ? `No ${periodCfg.shortLabel.toLowerCase()} reviews yet` : "No matches"}
+            title={
+              period === "custom" && !customAsOfDate
+                ? "Select a snapshot date"
+                : reviews.length === 0
+                  ? `No ${periodCfg.shortLabel.toLowerCase()} reviews yet`
+                  : "No matches"
+            }
             body={
-              reviews.length === 0
-                ? "Generate reviews for this period, or switch to another review type."
-                : "Try another search term."
+              period === "custom" && !customAsOfDate
+                ? "Enter an as-of date above, then generate or view saved custom reviews."
+                : reviews.length === 0
+                  ? "Generate reviews for this period, or switch to another review type."
+                  : "Try another search term."
             }
           />
         ) : (

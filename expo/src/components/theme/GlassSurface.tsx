@@ -11,6 +11,7 @@ import {
 import { BlurView } from "expo-blur"
 import { GlassView, type GlassStyle } from "expo-glass-effect"
 import type { AppThemeTokens } from "../../constants/app-themes"
+import { hexToRgba } from "../../constants/app-themes"
 import { useAppThemeTokens } from "../../context/AppearanceProvider"
 import {
   canUseSystemLiquidGlass,
@@ -73,19 +74,39 @@ function useReduceTransparencyEnabled(): boolean {
 
 export function useGlassChromeMode(tokens: AppThemeTokens) {
   const reduceTransparency = useReduceTransparencyEnabled()
-  const glassTheme = themeUsesGlassBlur(tokens)
+  const glassTheme =
+    tokens.navigation.style === "floating-glass" || themeUsesGlassBlur(tokens)
   const backend = resolveLiquidGlassBackend({ reduceTransparency })
   const nativeLiquidGlass = backend === "expo-ui" || backend === "glass-effect"
   const blurFallback = backend === "blur" && blurNativeAvailable
-  const useGlassChrome = backend !== "solid"
+  /** Frosted pageSheet / action-sheet surfaces — only for glass-capable themes. */
+  const useThemedGlassSheets = backend !== "solid" && glassTheme
+  /**
+   * Floating nav chrome — OS liquid glass / blur when available.
+   * Intentionally independent of `useThemedGlassSheets` (sheet theming must never gate headers).
+   */
+  const useFloatingNavChrome = backend !== "solid"
 
-  return { glassTheme, nativeLiquidGlass, blurFallback, useGlassChrome, backend }
+  return {
+    glassTheme,
+    nativeLiquidGlass,
+    blurFallback,
+    useThemedGlassSheets,
+    useFloatingNavChrome,
+    backend,
+  }
 }
 
-/** True when chrome should float over scrolling content (iOS Liquid Glass or blur). */
+/** True when the top bar should float over scrolling module content. */
 export function useGlassChromeActive(): boolean {
   const tokens = useAppThemeTokens()
-  return useGlassChromeMode(tokens).useGlassChrome
+  return useGlassChromeMode(tokens).useFloatingNavChrome
+}
+
+/** True when modal/pageSheet hosts should use frosted glass backgrounds (glass themes only). */
+export function useThemedGlassSheets(): boolean {
+  const tokens = useAppThemeTokens()
+  return useGlassChromeMode(tokens).useThemedGlassSheets
 }
 
 type GlassSurfaceProps = {
@@ -218,10 +239,10 @@ type GlassChromeBarProps = {
   children: ReactNode
 }
 
-/** Top navigation bar — native Liquid Glass or blur when theme supports it. */
+/** Top navigation bar — native Liquid Glass or blur when the OS supports it. */
 export function GlassChromeBar({ style, borderBottomColor, children }: GlassChromeBarProps) {
   const tokens = useAppThemeTokens()
-  const { nativeLiquidGlass, blurFallback, backend } = useGlassChromeMode(tokens)
+  const { nativeLiquidGlass, backend } = useGlassChromeMode(tokens)
 
   if (backend === "solid") {
     return (
@@ -249,7 +270,7 @@ export function GlassChromeBar({ style, borderBottomColor, children }: GlassChro
       ]}
     >
       <GlassSurface style={StyleSheet.absoluteFill} glassEffectStyle="clear" />
-      <View style={[styles.content, styles.contentFlex]} pointerEvents="box-none">
+      <View style={styles.content} pointerEvents="box-none">
         {children}
       </View>
     </View>
@@ -300,16 +321,21 @@ function splitSheetPadding(style?: StyleProp<ViewStyle>) {
   return { rootStyle, foregroundPadding, topRadius }
 }
 
+/** Frosted pageSheet / bottom-menu tint derived from the active appearance theme. */
+export function resolveSheetOverlayColor(tokens: AppThemeTokens, menuSheet = false): string {
+  const glassSurface = tokens.surfaceGlass ?? tokens.glass?.surface
+  if (glassSurface) return glassSurface
+
+  const base = tokens.chrome.sheetBg ?? tokens.native.secondaryGrouped ?? tokens.surface
+  const alpha = menuSheet ? (tokens.isDark ? 0.96 : 0.98) : tokens.isDark ? 0.92 : 0.94
+  if (base.startsWith("rgba(")) return base
+  return hexToRgba(base, alpha)
+}
+
 /** Bottom sheet / modal chrome — regular glass + frosted tint for readable menus over busy content. */
 export function GlassSheetBackground({ style, children, menuSheet = false, fillHeight = false }: GlassSheetProps) {
   const tokens = useAppThemeTokens()
-  const sheetTint = menuSheet
-    ? tokens.isDark
-      ? "rgba(30, 30, 32, 0.92)"
-      : "rgba(255, 255, 255, 0.97)"
-    : tokens.isDark
-      ? "rgba(30, 30, 32, 0.68)"
-      : "rgba(255, 255, 255, 0.86)"
+  const sheetTint = resolveSheetOverlayColor(tokens, menuSheet)
   const blurIntensity = tokens.isDark ? 64 : menuSheet ? 96 : 88
   const { rootStyle, foregroundPadding, topRadius } = splitSheetPadding(style)
 

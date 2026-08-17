@@ -1,5 +1,6 @@
 import { getApiBaseUrl } from "../constants"
 import { ApiError } from "./api"
+import type { MessageDeleteMode, MessageEditVersion } from "./message-lifecycle"
 import type { AppSession, FacultySession, GuestSession, StudentSession, SummerSession } from "./session"
 
 export type ParticipantKind = "student" | "instructor"
@@ -55,6 +56,14 @@ export type ThreadMessage = {
   deliveryStatus?: MessageDeliveryStatus
   attachments: MessageAttachment[]
   reactions: MessageReactionGroup[]
+  unsent?: boolean
+  unsentAt?: string | null
+  unsentByMe?: boolean
+  edited?: boolean
+  editedAt?: string | null
+  editHistory?: MessageEditVersion[]
+  canUnsend?: boolean
+  canEdit?: boolean
 }
 
 export type ThreadDetail = {
@@ -250,11 +259,36 @@ export const messagesApi = {
     })
   },
 
-  deleteMessage(auth: MessagesAuth, threadId: number, messageId: number) {
-    return messagesRequest<{ success?: boolean }>(
+  deleteMessage(
+    auth: MessagesAuth,
+    threadId: number,
+    messageId: number,
+    mode: MessageDeleteMode = "hide",
+  ) {
+    const normalizedMessageId = Number(messageId)
+    if (!Number.isFinite(normalizedMessageId) || normalizedMessageId <= 0) {
+      return Promise.reject(new ApiError("Invalid message", 400))
+    }
+    const query = mode === "unsend" ? "?mode=unsend" : "?mode=hide"
+    return messagesRequest<{ success?: boolean; mode?: MessageDeleteMode }>(
       auth,
-      `/api/messages/threads/${threadId}/messages/${messageId}`,
+      `/api/messages/threads/${threadId}/messages/${normalizedMessageId}${query}`,
       { method: "DELETE" },
+    )
+  },
+
+  editMessage(auth: MessagesAuth, threadId: number, messageId: number, body: string) {
+    const normalizedMessageId = Number(messageId)
+    if (!Number.isFinite(normalizedMessageId) || normalizedMessageId <= 0) {
+      return Promise.reject(new ApiError("Invalid message", 400))
+    }
+    return messagesRequest<{ message: ThreadMessage }>(
+      auth,
+      `/api/messages/threads/${threadId}/messages/${normalizedMessageId}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ body }),
+      },
     )
   },
 

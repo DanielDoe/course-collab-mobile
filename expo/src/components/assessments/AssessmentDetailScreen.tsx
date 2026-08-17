@@ -296,6 +296,7 @@ export function AssessmentDetailScreen() {
           onRefresh={onRefresh}
           error={error}
           disableTopInsetAdjustment
+          stackedHeader
         >
         <View
           style={[
@@ -413,7 +414,7 @@ export function AssessmentDetailScreen() {
           <ActionButton label="Report an issue" variant="ghost" onPress={() => setIssuesOpen(true)} />
 
           {actions.showClosed ? (
-            <View style={styles.noticeBox}>
+            <View style={[styles.noticeBox, { backgroundColor: SN.fill }]}>
               <Ionicons name="lock-closed-outline" size={18} color={SN.secondaryLabel} />
               <Text style={[styles.noticeText, { color: tokens.textSecondary }]}>
                 This assessment is closed. View your report or report an issue if you completed it.
@@ -422,8 +423,8 @@ export function AssessmentDetailScreen() {
           ) : null}
 
           {actions.showLocked && actions.lockedLabel ? (
-            <View style={styles.noticeBox}>
-              <Ionicons name="hourglass-outline" size={18} color="#b45309" />
+            <View style={[styles.noticeBox, { backgroundColor: SN.fill }]}>
+              <Ionicons name="hourglass-outline" size={18} color={tokens.warning} />
               <Text style={[styles.noticeText, { color: tokens.textSecondary }]}>{actions.lockedLabel}</Text>
             </View>
           ) : null}
@@ -557,7 +558,6 @@ const styles = StyleSheet.create({
     gap: 10,
     padding: 12,
     borderRadius: 12,
-    backgroundColor: "rgba(100,116,139,0.08)",
     marginTop: 4,
   },
   noticeText: { flex: 1, fontSize: 13, lineHeight: 18 },

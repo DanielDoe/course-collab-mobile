@@ -1,0 +1,10 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Summer Camp"
+- tapOn:
+    text: "Close menu"
+    optional: true
+- extendedWaitUntil:
+    visible: "Search programs…|No summer programs|Create summer program|Programs|Select a course"
+    timeout: 35000
+- takeScreenshot: summer-camp-page

@@ -1,0 +1,107 @@
+appId: com.coursecollab.app
+---
+# Native in-app membership checkout smoke (no Safari / no WebView).
+# Review student: 910000001 / Review26! @ University of Houston
+
+- launchApp:
+    clearState: false
+
+- runFlow:
+    when:
+      visible: "Open debugger to view warnings."
+    commands:
+      - tapOn:
+          text: "Dismiss"
+          optional: true
+      - pressKey: Escape
+
+- runFlow:
+    when:
+      visible: "Sign in"
+    commands:
+      - tapOn:
+          text: "University of Houston"
+          optional: true
+      - tapOn:
+          text: "Continue"
+          optional: true
+      - tapOn:
+          text: "Student ID"
+          optional: true
+      - inputText: "910000001"
+      - tapOn:
+          text: "Password"
+          optional: true
+      - inputText: "Review26!"
+      - hideKeyboard
+      - tapOn: "Sign in"
+
+- runFlow:
+    when:
+      visible: "First sign-in"
+    commands:
+      - tapOn:
+          text: "Current password"
+          optional: true
+      - inputText: "Review26!"
+      - tapOn:
+          text: "New password"
+          optional: true
+      - inputText: "Review26!"
+      - tapOn:
+          text: "Confirm new password"
+          optional: true
+      - inputText: "Review26!"
+      - hideKeyboard
+      - tapOn: "Save password & continue"
+
+- runFlow:
+    when:
+      visible: "Change Password"
+    commands:
+      - tapOn:
+          text: "Current Password"
+          optional: true
+      - inputText: "Review26!"
+      - tapOn:
+          text: "New Password"
+          optional: true
+      - inputText: "Review26!"
+      - tapOn:
+          text: "Confirm New Password"
+          optional: true
+      - inputText: "Review26!"
+      - hideKeyboard
+      - tapOn:
+          text: "Change Password"
+          index: 1
+          optional: true
+
+# Jump straight to native checkout (works even if already mid-flow)
+- openLink: coursecollab://membership/checkout?plan=Explorer
+- extendedWaitUntil:
+    visible: "Upgrade to Explorer"
+    timeout: 60000
+- assertVisible: "What you get"
+- scrollUntilVisible:
+    element: "Continue to secure checkout"
+    direction: DOWN
+    timeout: 20000
+    speed: 40
+    visibilityPercentage: 60
+- assertVisible: "Continue to secure checkout"
+- assertVisible: "Not now"
+- assertNotVisible: "For security, you must change your password"
+
+- tapOn: "Continue to secure checkout"
+- extendedWaitUntil:
+    visible: "Card"
+    timeout: 60000
+- assertVisible: "Card"
+- assertNotVisible: "Amount must be no less than"
+- assertNotVisible: "Afterpay"
+- assertNotVisible: "Klarna"
+- assertNotVisible: "Amazon Pay"
+- assertNotVisible: "Affirm"
+- assertNotVisible: "For security, you must change your password"
+- assertNotVisible: "Change Password"

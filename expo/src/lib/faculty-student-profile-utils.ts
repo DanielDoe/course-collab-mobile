@@ -79,6 +79,14 @@ export function filterActivityForStudent(
   return rows.filter((row) => nameMatches(student, row.student_name))
 }
 
+export function filterActivityForStudentName(
+  studentName: string | undefined,
+  rows: InstructorRecentActivity[],
+): InstructorRecentActivity[] {
+  if (!studentName?.trim()) return []
+  return rows.filter((row) => nameMatches({ full_name: studentName } as InstructorStudent, row.student_name))
+}
+
 export function findClassroomSummaryForStudent(
   student: InstructorStudent,
   rows: ClassroomPointsSummaryRow[],

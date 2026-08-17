@@ -3,6 +3,7 @@ import { ActivityIndicator, Modal, Pressable, RefreshControl, ScrollView, Text, 
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { instructorApi, type InstructorGroup } from "../../lib/instructor-api"
+import { facultyGroupStatusMeta } from "../../lib/faculty-collab-theme"
 import { studentInitials } from "../../lib/faculty-students-utils"
 import { FACULTY_SHEET_COLOR } from "../../lib/faculty-sheet-theme"
 import { FACULTY_SHEET_SOLID } from "../../lib/faculty-sheet-accents"
@@ -20,6 +21,7 @@ import {
   FacultySheetStatChip,
   FacultySheetStatRow
 } from "./faculty-collab-sheet-ui"
+import { useSuppressModuleSearchDock } from "../../context/ModuleSearchDockContext"
 import { SHEET_METRIC, SHEET_SECTION } from "./faculty-sheet-semantics"
 
 type Scope = { instructorId: number; courseId: number }
@@ -45,9 +47,7 @@ function groupStatusTone(status: string): "success" | "warning" | "danger" | "ne
 }
 
 function statusLabel(group: InstructorGroup): string {
-  if (group.deleted_at) return "Deleted"
-  if (group.status === "pending_update") return "Update pending"
-  return group.status
+  return facultyGroupStatusMeta(group).label
 }
 
 function isPendingGroup(group: InstructorGroup): boolean {
@@ -65,6 +65,7 @@ export function FacultyGroupActionSheet({
   onDelete,
   onRestore,
   onRemoveMember}: Props) {
+  useSuppressModuleSearchDock(visible)
   const collabSheetStyles = useCollabSheetStyles()
   const insets = useSafeAreaInsets()
   const [detail, setDetail] = useState<InstructorGroup | null>(null)
@@ -72,26 +73,38 @@ export function FacultyGroupActionSheet({
   const [refreshing, setRefreshing] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [pendingMember, setPendingMember] = useState<{ id: number; name: string } | null>(null)
+  const [detailError, setDetailError] = useState("")
 
   const loadDetail = useCallback(async () => {
     if (!scope || !group) return
     try {
+      setDetailError("")
       setDetail(await instructorApi.getGroupDetail(scope, group.id))
     } catch {
       setDetail(group)
+      setDetailError("Could not refresh group details. Showing the list snapshot.")
     }
   }, [scope, group])
 
   useEffect(() => {
     if (!visible || !group) {
       setDetail(null)
+      setDetailError("")
       return
     }
     setLoading(true)
     void loadDetail().finally(() => setLoading(false))
   }, [visible, group, loadDetail])
 
-  const view = detail ?? group
+  const view = useMemo(() => {
+    if (!group) return group
+    if (!detail) return group
+    return {
+      ...group,
+      ...detail,
+      deleted_at: detail.deleted_at ?? group.deleted_at,
+    }
+  }, [detail, group])
   const members = useMemo(() => view?.members ?? [], [view?.members])
   const memberCount = view?.member_count ?? members.length
   const isDeleted = Boolean(view?.deleted_at)
@@ -133,6 +146,13 @@ export function FacultyGroupActionSheet({
 
           <View style={collabSheetStyles.body}>
             {loading && !detail ? <ActivityIndicator color={FACULTY_SHEET_COLOR.link} style={{ marginVertical: 16 }} /> : null}
+
+            {detailError ? (
+              <View style={collabSheetStyles.alertBox}>
+                <Ionicons name="alert-circle-outline" size={18} color={FACULTY_SHEET_COLOR.nudge} />
+                <Text style={[collabSheetStyles.alertText, { flex: 1 }]}>{detailError}</Text>
+              </View>
+            ) : null}
 
             <FacultySheetStatRow>
               <FacultySheetStatChip icon="ribbon-outline" label="Leader" value={view.leader_name} tone={SHEET_METRIC.primary} />
@@ -215,7 +235,12 @@ export function FacultyGroupActionSheet({
                           <Text style={collabSheetStyles.memberId}>{member.student_id}</Text>
                         </View>
                         {view.status === "approved" && !isDeleted && !isLeader ? (
-                          <Pressable hitSlop={8} onPress={() => setPendingMember({ id: member.id, name: member.full_name })}>
+                          <Pressable
+                            hitSlop={8}
+                            onPress={() => setPendingMember({ id: member.id, name: member.full_name })}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Remove ${member.full_name}`}
+                          >
                             <Ionicons name="person-remove-outline" size={20} color="#94a3b8" />
                           </Pressable>
                         ) : null}
@@ -231,6 +256,8 @@ export function FacultyGroupActionSheet({
                 style={collabSheetStyles.actionRow}
                 disabled={acting}
                 onPress={() => (isDeleted ? onRestore(view) : setConfirmDelete(true))}
+                accessibilityRole="button"
+                accessibilityLabel={isDeleted ? "Restore group" : "Delete group"}
               >
                 <View style={collabSheetStyles.actionIcon}>
                   <Ionicons

@@ -1,0 +1,13 @@
+appId: com.coursecollab.app
+---
+- scrollUntilVisible:
+    element: "Summary"
+    direction: DOWN
+    timeout: 10000
+    visibilityPercentage: 40
+- tapOn:
+    text: "Brief overview"
+    optional: true
+- tapOn:
+    text: "Summary"
+    optional: true

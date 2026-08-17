@@ -8,6 +8,8 @@ import { instructorApi } from "../../lib/instructor-api"
 import { MANUAL_AWARD_CATEGORIES } from "../../lib/faculty-classroom-points-utils"
 import { FACULTY_CLASSROOM_POINTS_COLOR } from "../../lib/faculty-classroom-points-theme"
 import { useModuleTheme } from "../../lib/themed-module-shell"
+import { NativeSelect } from "../NativeSelect"
+import { POINT_AWARD_OPTIONS, withCurrentOption } from "./FacultyNativePickers"
 import { semanticSoft } from "../../lib/themed-module-theme"
 import {
   FacultySheetContainer,
@@ -135,7 +137,12 @@ export function FacultyManualAwardModal({
         >
           <FacultySheetSection label="Award details" tone={SHEET_CLASSROOM_POINTS.award}>
             <FacultySheetField label="Points">
-              <FacultySheetTextInput value={points} onChangeText={setPoints} keyboardType="decimal-pad" placeholder="1.0" />
+              <NativeSelect
+                placeholder="1 pts"
+                value={points}
+                options={withCurrentOption(POINT_AWARD_OPTIONS, points, `${points} pts`)}
+                onChange={setPoints}
+              />
             </FacultySheetField>
 
             <FacultySheetField label="Category">

@@ -7,6 +7,7 @@ export {
   resolveLiquidGlassBackend,
   useGlassChromeActive,
   useGlassChromeMode,
+  useThemedGlassSheets,
   type LiquidGlassBackend,
 } from "./GlassSurface"
 

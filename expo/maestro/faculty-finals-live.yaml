@@ -1,0 +1,4 @@
+appId: com.coursecollab.app
+---
+- tapOn: "ECE 2202 - Final Exam 1, Closed, 40 questions · 31 attempts · 3/3 sections open, From Jul 30 at 2:00 AM · Until Jul 30 at 7:00 AM, Closed, · Tap for details"
+- waitForAnimationToEnd

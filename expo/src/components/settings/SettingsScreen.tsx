@@ -3,8 +3,9 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { AppAlert } from '../../lib/app-alert'
 import Constants from "expo-constants"
 import { Ionicons } from "@/components/icons/AppIcon"
-import { useRouter } from "expo-router"
+import { useLocalSearchParams, useRouter } from "expo-router"
 import { ModuleScreen } from "../modules/ModuleScreen"
+import { NotetakerScreenHeader } from "../notetaker/NotetakerScreenHeader"
 import { useSession } from "../../context/SessionProvider"
 import { useAppearance, useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
 import { getAppearanceModeLabel, getThemeLabel } from "../../constants/app-themes"
@@ -158,6 +159,12 @@ export function SettingsScreen() {
   const summerSession = settingsSession?.portal === "summer" ? settingsSession.session : null
 
   const [activeSheet, setActiveSheet] = useState<SheetId>(null)
+  const params = useLocalSearchParams<{ open?: string | string[] }>()
+  const openSheet = Array.isArray(params.open) ? params.open[0] : params.open
+
+  useEffect(() => {
+    if (openSheet === "security") setActiveSheet("security")
+  }, [openSheet])
   const [fullName, setFullName] = useState("")
   const [email, setEmail] = useState("")
   const [currentPassword, setCurrentPassword] = useState("")
@@ -363,22 +370,28 @@ export function SettingsScreen() {
 
   if (!settingsSession) {
     return (
-      <ModuleScreen loading={false} error="Settings are not available for this account type.">
-        <View />
-      </ModuleScreen>
+      <View style={[styles.screenRoot, { backgroundColor: native.groupedBackground }]}>
+        <NotetakerScreenHeader title="Settings" fallbackHref="/dashboard" />
+        <ModuleScreen loading={false} error="Settings are not available for this account type." disableTopInsetAdjustment>
+          <View />
+        </ModuleScreen>
+      </View>
     )
   }
 
   return (
-    <ModuleScreen
-      loading={loading}
-      error={error}
-      refreshing={refreshing}
-      onRefresh={() => {
-        setRefreshing(true)
-        load().finally(() => setRefreshing(false))
-      }}
-    >
+    <View style={[styles.screenRoot, { backgroundColor: native.groupedBackground }]}>
+      <NotetakerScreenHeader title="Settings" fallbackHref="/dashboard" />
+      <ModuleScreen
+        loading={loading}
+        error={error}
+        refreshing={refreshing}
+        disableTopInsetAdjustment
+        onRefresh={() => {
+          setRefreshing(true)
+          load().finally(() => setRefreshing(false))
+        }}
+      >
       {message ? (
         <View style={[styles.bannerSuccess, { backgroundColor: `${tokens.success}18`, borderColor: `${tokens.success}33` }]}>
           <Ionicons name="checkmark-circle" size={18} color={tokens.success} />
@@ -435,9 +448,15 @@ export function SettingsScreen() {
             />
             <SettingsRow
               icon="diamond-outline"
-              label="Membership plan"
+              label="Membership"
               detail={membershipLabel}
               onPress={() => router.push("/membership" as never)}
+            />
+            <SettingsRow
+              icon="time-outline"
+              label="Cora usage"
+              detail="Logs"
+              onPress={() => router.push("/settings/cora-usage" as never)}
               isLast
             />
           </>
@@ -490,7 +509,6 @@ export function SettingsScreen() {
             icon="chatbubbles-outline"
             label="Discussions & help"
             onPress={() => router.push("/module/discussions" as never)}
-            isLast
           />
         ) : (
           <>
@@ -503,10 +521,15 @@ export function SettingsScreen() {
               icon="megaphone-outline"
               label="Announcements"
               onPress={() => router.push("/announcements" as never)}
-              isLast
             />
           </>
         )}
+        <SettingsRow
+          icon="shield-outline"
+          label="Privacy & security"
+          onPress={() => router.push("/settings/privacy-security" as never)}
+          isLast
+        />
       </SettingsGroup>
 
       <SettingsSectionHeader title="Session" />
@@ -557,10 +580,12 @@ export function SettingsScreen() {
         onClose={() => setActiveSheet(null)}
       />
     </ModuleScreen>
+    </View>
   )
 }
 
 const styles = StyleSheet.create({
+  screenRoot: { flex: 1 },
   bannerSuccess: {
     flexDirection: "row",
     alignItems: "center",
@@ -624,13 +649,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  rowLabel: { flex: 1, minWidth: 0, marginRight: 8 },
+  rowLabel: { flexShrink: 0, flexGrow: 1, marginRight: 8 },
   rowTrailing: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "flex-end",
     gap: 6,
-    flexShrink: 0,
-    maxWidth: "52%",
+    flexShrink: 1,
+    maxWidth: "46%",
   },
   rowDetail: { flexShrink: 1, textAlign: "right" as const },
   footer: { alignItems: "center", paddingVertical: 16 },

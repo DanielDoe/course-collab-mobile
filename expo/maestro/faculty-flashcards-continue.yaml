@@ -1,0 +1,21 @@
+appId: com.coursecollab.app
+---
+- extendedWaitUntil:
+    visible: "AC Analysis Essentials, Published|Create deck"
+    timeout: 20000
+- tapOn: "Delete AC Analysis Essentials"
+- takeScreenshot: flashcards-delete-live-confirm
+- tapOn: "Cancel"
+- tapOn: "Create deck"
+- extendedWaitUntil:
+    visible: "New deck"
+    timeout: 8000
+- tapOn: "Deck title"
+- eraseText
+- inputText: "QA Flashcards Deck"
+- tapOn: "New deck"
+- tapOn: "Save"
+- extendedWaitUntil:
+    visible: "QA Flashcards Deck"
+    timeout: 15000
+- takeScreenshot: flashcards-qa-created

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react"
-import { Platform, Pressable, StyleSheet, TextInput, View, type StyleProp, type ViewStyle } from "react-native"
+import { Keyboard, Platform, Pressable, StyleSheet, TextInput, View, type StyleProp, type ViewStyle } from "react-native"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useAppThemeTokens } from "../../context/AppearanceProvider"
 
@@ -40,7 +40,7 @@ export function LiquidGlassSearchIconButton({
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
-      hitSlop={4}
+      hitSlop={12}
     >
       <Ionicons name={icon} size={20} color={iconColor} />
     </Pressable>
@@ -94,14 +94,30 @@ export function LiquidGlassSearchField({
             value={value}
             onChangeText={onChange}
             placeholder={placeholder}
+            accessibilityLabel={placeholder}
+            accessibilityRole="search"
+            testID="module-search"
             placeholderTextColor={placeholderColor}
             autoCapitalize="none"
             autoCorrect={false}
+            keyboardType="ascii-capable"
             selectionColor={accent}
             returnKeyType="search"
             clearButtonMode="never"
             underlineColorAndroid="transparent"
           />
+          {value.length > 0 ? (
+            <View style={styles.clearSlot}>
+              <LiquidGlassSearchIconButton
+                icon="close-circle"
+                onPress={() => {
+                  onChange("")
+                  Keyboard.dismiss()
+                }}
+                accessibilityLabel="Clear search"
+              />
+            </View>
+          ) : null}
         </View>
       )}
 
@@ -163,6 +179,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 2,
+  },
+  clearSlot: {
+    flexShrink: 0,
+    zIndex: 2,
   },
   iconBtn: {
     width: 32,

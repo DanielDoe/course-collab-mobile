@@ -1,0 +1,8 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<testsuites>
+  <testsuite name="Test Suite" device="iPhone 17 Pro - iOS 26.0 - 4158A022-1067-455E-BF03-10CA5D80D946" tests="1" failures="1" time="18.0">
+    <testcase id="faculty-summer-camp-finish" name="faculty-summer-camp-finish" classname="faculty-summer-camp-finish" file="maestro/faculty-summer-camp-finish.yaml" time="18.0" status="ERROR">
+      <failure>Element not found: Text matching regex: Campers</failure>
+    </testcase>
+  </testsuite>
+</testsuites>

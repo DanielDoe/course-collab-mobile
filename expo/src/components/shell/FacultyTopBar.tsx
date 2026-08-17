@@ -43,6 +43,7 @@ export function FacultyTopBar({ session }: Props) {
           ]}
           onPress={nestedHeader ? nestedHeader.onBack : openDrawer}
           hitSlop={6}
+          testID="open-navigation-menu"
           accessibilityRole="button"
           accessibilityLabel={nestedHeader ? "Go back" : "Open navigation menu"}
         >

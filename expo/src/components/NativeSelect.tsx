@@ -57,6 +57,7 @@ export function NativeSelect<T extends string>({
   const canOpen = !disabled && !loading
   const grouped = variant === "grouped"
   const resolvedSheetTitle = sheetTitle ?? label
+  const sheetBackground = tokens.chrome.sheetBg ?? native.groupedBackground
 
   const styles = useMemo(
     () =>
@@ -114,8 +115,8 @@ export function NativeSelect<T extends string>({
           marginBottom: 12,
         },
         headerBtn: {
-          width: 40,
-          height: 40,
+          width: 44,
+          height: 44,
           alignItems: "center",
           justifyContent: "center",
         },
@@ -188,7 +189,11 @@ export function NativeSelect<T extends string>({
         disabled={!canOpen}
         onPress={() => setVisible(true)}
         accessibilityRole="button"
-        accessibilityLabel={label ?? placeholder}
+        accessibilityLabel={
+          selected
+            ? `${label ?? placeholder}, ${selected.label}`
+            : (label ?? placeholder)
+        }
       >
         <Text
           style={[styles.triggerText, !selected && styles.placeholder]}
@@ -203,11 +208,19 @@ export function NativeSelect<T extends string>({
         />
       </Pressable>
 
-      <Modal visible={visible} transparent animationType="slide" onRequestClose={closeSheet}>
-        <Pressable style={styles.backdrop} onPress={closeSheet}>
+      {visible ? (
+      <Modal
+        visible
+        transparent
+        animationType="fade"
+        presentationStyle="overFullScreen"
+        onRequestClose={closeSheet}
+      >
+        <Pressable style={styles.backdrop} onPress={closeSheet} accessible={false}>
           <Pressable
-            style={[styles.sheet, { backgroundColor: native.secondaryGrouped }]}
+            style={[styles.sheet, { backgroundColor: sheetBackground }]}
             onPress={() => {}}
+            accessible={false}
           >
             <View style={styles.handle} />
             <View style={styles.header}>
@@ -232,7 +245,7 @@ export function NativeSelect<T extends string>({
 
             <FlatList
               data={options}
-              keyExtractor={(option) => option.value}
+              keyExtractor={(option, index) => `${option.value}::${index}`}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
               contentContainerStyle={styles.list}
@@ -308,6 +321,7 @@ export function NativeSelect<T extends string>({
           </Pressable>
         </Pressable>
       </Modal>
+      ) : null}
     </View>
   )
 }

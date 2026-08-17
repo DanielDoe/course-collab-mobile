@@ -1,0 +1,7 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Edit section ECE2202 · QA16"
+- extendedWaitUntil:
+    visible: "Edit section"
+    timeout: 8000
+- tapOn: "Section description"

@@ -110,6 +110,21 @@ export function resolveQuestionBankTypeMeta(
   return custom ? customTypeToMeta(custom) : undefined
 }
 
+const ALLOWED_FIELD_KINDS = new Set<CustomQuestionTypeFieldKind>([
+  "text",
+  "textarea",
+  "options",
+  "code",
+  "rubric",
+  "media",
+  "boolean",
+])
+const FIELD_KEY_RE = /^[a-z][a-z0-9_]{0,47}$/
+const MAX_SCHEMA_FIELDS = 12
+const MAX_FIELD_LABEL = 80
+const MAX_FIELD_DESCRIPTION = 400
+const MAX_AI_PROMPT = 2000
+
 export function validateCustomQuestionTypeDraft(draft: CustomQuestionTypeDraft): string | null {
   if (!draft.label.trim()) return "Type name is required."
   if (!draft.description.trim()) return "Describe what this question type is for."
@@ -119,6 +134,28 @@ export function validateCustomQuestionTypeDraft(draft: CustomQuestionTypeDraft):
   if (!["choice", "coding", "structured"].includes(draft.category)) return "Invalid category."
   if (!Array.isArray(draft.schema.fields) || draft.schema.fields.length === 0) {
     return "Schema must include at least one field."
+  }
+  if (draft.schema.fields.length > MAX_SCHEMA_FIELDS) {
+    return `Schema may include at most ${MAX_SCHEMA_FIELDS} fields.`
+  }
+  const seen = new Set<string>()
+  for (const field of draft.schema.fields) {
+    if (!field || typeof field !== "object") return "Invalid schema field."
+    const key = String(field.key ?? "")
+    if (!FIELD_KEY_RE.test(key)) {
+      return "Each field needs a lowercase key (letters, numbers, underscores)."
+    }
+    if (seen.has(key)) return "Schema field keys must be unique."
+    seen.add(key)
+    if (!ALLOWED_FIELD_KINDS.has(field.kind)) return "Unknown schema field kind."
+    if (!String(field.label ?? "").trim()) return "Each field needs a label."
+    if (String(field.label).length > MAX_FIELD_LABEL) return "Field label is too long."
+    if (field.description && String(field.description).length > MAX_FIELD_DESCRIPTION) {
+      return "Field description is too long."
+    }
+  }
+  if (draft.aiQuestionPrompt && draft.aiQuestionPrompt.length > MAX_AI_PROMPT) {
+    return "AI prompt is too long."
   }
   return null
 }

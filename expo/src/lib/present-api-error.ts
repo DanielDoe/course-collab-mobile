@@ -59,7 +59,18 @@ export function presentApiError(err: unknown, options: PresentOptions = {}): Api
       }
     }
 
-    if (err.status === 401 || err.status === 403) {
+    if (err.status === 401) {
+      return {
+        kind: "client",
+        title: "Session expired",
+        message: "Your CourseCollab session expired. Sign in again to continue.",
+        status: err.status,
+        detail: buildApiErrorDetail(err),
+        retryable: false,
+      }
+    }
+
+    if (err.status === 403) {
       return {
         kind: "client",
         title: "Access denied",
@@ -67,6 +78,50 @@ export function presentApiError(err: unknown, options: PresentOptions = {}): Api
         status: err.status,
         detail: buildApiErrorDetail(err),
         retryable: false,
+      }
+    }
+
+    if (err.status === 404) {
+      return {
+        kind: "client",
+        title: `${feature} not found`,
+        message: err.message || "This item is no longer available.",
+        status: err.status,
+        detail: buildApiErrorDetail(err),
+        retryable: false,
+      }
+    }
+
+    if (err.status === 409) {
+      return {
+        kind: "client",
+        title: "Already updated",
+        message: err.message || "This action was already completed. Refresh and try again if needed.",
+        status: err.status,
+        detail: buildApiErrorDetail(err),
+        retryable: true,
+      }
+    }
+
+    if (err.status === 422) {
+      return {
+        kind: "client",
+        title: "Check your input",
+        message: err.message || fallback,
+        status: err.status,
+        detail: buildApiErrorDetail(err),
+        retryable: false,
+      }
+    }
+
+    if (err.status === 429) {
+      return {
+        kind: "client",
+        title: "Too many requests",
+        message: "CourseCollab is rate-limiting this action. Wait a moment, then try again.",
+        status: err.status,
+        detail: buildApiErrorDetail(err),
+        retryable: true,
       }
     }
 

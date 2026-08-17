@@ -57,7 +57,9 @@ export function FacultyQuestionBankPreviewModal({
     setLoadingDetail(true)
     instructorApi
       .getQuestionBankQuestion(scope, question.id)
-      .then((full) => setDetail(full))
+      .then((full) => {
+        if (full) setDetail({ ...full, deleted_at: full.deleted_at ?? question.deleted_at })
+      })
       .catch(() => setDetail(question))
       .finally(() => setLoadingDetail(false))
   }, [question, scope])
@@ -76,9 +78,10 @@ export function FacultyQuestionBankPreviewModal({
     }
   }
 
-  if (!question || !detail) return null
+  const display = detail ?? question
+  if (!display) return null
 
-  const isDeleted = Boolean(detail.deleted_at)
+  const isDeleted = Boolean(display.deleted_at || question?.deleted_at)
 
   return (
     <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
@@ -89,7 +92,7 @@ export function FacultyQuestionBankPreviewModal({
           onClose={onClose}
           rightSlot={
             !isDeleted && onEdit ? (
-              <FacultySheetTextAction label="Edit" onPress={() => onEdit(detail)} />
+              <FacultySheetTextAction label="Edit" onPress={() => onEdit(display)} />
             ) : undefined
           }
         />
@@ -104,7 +107,7 @@ export function FacultyQuestionBankPreviewModal({
             </View>
           ) : null}
 
-          <FacultyQuestionBankDetailContent question={detail} loading={loadingDetail} />
+          <FacultyQuestionBankDetailContent question={display} loading={loadingDetail} />
 
           <FacultySheetSection label="Actions" tone={SHEET_SECTION.tools}>
             {!isDeleted ? (
@@ -114,7 +117,7 @@ export function FacultyQuestionBankPreviewModal({
                     icon="create-outline"
                     label="Edit question"
                     tone="primary"
-                    onPress={() => onEdit(detail)}
+                    onPress={() => onEdit(display)}
                   />
                 ) : null}
                 <FacultySheetActionRow

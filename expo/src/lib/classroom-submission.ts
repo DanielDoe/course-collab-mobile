@@ -458,6 +458,10 @@ export function wrapBareMathSymbols(input: string): string {
   t = t.replace(/([A-Za-z0-9])\s*=\s*ω/g, "$1 = $\\omega$")
   t = t.replace(/ω/g, "$\\omega$")
 
+  // Unicode summation / sigma often used in flashcards (KCL, etc.)
+  t = t.replace(/[∑Σ]/g, "$\\sum$")
+  t = t.replace(/[−–]/g, "-")
+
   return restoreMathSegments(t, segments)
 }
 
@@ -479,6 +483,7 @@ export function needsQuestionRichRender(text: string): boolean {
   if (/\\(?:frac|omega|Omega|text|cdot|times|sqrt|sum|int|alpha|beta|theta|mu|pi)\b/.test(t)) return true
   if (/\b[A-Za-z]_[A-Za-z0-9]+\b/.test(t)) return true
   if (/ω/.test(t)) return true
+  if (/[∑Σ]/.test(t)) return true
   if (/<[a-z][\s\S]*>/i.test(t)) {
     const stripped = stripQuestionHtml(t)
     if (stripped !== t) return needsQuestionRichRender(stripped)
@@ -698,9 +703,27 @@ function resolveQuestionHtmlTheme(theme?: QuestionHtmlTheme) {
   }
 }
 
+/**
+ * Anti-cheat CSS for live assessment surfaces: kills text selection, the iOS
+ * long-press callout (Copy / Look Up / Share) and drag-out of question media so
+ * question text cannot be lifted into an external AI tool mid-attempt.
+ */
+function noSelectCss(disableSelection?: boolean): string {
+  if (!disableSelection) return ""
+  return `
+  html, body, #content, #content * {
+    -webkit-user-select: none !important;
+    user-select: none !important;
+    -webkit-touch-callout: none !important;
+    -webkit-user-drag: none !important;
+  }
+  img { pointer-events: none !important; }
+`
+}
+
 export function buildQuestionHtml(
   text: string,
-  options?: { compact?: boolean; theme?: QuestionHtmlTheme },
+  options?: { compact?: boolean; theme?: QuestionHtmlTheme; disableSelection?: boolean },
 ): string {
   const compact = options?.compact === true
   const colors = resolveQuestionHtmlTheme(options?.theme)
@@ -717,7 +740,7 @@ export function buildQuestionHtml(
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css"/>
-<style>
+<style>${noSelectCss(options?.disableSelection)}
   body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: ${bodyFontSize}; line-height: ${bodyLineHeight}; color: ${colors.text}; background: transparent; }
   #content { display: flex; flex-direction: column; gap: 0; }
   p.q-para { margin: 0 0 ${paraMargin}; word-wrap: break-word; overflow-wrap: anywhere; }
@@ -824,12 +847,14 @@ export type McqReportOptionHtmlItem = {
   badge?: string
   bg: string
   border: string
+  /** Foreground for rows with a solid status fill (selected correct/incorrect). */
+  fg?: string
 }
 
 /** Single WebView for multiple MCQ options (report / review surfaces). */
 export function buildMcqReportOptionsHtml(
   items: McqReportOptionHtmlItem[],
-  options?: { compact?: boolean; theme?: QuestionHtmlTheme },
+  options?: { compact?: boolean; theme?: QuestionHtmlTheme; disableSelection?: boolean },
 ): string {
   const compact = options?.compact === true
   const colors = resolveQuestionHtmlTheme(options?.theme)
@@ -839,6 +864,7 @@ export function buildMcqReportOptionsHtml(
     badge: item.badge ?? "",
     bg: item.bg,
     border: item.border,
+    fg: item.fg ?? colors.text,
   }))
   const payload = JSON.stringify(rows)
   const bodyFontSize = compact ? "14px" : "15px"
@@ -850,18 +876,20 @@ export function buildMcqReportOptionsHtml(
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css"/>
-<style>
+<style>${noSelectCss(options?.disableSelection)}
   body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: ${bodyFontSize}; line-height: ${bodyLineHeight}; color: ${colors.text}; background: transparent; }
   #content { display: flex; flex-direction: column; gap: ${compact ? "8px" : "10px"}; }
-  .opt-row { display: flex; align-items: flex-start; gap: 10px; padding: ${compact ? "8px 10px" : "10px 12px"}; border-radius: 12px; border: 1px solid transparent; }
-  .opt-letter { font-weight: 700; min-width: 1.4em; color: ${colors.heading}; flex-shrink: 0; padding-top: 1px; }
+  .opt-row { display: flex; align-items: flex-start; gap: 10px; padding: ${compact ? "8px 10px" : "10px 12px"}; border-radius: 12px; border: 1px solid transparent; color: ${colors.text}; }
+  .opt-letter { font-weight: 700; min-width: 1.4em; color: inherit; flex-shrink: 0; padding-top: 1px; }
   .opt-body { flex: 1; min-width: 0; }
-  .opt-badge { font-size: 11px; font-weight: 600; margin-top: 6px; color: ${colors.textSecondary}; }
+  .opt-badge { font-size: 11px; font-weight: 600; margin-top: 6px; color: inherit; opacity: 0.82; }
+  .opt-row .katex { color: inherit; }
+  .opt-row strong, .opt-row em { color: inherit; }
   p.q-para { margin: 0 0 8px; word-wrap: break-word; overflow-wrap: anywhere; }
   p.q-para:last-child { margin-bottom: 0; }
   p.q-para .inline-math { display: inline-block; margin: 0 0.36em; vertical-align: -0.08em; }
   .q-display { margin: 8px 0 10px; overflow-x: auto; text-align: center; }
-  .math-fallback { font-family: Menlo, monospace; font-size: 13px; color: ${colors.textSecondary}; }
+  .math-fallback { font-family: Menlo, monospace; font-size: 13px; color: inherit; opacity: 0.85; }
 </style>
 </head>
 <body>
@@ -923,7 +951,7 @@ export function buildMcqReportOptionsHtml(
   var html = "";
   for (var r = 0; r < rows.length; r++) {
     var row = rows[r];
-    html += '<div class="opt-row" style="background:' + row.bg + ";border-color:" + row.border + '">';
+    html += '<div class="opt-row" style="background:' + row.bg + ";border-color:" + row.border + ";color:" + row.fg + '">';
     html += '<span class="opt-letter">' + row.letter + ".</span>";
     html += '<div class="opt-body">' + renderBlocks(row.blocks);
     if (row.badge) {

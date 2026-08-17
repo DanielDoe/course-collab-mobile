@@ -1,0 +1,14 @@
+appId: com.coursecollab.app
+---
+- scrollUntilVisible:
+    element:
+      text: ".*View full report.*"
+    direction: DOWN
+    timeout: 12000
+- takeScreenshot: practice-alvin-actions
+- tapOn:
+    text: ".*View full report.*"
+- extendedWaitUntil:
+    visible: "Practice report"
+    timeout: 15000
+- takeScreenshot: practice-report-alvin

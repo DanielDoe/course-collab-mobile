@@ -1,0 +1,21 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Search roster"
+- eraseText
+- inputText: "Beta"
+- tapOn: "Create group"
+- takeScreenshot: groups-create-search-beta
+- tapOn:
+    text: ".*Beta Tester.*|Leader Beta Tester"
+    optional: true
+- tapOn:
+    text: "Leader Beta Tester"
+    optional: true
+- tapOn: "Group name"
+- eraseText
+- inputText: "QA99 Groups"
+- tapOn: "Create group"
+- takeScreenshot: groups-create-named
+- swipe:
+    direction: UP
+- takeScreenshot: groups-create-members

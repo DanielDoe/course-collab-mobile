@@ -1,13 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import {
   ActivityIndicator,
-  Modal,
   Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View} from "react-native"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
@@ -39,16 +37,20 @@ import { FacultyPlaygroundQuestionBank } from "./FacultyPlaygroundQuestionBank"
 import { FacultyPlaygroundSessionCard } from "./FacultyPlaygroundSessionCard"
 import { FacultyPlaygroundSessionDetailModal } from "./FacultyPlaygroundSessionDetailModal"
 import {
-  FacultySheetContainer,
+  FacultySheetModal,
   useCollabSheetStyles,
   FacultySheetChrome,
   FacultySheetField,
   FacultySheetNotice,
   FacultySheetSection,
-  FacultySheetSubmitButton
+  FacultySheetErrorBanner,
+  FacultySheetSubmitButton,
 } from "./faculty-collab-sheet-ui"
 import { SHEET_SECTION } from "./faculty-sheet-semantics"
+import { NativeSelect } from "../NativeSelect"
+import { QUESTION_COUNT_OPTIONS, secondsSelectOptions } from "./FacultyNativePickers"
 import { useModuleTheme } from "../../lib/themed-module-shell"
+import { useRouter } from "expo-router"
 
 const FILTER_SHEET_OPTIONS: FacultyFilterOption[] = [
   { value: "all", label: "All sessions" },
@@ -63,12 +65,13 @@ export function FacultyPlaygroundScreen() {
 
   const collabSheetStyles = useCollabSheetStyles()
   const insets = useSafeAreaInsets()
-  const { listScrollPad, scrollPad } = useFacultyStickyHeaderScrollLayout({ listTopGap: 4 })
+  const { listScrollPad, scrollPad } = useFacultyStickyHeaderScrollLayout({ extraBottom: 88, listTopGap: 4 })
   const tokens = useAppThemeTokens()
   const native = useThemedNative()
   const styles = useFacultyModuleStyles()
   const type = useNativeType()
   const { scope, ready } = useFacultyScope()
+  const router = useRouter()
 
   const [screenTab, setScreenTab] = useState<ScreenTab>("sessions")
   const [sessions, setSessions] = useState<PlaygroundSession[]>([])
@@ -84,6 +87,7 @@ export function FacultyPlaygroundScreen() {
   const [selected, setSelected] = useState<PlaygroundSession | null>(null)
 
   const [createOpen, setCreateOpen] = useState(false)
+  const [createError, setCreateError] = useState("")
   const [questionCount, setQuestionCount] = useState("10")
   const [durationSec, setDurationSec] = useState("10")
   const [selectedTopics, setSelectedTopics] = useState<string[]>([])
@@ -95,7 +99,7 @@ export function FacultyPlaygroundScreen() {
     try {
       const [nextSessions, nextTopics] = await Promise.all([
         instructorApi.getPlaygroundSessions(scope),
-        instructorApi.getPlaygroundTopics(scope).catch(() => []),
+        instructorApi.getPlaygroundTopics(scope),
       ])
       setSessions(nextSessions)
       setTopics(nextTopics)
@@ -137,6 +141,8 @@ export function FacultyPlaygroundScreen() {
     setRefreshing(true)
     try {
       await load()
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not refresh playground.")
     } finally {
       setRefreshing(false)
     }
@@ -175,11 +181,11 @@ export function FacultyPlaygroundScreen() {
     const count = Number.parseInt(questionCount, 10)
     const duration = Number.parseInt(durationSec, 10)
     if (!Number.isFinite(count) || count < 1) {
-      setError("Question count must be at least 1.")
+      setCreateError("Question count must be at least 1.")
       return
     }
     setCreating(true)
-    setError("")
+    setCreateError("")
     try {
       await instructorApi.createPlaygroundSession(scope, {
         topics: selectedTopics,
@@ -190,7 +196,7 @@ export function FacultyPlaygroundScreen() {
       setSelectedTopics([])
       await load()
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not create session.")
+      setCreateError(err instanceof ApiError ? err.message : "Could not create session.")
     } finally {
       setCreating(false)
     }
@@ -227,6 +233,17 @@ export function FacultyPlaygroundScreen() {
             { id: "questions", label: "Question bank" },
           ]}
         />
+        <Pressable
+          onPress={() => router.push("/module/playground-rules" as never)}
+          accessibilityRole="button"
+          accessibilityLabel="Open Playground Rules"
+          hitSlop={8}
+          style={localStyles.rulesLink}
+        >
+          <Text style={[type.caption, { color: FACULTY_PLAYGROUND_COLOR.link, fontWeight: "600" }]}>
+            Playground Rules
+          </Text>
+        </Pressable>
       </FacultyModuleStickyHeader>
 
       {screenTab === "questions" && scope ? (
@@ -251,12 +268,15 @@ export function FacultyPlaygroundScreen() {
             <FacultySearchToolbar
               value={search}
               onChange={setSearch}
-              placeholder="Search sessions, codes, passcodes…"
+              placeholder="Search sessions…"
               filterActive={filtersActive}
               filterLabel={FILTER_SHEET_OPTIONS.find((o) => o.value === filter)?.label}
               onOpenFilter={() => setFilterSheetOpen(true)}
               trailingAction={{
-                onPress: () => setCreateOpen(true),
+                onPress: () => {
+                  setCreateError("")
+                  setCreateOpen(true)
+                },
                 accessibilityLabel: "Create playground session"}}
             />
 
@@ -286,7 +306,7 @@ export function FacultyPlaygroundScreen() {
             ) : filtered.length === 0 ? (
               <FacultyEmptyState
                 icon="flash-outline"
-                title={sessions.length === 0 ? "No playground sessions yet" : "No matching sessions"}
+                title={sessions.length === 0 ? "No playground sessions yet" : search.trim() ? "No matches" : "No matching sessions"}
                 body={
                   sessions.length === 0
                     ? "Use + in the search bar for a quick random session, or use Question bank to pick exact questions."
@@ -308,29 +328,29 @@ export function FacultyPlaygroundScreen() {
         </>
       )}
 
-      <Modal visible={createOpen} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setCreateOpen(false)}>
-        <FacultySheetContainer>
+      <FacultySheetModal visible={createOpen} onRequestClose={() => setCreateOpen(false)}>
           <FacultySheetChrome topInset={insets.top} title="Quick random session" onClose={() => setCreateOpen(false)} />
           <ScrollView
             contentContainerStyle={[collabSheetStyles.scroll, scrollPad]}
             keyboardShouldPersistTaps="handled"
           >
             <FacultySheetNotice message="Pulls random questions from selected topics. For hand-picked questions, use the Question bank tab." />
+            {createError ? <FacultySheetErrorBanner message={createError} /> : null}
             <FacultySheetSection label="Session setup" tone={SHEET_SECTION.edit}>
               <FacultySheetField label="Questions">
-                <TextInput
-                  style={collabSheetStyles.fieldInput}
+                <NativeSelect
+                  placeholder="10 questions"
                   value={questionCount}
-                  onChangeText={setQuestionCount}
-                  keyboardType="number-pad"
+                  options={QUESTION_COUNT_OPTIONS}
+                  onChange={setQuestionCount}
                 />
               </FacultySheetField>
               <FacultySheetField label="Seconds per question">
-                <TextInput
-                  style={collabSheetStyles.fieldInput}
+                <NativeSelect
+                  placeholder="10 seconds"
                   value={durationSec}
-                  onChangeText={setDurationSec}
-                  keyboardType="number-pad"
+                  options={secondsSelectOptions(Number(durationSec))}
+                  onChange={setDurationSec}
                 />
               </FacultySheetField>
               <FacultySheetField label="Topics (optional)">
@@ -352,6 +372,9 @@ export function FacultyPlaygroundScreen() {
                             active && { borderWidth: 1, borderColor: FACULTY_PLAYGROUND_COLOR.link },
                           ]}
                           onPress={() => toggleTopic(name)}
+                          accessibilityRole="button"
+                          accessibilityLabel={name}
+                          accessibilityState={{ selected: active }}
                         >
                           <Text
                             style={[
@@ -376,8 +399,7 @@ export function FacultyPlaygroundScreen() {
               loading={creating}
             />
           </ScrollView>
-        </FacultySheetContainer>
-      </Modal>
+      </FacultySheetModal>
 
       <FacultyPlaygroundSessionDetailModal
         session={selected}
@@ -393,4 +415,6 @@ const localStyles = StyleSheet.create({
   loadingBox: { paddingVertical: 32, alignItems: "center" },
   list: { gap: 12 },
   topicRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  topicEmpty: { fontStyle: "italic" }})
+  topicEmpty: { fontStyle: "italic" },
+  rulesLink: { alignSelf: "flex-end", paddingHorizontal: 4, paddingBottom: 4 },
+})

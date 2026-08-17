@@ -1,0 +1,7 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Tracks"
+- tapOn: "Search training tracks…"
+- inputText: "QA16"
+- hideKeyboard
+- takeScreenshot: summer-search-qa16-track

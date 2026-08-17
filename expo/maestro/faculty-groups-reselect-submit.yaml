@@ -1,0 +1,21 @@
+appId: com.coursecollab.app
+---
+- swipe:
+    direction: DOWN
+    duration: 400
+- swipe:
+    direction: DOWN
+    duration: 400
+- tapOn: "Search roster"
+- eraseText
+- inputText: "Beta"
+- tapOn: "Leader Beta Tester"
+- extendedWaitUntil:
+    visible: "Invite members"
+    timeout: 8000
+- scrollUntilVisible:
+    element: "Submit create group"
+    direction: DOWN
+    timeout: 20000
+- takeScreenshot: groups-ready-submit
+- tapOn: "Submit create group"

@@ -1,0 +1,25 @@
+appId: com.coursecollab.app
+---
+- tapOn: "New note"
+- tapOn: "Topic"
+- takeScreenshot: notes-topic-picker
+- tapOn:
+    text: "General"
+    optional: true
+- tapOn:
+    text: "Close"
+    optional: true
+- tapOn: "Show student preview"
+- takeScreenshot: notes-preview
+- tapOn: "Hide student preview"
+- tapOn: "Handwritten"
+- takeScreenshot: notes-handwritten
+- tapOn: "Typed"
+- tapOn: "Note body Markdown supported"
+- inputText: "QA body"
+- tapOn: "New note"
+- tapOn: "Save"
+- extendedWaitUntil:
+    visible: "QA16N, Draft|QA16N"
+    timeout: 25000
+- takeScreenshot: notes-qa-created

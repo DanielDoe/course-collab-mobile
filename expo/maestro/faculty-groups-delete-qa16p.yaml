@@ -1,0 +1,12 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Manage Groups"
+- tapOn:
+    text: "Close menu"
+    optional: true
+- extendedWaitUntil:
+    visible: "QA16P|Search groups…|No groups"
+    timeout: 20000
+- tapOn:
+    text: "QA16P"
+    optional: true

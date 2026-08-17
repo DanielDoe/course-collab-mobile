@@ -1,0 +1,16 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Go back"
+- extendedWaitUntil:
+    visible: "Search topics…"
+    timeout: 8000
+- tapOn:
+    text: "Chapter 0.*"
+- extendedWaitUntil:
+    visible: "Select all|Create session"
+    timeout: 15000
+- takeScreenshot: playground-bank-ch0
+- tapOn: "Go back"
+- tapOn: "Sessions"
+- scroll
+- takeScreenshot: playground-sessions-rest

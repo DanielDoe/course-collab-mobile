@@ -12,6 +12,8 @@ import { useSession } from "../../context/SessionProvider"
 import { ApiError } from "../../lib/student-api"
 import type { StudentSession } from "../../lib/session"
 import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
+import { hexToRgba } from "../../constants/app-themes"
+import { semanticSoft } from "../../lib/themed-module-theme"
 import {
   assignmentKindLabel,
   isSolutionAssignment,
@@ -141,8 +143,17 @@ export function ClassroomPointsTaskScreen() {
       keyboardShouldPersistTaps="handled"
     >
       {error ? (
-        <View style={styles.errorBox}>
-          <Text style={styles.errorText}>{error}</Text>
+        <View
+          style={[
+            styles.errorBox,
+            {
+              backgroundColor: semanticSoft(tokens.danger, tokens.isDark),
+              borderColor: hexToRgba(tokens.danger, tokens.isDark ? 0.4 : 0.28),
+            },
+          ]}
+        >
+          <Ionicons name="alert-circle-outline" size={16} color={tokens.danger} />
+          <Text style={[styles.errorText, { color: native.label }]}>{error}</Text>
         </View>
       ) : null}
 
@@ -160,9 +171,19 @@ export function ClassroomPointsTaskScreen() {
           </View>
 
           {isPending && assignment.classroomPoint?.instructorFeedback ? (
-            <View style={styles.feedbackBox}>
-              <Ionicons name="chatbubble-ellipses-outline" size={16} color="#b45309" />
-              <Text style={styles.feedbackText}>{assignment.classroomPoint.instructorFeedback}</Text>
+            <View
+              style={[
+                styles.feedbackBox,
+                {
+                  backgroundColor: semanticSoft(tokens.warning, tokens.isDark),
+                  borderColor: hexToRgba(tokens.warning, tokens.isDark ? 0.38 : 0.26),
+                },
+              ]}
+            >
+              <Ionicons name="chatbubble-ellipses-outline" size={16} color={tokens.warning} />
+              <Text style={[styles.feedbackText, { color: native.label }]}>
+                {assignment.classroomPoint.instructorFeedback}
+              </Text>
             </View>
           ) : null}
 
@@ -228,12 +249,13 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   content: { padding: 16, gap: 14 },
   errorBox: {
-    backgroundColor: "#fef2f2",
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
     borderRadius: 14,
     padding: 12,
-    borderWidth: 1,
-    borderColor: "#fecaca"},
-  errorText: { color: "#b91c1c", fontSize: 14, lineHeight: 20 },
+    borderWidth: 1},
+  errorText: { flex: 1, fontSize: 14, lineHeight: 20 },
   titleBlock: { gap: 10 },
   title: {
     fontSize: 20,
@@ -246,10 +268,8 @@ const styles = StyleSheet.create({
     gap: 8,
     padding: 12,
     borderRadius: 14,
-    backgroundColor: "#fffbeb",
-    borderWidth: 1,
-    borderColor: "#fde68a"},
-  feedbackText: { flex: 1, fontSize: 13, color: "#92400e", lineHeight: 18 },
+    borderWidth: 1},
+  feedbackText: { flex: 1, fontSize: 13, lineHeight: 18 },
   questionBody: { paddingHorizontal: 14, paddingVertical: 10 },
   instructionsCallout: {
     gap: 8,

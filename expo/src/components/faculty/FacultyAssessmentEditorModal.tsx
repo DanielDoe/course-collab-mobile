@@ -38,6 +38,20 @@ import { FacultyAssessmentQuestionPreview } from "./FacultyAssessmentQuestionPre
 import { FacultyAssessmentSectionsPanel } from "./FacultyAssessmentSectionsPanel"
 import { FacultyAssessmentStudentGrantsPanel } from "./FacultyAssessmentStudentGrantsPanel"
 import { FacultyAssessmentTimePanel } from "./FacultyAssessmentTimePanel"
+import { NativeSelect } from "../NativeSelect"
+import {
+  CONCURRENT_STUDENT_OPTIONS,
+  CONFIDENCE_THRESHOLD_OPTIONS,
+  FacultyDateTimeField,
+  GEO_RADIUS_OPTIONS,
+  HINT_PENALTY_OPTIONS,
+  HOUR_GRANT_OPTIONS,
+  POINT_AWARD_OPTIONS,
+  RETAKE_LIMIT_OPTIONS,
+  secondsSelectOptions,
+  STRIKE_COUNT_OPTIONS,
+  withCurrentOption,
+} from "./FacultyNativePickers"
 import {
   EditorChipPicker,
   EditorDivider,
@@ -628,11 +642,17 @@ function MediaFieldsEditor({
         const result = await ImagePicker.launchImageLibraryAsync({
           quality: 0.85,
           allowsEditing: false,
-          mediaTypes: ["images"]})
+          mediaTypes: ["images"],
+          preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
+        })
         if (result.canceled || !result.assets?.[0]) return
         uri = result.assets[0].uri
-        name = result.assets[0].fileName ?? "diagram.png"
-        type = result.assets[0].mimeType ?? "image/png"
+        name = result.assets[0].fileName ?? "diagram.jpg"
+        type = result.assets[0].mimeType ?? "image/jpeg"
+        if (/\.heic$|\.heif$/i.test(name) || /heic|heif/i.test(type)) {
+          name = name.replace(/\.(heic|heif)$/i, ".jpg")
+          type = "image/jpeg"
+        }
       }
 
       const saved = await instructorApi.uploadQuestionMedia(scope, { uri, name, type })
@@ -672,6 +692,8 @@ function MediaFieldsEditor({
               style={styles.uploadBtn}
               disabled={uploading}
               onPress={() => void pickAndUpload("image")}
+              accessibilityRole="button"
+              accessibilityLabel="Upload image"
             >
               {uploading ? (
                 <ActivityIndicator size="small" color={FACULTY_ASSESSMENT_COLOR.link} />
@@ -686,6 +708,8 @@ function MediaFieldsEditor({
               style={styles.uploadBtn}
               disabled={uploading}
               onPress={() => void pickAndUpload("pdf")}
+              accessibilityRole="button"
+              accessibilityLabel="Upload PDF"
             >
               <Ionicons name="document-outline" size={16} color={FACULTY_ASSESSMENT_COLOR.link} />
               <Text style={styles.uploadBtnText}>PDF</Text>
@@ -824,36 +848,43 @@ function QuestionEditorPanel({
       <EditorSectionCard icon="speedometer-outline" title="Scoring & timing" subtitle="Points, timer, and proctoring exemption">
         <EditorInlineFields>
           <EditorInlineField>
-            <TextField
+            <NativeSelect
               label="Points"
+              placeholder="1 pts"
               value={String(question.max_points ?? question.points ?? 1)}
-              onChangeText={(v) => {
+              options={withCurrentOption(
+                POINT_AWARD_OPTIONS,
+                String(question.max_points ?? question.points ?? 1),
+                `${question.max_points ?? question.points ?? 1} pts`,
+              )}
+              onChange={(v) => {
                 const n = Number(v)
                 onChange({ max_points: Number.isFinite(n) ? n : 1, points: Number.isFinite(n) ? n : 1 })
               }}
-              keyboardType="numeric"
             />
           </EditorInlineField>
           <EditorInlineField>
-            <TextField
-              label="Time (sec)"
-              value={String(question.time_limit ?? "")}
-              onChangeText={(v) => {
-                const n = Number(v)
-                onChange({ time_limit: Number.isFinite(n) ? n : null })
-              }}
-              keyboardType="numeric"
+            <NativeSelect
+              label="Time"
+              placeholder="Default"
+              value={question.time_limit != null ? String(question.time_limit) : ""}
+              options={[
+                { value: "", label: "Default" },
+                ...secondsSelectOptions(question.time_limit),
+              ]}
+              onChange={(v) => onChange({ time_limit: v ? Number(v) : null })}
             />
           </EditorInlineField>
           <EditorInlineField>
-            <TextField
+            <NativeSelect
               label="Hint penalty"
+              placeholder="No penalty"
               value={String(question.hint_penalty ?? 0)}
-              onChangeText={(v) => {
+              options={HINT_PENALTY_OPTIONS}
+              onChange={(v) => {
                 const n = Number(v)
                 onChange({ hint_penalty: Number.isFinite(n) ? n : 0 })
               }}
-              keyboardType="numeric"
             />
           </EditorInlineField>
         </EditorInlineFields>
@@ -1092,7 +1123,13 @@ export function FacultyAssessmentEditorModal({quiz,
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <View style={styles.topBar}>
-          <Pressable onPress={handleClose} hitSlop={12} disabled={saving}>
+          <Pressable
+            onPress={handleClose}
+            hitSlop={12}
+            disabled={saving}
+            accessibilityRole="button"
+            accessibilityLabel="Close editor"
+          >
             <Ionicons name="close" size={24} color={native.label} />
           </Pressable>
           <View style={styles.topCopy}>
@@ -1213,29 +1250,24 @@ export function FacultyAssessmentEditorModal({quiz,
                   title="Timing & availability"
                   subtitle="Default pacing and when students can access"
                 >
-                  <TextField
+                  <NativeSelect
                     label="Default time per question"
-                    hint="Seconds applied when a question has no override"
+                    placeholder="1 minute"
                     value={String(draft.time_per_question)}
-                    onChangeText={(v) => {
-                      const n = Number(v)
-                      patchDraft({ time_per_question: Number.isFinite(n) ? n : 60 })
-                    }}
-                    keyboardType="numeric"
+                    options={secondsSelectOptions(draft.time_per_question)}
+                    onChange={(v) => patchDraft({ time_per_question: Number(v) || 60 })}
                   />
-                  <TextField
-                    label="Available from"
-                    hint="Local time · YYYY-MM-DDTHH:mm"
+                  <FacultyDateTimeField
                     value={draft.available_from}
-                    onChangeText={(v) => patchDraft({ available_from: v })}
-                    placeholder="2026-03-01T08:00"
+                    onChange={(available_from) => patchDraft({ available_from })}
+                    dateLabel="Available from"
+                    timeLabel="From time"
                   />
-                  <TextField
-                    label="Available until"
-                    hint="Local time · YYYY-MM-DDTHH:mm"
+                  <FacultyDateTimeField
                     value={draft.available_until}
-                    onChangeText={(v) => patchDraft({ available_until: v })}
-                    placeholder="2026-03-01T23:59"
+                    onChange={(available_until) => patchDraft({ available_until })}
+                    dateLabel="Available until"
+                    timeLabel="Until time"
                   />
                 </EditorSectionCard>
 
@@ -1264,18 +1296,16 @@ export function FacultyAssessmentEditorModal({quiz,
                   title="Waiting room"
                   subtitle="Limit how many students can take this assessment at once"
                 >
-                  <EditorTextField
+                  <NativeSelect
                     label="Max concurrent students"
-                    hint="Leave empty for unlimited (no waiting room)"
+                    placeholder="Unlimited"
                     value={draft.max_concurrent_students != null ? String(draft.max_concurrent_students) : ""}
-                    onChangeText={(v) => {
-                      const n = Number(v)
+                    options={CONCURRENT_STUDENT_OPTIONS}
+                    onChange={(v) =>
                       patchDraft({
-                        max_concurrent_students:
-                          v.trim() && Number.isFinite(n) ? Math.max(1, n) : null})
-                    }}
-                    placeholder="e.g. 30"
-                    keyboardType="numeric"
+                        max_concurrent_students: v ? Math.max(1, Number(v) || 30) : null,
+                      })
+                    }
                   />
                   <EditorNotice
                     tone="info"
@@ -1443,14 +1473,16 @@ export function FacultyAssessmentEditorModal({quiz,
                   />
                   {draft.retake_enabled && assessmentType !== "mid_semester" && assessmentType !== "final" ? (
                     <>
-                      <TextField
+                      <NativeSelect
                         label="Retake limit"
+                        placeholder="1 retake"
                         value={String(draft.retake_limit)}
-                        onChangeText={(v) => {
-                          const n = Number(v)
-                          patchDraft({ retake_limit: Number.isFinite(n) ? n : 0 })
-                        }}
-                        keyboardType="numeric"
+                        options={withCurrentOption(
+                          RETAKE_LIMIT_OPTIONS,
+                          String(draft.retake_limit),
+                          `${draft.retake_limit} retakes`,
+                        )}
+                        onChange={(v) => patchDraft({ retake_limit: Number(v) || 0 })}
                       />
                       <ChipPicker
                         label="Retake policy"
@@ -1522,18 +1554,22 @@ export function FacultyAssessmentEditorModal({quiz,
                     onValueChange={(v) => patchDraft({ ai_enable_opus_fallback: v })}
                   />
                   {draft.ai_enable_opus_fallback ? (
-                    <TextField
-                      label="Fallback confidence threshold"
-                      hint="0.5–0.95 · lower triggers fallback more often"
+                    <NativeSelect
+                      label="Fallback confidence"
+                      placeholder="0.8"
                       value={String(draft.ai_opus_confidence_threshold)}
-                      onChangeText={(v) => {
+                      options={withCurrentOption(
+                        CONFIDENCE_THRESHOLD_OPTIONS,
+                        String(draft.ai_opus_confidence_threshold),
+                      )}
+                      onChange={(v) => {
                         const n = Number(v)
                         patchDraft({
                           ai_opus_confidence_threshold: Number.isFinite(n)
                             ? Math.max(0.5, Math.min(0.95, n))
-                            : 0.8})
+                            : 0.8,
+                        })
                       }}
-                      keyboardType="decimal-pad"
                     />
                   ) : null}
                 </EditorSectionCard>
@@ -1585,14 +1621,12 @@ export function FacultyAssessmentEditorModal({quiz,
                         disabled={assessmentType === "final"}
                         nested
                       />
-                      <TextField
+                      <NativeSelect
                         label="Max tab switches"
+                        placeholder="3"
                         value={String(draft.max_tab_switches)}
-                        onChangeText={(v) => {
-                          const n = Number(v)
-                          patchDraft({ max_tab_switches: Number.isFinite(n) ? n : 3 })
-                        }}
-                        keyboardType="numeric"
+                        options={withCurrentOption(STRIKE_COUNT_OPTIONS, String(draft.max_tab_switches))}
+                        onChange={(v) => patchDraft({ max_tab_switches: Number(v) || 0 })}
                       />
                       <ToggleRow
                         label="Auto-submit on violations"
@@ -1615,14 +1649,12 @@ export function FacultyAssessmentEditorModal({quiz,
                         disabled={assessmentType === "final"}
                         nested
                       />
-                      <TextField
+                      <NativeSelect
                         label="Max Gemini / AI strikes"
+                        placeholder="3"
                         value={String(draft.max_gemini_strikes)}
-                        onChangeText={(v) => {
-                          const n = Number(v)
-                          patchDraft({ max_gemini_strikes: Number.isFinite(n) ? n : 3 })
-                        }}
-                        keyboardType="numeric"
+                        options={withCurrentOption(STRIKE_COUNT_OPTIONS, String(draft.max_gemini_strikes))}
+                        onChange={(v) => patchDraft({ max_gemini_strikes: Number(v) || 0 })}
                       />
                       <ToggleRow
                         label="Require fullscreen"
@@ -1652,15 +1684,16 @@ export function FacultyAssessmentEditorModal({quiz,
                   {draft.rollover_enabled &&
                   assessmentType !== "mid_semester" &&
                   assessmentType !== "final" ? (
-                    <TextField
+                    <NativeSelect
                       label="Rollover hours"
-                      hint="1–72 hours"
+                      placeholder="24 hours"
                       value={String(draft.rollover_hours)}
-                      onChangeText={(v) => {
-                        const n = Number(v)
-                        patchDraft({ rollover_hours: Number.isFinite(n) ? n : 24 })
-                      }}
-                      keyboardType="numeric"
+                      options={withCurrentOption(
+                        HOUR_GRANT_OPTIONS,
+                        String(draft.rollover_hours),
+                        `${draft.rollover_hours} hours`,
+                      )}
+                      onChange={(v) => patchDraft({ rollover_hours: Number(v) || 24 })}
                     />
                   ) : null}
                   <EditorDivider />
@@ -1690,14 +1723,16 @@ export function FacultyAssessmentEditorModal({quiz,
                           />
                         </EditorInlineField>
                       </EditorInlineFields>
-                      <TextField
-                        label="Radius (meters)"
+                      <NativeSelect
+                        label="Radius"
+                        placeholder="100 m"
                         value={String(draft.geo_radius_meters)}
-                        onChangeText={(v) => {
-                          const n = Number(v)
-                          patchDraft({ geo_radius_meters: Number.isFinite(n) ? n : 100 })
-                        }}
-                        keyboardType="numeric"
+                        options={withCurrentOption(
+                          GEO_RADIUS_OPTIONS,
+                          String(draft.geo_radius_meters),
+                          `${draft.geo_radius_meters} m`,
+                        )}
+                        onChange={(v) => patchDraft({ geo_radius_meters: Number(v) || 100 })}
                       />
                     </>
                   ) : null}

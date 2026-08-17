@@ -1,0 +1,10 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Final Exams"
+    direction: DOWN
+    timeout: 20000
+    centerElement: true
+- tapOn: "Final Exams"
+- waitForAnimationToEnd

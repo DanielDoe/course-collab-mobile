@@ -23,7 +23,10 @@ export function formatFacultyMembershipTierLabel(
   return variant === "long" ? facultyMembershipTierLongLabel(tier) : facultyMembershipTierShortLabel(tier)
 }
 
-export function getFacultyNavUpgradePrompt(item: FacultyNavItem, currentTier: FacultyMembershipTier) {
+export function getFacultyNavUpgradePrompt(
+  item: Pick<FacultyNavItem, "label" | "minTier"> & Partial<Pick<FacultyNavItem, "id" | "route" | "icon">>,
+  currentTier: FacultyMembershipTier,
+) {
   const requiredTier = item.minTier ?? "Pro"
   return {
     title: `${requiredTier} plan required`,

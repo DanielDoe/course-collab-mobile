@@ -1,0 +1,34 @@
+appId: com.coursecollab.app
+---
+- tapOn: "All"
+- takeScreenshot: groups-tab-all
+- tapOn: "Queue"
+- takeScreenshot: groups-tab-queue
+- tapOn: "Denied"
+- takeScreenshot: groups-tab-denied
+- tapOn: "Trash"
+- takeScreenshot: groups-tab-trash
+- tapOn: "Active"
+- takeScreenshot: groups-tab-active
+
+- tapOn: "Search groups, leaders…"
+- inputText: "zzz"
+- tapOn: "Manage Groups"
+- extendedWaitUntil:
+    visible: "No matches"
+    timeout: 8000
+- takeScreenshot: groups-search-empty
+- tapOn: "Clear search"
+
+- tapOn: "All"
+- tapOn: "Search groups, leaders…"
+- inputText: "team"
+- tapOn: "Manage Groups"
+- takeScreenshot: groups-search-team
+- tapOn: "Clear search"
+
+- tapOn: "Open filters"
+- extendedWaitUntil:
+    visible: "Filter by section|All sections"
+    timeout: 8000
+- takeScreenshot: groups-filters

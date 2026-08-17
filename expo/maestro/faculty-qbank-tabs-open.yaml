@@ -1,0 +1,17 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Topics"
+- waitForAnimationToEnd
+- tapOn: "Types"
+- waitForAnimationToEnd
+- tapOn: "Deleted"
+- waitForAnimationToEnd
+- tapOn: "All"
+- waitForAnimationToEnd
+- tapOn: "A single-phase AC load consumes 4.8 kW of real powe..."
+- waitForAnimationToEnd
+- tapOn: "Done"
+- waitForAnimationToEnd
+- tapOn: "True or False: A lagging power factor in an AC circuit corresp..."
+- waitForAnimationToEnd
+- tapOn: "Done"

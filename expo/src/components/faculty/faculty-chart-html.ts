@@ -29,7 +29,7 @@ function chartShell(script: string, height: number): string {
 }
 
 
-/** Submissions (Last 7 Days) — matches web BarChart with gradient bars + grid. */
+/** Submissions over time — gradient bars; x labels thinned for 30-day series. */
 export function buildFacultySubmissionsChartHtml(
   data: InstructorDashboardCharts["submissionsOverTime"],
   width: number,
@@ -45,10 +45,12 @@ export function buildFacultySubmissionsChartHtml(
   const colors = ${colors};
   const width = ${Math.max(280, Math.floor(width))};
   const height = ${chartHeight};
+  const n = Math.max(data.length, 1);
+  const dense = n > 10;
   const plotLeft = 34;
   const plotRight = width - 16;
   const plotTop = 16;
-  const plotBottom = height - 32;
+  const plotBottom = height - (dense ? 36 : 32);
   const innerW = plotRight - plotLeft;
   const innerH = plotBottom - plotTop;
   const maxVal = Math.max(1, ...data.map(function (d) { return d.count; }));
@@ -59,8 +61,37 @@ export function buildFacultySubmissionsChartHtml(
   if (yTicks.length < 2) yTicks.push(yMax);
 
   function yAt(v) { return plotTop + innerH * (1 - v / yMax); }
-  const slotW = innerW / Math.max(data.length, 1);
-  const barW = Math.min(48, Math.max(14, slotW - 12));
+  const slotW = innerW / n;
+  // Keep bars readable on 30-day series without melting into a solid block.
+  const barW = dense
+    ? Math.min(10, Math.max(3, slotW * 0.72))
+    : Math.min(48, Math.max(14, slotW - 12));
+
+  // Cap visible x labels by chart width (~52px per "Mon DD" label).
+  const maxLabels = dense
+    ? Math.max(4, Math.min(6, Math.floor(innerW / 56)))
+    : n;
+  const labelIndexSet = {};
+  if (!dense) {
+    for (var li = 0; li < n; li++) labelIndexSet[li] = true;
+  } else {
+    for (var k = 0; k < maxLabels; k++) {
+      labelIndexSet[Math.round((k * (n - 1)) / Math.max(maxLabels - 1, 1))] = true;
+    }
+  }
+
+  function shortLabel(raw) {
+    if (!raw) return "";
+    var base = raw.indexOf(",") > -1 ? raw.split(",")[0].trim() : String(raw).trim();
+    if (!dense) return base;
+    // "Jul 17, Fri" → "Jul 17"
+    var m = base.match(/^([A-Za-z]{3})\\s+(\\d{1,2})/);
+    return m ? (m[1] + " " + m[2]) : base;
+  }
+
+  function shouldShowLabel(i) {
+    return !!labelIndexSet[i];
+  }
 
   let svg = '<svg viewBox="0 0 ' + width + ' ' + height + '" xmlns="http://www.w3.org/2000/svg">';
   svg += '<defs><linearGradient id="subBarGrad" x1="0" y1="0" x2="0" y2="1">';
@@ -79,9 +110,14 @@ export function buildFacultySubmissionsChartHtml(
     const h = Math.max(d.count > 0 ? 4 : 0, (d.count / yMax) * innerH);
     const x = cx - barW / 2;
     const y = plotBottom - h;
-    svg += '<rect x="' + x + '" y="' + y + '" width="' + barW + '" height="' + h + '" rx="6" ry="6" fill="url(#subBarGrad)"/>';
-    const short = d.label && d.label.indexOf(",") > -1 ? d.label.split(",")[0].trim() : (d.label || "");
-    svg += '<text x="' + cx + '" y="' + (height - 10) + '" fill="' + colors.slate + '" font-size="11" font-weight="500" text-anchor="middle">' + short + '</text>';
+    const rx = dense ? 2 : 6;
+    svg += '<rect x="' + x + '" y="' + y + '" width="' + barW + '" height="' + h + '" rx="' + rx + '" ry="' + rx + '" fill="url(#subBarGrad)"/>';
+    if (shouldShowLabel(i)) {
+      const short = shortLabel(d.label || "");
+      const anchor = i === 0 ? "start" : (i === n - 1 ? "end" : "middle");
+      const tx = i === 0 ? plotLeft : (i === n - 1 ? plotRight : cx);
+      svg += '<text x="' + tx + '" y="' + (height - 10) + '" fill="' + colors.slate + '" font-size="' + (dense ? 10 : 11) + '" font-weight="500" text-anchor="' + anchor + '">' + short + '</text>';
+    }
   });
 
   svg += '</svg>';
@@ -261,10 +297,110 @@ export function hasSubmissionsChartData(data: InstructorDashboardCharts["submiss
   return data.some((d) => d.count > 0)
 }
 
+export function resolveSubmissionsChartSeries(charts: InstructorDashboardCharts): {
+  data: InstructorDashboardCharts["submissionsOverTime"]
+  title: string
+} {
+  if (hasSubmissionsChartData(charts.submissionsOverTime)) {
+    return { data: charts.submissionsOverTime, title: "Submissions (Last 7 Days)" }
+  }
+
+  const extended = charts.submissionsOverTimeExtended ?? []
+  if (hasSubmissionsChartData(extended)) {
+    return { data: extended, title: "Submissions Over Time (Last 30 Days)" }
+  }
+
+  const fromScoreTrend = charts.scoreTrend.map((w) => ({
+    date: w.week,
+    label: w.week,
+    count: w.attempts,
+  }))
+  if (hasSubmissionsChartData(fromScoreTrend)) {
+    return { data: fromScoreTrend, title: "Submissions Over Time" }
+  }
+
+  return { data: charts.submissionsOverTime, title: "Submissions (Last 7 Days)" }
+}
+
+export function hasAnySubmissionsChartData(charts: InstructorDashboardCharts | null): boolean {
+  if (!charts) return false
+  if (hasSubmissionsChartData(charts.submissionsOverTime)) return true
+  if (hasSubmissionsChartData(charts.submissionsOverTimeExtended ?? [])) return true
+  return hasSubmissionsChartData(
+    charts.scoreTrend.map((w) => ({ date: w.week, label: w.week, count: w.attempts })),
+  )
+}
+
 export function hasBreakdownChartData(data: InstructorDashboardCharts["assessmentBreakdown"]): boolean {
   return data.some((d) => d.value > 0)
 }
 
 export function hasScoreTrendChartData(data: InstructorDashboardCharts["scoreTrend"]): boolean {
   return data.some((d) => d.avgScore > 0 || d.attempts > 0)
+}
+
+/** Practice hub score bands — horizontal bars with semantic colors for Student Progress. */
+export function buildFacultyPracticeScoreDistributionChartHtml(
+  data: Array<{ label: string; count: number }>,
+  width: number,
+): string {
+  const payload = escapeJson(data)
+  const colors = escapeJson({
+    bars: ["#94a3b8", "#e11d48", "#f97316", "#6366f1", "#16a34a"],
+    grid,
+    tick,
+  })
+  const chartHeight = FACULTY_CHART_HEIGHT
+
+  const script = `
+<script>
+(function () {
+  const data = ${payload};
+  const colors = ${colors};
+  const width = ${Math.max(280, Math.floor(width))};
+  const height = ${chartHeight};
+  const plotLeft = 34;
+  const plotRight = width - 16;
+  const plotTop = 16;
+  const plotBottom = height - 36;
+  const innerW = plotRight - plotLeft;
+  const innerH = plotBottom - plotTop;
+  const n = Math.max(data.length, 1);
+  const maxVal = Math.max(1, ...data.map(function (d) { return d.count; }));
+  const step = Math.max(1, Math.ceil(maxVal / 4));
+  const xMax = Math.ceil(maxVal / step) * step || 1;
+  const xTicks = [];
+  for (var v = 0; v <= xMax; v += step) xTicks.push(v);
+  if (xTicks.length < 2) xTicks.push(xMax);
+
+  function xAt(v) { return plotLeft + innerW * (v / xMax); }
+  const rowH = innerH / n;
+  const barH = Math.min(28, Math.max(14, rowH * 0.62));
+
+  let svg = '<svg viewBox="0 0 ' + width + ' ' + height + '" xmlns="http://www.w3.org/2000/svg">';
+
+  xTicks.forEach(function (tick) {
+    const x = xAt(tick);
+    svg += '<line x1="' + x + '" y1="' + plotTop + '" x2="' + x + '" y2="' + plotBottom + '" stroke="' + colors.grid + '" stroke-dasharray="3 3"/>';
+    svg += '<text x="' + x + '" y="' + (height - 10) + '" fill="' + colors.tick + '" font-size="11" font-weight="500" text-anchor="middle">' + tick + '</text>';
+  });
+
+  data.forEach(function (d, i) {
+    const cy = plotTop + rowH * i + rowH / 2;
+    const w = Math.max(d.count > 0 ? 6 : 0, (d.count / xMax) * innerW);
+    const y = cy - barH / 2;
+    const fill = colors.bars[i % colors.bars.length];
+    svg += '<text x="' + (plotLeft - 6) + '" y="' + (cy + 4) + '" fill="' + colors.tick + '" font-size="11" font-weight="600" text-anchor="end">' + d.label + '</text>';
+    svg += '<rect x="' + plotLeft + '" y="' + y + '" width="' + w + '" height="' + barH + '" rx="6" ry="6" fill="' + fill + '" fill-opacity="0.92"/>';
+    if (d.count > 0) {
+      svg += '<text x="' + (plotLeft + w + 6) + '" y="' + (cy + 4) + '" fill="' + colors.tick + '" font-size="11" font-weight="600" text-anchor="start">' + d.count + '</text>';
+    }
+  });
+
+  svg += '</svg>';
+  document.querySelector(".wrap").innerHTML = svg;
+})();
+</script>`
+
+  return chartShell(script, chartHeight)
 }

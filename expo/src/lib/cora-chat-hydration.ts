@@ -54,6 +54,7 @@ export async function loadLocalCoraChatSession(studentId: string): Promise<CoraC
 export async function syncCoraChatHistory(
   session: StudentSession,
   local: CoraChatLocalSession,
+  preferredActiveThreadId?: string | null,
 ): Promise<CoraChatHydrationResult> {
   let threads = local.threads
   let archivedThreads = local.archivedThreads
@@ -61,8 +62,29 @@ export async function syncCoraChatHistory(
   try {
     const remoteRaw = await getWorkspaceConversations(session)
     const remote = (remoteRaw as WorkspaceConversation[]).map(workspaceConversationToThread)
-    const archivedIds = new Set(archivedThreads.map((thread) => thread.id))
-    threads = mergeConversationThreads(remote, threads, archivedIds)
+    const remoteActive = remote.filter((thread) => !thread.archivedAt)
+    const remoteArchived = remote.filter((thread) => Boolean(thread.archivedAt))
+    const archivedIds = new Set([
+      ...archivedThreads.map((thread) => thread.id),
+      ...remoteArchived.map((thread) => thread.id),
+    ])
+    threads = mergeConversationThreads(remoteActive, threads, archivedIds)
+    // Merge archived lists (server + local) so web/mobile stay aligned
+    const archivedById = new Map<string, AiTutorChatThread>()
+    for (const thread of archivedThreads) archivedById.set(thread.id, thread)
+    for (const thread of remoteArchived) {
+      const existing = archivedById.get(thread.id)
+      if (!existing) {
+        archivedById.set(thread.id, thread)
+        continue
+      }
+      const remoteTime = new Date(thread.updatedAt).getTime()
+      const localTime = new Date(existing.updatedAt).getTime()
+      archivedById.set(thread.id, remoteTime >= localTime ? thread : existing)
+    }
+    archivedThreads = [...archivedById.values()].sort(
+      (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+    )
   } catch {
     /* keep local cache when remote history is unavailable */
   }
@@ -79,7 +101,7 @@ export async function syncCoraChatHistory(
 
   await upsertActiveThreads(session.databaseId, threads)
 
-  const activeThreadId = local.activeThreadId
+  const activeThreadId = preferredActiveThreadId ?? local.activeThreadId
   const activeMessages = resolveActiveMessages(threads, archivedThreads, activeThreadId)
 
   return {

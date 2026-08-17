@@ -10,31 +10,43 @@ import {
 } from "react-native"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useRouter } from "expo-router"
-import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { ApiError } from "../../lib/api"
 import { guestApi } from "../../lib/guest-api"
+import { useGuestEntitlements } from "../../context/GuestEntitlementsProvider"
+import { guestCoraCommerceEnabled } from "../../constants/guest-nav"
+import { recommendationStatusLabel } from "../../lib/faculty-recommendation-utils"
 import {
-  recommendationStatusLabel,
-  recommendationStatusTone,
-} from "../../lib/faculty-recommendation-utils"
-import { guestNeedsAction, summarizeGuestRequests } from "../../lib/guest-recommendation-utils"
+  countGuestLettersByFilter,
+  summarizeGuestRequests,
+} from "../../lib/guest-recommendation-utils"
+import {
+  buildGuestDashboardInsights,
+  buildGuestDeadlineItems,
+  buildGuestPipelineSegments,
+} from "../../lib/guest-dashboard-utils"
 import type { RecommendationRequest } from "../../lib/course-info-api"
 import { useSession } from "../../context/SessionProvider"
 import type { GuestSession } from "../../lib/session"
+import type { GuestHomeResponse } from "../../lib/guest-types"
 import { DashboardWelcomeCard } from "../dashboard/DashboardWelcomeCard"
 import { DashboardCard } from "../dashboard/DashboardCard"
-import { FacultyStatusPill } from "../faculty/faculty-shared"
+import { GuestKpiGrid } from "./GuestKpiGrid"
+import { GuestDashboardPipelineChart } from "./dashboard/GuestDashboardPipelineChart"
+import { GuestDashboardCreditsPanel } from "./dashboard/GuestDashboardCreditsPanel"
+import { GuestDashboardInsightsPanel } from "./dashboard/GuestDashboardInsightsPanel"
+import { GuestDashboardQuickTools } from "./dashboard/GuestDashboardQuickTools"
+import { GuestDashboardDeadlinesPanel } from "./dashboard/GuestDashboardDeadlinesPanel"
 import { NATIVE } from "../../constants/faculty-native-theme"
 import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
 import { useNativeType, semanticSoft } from "../../lib/themed-module-theme"
 import { useDashboardContentStyle } from "../../lib/responsive-layout"
 import { formatListDate, purposeLabel } from "../../lib/course-info-api"
-import { GuestKpiGrid } from "./GuestKpiGrid"
 import { useChromeScrollPadding } from "../../context/ChromeInsetContext"
 import { useNotificationModuleRefresh } from "../../lib/notifications/notification-events"
 
+const GUEST_HOME_TAGLINE = "Keep recommendations and application materials organized in one place"
+
 export function GuestDashboardScreen() {
-  const insets = useSafeAreaInsets()
   const scrollPad = useChromeScrollPadding(32)
   const router = useRouter()
   const { session } = useSession()
@@ -44,6 +56,8 @@ export function GuestDashboardScreen() {
   const dashboardContentStyle = useDashboardContentStyle()
 
   const guestSession = session?.portal === "guest" ? (session as GuestSession) : null
+  const { entitlements, workspaceEnabled } = useGuestEntitlements()
+  const [home, setHome] = useState<GuestHomeResponse | null>(null)
   const [requests, setRequests] = useState<RecommendationRequest[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -53,10 +67,14 @@ export function GuestDashboardScreen() {
     if (!guestSession) return
     setError("")
     try {
-      const list = await guestApi.getRecommendations(guestSession)
+      const [homePayload, list] = await Promise.all([
+        guestApi.getHome(guestSession),
+        guestApi.getRecommendations(guestSession),
+      ])
+      setHome(homePayload)
       setRequests(list)
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not load your letters.")
+      setError(err instanceof ApiError ? err.message : "Could not load your workspace.")
     }
   }, [guestSession])
 
@@ -74,16 +92,61 @@ export function GuestDashboardScreen() {
   useNotificationModuleRefresh(["dashboard", "recommendations"], handleRefresh)
 
   const summary = useMemo(() => summarizeGuestRequests(requests), [requests])
-  const featured = useMemo(() => {
+  const filterCounts = useMemo(() => countGuestLettersByFilter(requests), [requests])
+
+  const chartColors = useMemo(
+    () => ({
+      needsYou: tokens.warning,
+      inProgress: tokens.accent,
+      completed: tokens.success,
+      rejected: native.tertiaryLabel,
+    }),
+    [tokens, native.tertiaryLabel],
+  )
+
+  const pipelineSegments = useMemo(
+    () => buildGuestPipelineSegments(requests, chartColors),
+    [requests, chartColors],
+  )
+  const deadlineItems = useMemo(() => buildGuestDeadlineItems(requests), [requests])
+
+  const upcomingDeadline = useMemo(() => {
+    if (home?.upcomingDeadline) return home.upcomingDeadline
+    return deadlineItems[0]?.deadline ?? null
+  }, [home?.upcomingDeadline, deadlineItems])
+
+  const insights = useMemo(
+    () => buildGuestDashboardInsights(requests, entitlements, upcomingDeadline),
+    [requests, entitlements, upcomingDeadline],
+  )
+
+  const recentRequests = useMemo(() => {
     const sorted = [...requests].sort((a, b) => {
       const aTime = new Date(a.updated_at ?? a.created_at ?? 0).getTime()
       const bTime = new Date(b.updated_at ?? b.created_at ?? 0).getTime()
       return bTime - aTime
     })
-    return sorted[0] ?? null
+    return sorted.slice(0, 5)
   }, [requests])
 
+  const metaLine = useMemo(() => {
+    const parts = [home?.subtitle?.trim() || GUEST_HOME_TAGLINE]
+    const uni = home?.universityShortName?.trim()
+    if (uni) parts.push(uni)
+    return parts.join(" · ")
+  }, [home?.subtitle, home?.universityShortName])
+
   if (!guestSession) return null
+
+  if (!workspaceEnabled) {
+    return (
+      <View style={[styles.root, { backgroundColor: native.groupedBackground, padding: 24, justifyContent: "center" }]}>
+        <Text style={[type.bodyEmphasis, { color: native.label, textAlign: "center" }]}>
+          Career Member workspace is temporarily unavailable.
+        </Text>
+      </View>
+    )
+  }
 
   return (
     <View style={[styles.root, { backgroundColor: native.groupedBackground }]}>
@@ -94,16 +157,12 @@ export function GuestDashboardScreen() {
         }
         showsVerticalScrollIndicator={false}
       >
-        <DashboardWelcomeCard
-          portal="guest"
-          name={guestSession.name}
-          metaLine="Guest · Recommendation letters"
-        />
+        <DashboardWelcomeCard portal="guest" name={home?.greeting ?? guestSession.name} metaLine={metaLine} />
 
         {loading ? (
           <View style={styles.loadingBox}>
             <ActivityIndicator size="large" color={tokens.accent} />
-            <Text style={[type.caption, { color: native.secondaryLabel }]}>Loading your letter workspace…</Text>
+            <Text style={[type.caption, { color: native.secondaryLabel }]}>Loading your workspace…</Text>
           </View>
         ) : (
           <>
@@ -119,79 +178,93 @@ export function GuestDashboardScreen() {
               </View>
             ) : null}
 
-            <GuestKpiGrid total={summary.total} awaitingYou={summary.awaitingYou} completed={summary.completed} />
-
-            <DashboardCard title="Quick actions" subtitle="Request, edit, and download recommendation letters">
-              <View style={[styles.actionList, tokens.cardShadow, { backgroundColor: native.fill }]}>
-                <QuickActionRow
-                  icon="folder-open-outline"
-                  label="My letters"
-                  detail="View all requests"
-                  onPress={() => router.push("/module/recommendations" as never)}
-                />
-                <QuickActionRow
-                  icon="add-circle-outline"
-                  label="New request"
-                  detail="Ask an instructor for a letter"
-                  onPress={() => router.push("/module/recommendations?tab=new" as never)}
-                  last
-                />
-              </View>
+            <DashboardCard title="Overview" subtitle="Your letter workspace at a glance">
+              <GuestKpiGrid
+                total={summary.total}
+                awaitingYou={summary.awaitingYou}
+                inProgress={filterCounts.in_progress}
+                completed={summary.completed}
+              />
             </DashboardCard>
 
-            {featured ? (
-              <DashboardCard title="Latest letter" subtitle="Continue where you left off">
-                <Pressable
-                  style={[
-                    styles.featuredCard,
-                    tokens.cardShadow,
-                    { backgroundColor: native.secondaryGrouped, borderColor: native.separator },
-                  ]}
-                  onPress={() => router.push(`/recommendation/${featured.id}` as never)}
-                >
-                  <View style={styles.featuredHead}>
-                    <View style={[styles.featuredIcon, { backgroundColor: tokens.accentSoft }]}>
-                      <Ionicons name="document-text-outline" size={18} color={tokens.accent} />
-                    </View>
-                    <View style={styles.featuredBody}>
-                      <Text style={[type.bodyEmphasis]}>{purposeLabel(featured.purpose)}</Text>
-                      <Text style={[type.caption, { color: native.secondaryLabel }]}>
-                        {featured.instructor_name ?? "Instructor"} · {featured.course_code ?? "Course"}
-                      </Text>
-                    </View>
-                    <FacultyStatusPill
-                      label={recommendationStatusLabel(featured.status)}
-                      tone={recommendationStatusTone(featured.status)}
-                    />
-                  </View>
-                  {featured.deadline ? (
-                    <Text style={[type.caption, { color: native.secondaryLabel }]}>
-                      Deadline {formatListDate(featured.deadline)}
-                    </Text>
-                  ) : null}
-                  {guestNeedsAction(featured.status) ? (
-                    <View style={[styles.actionHint, { backgroundColor: semanticSoft(tokens.warning, tokens.isDark, 0.14) }]}>
-                      <Ionicons name="arrow-forward-circle-outline" size={16} color={tokens.warning} />
-                      <Text style={[type.caption, { color: tokens.warning, fontWeight: "600" }]}>Tap to continue</Text>
-                    </View>
-                  ) : null}
-                </Pressable>
+            {insights.length ? (
+              <DashboardCard title="Updates" subtitle="What needs attention">
+                <GuestDashboardInsightsPanel insights={insights.slice(0, 2)} />
               </DashboardCard>
-            ) : (
-              <DashboardCard title="Get started" subtitle="Collaborate with your instructor on a polished letter">
-                <Text style={[type.secondary, styles.emptyBody]}>
-                  You have not started a recommendation letter yet. Create a request and your instructor will guide you
-                  through questionnaire, drafts, review, and PDF download.
-                </Text>
-                <Pressable
-                  style={[styles.primaryBtn, { backgroundColor: tokens.accent }]}
-                  onPress={() => router.push("/module/recommendations?tab=new" as never)}
-                >
-                  <Ionicons name="add-outline" size={18} color="#ffffff" />
-                  <Text style={styles.primaryBtnText}>Start a letter request</Text>
-                </Pressable>
+            ) : null}
+
+            <DashboardCard title="Quick tools" subtitle="Letters, messages, and Cora">
+              <GuestDashboardQuickTools />
+            </DashboardCard>
+
+            {guestCoraCommerceEnabled(entitlements) ? (
+              <GuestDashboardCreditsPanel entitlements={entitlements} />
+            ) : null}
+
+            {summary.total > 0 ? (
+              <DashboardCard title="Letter pipeline" subtitle="Where your requests stand">
+                <GuestDashboardPipelineChart segments={pipelineSegments} total={summary.total} />
               </DashboardCard>
-            )}
+            ) : null}
+
+            {deadlineItems.length > 0 ? (
+              <DashboardCard title="Upcoming deadlines" subtitle="Sorted by urgency">
+                <GuestDashboardDeadlinesPanel items={deadlineItems} />
+              </DashboardCard>
+            ) : null}
+
+            <DashboardCard title="Recent requests" subtitle="Latest activity across your letters">
+              {recentRequests.length ? (
+                <View style={[styles.listGroup, tokens.cardShadow, { backgroundColor: native.fill }]}>
+                  {recentRequests.map((item, index) => (
+                    <Pressable
+                      key={item.id}
+                      style={[
+                        styles.recentRow,
+                        { backgroundColor: native.secondaryGrouped },
+                        index < recentRequests.length - 1 && {
+                          borderBottomColor: native.separator,
+                          borderBottomWidth: StyleSheet.hairlineWidth,
+                        },
+                      ]}
+                      onPress={() => router.push(`/recommendation/${item.id}` as never)}
+                    >
+                      <View style={[styles.recentIcon, { backgroundColor: tokens.accentSoft }]}>
+                        <Ionicons name="document-text-outline" size={16} color={tokens.accent} />
+                      </View>
+                      <View style={styles.recentCopy}>
+                        <Text style={[type.bodyEmphasis, { color: native.label }]} numberOfLines={1}>
+                          {purposeLabel(item.purpose)}
+                        </Text>
+                        <Text style={[type.caption, { color: native.secondaryLabel }]} numberOfLines={1}>
+                          {recommendationStatusLabel(item.status)}
+                          {item.instructor_name ? ` · ${item.instructor_name}` : ""}
+                        </Text>
+                      </View>
+                      {item.deadline ? (
+                        <Text style={[type.footnote, { color: native.tertiaryLabel }]}>
+                          {formatListDate(item.deadline)}
+                        </Text>
+                      ) : null}
+                      <Ionicons name="chevron-forward" size={16} color={native.tertiaryLabel} />
+                    </Pressable>
+                  ))}
+                </View>
+              ) : (
+                <View style={[styles.emptyCard, { backgroundColor: native.fill, borderColor: native.separator }]}>
+                  <Text style={[type.secondary, { lineHeight: 21 }]}>
+                    No recommendation requests yet. Start a new request to collaborate with your instructor.
+                  </Text>
+                  <Pressable
+                    style={[styles.primaryBtn, { backgroundColor: tokens.accent }]}
+                    onPress={() => router.push("/module/recommendations?tab=new" as never)}
+                  >
+                    <Ionicons name="add-outline" size={18} color="#ffffff" />
+                    <Text style={styles.primaryBtnText}>New request</Text>
+                  </Pressable>
+                </View>
+              )}
+            </DashboardCard>
           </>
         )}
       </ScrollView>
@@ -199,80 +272,35 @@ export function GuestDashboardScreen() {
   )
 }
 
-function QuickActionRow({
-  icon,
-  label,
-  detail,
-  onPress,
-  last,
-}: {
-  icon: keyof typeof Ionicons.glyphMap
-  label: string
-  detail: string
-  onPress: () => void
-  last?: boolean
-}) {
-  const native = useThemedNative()
-  const tokens = useAppThemeTokens()
-  const type = useNativeType()
-
-  return (
-    <Pressable
-      style={[
-        styles.actionRow,
-        { backgroundColor: native.secondaryGrouped },
-        !last && { borderBottomColor: native.separator, borderBottomWidth: StyleSheet.hairlineWidth },
-      ]}
-      onPress={onPress}
-    >
-      <View style={[styles.actionIcon, { backgroundColor: tokens.accentSoft }]}>
-        <Ionicons name={icon} size={18} color={tokens.accent} />
-      </View>
-      <View style={styles.actionCopy}>
-        <Text style={[type.bodyEmphasis]}>{label}</Text>
-        <Text style={[type.caption, { color: native.secondaryLabel }]}>{detail}</Text>
-      </View>
-      <Ionicons name="chevron-forward" size={16} color={native.tertiaryLabel} />
-    </Pressable>
-  )
-}
-
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  content: { padding: NATIVE.pagePadding, gap: 12 },
+  content: { padding: NATIVE.pagePadding, gap: 16 },
   loadingBox: { alignItems: "center", justifyContent: "center", paddingVertical: 48, gap: 12 },
   errorBox: { flexDirection: "row", gap: 8, padding: 12, borderRadius: NATIVE.sectionRadius },
   errorText: { flex: 1, fontSize: 14, lineHeight: 20 },
-  actionList: { borderRadius: 16, overflow: "hidden" },
-  actionRow: { flexDirection: "row", alignItems: "center", gap: 12, padding: 12, minHeight: 58 },
-  actionIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  actionCopy: { flex: 1, gap: 2 },
-  featuredCard: { borderRadius: 16, padding: 14, gap: 8, borderWidth: StyleSheet.hairlineWidth },
-  featuredHead: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
-  featuredIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  featuredBody: { flex: 1, gap: 2 },
-  actionHint: {
+  listGroup: { borderRadius: 16, overflow: "hidden" },
+  recentRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 10,
-    alignSelf: "flex-start",
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    minHeight: 58,
   },
-  emptyBody: { lineHeight: 21, marginBottom: 12 },
+  recentIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  recentCopy: { flex: 1, gap: 2 },
+  emptyCard: {
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 14,
+    gap: 12,
+  },
   primaryBtn: {
     flexDirection: "row",
     alignItems: "center",

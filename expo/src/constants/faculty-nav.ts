@@ -134,6 +134,7 @@ export const FACULTY_NAV_GROUPS: FacultyNavGroup[] = [
     icon: "shield-outline",
     items: [
       { id: "course-settings", label: "Course Settings", route: "/module/course-settings", icon: "options-outline" },
+      { id: "schedule-adjustment", label: "Schedule Adjustment", route: "/module/schedule-adjustment", icon: "calendar-outline" },
       { id: "assessment-governance", label: "Assessment Governance", route: "/module/assessment-governance", icon: "shield-checkmark-outline" },
       { id: "assessment-defaults", label: "Assessment Defaults", route: "/module/assessment-defaults", icon: "clipboard-outline" },
       { id: "my-courses", label: "My Courses", route: "/module/my-courses", icon: "school-outline" },
@@ -325,6 +326,7 @@ export function facultyNativeRouteFromLink(link: string | undefined): string {
   if (path.includes("learning-center/help") || path.includes("student-support")) return "/module/student-support"
 
   if (path.includes("administration/course-settings") || path.includes("course-settings")) return "/module/course-settings"
+  if (path.includes("schedule-adjustment")) return "/module/schedule-adjustment"
   if (path.includes("assessment-governance")) return "/module/assessment-governance"
   if (path.includes("assessment-defaults")) return "/module/assessment-defaults"
   if (path.includes("my-courses")) return "/module/my-courses"

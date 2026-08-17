@@ -22,6 +22,7 @@ import {
   CommEmptyState,
   CommSectionFooter,
 } from "../faculty/faculty-communication-ui"
+import { ModuleShowMoreRow } from "../modules/ModuleScreen"
 import { SignatureListCard } from "../theme/SignatureListCard"
 import { TabbedModuleLayout, signatureListStyles } from "../theme/TabbedModuleLayout"
 import { StudentFilterSheet, StudentSearchToolbar } from "../student/student-search-toolbar"
@@ -99,6 +100,9 @@ function LeaderboardListCard({ entry, rank, index }: { entry: ForumLeaderboardEn
   )
 }
 
+/** TabbedModuleLayout pages are plain ScrollViews — page long lists instead of mounting every row. */
+const LIST_PAGE_SIZE = 20
+
 export function ForumScreen() {
   const session = useStudentSession()
   const router = useRouter()
@@ -118,6 +122,9 @@ export function ForumScreen() {
   const [showTutorForm, setShowTutorForm] = useState(false)
   const [tutorSubject, setTutorSubject] = useState("")
   const [filterSheetOpen, setFilterSheetOpen] = useState(false)
+  const [threadCount, setThreadCount] = useState(LIST_PAGE_SIZE)
+  const [tutoringCount, setTutoringCount] = useState(LIST_PAGE_SIZE)
+  const [leaderboardCount, setLeaderboardCount] = useState(LIST_PAGE_SIZE)
 
   const load = useCallback(async () => {
     if (!session) return
@@ -162,6 +169,12 @@ export function ForumScreen() {
   }, [load])
 
   useNotificationModuleRefresh("forum", onRefresh)
+
+  useEffect(() => {
+    setThreadCount(LIST_PAGE_SIZE)
+    setTutoringCount(LIST_PAGE_SIZE)
+    setLeaderboardCount(LIST_PAGE_SIZE)
+  }, [search, sortBy, lbView])
 
   const leaderboard = lbView === "weekly" ? weeklyLb : allTimeLb
 
@@ -261,7 +274,7 @@ export function ForumScreen() {
           />
         ) : (
           <View style={signatureListStyles.list}>
-            {threads.map((thread, index) => (
+            {threads.slice(0, threadCount).map((thread, index) => (
               <ThreadListCard
                 key={thread.id}
                 index={index}
@@ -269,6 +282,11 @@ export function ForumScreen() {
                 onPress={() => router.push(`/collaboration/forum/thread/${thread.id}` as never)}
               />
             ))}
+            <ModuleShowMoreRow
+              variant="card"
+              remaining={threads.length - threadCount}
+              onPress={() => setThreadCount((prev) => prev + LIST_PAGE_SIZE)}
+            />
           </View>
         )}
         <CommSectionFooter>Tap a thread to read replies or vote on posts.</CommSectionFooter>
@@ -287,9 +305,14 @@ export function ForumScreen() {
           />
         ) : (
           <View style={signatureListStyles.list}>
-            {filteredTutoring.map((offer, index) => (
+            {filteredTutoring.slice(0, tutoringCount).map((offer, index) => (
               <TutoringListCard key={offer.id} offer={offer} index={index} />
             ))}
+            <ModuleShowMoreRow
+              variant="card"
+              remaining={filteredTutoring.length - tutoringCount}
+              onPress={() => setTutoringCount((prev) => prev + LIST_PAGE_SIZE)}
+            />
           </View>
         )}
         {showTutorForm ? (
@@ -326,9 +349,14 @@ export function ForumScreen() {
       />
     ) : (
       <View style={signatureListStyles.list}>
-        {filteredLeaderboard.map((entry, index) => (
+        {filteredLeaderboard.slice(0, leaderboardCount).map((entry, index) => (
           <LeaderboardListCard key={entry.student_id} entry={entry} rank={index} index={index} />
         ))}
+        <ModuleShowMoreRow
+          variant="card"
+          remaining={filteredLeaderboard.length - leaderboardCount}
+          onPress={() => setLeaderboardCount((prev) => prev + LIST_PAGE_SIZE)}
+        />
       </View>
     )
   }

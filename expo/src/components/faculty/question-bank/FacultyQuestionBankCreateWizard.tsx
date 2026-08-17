@@ -104,7 +104,12 @@ export function FacultyQuestionBankCreateWizard({ visible, onClose, onSaved }: P
       <Modal visible={visible && !manualEditorOpen} animationType="slide" presentationStyle="pageSheet">
         <View style={[styles.root, { backgroundColor: native.groupedBackground, paddingTop: insets.top }]}>
           <View style={[styles.header, { borderBottomColor: native.separator }]}>
-            <Pressable onPress={handleClose} hitSlop={8}>
+            <Pressable
+              onPress={handleClose}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel"
+            >
               <Text style={[type.bodyEmphasis, { color: FACULTY_QUESTION_BANK_COLOR.link }]}>Cancel</Text>
             </Pressable>
             <Text style={[type.navTitle, { color: native.label }]}>

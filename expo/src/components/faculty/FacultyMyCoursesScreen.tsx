@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import {
   ActivityIndicator,
-  Modal,
+  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -9,54 +9,90 @@ import {
   View,
 } from "react-native"
 import { Ionicons } from "@/components/icons/AppIcon"
-import { useSafeAreaInsets } from "react-native-safe-area-context"
+import { ApiError } from "../../lib/api"
 import { useFacultyShell } from "../../context/FacultyShellContext"
 import { useFacultyScope } from "../../hooks/useFacultyScope"
 import { persistFacultyCourse } from "../../hooks/useFacultyShellRefresh"
-import { instructorAdminApi } from "../../lib/instructor-admin-api"
-import { instructorApi, type InstructorCourse } from "../../lib/instructor-api"
+import {
+  termPayloadFromForm,
+  type AcademicTermNameForm,
+} from "../../lib/faculty-academic-term-utils"
+import {
+  flattenFacultyCourseOfferings,
+  facultyOfferingKey,
+  normalizeFacultyCourseOfferings,
+  type FacultyCourseOfferingRow,
+} from "../../lib/faculty-my-courses-utils"
+import {
+  instructorApi,
+  type InstructorAcademicTerm,
+  type InstructorCourse,
+  type InstructorSession,
+} from "../../lib/instructor-api"
 import { NATIVE } from "../../constants/faculty-native-theme"
 import { FACULTY_ADMIN_COLOR } from "../../lib/faculty-admin-theme"
 import { FacultyEmptyState } from "./faculty-shared"
 import { useFacultyModuleScrollPadding, FacultySearchToolbar } from "./faculty-module-shell"
 import { useModuleTheme } from "../../lib/themed-module-shell"
-import {
-  FacultySheetContainer,
-  useCollabSheetStyles,
-  FacultySheetChrome,
-  FacultySheetField,
-  FacultySheetSaveAction,
-  FacultySheetTextInput,
-} from "./faculty-collab-sheet-ui"
 import { FacultyMyCourseCard } from "./FacultyAdminListCards"
+import { FacultyMyCourseActionSheet } from "./FacultyMyCourseActionSheet"
+import { FacultyCreateCourseSheet } from "./FacultyCreateCourseSheet"
+import { FacultyAcademicTermActionSheet } from "./FacultyAcademicTermActionSheet"
+import {
+  FacultyAcademicTermFormModal,
+  FacultySectionFormModal,
+} from "./FacultyAcademicTermFormModal"
 
-type CourseRow = InstructorCourse & { is_active_term?: boolean; term_label?: string | null }
+type ActiveTermState = { id: number | null; label: string | null }
 
 export function FacultyMyCoursesScreen() {
   const { styles: moduleStyles, native, type } = useModuleTheme()
-  const collabSheetStyles = useCollabSheetStyles()
-  const insets = useSafeAreaInsets()
   const scrollPad = useFacultyModuleScrollPadding(24)
   const { session } = useFacultyScope()
   const { selectedCourse, setSelectedCourse, refreshFacultyData } = useFacultyShell()
 
-  const [courses, setCourses] = useState<CourseRow[]>([])
-  const [activeTermLabel, setActiveTermLabel] = useState<string | null>(null)
+  const [courses, setCourses] = useState<FacultyCourseOfferingRow[]>([])
+  const [activeTerm, setActiveTerm] = useState<ActiveTermState>({ id: null, label: null })
   const [search, setSearch] = useState("")
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState("")
+
   const [createOpen, setCreateOpen] = useState(false)
-  const [creating, setCreating] = useState(false)
-  const [createError, setCreateError] = useState("")
-  const [draftCode, setDraftCode] = useState("")
-  const [draftTitle, setDraftTitle] = useState("")
-  const [draftDescription, setDraftDescription] = useState("")
+  const [selectedOffering, setSelectedOffering] = useState<FacultyCourseOfferingRow | null>(null)
+  const [courseSheetOpen, setCourseSheetOpen] = useState(false)
+
+  const [selectedTerm, setSelectedTerm] = useState<InstructorAcademicTerm | null>(null)
+  const [termSheetOpen, setTermSheetOpen] = useState(false)
+  const [termSheetLoading, setTermSheetLoading] = useState(false)
+
+  const [termFormMode, setTermFormMode] = useState<"add" | "edit">("add")
+  const [termFormOpen, setTermFormOpen] = useState(false)
+  const [termFormTarget, setTermFormTarget] = useState<InstructorAcademicTerm | null>(null)
+
+  const [sectionFormMode, setSectionFormMode] = useState<"add" | "edit">("add")
+  const [sectionFormOpen, setSectionFormOpen] = useState(false)
+  const [sectionFormTerm, setSectionFormTerm] = useState<InstructorAcademicTerm | null>(null)
+  const [sectionFormTarget, setSectionFormTarget] = useState<InstructorSession | null>(null)
+
+  const termScope = useMemo(() => {
+    if (!session) return null
+    const courseId = selectedCourse?.id ?? courses[0]?.course_id
+    if (!courseId) return null
+    return { instructorId: session.id, courseId }
+  }, [session, selectedCourse, courses])
 
   const load = useCallback(async () => {
     if (!session) return
     const data = await instructorApi.getCourses(session.id)
-    setCourses((data.courses ?? []).filter((c) => c.id > 0) as CourseRow[])
-    setActiveTermLabel(data.activeTerm?.label ?? null)
+    const raw = data.offerings?.length ? data.offerings : data.courses ?? []
+    const offerings = flattenFacultyCourseOfferings(normalizeFacultyCourseOfferings(raw as Array<Record<string, unknown>>))
+    setCourses(offerings)
+    setActiveTerm({
+      id: data.activeTerm?.id ?? null,
+      label: data.activeTerm?.label ?? null,
+    })
   }, [session])
 
   useEffect(() => {
@@ -65,7 +101,9 @@ export function FacultyMyCoursesScreen() {
       return
     }
     setLoading(true)
-    load().finally(() => setLoading(false))
+    load()
+      .catch((err) => setError(err instanceof ApiError ? err.message : "Could not load courses."))
+      .finally(() => setLoading(false))
   }, [session, load])
 
   async function handleRefresh() {
@@ -77,11 +115,23 @@ export function FacultyMyCoursesScreen() {
     }
   }
 
-  async function selectCourse(course: InstructorCourse) {
+  async function selectCourse(course: FacultyCourseOfferingRow | InstructorCourse) {
     if (!session || course.id <= 0) return
-    setSelectedCourse(course)
-    await persistFacultyCourse(session.id, course.id)
-    await refreshFacultyData?.(course)
+    const next: InstructorCourse = {
+      id: "course_id" in course ? course.course_id : course.id,
+      course_code: course.course_code,
+      course_title: course.course_title,
+      university: course.university,
+      semester: course.semester,
+      staff_role: course.staff_role,
+      term_label: course.term_label,
+      is_active_term: course.is_active_term,
+      academic_term_id: course.academic_term_id,
+      description: course.description,
+    }
+    setSelectedCourse(next)
+    await persistFacultyCourse(session.id, next.id)
+    await refreshFacultyData?.(next)
   }
 
   const filtered = useMemo(() => {
@@ -91,7 +141,7 @@ export function FacultyMyCoursesScreen() {
       (c) =>
         c.course_code.toLowerCase().includes(q) ||
         c.course_title.toLowerCase().includes(q) ||
-        (c.semester ?? "").toLowerCase().includes(q),
+        (c.term_label ?? c.semester ?? "").toLowerCase().includes(q),
     )
   }, [courses, search])
 
@@ -104,46 +154,144 @@ export function FacultyMyCoursesScreen() {
     [filtered],
   )
 
-  async function handleCreateCourse() {
-    if (!session) return
-    if (!draftCode.trim() || !draftTitle.trim()) {
-      setCreateError("Course code and title are required.")
+  function openCourseSheet(course: FacultyCourseOfferingRow) {
+    setSelectedOffering(course)
+    setCourseSheetOpen(true)
+  }
+
+  async function openActiveTermSheet() {
+    if (!termScope) {
+      setTermFormMode("add")
+      setTermFormTarget(null)
+      setTermFormOpen(true)
       return
     }
-    setCreating(true)
-    setCreateError("")
+    setTermSheetLoading(true)
+    setError("")
     try {
-      await instructorAdminApi.createCourse(session.id, {
-        course_code: draftCode.trim(),
-        course_title: draftTitle.trim(),
-        description: draftDescription.trim() || null,
-      })
-      setCreateOpen(false)
-      setDraftCode("")
-      setDraftTitle("")
-      setDraftDescription("")
-      await load()
+      const data = await instructorApi.getAcademicTerms(termScope)
+      const term =
+        (activeTerm.id ? data.terms?.find((t) => t.id === activeTerm.id) : null) ??
+        data.terms?.find((t) => t.is_active) ??
+        null
+      if (term) {
+        setSelectedTerm(term)
+        setTermSheetOpen(true)
+      } else {
+        setTermFormMode("add")
+        setTermFormTarget(null)
+        setTermFormOpen(true)
+      }
     } catch (err) {
-      setCreateError(err instanceof Error ? err.message : "Could not create course.")
+      setError(err instanceof ApiError ? err.message : "Could not load active term.")
     } finally {
-      setCreating(false)
+      setTermSheetLoading(false)
     }
   }
 
-  function renderSection(label: string, items: CourseRow[]) {
+  function openEditTerm(term: InstructorAcademicTerm) {
+    setTermSheetOpen(false)
+    setTermFormMode("edit")
+    setTermFormTarget(term)
+    setTermFormOpen(true)
+  }
+
+  function openAddSection(term: InstructorAcademicTerm) {
+    setTermSheetOpen(false)
+    setSectionFormMode("add")
+    setSectionFormTerm(term)
+    setSectionFormTarget(null)
+    setSectionFormOpen(true)
+  }
+
+  function openEditSection(term: InstructorAcademicTerm, section: InstructorSession) {
+    setTermSheetOpen(false)
+    setSectionFormMode("edit")
+    setSectionFormTerm(term)
+    setSectionFormTarget(section)
+    setSectionFormOpen(true)
+  }
+
+  async function handleTermSubmit(form: AcademicTermNameForm) {
+    if (!termScope) return
+    setSubmitting(true)
+    setError("")
+    try {
+      const payload = termPayloadFromForm(form)
+      if (termFormMode === "add") {
+        await instructorApi.createAcademicTerm(termScope, payload)
+      } else if (termFormTarget) {
+        await instructorApi.updateAcademicTerm(termScope, termFormTarget.id, payload)
+      }
+      setTermFormOpen(false)
+      await load()
+    } catch (err) {
+      setError(err instanceof ApiError || err instanceof Error ? err.message : "Could not save term.")
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function handleSectionSubmit(payload: { code: string; description: string }) {
+    if (!termScope || !sectionFormTerm) return
+    if (!payload.code) {
+      setError("Section code is required.")
+      return
+    }
+    if (payload.code.toUpperCase() === "BETA") {
+      setError("BETA sections cannot be linked to an academic term.")
+      return
+    }
+    setSubmitting(true)
+    setError("")
+    try {
+      if (sectionFormMode === "add") {
+        await instructorApi.createSession(termScope, {
+          code: payload.code,
+          description: payload.description || null,
+          academic_term_id: sectionFormTerm.id,
+        })
+      } else if (sectionFormTarget) {
+        await instructorApi.updateSession(termScope, sectionFormTarget.id, {
+          code: payload.code,
+          description: payload.description || null,
+        })
+      }
+      setSectionFormOpen(false)
+      await load()
+    } catch (err) {
+      setError(err instanceof ApiError || err instanceof Error ? err.message : "Could not save section.")
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function handleCourseCreated(created: InstructorCourse) {
+    await load()
+    if (created?.id) {
+      await selectCourse(created)
+    }
+  }
+
+  function renderSection(label: string, items: FacultyCourseOfferingRow[]) {
     if (items.length === 0) return null
     return (
       <>
-        <Text style={[type.sectionHeader, { color: native.secondaryLabel, paddingHorizontal: 4, marginTop: 4, textTransform: "none" }]}>
+        <Text
+          style={[
+            type.sectionHeader,
+            { color: native.secondaryLabel, paddingHorizontal: 4, marginTop: 4, textTransform: "none" },
+          ]}
+        >
           {label}
         </Text>
         <View style={styles.list}>
           {items.map((course) => (
             <FacultyMyCourseCard
-              key={course.id}
+              key={facultyOfferingKey(course.course_id, course.academic_term_id)}
               course={course}
-              active={selectedCourse?.id === course.id}
-              onPress={() => void selectCourse(course)}
+              active={selectedCourse?.id === course.course_id}
+              onPress={() => openCourseSheet(course)}
             />
           ))}
         </View>
@@ -151,35 +299,61 @@ export function FacultyMyCoursesScreen() {
     )
   }
 
+  const sheetOpen = courseSheetOpen || termSheetOpen || createOpen || termFormOpen || sectionFormOpen
+
   return (
     <>
+      <FacultySearchToolbar
+        value={search}
+        onChange={setSearch}
+        placeholder="Search courses"
+        showFilter={false}
+        trailingAction={{
+          icon: "add",
+          accessibilityLabel: "Create course",
+          onPress: () => setCreateOpen(true),
+        }}
+      />
+
       <ScrollView
         style={[moduleStyles.root, styles.root]}
         contentContainerStyle={[styles.content, scrollPad]}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={() => void handleRefresh()} tintColor={FACULTY_ADMIN_COLOR.link} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => void handleRefresh()}
+            tintColor={FACULTY_ADMIN_COLOR.link}
+          />
         }
         showsVerticalScrollIndicator={false}
       >
-        <FacultySearchToolbar
-          value={search}
-          onChange={setSearch}
-          placeholder="Search courses"
-          showFilter={false}
-          trailingAction={{
-            icon: "add",
-            accessibilityLabel: "Create course",
-            onPress: () => setCreateOpen(true),
-          }}
-        />
-
-        {activeTermLabel ? (
-          <View style={[styles.termBanner, { backgroundColor: `${FACULTY_ADMIN_COLOR.link}14` }]}>
+        {activeTerm.label || termScope ? (
+          <Pressable
+            style={({ pressed }) => [
+              styles.termBanner,
+              { backgroundColor: `${FACULTY_ADMIN_COLOR.link}14` },
+              pressed && { opacity: 0.85 },
+            ]}
+            onPress={() => void openActiveTermSheet()}
+            accessibilityRole="button"
+            accessibilityLabel={
+              activeTerm.label ? `Manage active term ${activeTerm.label}` : "Manage academic terms"
+            }
+          >
             <Ionicons name="calendar-outline" size={16} color={FACULTY_ADMIN_COLOR.link} />
-            <Text style={[type.secondary, styles.termBannerText, { color: FACULTY_ADMIN_COLOR.link }]}>
-              Active term · {activeTermLabel}
+            <Text style={[type.secondary, styles.termBannerText, { color: FACULTY_ADMIN_COLOR.link, flex: 1 }]}>
+              {activeTerm.label ? `Active term · ${activeTerm.label}` : "Set up academic term"}
             </Text>
-          </View>
+            {termSheetLoading ? (
+              <ActivityIndicator size="small" color={FACULTY_ADMIN_COLOR.link} />
+            ) : (
+              <Ionicons name="chevron-forward" size={16} color={FACULTY_ADMIN_COLOR.link} />
+            )}
+          </Pressable>
+        ) : null}
+
+        {error && !sheetOpen ? (
+          <Text style={[type.destructive, styles.inlineError]}>{error}</Text>
         ) : null}
 
         {loading ? (
@@ -198,50 +372,67 @@ export function FacultyMyCoursesScreen() {
           <>
             {renderSection("Current Term", currentTerm)}
             {renderSection("Other Terms", otherTerms)}
-            {currentTerm.length === 0 && otherTerms.length === 0
-              ? renderSection("Courses", filtered)
-              : null}
+            {currentTerm.length === 0 && otherTerms.length === 0 ? renderSection("Courses", filtered) : null}
           </>
         )}
       </ScrollView>
 
-      <Modal visible={createOpen} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setCreateOpen(false)}>
-        <FacultySheetContainer>
-          <FacultySheetChrome
-            topInset={insets.top}
-            title="Create Course"
-            onClose={() => setCreateOpen(false)}
-            accentColor={FACULTY_ADMIN_COLOR.link}
-          />
-          <ScrollView contentContainerStyle={[collabSheetStyles.scroll, scrollPad]}>
-            <FacultySheetField label="Course code">
-              <FacultySheetTextInput
-                value={draftCode}
-                onChangeText={setDraftCode}
-                placeholder="ECE2202"
-                autoCapitalize="characters"
-              />
-            </FacultySheetField>
-            <FacultySheetField label="Course title">
-              <FacultySheetTextInput
-                value={draftTitle}
-                onChangeText={setDraftTitle}
-                placeholder="Digital Logic Design"
-              />
-            </FacultySheetField>
-            <FacultySheetField label="Description">
-              <FacultySheetTextInput
-                value={draftDescription}
-                onChangeText={setDraftDescription}
-                placeholder="Optional course description"
-                multiline
-              />
-            </FacultySheetField>
-            {createError ? <Text style={[type.destructive, styles.createError]}>{createError}</Text> : null}
-            <FacultySheetSaveAction label="Create course" saving={creating} onPress={() => void handleCreateCourse()} />
-          </ScrollView>
-        </FacultySheetContainer>
-      </Modal>
+      <FacultyCreateCourseSheet
+        visible={createOpen}
+        instructorId={session?.id ?? null}
+        activeTermLabel={activeTerm.label}
+        activeTermId={activeTerm.id}
+        onClose={() => setCreateOpen(false)}
+        onCreated={handleCourseCreated}
+      />
+
+      <FacultyMyCourseActionSheet
+        visible={courseSheetOpen}
+        course={selectedOffering}
+        instructorId={session?.id ?? null}
+        activeSelected={selectedOffering != null && selectedCourse?.id === selectedOffering.course_id}
+        onClose={() => {
+          setCourseSheetOpen(false)
+          setSelectedOffering(null)
+        }}
+        onSelectCourse={selectCourse}
+        onRemoved={() => void load()}
+      />
+
+      <FacultyAcademicTermActionSheet
+        visible={termSheetOpen}
+        term={selectedTerm}
+        scope={termScope}
+        courseCode={selectedCourse?.course_code ?? courses[0]?.course_code}
+        onClose={() => {
+          setTermSheetOpen(false)
+          setSelectedTerm(null)
+        }}
+        onEditTerm={openEditTerm}
+        onAddSection={openAddSection}
+        onEditSection={openEditSection}
+        onUpdated={() => void load()}
+      />
+
+      <FacultyAcademicTermFormModal
+        visible={termFormOpen}
+        mode={termFormMode}
+        initial={termFormTarget}
+        submitting={submitting}
+        error={error}
+        onClose={() => setTermFormOpen(false)}
+        onSubmit={handleTermSubmit}
+      />
+
+      <FacultySectionFormModal
+        visible={sectionFormOpen}
+        mode={sectionFormMode}
+        initialCode={sectionFormTarget?.code ?? ""}
+        initialDescription={sectionFormTarget?.description ?? ""}
+        submitting={submitting}
+        onClose={() => setSectionFormOpen(false)}
+        onSubmit={(payload) => void handleSectionSubmit(payload)}
+      />
     </>
   )
 }
@@ -259,5 +450,5 @@ const styles = StyleSheet.create({
   },
   termBannerText: { fontWeight: "600" },
   list: { gap: 12 },
-  createError: { marginBottom: 8 },
+  inlineError: { paddingHorizontal: 4 },
 })

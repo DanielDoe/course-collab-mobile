@@ -1,12 +1,16 @@
 import { useEffect, useMemo, useState } from "react"
 import { ActivityIndicator, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { AppAlert } from '../../lib/app-alert'
+import { AppAlertHost } from "../../context/AppAlertProvider"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import type { InstructorAnnouncement } from "../../lib/instructor-api"
 import { instructorApi } from "../../lib/instructor-api"
 import { summarizeAnnouncement } from "../../lib/announcement-summary"
-import { formatAnnouncementRelativeDate } from "../../lib/faculty-announcement-utils"
+import {
+  facultyAnnouncementAudienceLabel,
+  formatAnnouncementRelativeDate,
+} from "../../lib/faculty-announcement-utils"
 import {
   FACULTY_ANNOUNCEMENT_COLOR,
   facultyAnnouncementListThumb,
@@ -85,6 +89,8 @@ function AttachmentTile({
         pressed && { backgroundColor: native.secondaryGrouped },
       ]}
       onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`Open attachment ${name}`}
     >
       <View
         style={[
@@ -110,12 +116,16 @@ export function FacultyAnnouncementDetailModal({ item, scope, onClose, onEdit, o
   const { styles: moduleStyles, native, tokens, type } = useModuleTheme()
   const insets = useSafeAreaInsets()
   const [detail, setDetail] = useState<InstructorAnnouncement | null>(null)
+  const [heldItem, setHeldItem] = useState<InstructorAnnouncement | null>(null)
   const [loading, setLoading] = useState(false)
   const [loadError, setLoadError] = useState("")
 
   useEffect(() => {
+    if (item) setHeldItem(item)
+  }, [item])
+
+  useEffect(() => {
     if (!item || !scope) {
-      setDetail(null)
       setLoadError("")
       return
     }
@@ -143,7 +153,7 @@ export function FacultyAnnouncementDetailModal({ item, scope, onClose, onEdit, o
     }
   }, [item, scope])
 
-  const announcement = detail ?? item
+  const announcement = detail ?? item ?? heldItem
 
   const summary = useMemo(
     () =>
@@ -175,6 +185,10 @@ export function FacultyAnnouncementDetailModal({ item, scope, onClose, onEdit, o
       animationType="slide"
       presentationStyle="fullScreen"
       onRequestClose={onClose}
+      onDismiss={() => {
+        setHeldItem(null)
+        setDetail(null)
+      }}
     >
       <View style={moduleStyles.root}>
         <View
@@ -187,7 +201,13 @@ export function FacultyAnnouncementDetailModal({ item, scope, onClose, onEdit, o
             },
           ]}
         >
-          <Pressable style={styles.navBtn} onPress={onClose} hitSlop={8}>
+          <Pressable
+            style={styles.navBtn}
+            onPress={onClose}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Back"
+          >
             <Ionicons name="chevron-back" size={24} color={FACULTY_ANNOUNCEMENT_COLOR.link} />
             <Text style={[type.body, { color: FACULTY_ANNOUNCEMENT_COLOR.link, fontWeight: "500" }]}>Back</Text>
           </Pressable>
@@ -196,6 +216,8 @@ export function FacultyAnnouncementDetailModal({ item, scope, onClose, onEdit, o
             onPress={() => announcement && onEdit(announcement)}
             disabled={!announcement || loading}
             hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Edit"
           >
             <Text
               style={[
@@ -282,7 +304,10 @@ export function FacultyAnnouncementDetailModal({ item, scope, onClose, onEdit, o
                   {(announcement.comments_count ?? 0) > 0 ? (
                     <StatChip icon="chatbubble-outline" label={`${announcement.comments_count} comments`} />
                   ) : null}
-                  <StatChip icon="people-outline" label="Course-wide" />
+                  <StatChip
+                    icon="people-outline"
+                    label={facultyAnnouncementAudienceLabel(announcement.target_session)}
+                  />
                 </View>
               </View>
 
@@ -373,19 +398,27 @@ export function FacultyAnnouncementDetailModal({ item, scope, onClose, onEdit, o
                 ]}
                 onPress={() => onEdit(announcement)}
                 disabled={loading}
+                accessibilityRole="button"
+                accessibilityLabel="Edit announcement"
               >
                 <Ionicons name="create-outline" size={20} color={FACULTY_ANNOUNCEMENT_COLOR.actionInk} />
                 <Text style={[type.bodyEmphasis, { color: FACULTY_ANNOUNCEMENT_COLOR.actionInk, fontSize: 16 }]}>
                   Edit announcement
                 </Text>
               </Pressable>
-              <Pressable style={styles.deleteBtn} onPress={confirmDelete}>
+              <Pressable
+                style={styles.deleteBtn}
+                onPress={confirmDelete}
+                accessibilityRole="button"
+                accessibilityLabel="Delete announcement"
+              >
                 <Text style={[type.destructive, { fontWeight: "600", fontSize: 15 }]}>Delete announcement</Text>
               </Pressable>
             </View>
           </>
         ) : null}
       </View>
+      <AppAlertHost />
     </Modal>
   )
 }

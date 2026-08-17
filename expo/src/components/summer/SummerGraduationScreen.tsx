@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react"
-import { StyleSheet, Text, View } from "react-native"
+import { Linking, Pressable, StyleSheet, Text, View } from "react-native"
 import { Ionicons } from "@/components/icons/AppIcon"
 import {
   summerCampApi,
@@ -23,7 +23,7 @@ import {
 import { SummerBadgeListCard } from "./SummerBadgeListCard"
 import { SummerGraduationActionSheet } from "./SummerGraduationActionSheet"
 import { SummerGraduationRequirementCard } from "./SummerGraduationRequirementCard"
-import { useSummerLoader } from "./summer-module-hooks"
+import { useSummerLoader, useSummerStudentId } from "./summer-module-hooks"
 
 type GraduationTab = "progress" | "badges"
 type BadgeFilter = "all" | "earned" | "locked"
@@ -48,6 +48,7 @@ export function SummerGraduationScreen() {
   const tokens = useAppThemeTokens()
   const type = useNativeType()
   const { data, loading, refreshing, error, refresh } = useSummerLoader(summerCampApi.getGraduation)
+  const studentId = useSummerStudentId()
   const [tab, setTab] = useState<GraduationTab>("progress")
   const [search, setSearch] = useState("")
   const [filter, setFilter] = useState<BadgeFilter>("all")
@@ -167,6 +168,37 @@ export function SummerGraduationScreen() {
                       </Text>
                     </View>
                   </View>
+                  <View style={styles.certActions}>
+                    <Pressable
+                      style={[styles.certBtn, { backgroundColor: tokens.accentSoft, borderColor: tokens.accentBorder }]}
+                      onPress={() => {
+                        if (!studentId || !training.certificate?.id) return
+                        void Linking.openURL(summerCampApi.getCertificatePreviewUrl(studentId, training.certificate.id))
+                      }}
+                    >
+                      <Ionicons name="eye-outline" size={16} color={tokens.accent} />
+                      <Text style={[type.caption, { color: tokens.accentDark, fontWeight: "700" }]}>Preview</Text>
+                    </Pressable>
+                    <Pressable
+                      style={[styles.certBtn, { backgroundColor: tokens.accentSoft, borderColor: tokens.accentBorder }]}
+                      onPress={() => {
+                        if (!studentId || !training.certificate?.id) return
+                        void Linking.openURL(summerCampApi.getCertificateDownloadUrl(studentId, training.certificate.id))
+                      }}
+                    >
+                      <Ionicons name="download-outline" size={16} color={tokens.accent} />
+                      <Text style={[type.caption, { color: tokens.accentDark, fontWeight: "700" }]}>Download</Text>
+                    </Pressable>
+                    {training.certificate.linkedin_share_url ? (
+                      <Pressable
+                        style={[styles.certBtn, { backgroundColor: tokens.accentSoft, borderColor: tokens.accentBorder }]}
+                        onPress={() => void Linking.openURL(training.certificate!.linkedin_share_url!)}
+                      >
+                        <Ionicons name="logo-linkedin" size={16} color={tokens.accent} />
+                        <Text style={[type.caption, { color: tokens.accentDark, fontWeight: "700" }]}>LinkedIn</Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
                 </ModuleSection>
               </View>
             ) : null}
@@ -237,4 +269,20 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   summaryCopy: { flex: 1, minWidth: 0, gap: 2 },
+  certActions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingBottom: 12,
+  },
+  certBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
 })

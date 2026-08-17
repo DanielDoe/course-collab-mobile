@@ -1,0 +1,8 @@
+appId: com.coursecollab.app
+---
+- scrollUntilVisible:
+    element: "Final Exams"
+    direction: UP
+    timeout: 20000
+- tapOn: "Final Exams"
+- waitForAnimationToEnd

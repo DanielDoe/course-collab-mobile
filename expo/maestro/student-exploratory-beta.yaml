@@ -1,0 +1,343 @@
+appId: com.coursecollab.app
+---
+- openLink: coursecollab://dev-student-login
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 90000
+- takeScreenshot: beta-dashboard
+
+# Messages — verify course-import preview + compose + thread
+- openLink: coursecollab:///module/messages
+- extendedWaitUntil:
+    visible: "Messages"
+    timeout: 30000
+- tapOn:
+    text: "Search conversations…"
+    optional: true
+- inputText: "Daniel"
+- hideKeyboard
+- tapOn:
+    text: "Daniel Doe"
+    optional: true
+- extendedWaitUntil:
+    visible: "Course question|Daniel Doe|Messages"
+    timeout: 15000
+    optional: true
+- tapOn:
+    text: "Close"
+    optional: true
+- back
+- tapOn:
+    text: "New message"
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn:
+    text: "Cancel"
+    optional: true
+- tapOn:
+    text: "Close"
+    optional: true
+- takeScreenshot: beta-messages
+
+# Forum
+- openLink: coursecollab:///module/forum
+- extendedWaitUntil:
+    visible: "Forum Hub"
+    timeout: 45000
+- tapOn:
+    text: "Tutoring"
+    optional: true
+- tapOn:
+    text: "Leaderboard"
+    optional: true
+- tapOn:
+    text: "Discussions"
+    optional: true
+- tapOn:
+    text: "Search threads…"
+    optional: true
+- inputText: "circuit"
+- hideKeyboard
+- tapOn:
+    text: "Start a thread"
+    optional: true
+- tapOn:
+    text: "Cancel"
+    optional: true
+- tapOn:
+    text: "Close"
+    optional: true
+- takeScreenshot: beta-forum
+
+# Groups
+- openLink: coursecollab:///module/groups
+- extendedWaitUntil:
+    visible: "Groups"
+    timeout: 45000
+- tapOn:
+    text: "Mine"
+    optional: true
+- tapOn:
+    text: "Join"
+    optional: true
+- tapOn:
+    text: "All"
+    optional: true
+- tapOn:
+    text: "Search groups…"
+    optional: true
+- inputText: "team"
+- hideKeyboard
+- takeScreenshot: beta-groups
+
+# Projects
+- openLink: coursecollab:///module/projects
+- extendedWaitUntil:
+    visible: "Projects"
+    timeout: 45000
+- tapOn:
+    text: "Search projects…"
+    optional: true
+- inputText: "final"
+- hideKeyboard
+- takeScreenshot: beta-projects
+
+# Playground
+- openLink: coursecollab:///module/playground
+- extendedWaitUntil:
+    visible: "Playground"
+    timeout: 30000
+- tapOn:
+    text: "Leaderboard"
+    optional: true
+- back
+- tapOn:
+    text: "Solo practice"
+    optional: true
+- tapOn:
+    text: "Cancel"
+    optional: true
+- tapOn:
+    text: "Close"
+    optional: true
+- back
+- takeScreenshot: beta-playground
+
+# Classroom Points
+- openLink: coursecollab:///module/classroom-points
+- extendedWaitUntil:
+    visible: "Classroom Points"
+    timeout: 30000
+- tapOn:
+    text: "Tasks"
+    optional: true
+- tapOn:
+    text: "Ranks"
+    optional: true
+- tapOn:
+    text: "History"
+    optional: true
+- takeScreenshot: beta-points
+
+# Attendance
+- openLink: coursecollab:///module/attendance
+- extendedWaitUntil:
+    visible: "Attendance"
+    timeout: 30000
+- tapOn:
+    text: "History"
+    optional: true
+- tapOn:
+    text: "Ranks"
+    optional: true
+- tapOn:
+    text: "Overview"
+    optional: true
+- takeScreenshot: beta-attendance
+
+# Trade Center
+- openLink: coursecollab:///module/trade-center
+- extendedWaitUntil:
+    visible: "Trade Center"
+    timeout: 30000
+- tapOn:
+    text: "Trade"
+    optional: true
+- tapOn:
+    text: "Points to trade"
+    optional: true
+- inputText: "0"
+- tapOn:
+    text: "Trade points"
+    optional: true
+- tapOn:
+    text: "OK"
+    optional: true
+- tapOn:
+    text: "Donate"
+    optional: true
+- tapOn:
+    text: "Points to donate"
+    optional: true
+- inputText: "1"
+- tapOn:
+    text: "Donate"
+    optional: true
+- tapOn:
+    text: "OK"
+    optional: true
+- tapOn:
+    text: "Overview"
+    optional: true
+- takeScreenshot: beta-trade
+
+# Calendar
+- openLink: coursecollab:///module/calendar
+- extendedWaitUntil:
+    visible: "Calendar"
+    timeout: 30000
+- tapOn:
+    text: "Jump to today"
+    optional: true
+- tapOn:
+    text: "15 min before"
+    optional: true
+- tapOn:
+    text: "30 min before"
+    optional: true
+- tapOn:
+    text: "Google"
+    optional: true
+- tapOn:
+    text: "Cancel"
+    optional: true
+- tapOn:
+    text: "Close"
+    optional: true
+- takeScreenshot: beta-calendar
+
+# Office Hours — fill fields, do not submit a real request
+- openLink: coursecollab:///module/office-hours
+- extendedWaitUntil:
+    visible: "Office Hours"
+    timeout: 30000
+- tapOn: "Topic"
+- inputText: "Beta test — nodal analysis"
+- tapOn:
+    text: "Area of concern"
+    optional: true
+- inputText: "Circuits"
+- tapOn:
+    text: "Description"
+    optional: true
+- inputText: "Exploratory UI test. Do not schedule."
+- tapOn:
+    text: "High"
+    optional: true
+- tapOn:
+    text: "My requests"
+    optional: true
+- tapOn:
+    text: "New request"
+    optional: true
+- takeScreenshot: beta-office
+
+# Recommendations — open form, do not submit
+- openLink: coursecollab:///module/recommendations
+- extendedWaitUntil:
+    visible: "Recommendation"
+    timeout: 30000
+- tapOn:
+    text: "New request"
+    optional: true
+- tapOn:
+    text: "Deadline"
+    optional: true
+- inputText: "2026-09-01"
+- tapOn:
+    text: "Recommendation description"
+    optional: true
+- inputText: "Exploratory UI test — do not send."
+- tapOn:
+    text: "My requests"
+    optional: true
+- takeScreenshot: beta-recs
+
+# Settings sheets
+- openLink: coursecollab:///settings
+- extendedWaitUntil:
+    visible: "Settings"
+    timeout: 20000
+- tapOn:
+    text: "Edit profile"
+    optional: true
+- tapOn:
+    text: "Cancel"
+    optional: true
+- tapOn:
+    text: "Close"
+    optional: true
+- tapOn:
+    text: "Password & security"
+    optional: true
+- tapOn:
+    text: "Cancel"
+    optional: true
+- tapOn:
+    text: "Close"
+    optional: true
+- tapOn:
+    text: "Notifications"
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn:
+    text: "Close"
+    optional: true
+- tapOn:
+    text: "Appearance"
+    optional: true
+- back
+- takeScreenshot: beta-settings
+
+# Support forms — validation only
+- openLink: coursecollab:///module/help-center
+- extendedWaitUntil:
+    visible: "Help Center"
+    timeout: 20000
+- tapOn:
+    text: "Search help articles…"
+    optional: true
+- inputText: "quiz"
+- hideKeyboard
+- tapOn:
+    text: "How do I sign in?"
+    optional: true
+- takeScreenshot: beta-help
+
+- openLink: coursecollab:///module/report-bug
+- extendedWaitUntil:
+    visible: "Report"
+    timeout: 20000
+- tapOn:
+    text: "Submit bug report"
+    optional: true
+- tapOn:
+    text: "OK"
+    optional: true
+- takeScreenshot: beta-bug
+
+- openLink: coursecollab:///module/feature-requests
+- extendedWaitUntil:
+    visible: "Feature Requests"
+    timeout: 20000
+- takeScreenshot: beta-features
+
+- openLink: coursecollab:///membership
+- extendedWaitUntil:
+    visible: "Membership|Plans|Trailblazer|Explorer"
+    timeout: 30000
+- takeScreenshot: beta-membership

@@ -1,0 +1,10 @@
+appId: com.coursecollab.app
+---
+- tapOn:
+    text: "OK"
+    optional: true
+- tapOn: "Deleted"
+- tapOn: "Permanently delete QA Flashcards Deck 16|Permanently delete deck"
+- takeScreenshot: flashcards-prod-purge2-confirm
+- tapOn: "Delete forever"
+- takeScreenshot: flashcards-prod-purged2

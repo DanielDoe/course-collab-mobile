@@ -1,0 +1,5 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Select All That Apply, medium, A single-phase AC load consumes 4.8 kW of real power and 3.6 kVAR of inductive reactive power. Select all statements that are correct about this load's apparent power and power factor ."
+- tapOn: "Submit Create final"
+- waitForAnimationToEnd

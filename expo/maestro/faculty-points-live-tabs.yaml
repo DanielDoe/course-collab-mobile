@@ -1,0 +1,12 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Problem"
+- tapOn: "Schedule"
+- tapOn: "Details"
+- tapOn: "Delete assignment"
+- tapOn: "Cancel"
+- tapOn: "Done"
+- tapOn: "8-5 Maximum Power Transfer — Problem 8.53 — Max Power with Dependent Source (Fig. P8.53)"
+- tapOn: "Done"
+- tapOn: "Create assignment"
+- waitForAnimationToEnd

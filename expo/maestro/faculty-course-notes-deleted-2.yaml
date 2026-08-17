@@ -1,0 +1,6 @@
+appId: com.coursecollab.app
+---
+- waitForAnimationToEnd
+- tapOn: "Preview QA99 Course NoteQA probe body. Safe to delete."
+- waitForAnimationToEnd
+- takeScreenshot: course-notes-deleted-preview

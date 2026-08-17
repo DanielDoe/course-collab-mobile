@@ -1,0 +1,7 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Create"
+- extendedWaitUntil:
+    visible: "QA16S, Draft|QA16S"
+    timeout: 25000
+- takeScreenshot: summer-qa-created

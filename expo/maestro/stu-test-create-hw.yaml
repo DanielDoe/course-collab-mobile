@@ -1,0 +1,11 @@
+appId: com.coursecollab.app
+---
+- tapOn: "New homework"
+- tapOn: "AC Power"
+- waitForAnimationToEnd
+- tapOn: "Select all"
+- waitForAnimationToEnd
+- tapOn: "Submit Create homework (12)"
+- waitForAnimationToEnd
+- tapOn: "OK"
+- waitForAnimationToEnd

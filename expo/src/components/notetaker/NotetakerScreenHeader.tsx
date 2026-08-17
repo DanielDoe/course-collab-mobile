@@ -29,15 +29,22 @@ export function NotetakerScreenHeader({
   const type = useNativeType()
 
   return (
-    <View style={[styles.bar, { paddingTop: insets.top + 8, borderBottomColor: native.separator }]}>
+    <View style={[styles.bar, { paddingTop: insets.top + 8, borderBottomColor: native.separator, backgroundColor: native.groupedBackground }]}>
       <Pressable
+        style={styles.back}
         onPress={onBackPress ?? (() => safeRouterBack(router, fallbackHref))}
         hitSlop={8}
+        accessibilityRole="button"
         accessibilityLabel="Back"
       >
         <Ionicons name="chevron-back" size={24} color={tokens.accent} />
       </Pressable>
-      <Text style={[type.navTitle, styles.title]} numberOfLines={1}>
+      <Text
+        style={[type.navTitle, styles.title]}
+        numberOfLines={1}
+        ellipsizeMode="tail"
+        accessibilityRole="header"
+      >
         {title}
       </Text>
       <View style={styles.right}>{rightSlot ?? <View style={styles.rightSpacer} />}</View>
@@ -53,6 +60,11 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
     gap: 8,
+  },
+  back: {
+    minWidth: 44,
+    minHeight: 36,
+    justifyContent: "center",
   },
   title: {
     flex: 1,

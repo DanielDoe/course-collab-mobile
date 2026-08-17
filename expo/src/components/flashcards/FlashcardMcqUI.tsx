@@ -1,10 +1,23 @@
-import { Pressable, StyleSheet, Text, View } from "react-native"
+import { useEffect } from "react"
+import { Platform, Pressable, StyleSheet, Text, View } from "react-native"
 import { Ionicons } from "@/components/icons/AppIcon"
+import * as Haptics from "expo-haptics"
+import Animated, {
+  Easing,
+  FadeIn,
+  FadeInUp,
+  useAnimatedStyle,
+  useSharedValue,
+  withSequence,
+  withSpring,
+  withTiming,
+} from "react-native-reanimated"
 import type { FlashcardMcq } from "../../lib/flashcard-quiz"
 import { hexToRgba } from "../../constants/app-themes"
 import { NATIVE } from "../../constants/faculty-native-theme"
 import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
 import { useNativeType } from "../../lib/themed-module-theme"
+import { QuestionContentWebView } from "../rewards/QuestionContent"
 
 type PromptProps = {
   mcq: FlashcardMcq
@@ -57,9 +70,9 @@ export function FlashcardMcqPrompt({ mcq, badge, variant = "quiz", accentColor }
       <Text style={[type.caption, { color: native.secondaryLabel, marginTop: 10 }]}>
         {mcq.promptLabel}
       </Text>
-      <Text style={[type.bodyEmphasis, styles.promptText, { color: native.label }]}>
-        {mcq.promptText}
-      </Text>
+      <View style={styles.promptMath} pointerEvents="none">
+        <QuestionContentWebView text={mcq.promptText} embedded compact />
+      </View>
     </View>
   )
 }
@@ -68,79 +81,243 @@ type ChoicesProps = {
   mcq: FlashcardMcq
   locked?: boolean
   feedback?: "correct" | "incorrect" | null
+  selectedChoiceId?: string | null
   previewCorrect?: boolean
   onSelect?: (choiceId: string) => void
+}
+
+function FeedbackBanner({
+  feedback,
+  correctText,
+}: {
+  feedback: "correct" | "incorrect"
+  correctText?: string
+}) {
+  const tokens = useAppThemeTokens()
+  const type = useNativeType()
+  const isCorrect = feedback === "correct"
+  const tone = isCorrect ? tokens.success : tokens.danger
+  const scale = useSharedValue(0.92)
+  const glow = useSharedValue(0)
+
+  useEffect(() => {
+    scale.value = withSequence(
+      withSpring(1.04, { damping: 12, stiffness: 220 }),
+      withSpring(1, { damping: 14, stiffness: 180 }),
+    )
+    glow.value = withSequence(
+      withTiming(1, { duration: 220, easing: Easing.out(Easing.cubic) }),
+      withTiming(0.55, { duration: 420 }),
+    )
+    if (Platform.OS === "ios") {
+      void Haptics.notificationAsync(
+        isCorrect
+          ? Haptics.NotificationFeedbackType.Success
+          : Haptics.NotificationFeedbackType.Error,
+      )
+    }
+  }, [feedback, glow, isCorrect, scale])
+
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+    opacity: 0.85 + glow.value * 0.15,
+  }))
+
+  return (
+    <Animated.View
+      entering={FadeInUp.springify().damping(16)}
+      style={[
+        styles.feedback,
+        animStyle,
+        {
+          backgroundColor: hexToRgba(tone, tokens.isDark ? 0.2 : 0.12),
+          borderColor: hexToRgba(tone, tokens.isDark ? 0.45 : 0.35),
+        },
+      ]}
+    >
+      <View style={[styles.feedbackIcon, { backgroundColor: hexToRgba(tone, tokens.isDark ? 0.28 : 0.18) }]}>
+        <Ionicons
+          name={isCorrect ? "checkmark-circle" : "close-circle"}
+          size={22}
+          color={tone}
+        />
+      </View>
+      <View style={styles.feedbackCopy}>
+        <Text style={[type.bodyEmphasis, { color: tone }]}>
+          {isCorrect ? "Nice — that’s correct" : "Not quite"}
+        </Text>
+        {isCorrect ? (
+          <Text style={[type.caption, { color: tokens.native.secondaryLabel, lineHeight: 18 }]}>
+            Keep the streak going into the next question.
+          </Text>
+        ) : correctText ? (
+          <View style={styles.feedbackAnswer} pointerEvents="none">
+            <Text style={[type.caption, { color: tokens.native.secondaryLabel, marginBottom: 4 }]}>
+              Answer
+            </Text>
+            <QuestionContentWebView text={correctText} embedded compact />
+          </View>
+        ) : (
+          <Text style={[type.caption, { color: tokens.native.secondaryLabel, lineHeight: 18 }]}>
+            Review the correct option highlighted above.
+          </Text>
+        )}
+      </View>
+    </Animated.View>
+  )
+}
+
+function ChoiceRow({
+  index,
+  text,
+  selected,
+  showCorrect,
+  showWrong,
+  locked,
+  interactive,
+  onPress,
+}: {
+  index: number
+  text: string
+  selected: boolean
+  showCorrect: boolean
+  showWrong: boolean
+  locked: boolean
+  interactive: boolean
+  onPress?: () => void
+}) {
+  const tokens = useAppThemeTokens()
+  const native = useThemedNative()
+  const type = useNativeType()
+  const shake = useSharedValue(0)
+  const pop = useSharedValue(1)
+
+  useEffect(() => {
+    if (showWrong) {
+      shake.value = withSequence(
+        withTiming(-6, { duration: 45 }),
+        withTiming(6, { duration: 45 }),
+        withTiming(-4, { duration: 40 }),
+        withTiming(4, { duration: 40 }),
+        withTiming(0, { duration: 40 }),
+      )
+    }
+    if (showCorrect) {
+      pop.value = withSequence(
+        withSpring(1.03, { damping: 10, stiffness: 260 }),
+        withSpring(1, { damping: 14, stiffness: 200 }),
+      )
+    }
+  }, [pop, shake, showCorrect, showWrong])
+
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: shake.value }, { scale: pop.value }],
+  }))
+
+  const tone = showCorrect ? tokens.success : showWrong ? tokens.danger : null
+  const bg = tone
+    ? hexToRgba(tone, tokens.isDark ? 0.18 : 0.1)
+    : selected && !locked
+      ? hexToRgba(tokens.accent, tokens.isDark ? 0.16 : 0.08)
+      : native.secondaryGrouped
+  const border = tone
+    ? tone
+    : selected && !locked
+      ? tokens.accent
+      : native.separator
+
+  return (
+    <Animated.View style={animStyle}>
+      <Pressable
+        disabled={locked || !interactive}
+        onPress={interactive ? onPress : undefined}
+        style={({ pressed }) => [
+          styles.choice,
+          {
+            backgroundColor: bg,
+            borderColor: border,
+            borderWidth: tone || selected ? 1.5 : StyleSheet.hairlineWidth,
+            opacity: pressed && interactive ? 0.88 : 1,
+          },
+        ]}
+      >
+        <View
+          style={[
+            styles.choiceIndex,
+            {
+              backgroundColor: tone
+                ? hexToRgba(tone, tokens.isDark ? 0.28 : 0.16)
+                : native.tertiaryGrouped,
+            },
+          ]}
+        >
+          {showCorrect ? (
+            <Ionicons name="checkmark" size={14} color={tokens.success} />
+          ) : showWrong ? (
+            <Ionicons name="close" size={14} color={tokens.danger} />
+          ) : (
+            <Text style={[type.caption, { color: native.secondaryLabel, fontWeight: "700" }]}>
+              {index + 1}
+            </Text>
+          )}
+        </View>
+        <View style={styles.choiceTextWrap} pointerEvents="none">
+          <QuestionContentWebView text={text} embedded compact />
+        </View>
+        {showCorrect ? (
+          <Animated.View entering={FadeIn.duration(220)}>
+            <Text style={[type.caption, { color: tokens.success, fontWeight: "700" }]}>Correct</Text>
+          </Animated.View>
+        ) : null}
+        {showWrong ? (
+          <Animated.View entering={FadeIn.duration(220)}>
+            <Text style={[type.caption, { color: tokens.danger, fontWeight: "700" }]}>Yours</Text>
+          </Animated.View>
+        ) : null}
+      </Pressable>
+    </Animated.View>
+  )
 }
 
 export function FlashcardMcqChoices({
   mcq,
   locked = false,
   feedback = null,
+  selectedChoiceId = null,
   previewCorrect = false,
   onSelect,
 }: ChoicesProps) {
-  const tokens = useAppThemeTokens()
-  const native = useThemedNative()
-  const type = useNativeType()
   const correctChoice = mcq.choices.find((c) => c.isCorrect)
   const interactive = Boolean(onSelect) && !previewCorrect
 
   return (
     <View style={styles.choicesWrap}>
-      {feedback ? (
-        <View
-          style={[
-            styles.feedback,
-            {
-              backgroundColor:
-                feedback === "correct" ? `${tokens.success}18` : `${tokens.danger}18`,
-            },
-          ]}
-        >
-          <Ionicons
-            name={feedback === "correct" ? "checkmark-circle" : "close-circle"}
-            size={16}
-            color={feedback === "correct" ? tokens.success : tokens.danger}
-          />
-          <Text
-            style={[
-              type.caption,
-              {
-                color: feedback === "correct" ? tokens.success : tokens.danger,
-                fontWeight: "600",
-                flex: 1,
-              },
-            ]}
-          >
-            {feedback === "correct" ? "Correct!" : `Not quite — it was: ${correctChoice?.text}`}
-          </Text>
-        </View>
-      ) : null}
-
       <View style={styles.choices}>
         {mcq.choices.map((choice, i) => {
+          const isSelected = selectedChoiceId === choice.id
           const showCorrect =
-            (previewCorrect && choice.isCorrect) || (feedback === "incorrect" && choice.isCorrect)
+            (previewCorrect && choice.isCorrect) ||
+            (feedback != null && choice.isCorrect)
+          const showWrong = feedback === "incorrect" && isSelected && !choice.isCorrect
           return (
-            <Pressable
+            <ChoiceRow
               key={choice.id}
-              disabled={locked || !interactive}
-              onPress={interactive ? () => onSelect?.(choice.id) : undefined}
-              style={({ pressed }) => [
-                styles.choice,
-                {
-                  backgroundColor: showCorrect ? `${tokens.success}18` : native.secondaryGrouped,
-                  borderColor: showCorrect ? tokens.success : native.separator,
-                  opacity: pressed && interactive ? 0.85 : previewCorrect && !choice.isCorrect ? 0.75 : 1,
-                },
-              ]}
-            >
-              <Text style={[type.caption, { color: native.tertiaryLabel, width: 20 }]}>{i + 1}.</Text>
-              <Text style={[type.body, { color: native.label, flex: 1 }]}>{choice.text}</Text>
-            </Pressable>
+              index={i}
+              text={choice.text}
+              selected={isSelected}
+              showCorrect={showCorrect}
+              showWrong={showWrong}
+              locked={locked}
+              interactive={interactive}
+              onPress={() => onSelect?.(choice.id)}
+            />
           )
         })}
       </View>
+
+      {feedback ? (
+        <FeedbackBanner feedback={feedback} correctText={correctChoice?.text} />
+      ) : null}
     </View>
   )
 }
@@ -150,7 +327,7 @@ const styles = StyleSheet.create({
     borderRadius: NATIVE.sectionRadius,
     borderWidth: StyleSheet.hairlineWidth,
     padding: 20,
-    minHeight: 160,
+    minHeight: 140,
   },
   badge: {
     flexDirection: "row",
@@ -162,25 +339,43 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   badgeText: { fontWeight: "700", fontSize: 10, letterSpacing: 0.4, textTransform: "uppercase" },
-  promptText: { marginTop: 8, fontSize: 20, lineHeight: 28 },
-  choicesWrap: { gap: 8 },
+  promptMath: { marginTop: 8, width: "100%" },
+  choicesWrap: { gap: 10 },
   feedback: {
     flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    borderRadius: 12,
+    alignItems: "flex-start",
+    gap: 12,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingVertical: 12,
   },
+  feedbackIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 1,
+  },
+  feedbackCopy: { flex: 1, gap: 2, minWidth: 0 },
+  feedbackAnswer: { marginTop: 2 },
   choices: { gap: 8 },
   choice: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 10,
     borderRadius: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    minHeight: 48,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    minHeight: 52,
   },
+  choiceIndex: {
+    width: 28,
+    height: 28,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  choiceTextWrap: { flex: 1, minWidth: 0 },
 })

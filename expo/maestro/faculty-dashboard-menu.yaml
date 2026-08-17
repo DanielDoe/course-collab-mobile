@@ -1,0 +1,15 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Open account menu"
+- waitForAnimationToEnd
+- tapOn: "Available"
+- takeScreenshot: presence-available
+- tapOn:
+    text: ".*Switch course.*"
+- extendedWaitUntil:
+    visible: "All of your courses|Current Term|Other Terms"
+    timeout: 15000
+- takeScreenshot: course-picker
+- tapOn: "Close course picker"
+- waitForAnimationToEnd
+- takeScreenshot: after-picker

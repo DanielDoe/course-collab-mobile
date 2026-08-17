@@ -1,0 +1,28 @@
+appId: com.coursecollab.app
+---
+- tapOn:
+    text: ".*course evaluation.*"
+- extendedWaitUntil:
+    visible: "Edit announcement|Delete announcement"
+    timeout: 15000
+- swipe:
+    direction: UP
+- swipe:
+    direction: UP
+- takeScreenshot: announcements-detail-2
+- tapOn: "Back"
+- tapOn: "New announcement"
+- extendedWaitUntil:
+    visible: "New announcement"
+    timeout: 10000
+- tapOn: "Title"
+- inputText: "QA99 announcement draft"
+- tapOn: "New announcement"
+- tapOn: "Message"
+- inputText: "Do not publish. Safe to discard."
+- tapOn: "New announcement"
+- tapOn: "Pin to top of student feed"
+- takeScreenshot: announcements-composer
+- tapOn: "Cancel"
+- tapOn: "Discard"
+- takeScreenshot: announcements-after-discard

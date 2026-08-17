@@ -1,0 +1,11 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Done"
+- tapOn: "Samar Thadhani"
+- tapOn: "Done"
+- tapOn: "Overview"
+- tapOn: "Search students…"
+- inputText: "zzz"
+- hideKeyboard
+- tapOn: "Clear search"
+- waitForAnimationToEnd

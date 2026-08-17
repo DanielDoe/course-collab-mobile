@@ -1,0 +1,24 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Search questions…"
+- eraseText
+- inputText: "sinusoidal"
+- tapOn: "Turn questions on or off for the student Practice Hub. Hidden questions will not appear in practice sessions."
+- extendedWaitUntil:
+    visible: "Preview question"
+    timeout: 8000
+- takeScreenshot: practice-q-match
+- tapOn: "Preview question"
+- extendedWaitUntil:
+    visible: "Question preview"
+    timeout: 15000
+- takeScreenshot: practice-q-preview
+- tapOn: "Done"
+- extendedWaitUntil:
+    visible: "Topic settings"
+    timeout: 8000
+- tapOn: "Topic settings"
+- extendedWaitUntil:
+    visible: "Practice topic"
+    timeout: 10000
+- takeScreenshot: practice-topic-settings

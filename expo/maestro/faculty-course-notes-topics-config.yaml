@@ -1,0 +1,25 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Topics"
+- takeScreenshot: course-notes-topics-page
+- tapOn: "Section, All sections"
+- takeScreenshot: course-notes-topics-section-picker
+- tapOn: "Close"
+- tapOn: "Config"
+- tapOn: "Search topics…"
+- inputText: "zzzqnofind"
+- tapOn: "Course Notes"
+- takeScreenshot: course-notes-config-search-empty
+- tapOn: "Search topics…"
+- eraseText
+- tapOn:
+    text: "Clear search"
+    optional: true
+- tapOn: "Course Notes"
+- tapOn: "Search topics…"
+- inputText: "Nodal"
+- tapOn: "Course Notes"
+- takeScreenshot: course-notes-config-search-match
+- swipe:
+    direction: UP
+- takeScreenshot: course-notes-config-scrolled

@@ -1,0 +1,22 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Search questions in this topic…"
+- inputText: "zzz"
+- tapOn: "AC Power"
+- extendedWaitUntil:
+    visible: "No matches|No matching questions"
+    timeout: 8000
+- takeScreenshot: playground-bank-q-empty
+- tapOn: "Clear search"
+- tapOn: "Select all"
+- takeScreenshot: playground-bank-selected
+- tapOn: "Seconds per question"
+- eraseText
+- inputText: "8"
+- tapOn: "AC Power"
+- tapOn: "Clear all"
+- tapOn:
+    text: "Create session"
+    optional: true
+- tapOn: "Select all"
+- tapOn: "Clear all"

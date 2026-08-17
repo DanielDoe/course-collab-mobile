@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import {
   ActivityIndicator,
   Platform,
@@ -6,6 +6,7 @@ import {
   StyleSheet,
   Switch,
   Text,
+  TextInput,
   View,
 } from "react-native"
 import { hexToRgba } from "../../constants/app-themes"
@@ -27,6 +28,7 @@ import {
   readRememberedUniversity,
 } from "../../lib/remembered-student-auth"
 import { persistMfaDeviceTrustFromLogin, studentMfaLoginKey, studentMfaAliasKeys } from "../../lib/mfa-device-trust"
+import { stashPendingLoginPassword } from "../../lib/pending-login-password"
 import { useSession } from "../../context/SessionProvider"
 import { MfaLoginStep } from "../auth/MfaLoginStep"
 import { ErrorBanner, LoginFieldGroup } from "./LoginCard"
@@ -38,6 +40,17 @@ import { useLoginTheme } from "./login-theme"
 import { parseMfaCompletePayload, parseMfaLoginResponse, type MfaLoginState } from "../../lib/mfa-types"
 
 type Step = "university" | "credentials" | "course" | "mfa"
+
+/** Mirrors web lib/universities-shared.ts — the catch-all "Other" picker row. */
+function isOtherUniversity(uni: Pick<UniversityRecord, "short_name"> | null | undefined): boolean {
+  return String(uni?.short_name ?? "").trim().toUpperCase() === "OTHER"
+}
+
+function sameUniversity(a: UniversityRecord | null, b: UniversityRecord): boolean {
+  if (!a) return false
+  if (a.id > 0 || b.id > 0) return a.id === b.id
+  return a.name === b.name && (a.domain ?? "") === (b.domain ?? "")
+}
 type AuthMode = "login" | "activate"
 
 type Props = {
@@ -60,6 +73,10 @@ export function StudentLoginPanel({ onBack }: Props) {
   const [universities, setUniversities] = useState<UniversityRecord[]>([])
   const [loadingUniversities, setLoadingUniversities] = useState(true)
   const [selectedUniversity, setSelectedUniversity] = useState<UniversityRecord | null>(null)
+  const [uniQuery, setUniQuery] = useState("")
+  const [uniResults, setUniResults] = useState<UniversityRecord[]>([])
+  const [searchingUniversities, setSearchingUniversities] = useState(false)
+  const [savingUniversity, setSavingUniversity] = useState(false)
 
   const [identifier, setIdentifier] = useState("")
   const [password, setPassword] = useState("")
@@ -120,6 +137,39 @@ export function StudentLoginPanel({ onBack }: Props) {
     }
   }, [])
 
+  useEffect(() => {
+    const q = uniQuery.trim()
+    if (q.length < 2) {
+      setUniResults([])
+      setSearchingUniversities(false)
+      return
+    }
+    const handle = setTimeout(() => {
+      void (async () => {
+        setSearchingUniversities(true)
+        try {
+          const data = await api.searchUniversities(q)
+          setUniResults(data.universities ?? [])
+        } catch {
+          setUniResults([])
+        } finally {
+          setSearchingUniversities(false)
+        }
+      })()
+    }, 280)
+    return () => clearTimeout(handle)
+  }, [uniQuery])
+
+  const featuredUniversities = useMemo(
+    () => universities.filter((u) => !isOtherUniversity(u)),
+    [universities],
+  )
+  const otherUniversity = useMemo(
+    () => universities.find((u) => isOtherUniversity(u)) ?? null,
+    [universities],
+  )
+  const showingUniversitySearch = uniQuery.trim().length >= 2
+
   /** Color Hunt link accent; school color only for university row identity. */
   const linkAccent = LOGIN.purple
   const schoolAccent = selectedUniversity?.primary_color ?? linkAccent
@@ -159,6 +209,12 @@ export function StudentLoginPanel({ onBack }: Props) {
       await clearRememberedStudentCredentials()
     }
 
+    const requiresPasswordChange = student.has_changed_password === false
+    const loginPassword = pendingCredentials?.password ?? password
+    if (requiresPasswordChange && loginPassword) {
+      stashPendingLoginPassword(loginPassword)
+    }
+
     await signIn({
       portal: "student",
       id: student.student_id,
@@ -173,6 +229,7 @@ export function StudentLoginPanel({ onBack }: Props) {
       universityId: university?.id,
       universityName: university?.name,
       universityShortName: university?.short_name,
+      requiresPasswordChange,
     })
 
     // Parent login screen redirects to signing-in when session is set.
@@ -295,13 +352,31 @@ export function StudentLoginPanel({ onBack }: Props) {
     }
   }
 
-  function handleContinueUniversity() {
+  async function handleContinueUniversity() {
     if (!selectedUniversity) {
       setError("Select your university to continue.")
       return
     }
     setError("")
-    void persistRememberedUniversity(selectedUniversity)
+    let university = selectedUniversity
+    if (!university.id) {
+      setSavingUniversity(true)
+      try {
+        const data = await api.ensureUniversity({
+          name: university.name,
+          domain: university.domain,
+          shortName: university.short_name,
+        })
+        university = data.university
+        setSelectedUniversity(university)
+      } catch (err) {
+        setError(err instanceof ApiError ? err.message : "Could not save your school. Try again.")
+        setSavingUniversity(false)
+        return
+      }
+      setSavingUniversity(false)
+    }
+    void persistRememberedUniversity(university)
     setStep("credentials")
   }
 
@@ -321,7 +396,7 @@ export function StudentLoginPanel({ onBack }: Props) {
         <View style={styles.stepHeader}>
           <Text style={loginType.panelTitle}>Choose Your University</Text>
           <Text style={loginType.panelDescription}>
-            Select the institution where you are enrolled.
+            Search thousands of schools, or pick Other if yours is not listed.
           </Text>
         </View>
 
@@ -330,58 +405,132 @@ export function StudentLoginPanel({ onBack }: Props) {
             <ActivityIndicator color={linkAccent} />
           </View>
         ) : (
-          <View style={styles.uniList}>
-            {universities.map((uni) => {
-              const active = selectedUniversity?.id === uni.id
-              return (
-                <Pressable
-                  key={uni.id}
-                  onPress={() => {
-                    setSelectedUniversity(uni)
-                    void persistRememberedUniversity(uni)
-                    setError("")
-                  }}
-                  style={({ pressed }) => [
-                    styles.uniRow,
-                    {
-                      borderColor: active ? uni.primary_color : LOGIN.separator,
-                      backgroundColor: active
-                        ? hexToRgba(uni.primary_color, 0.1)
-                        : LOGIN.grouped,
-                    },
-                    pressed && styles.pressed,
-                  ]}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: active }}
-                >
-                  <UniversityAuthLogoImage university={uni} variant="list" />
-                  <View style={styles.uniText}>
-                    <Text style={[loginType.stepLabel, { color: LOGIN.label }]} numberOfLines={1}>
-                      {uni.name}
-                    </Text>
-                    <Text style={[loginType.info, { color: LOGIN.secondaryLabel }]}>
-                      {uni.short_name}
-                      {uni.domain ? ` · ${uni.domain}` : ""}
-                    </Text>
-                  </View>
-                  {active ? (
-                    <Ionicons name="checkmark-circle" size={22} color={uni.primary_color} />
-                  ) : (
-                    <Ionicons name="chevron-forward" size={18} color={LOGIN.secondaryLabel} />
-                  )}
+          <>
+            <View
+              style={[
+                styles.searchBox,
+                { borderColor: LOGIN.separator, backgroundColor: LOGIN.grouped },
+              ]}
+            >
+              <Ionicons name="search" size={17} color={LOGIN.secondaryLabel} />
+              <TextInput
+                value={uniQuery}
+                onChangeText={setUniQuery}
+                placeholder="Search universities…"
+                placeholderTextColor={LOGIN.secondaryLabel}
+                autoCapitalize="none"
+                autoCorrect={false}
+                style={[styles.searchInput, { color: LOGIN.label }]}
+              />
+              {searchingUniversities ? (
+                <ActivityIndicator size="small" color={linkAccent} />
+              ) : uniQuery ? (
+                <Pressable onPress={() => setUniQuery("")} hitSlop={8} accessibilityLabel="Clear search">
+                  <Ionicons name="close-circle" size={17} color={LOGIN.secondaryLabel} />
                 </Pressable>
-              )
-            })}
-          </View>
+              ) : null}
+            </View>
+
+            <View style={styles.uniList}>
+              {showingUniversitySearch && uniResults.length === 0 && !searchingUniversities ? (
+                <Text style={[loginType.info, { color: LOGIN.secondaryLabel, textAlign: "center", paddingVertical: 10 }]}>
+                  No matches. Choose Other below.
+                </Text>
+              ) : null}
+              {(showingUniversitySearch ? uniResults : featuredUniversities).map((uni) => {
+                const active = sameUniversity(selectedUniversity, uni)
+                return (
+                  <Pressable
+                    key={`${uni.id}-${uni.domain ?? uni.name}`}
+                    onPress={() => {
+                      setSelectedUniversity(uni)
+                      if (uni.id > 0) void persistRememberedUniversity(uni)
+                      setError("")
+                    }}
+                    style={({ pressed }) => [
+                      styles.uniRow,
+                      {
+                        borderColor: active ? uni.primary_color : LOGIN.separator,
+                        backgroundColor: active
+                          ? hexToRgba(uni.primary_color, 0.1)
+                          : LOGIN.grouped,
+                      },
+                      pressed && styles.pressed,
+                    ]}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: active }}
+                  >
+                    <UniversityAuthLogoImage university={uni} variant="list" />
+                    <View style={styles.uniText}>
+                      <Text style={[loginType.stepLabel, { color: LOGIN.label }]} numberOfLines={1}>
+                        {uni.name}
+                      </Text>
+                      <Text style={[loginType.info, { color: LOGIN.secondaryLabel }]}>
+                        {uni.short_name}
+                        {uni.domain ? ` · ${uni.domain}` : ""}
+                      </Text>
+                    </View>
+                    {active ? (
+                      <Ionicons name="checkmark-circle" size={22} color={uni.primary_color} />
+                    ) : (
+                      <Ionicons name="chevron-forward" size={18} color={LOGIN.secondaryLabel} />
+                    )}
+                  </Pressable>
+                )
+              })}
+              {otherUniversity ? (
+                (() => {
+                  const active = Boolean(selectedUniversity && isOtherUniversity(selectedUniversity))
+                  return (
+                    <Pressable
+                      key="other-university"
+                      onPress={() => {
+                        setSelectedUniversity(otherUniversity)
+                        void persistRememberedUniversity(otherUniversity)
+                        setError("")
+                      }}
+                      style={({ pressed }) => [
+                        styles.uniRow,
+                        {
+                          borderColor: active ? otherUniversity.primary_color : LOGIN.separator,
+                          backgroundColor: active
+                            ? hexToRgba(otherUniversity.primary_color, 0.1)
+                            : LOGIN.grouped,
+                        },
+                        pressed && styles.pressed,
+                      ]}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: active }}
+                    >
+                      <UniversityAuthLogoImage university={otherUniversity} variant="list" />
+                      <View style={styles.uniText}>
+                        <Text style={[loginType.stepLabel, { color: LOGIN.label }]} numberOfLines={1}>
+                          {otherUniversity.name}
+                        </Text>
+                        <Text style={[loginType.info, { color: LOGIN.secondaryLabel }]}>
+                          Independent, company, or school not listed
+                        </Text>
+                      </View>
+                      {active ? (
+                        <Ionicons name="checkmark-circle" size={22} color={otherUniversity.primary_color} />
+                      ) : (
+                        <Ionicons name="chevron-forward" size={18} color={LOGIN.secondaryLabel} />
+                      )}
+                    </Pressable>
+                  )
+                })()
+              ) : null}
+            </View>
+          </>
         )}
 
         {error ? <ErrorBanner message={error} /> : null}
 
         <LoginButton
-          label="Continue"
+          label={savingUniversity ? "Saving…" : "Continue"}
           icon="arrow-forward"
-          onPress={handleContinueUniversity}
-          disabled={!selectedUniversity || loadingUniversities}
+          onPress={() => void handleContinueUniversity()}
+          disabled={!selectedUniversity || loadingUniversities || savingUniversity}
         />
 
         {onBack ? <LoginBackLink label="Other sign-in options" onPress={onBack} /> : null}
@@ -518,6 +667,18 @@ export function StudentLoginPanel({ onBack }: Props) {
             onPress={() => void handleLogin()}
             loading={submitting}
           />
+
+          <Pressable
+            onPress={() =>
+              setError("Forgot your password? Ask your instructor to approve a reset, then sign in and set a new password.")
+            }
+            accessibilityRole="button"
+            style={({ pressed }) => [pressed && styles.pressed]}
+          >
+            <Text style={[loginType.link, { color: linkAccent, textAlign: "center" }]}>
+              Forgot password?
+            </Text>
+          </Pressable>
         </>
       ) : (
         <>
@@ -610,6 +771,17 @@ export function StudentLoginPanel({ onBack }: Props) {
 
 const styles = StyleSheet.create({
   stepHeader: { gap: 6, marginBottom: 2 },
+  searchBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth * 2,
+    paddingHorizontal: 12,
+    height: 44,
+    marginBottom: 10,
+  },
+  searchInput: { flex: 1, fontSize: 15, paddingVertical: 0 },
   loadingBox: { paddingVertical: 36, alignItems: "center" },
   uniList: { gap: 10 },
   uniRow: {

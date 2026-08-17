@@ -1,0 +1,8 @@
+appId: com.coursecollab.app
+---
+- tapOn: "QA16QB blank test"
+- waitForAnimationToEnd
+- tapOn: "Delete forever"
+- waitForAnimationToEnd
+- tapOn: "Delete forever"
+- waitForAnimationToEnd

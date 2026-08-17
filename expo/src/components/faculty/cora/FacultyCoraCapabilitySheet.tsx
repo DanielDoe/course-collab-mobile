@@ -79,6 +79,7 @@ export function FacultyCoraCapabilitySheet({
               <CommListRow
                 key={prompt}
                 title={prompt}
+                titleLines={3}
                 icon="chatbubble-outline"
                 iconColor={accent.accent}
                 iconSoft={accent.iconSoft(tokens.isDark)}
@@ -125,6 +126,8 @@ export function FacultyCoraCapabilitySheet({
               onStartChat(capabilityId, suggestedPrompt)
             }}
             style={[styles.primaryBtn, { backgroundColor: coraAction.background }]}
+            accessibilityRole="button"
+            accessibilityLabel={`Open chat with Cora for ${capability.label}`}
           >
             <Ionicons name="chatbubbles-outline" size={18} color={coraAction.ink} />
             <Text style={[type.bodyEmphasis, { color: coraAction.ink }]}>Open chat with</Text>

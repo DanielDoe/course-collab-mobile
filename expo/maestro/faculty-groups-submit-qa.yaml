@@ -1,0 +1,10 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Leader Beta Tester"
+- swipe:
+    direction: UP
+- swipe:
+    direction: UP
+- takeScreenshot: groups-before-submit
+- tapOn:
+    point: "50%,90%"

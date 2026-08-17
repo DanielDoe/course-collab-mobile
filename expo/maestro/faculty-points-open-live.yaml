@@ -1,0 +1,4 @@
+appId: com.coursecollab.app
+---
+- tapOn: "8-5 Maximum Power Transfer — Problem 8.55 — Max Power with CCVS (Fig. P8.55)"
+- waitForAnimationToEnd

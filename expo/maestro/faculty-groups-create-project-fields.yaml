@@ -1,0 +1,14 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Project title"
+- eraseText
+- inputText: "QA99 Project"
+- tapOn: "Create project"
+- tapOn: "Brief overview"
+- eraseText
+- inputText: "Do not submit"
+- tapOn: "Create project"
+- swipe:
+    direction: UP
+- takeScreenshot: groups-project-fields
+- tapOn: "Done"

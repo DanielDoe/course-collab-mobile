@@ -1,0 +1,11 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Decrease question timer"
+- tapOn: "Increase question timer"
+- tapOn: "Move question 1 down"
+- tapOn: "Remove question 2"
+- takeScreenshot: playground-p31-dirty
+- tapOn: "Done"
+- extendedWaitUntil:
+    visible: "Search sessions…"
+    timeout: 8000

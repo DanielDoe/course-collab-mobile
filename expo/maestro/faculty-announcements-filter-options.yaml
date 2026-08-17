@@ -1,0 +1,18 @@
+appId: com.coursecollab.app
+---
+- tapOn:
+    text: ".*Pinned.*"
+- takeScreenshot: announcements-filter-pinned
+- tapOn: "Open filters"
+- tapOn:
+    text: ".*Active.*"
+- takeScreenshot: announcements-filter-active
+- tapOn: "Open filters"
+- tapOn: "All announcements"
+- takeScreenshot: announcements-filter-all
+- tapOn:
+    text: ".*Final grades posted.*"
+- extendedWaitUntil:
+    visible: "Back|Edit announcement|Delete announcement"
+    timeout: 15000
+- takeScreenshot: announcements-detail-1

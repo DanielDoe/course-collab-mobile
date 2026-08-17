@@ -1,0 +1,9 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Delete group"
+- extendedWaitUntil:
+    visible: "Delete group?|Cancel"
+    timeout: 8000
+- takeScreenshot: groups-delete-confirm
+- tapOn: "Cancel"
+- takeScreenshot: groups-after-cancel-delete

@@ -132,6 +132,9 @@ function TypeCard({
   return (
     <Pressable
       onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ selected }}
       style={[
         styles.typeCard,
         cardLayout,

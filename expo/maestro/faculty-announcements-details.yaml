@@ -1,0 +1,31 @@
+appId: com.coursecollab.app
+---
+- tapOn:
+    text: ".*Final grades posted.*"
+- extendedWaitUntil:
+    visible: "Edit announcement|Delete announcement"
+    timeout: 15000
+- swipe:
+    direction: UP
+- takeScreenshot: announcements-detail-1
+- tapOn: "Delete announcement"
+- takeScreenshot: announcements-delete-confirm
+- tapOn: "Cancel"
+- tapOn: "Edit"
+- extendedWaitUntil:
+    visible: "Edit announcement|Save"
+    timeout: 12000
+- takeScreenshot: announcements-edit
+- tapOn: "Cancel"
+- tapOn:
+    text: "Discard"
+    optional: true
+- tapOn:
+    text: "Keep editing"
+    optional: true
+- tapOn:
+    text: "Cancel"
+    optional: true
+- tapOn:
+    text: "Back"
+    optional: true

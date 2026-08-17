@@ -1,0 +1,10 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Done"
+- tapOn: "All"
+- takeScreenshot: groups-final-all
+- swipe:
+    start: 50%, 40%
+    end: 50%, 80%
+- tapOn: "Queue"
+- takeScreenshot: groups-final-queue

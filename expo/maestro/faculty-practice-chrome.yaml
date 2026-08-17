@@ -1,0 +1,36 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Students"
+- tapOn: "Stats"
+- tapOn: "Activity"
+- tapOn: "Topics"
+- tapOn: "Search topics…"
+- eraseText
+- inputText: "zzz"
+- tapOn: "Manage Practice"
+- tapOn: "Clear search"
+- tapOn: "Open filters"
+- tapOn: "Done"
+- tapOn: "Configure practice"
+- tapOn: "Done"
+- tapOn: "AC Power"
+- extendedWaitUntil:
+    visible: "Preview question 1|Topic settings|Done"
+    timeout: 12000
+- tapOn:
+    text: "Preview question 1"
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn: "Topic settings"
+- waitForAnimationToEnd
+- tapOn: "Available to students"
+- tapOn: "Available to students"
+- scrollUntilVisible:
+    element: "Remove from All sections. Topic stays in the bank but is hidden here"
+    direction: DOWN
+    timeout: 8000
+- tapOn: "Remove from All sections. Topic stays in the bank but is hidden here"
+- tapOn: "Cancel"
+- tapOn: "Done"

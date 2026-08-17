@@ -1,0 +1,11 @@
+appId: com.coursecollab.app
+---
+- tapOn:
+    text: "return"
+    optional: true
+- scrollUntilVisible:
+    element: "Submit create group"
+    direction: DOWN
+    timeout: 25000
+- takeScreenshot: groups-submit-ready
+- tapOn: "Submit create group"

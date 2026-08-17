@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, InteractionManager, StyleSheet, Text, View } from "react-native";
 import { AppAlert } from '../../lib/app-alert'
 import { useFocusEffect, useRouter } from "expo-router"
 import { useBlockStackBackWhile } from "../navigation/ModuleNestedBackHandler"
@@ -12,6 +12,7 @@ import { useSession } from "../../context/SessionProvider"
 import { useStudentShell } from "../../context/StudentShellContext"
 import {
   aiTutorApi,
+  applyCoraChatMeta,
   type AiTutorCredits,
   type AiTutorRecommendation,
   type AiTutorStats,
@@ -35,7 +36,23 @@ import { CoraToolFlowSheet } from "./CoraToolFlowSheet"
 import { StudentCoraContextProvider } from "../../context/StudentCoraContextProvider"
 import { useStudentCoraContext } from "../../hooks/useStudentCoraContext"
 import { StudentCoraHubView } from "./StudentCoraHubView"
+import {
+  confirmStudentCoraAction,
+  executeLocalCoraProposal,
+  isLocalCoraProposal,
+  isProposalConfirmable,
+  markProposalConfirming,
+  markProposalError,
+  markProposalResult,
+  removeProposal,
+  withMessageProposals,
+  type CoraActionProposal,
+} from "../../lib/cora"
+import * as Haptics from "expo-haptics"
 import { hasNavAccess } from "../../constants/student-nav"
+import { formatCoraCreditsLabel, isCoraLiteEligible } from "../../lib/cora/credits/economy"
+import type { CoraExpensiveTaskPayload } from "../../lib/cora/credits/types"
+import { submitCoraScopeFeedback } from "../../lib/cora/scope/feedback-api"
 import type { StudentSession } from "../../lib/session"
 import { CORA_TOOLS, isCoraPrimaryTab, type CoraSectionId } from "../../lib/cora-nav-config"
 import type { StudentCoraCapability, StudentCoraCapabilityId } from "../../lib/student-cora-config"
@@ -192,8 +209,13 @@ export function AiTutorScreen() {
   threadsRef.current = threads
   const archivedThreadsRef = useRef(archivedThreads)
   archivedThreadsRef.current = archivedThreads
+  const messagesRef = useRef(messages)
+  messagesRef.current = messages
+  const activeThreadIdRef = useRef(activeThreadId)
+  activeThreadIdRef.current = activeThreadId
   const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const editingMessageIdRef = useRef<string | null>(null)
+  const scopeRetryRef = useRef<{ confirm: boolean; context: string | null } | null>(null)
 
   const hasAccess = membershipTierLoaded && hasNavAccess(membershipTier, "Explorer")
   const {
@@ -234,11 +256,16 @@ export function AiTutorScreen() {
     )
   }, [])
 
-  const creditsLabel = credits?.isUnlimited
-    ? "Unlimited credits"
-    : credits
-      ? `${credits.credits} credits remaining`
-      : "Loading credits…"
+  const creditsLabel = credits
+    ? formatCoraCreditsLabel(credits.credits, credits.coraMode)
+    : "Loading credits…"
+
+  const creditsSubtitle =
+    credits?.coraMode === "lite"
+      ? "Lite mode — navigation & simple lookups"
+      : credits?.isLow
+        ? "Running low — packs or wait for monthly refresh"
+        : "Monthly Cora Credits"
 
   const todayRecommendations = useMemo(
     () =>
@@ -396,13 +423,25 @@ export function AiTutorScreen() {
       setHistorySyncing(true)
 
       try {
-        const synced = await syncCoraChatHistory(session, local)
+        const synced = await syncCoraChatHistory(session, local, activeThreadIdRef.current)
         if (cancelled) return
 
         setThreads(synced.threads)
         setArchivedThreads(synced.archivedThreads)
 
-        if (synced.activeThreadId && synced.activeMessages) {
+        const preferredId = activeThreadIdRef.current ?? synced.activeThreadId
+        if (preferredId) {
+          const thread =
+            synced.threads.find((entry) => entry.id === preferredId) ??
+            synced.archivedThreads.find((entry) => entry.id === preferredId)
+          if (thread) {
+            setActiveThreadId(thread.id)
+            setMessages(thread.messages)
+          } else if (synced.activeThreadId && synced.activeMessages) {
+            setActiveThreadId(synced.activeThreadId)
+            setMessages(synced.activeMessages)
+          }
+        } else if (synced.activeThreadId && synced.activeMessages) {
           setActiveThreadId(synced.activeThreadId)
           setMessages(synced.activeMessages)
         }
@@ -423,17 +462,17 @@ export function AiTutorScreen() {
   }, [session])
 
   const scheduleRemoteSync = useCallback(
-    (nextThreads: AiTutorChatThread[]) => {
+    (nextThreads: AiTutorChatThread[], nextArchived: AiTutorChatThread[] = archivedThreads) => {
       if (!session) return
       if (syncTimerRef.current) clearTimeout(syncTimerRef.current)
       syncTimerRef.current = setTimeout(() => {
-        const payload = nextThreads.map(threadToWorkspaceConversation)
+        const payload = [...nextThreads, ...nextArchived].map(threadToWorkspaceConversation)
         void syncWorkspaceConversations(session, payload).catch(() => {
           /* best-effort cloud sync */
         })
       }, 800)
     },
-    [session],
+    [session, archivedThreads],
   )
 
   useEffect(() => {
@@ -531,10 +570,6 @@ export function AiTutorScreen() {
   )
 
   const exitCora = useCallback(() => {
-    if (router.canGoBack()) {
-      router.back()
-      return
-    }
     router.replace("/dashboard" as never)
   }, [router])
 
@@ -686,8 +721,27 @@ export function AiTutorScreen() {
       return
     }
 
-    if (credits && !credits.isUnlimited && credits.credits <= 0) {
-      AppAlert.alert("No credits left", `You've used your weekly ${CORA_NAME} credits. Upgrade or wait for reset.`)
+    if (credits?.coraMode === "lite") {
+      if (!isCoraLiteEligible(text)) {
+        AppAlert.alert(
+          "Cora Lite",
+          "Premium generation needs Cora Credits. Buy a pack on Plans, or ask about grades, deadlines, and navigation.",
+          [
+            { text: "Not now", style: "cancel" },
+            { text: "View packs", onPress: () => router.push("/membership" as never) },
+          ],
+        )
+        return
+      }
+    } else if (credits && credits.credits <= 0) {
+      AppAlert.alert(
+        "No credits left",
+        `You've used your ${CORA_NAME} credits for this period. Buy a pack or wait for your monthly refresh.`,
+        [
+          { text: "Not now", style: "cancel" },
+          { text: "View packs", onPress: () => router.push("/membership" as never) },
+        ],
+      )
       return
     }
 
@@ -717,13 +771,18 @@ export function AiTutorScreen() {
         id: `${Date.now()}`,
         role: "user",
         content: text.trim(),
+        createdAt: new Date().toISOString(),
         ...meta,
       }
       baseMessages = [...messages, userMsg]
     }
 
     const assistantId = `${Date.now() + 1}`
-    setMessages([...baseMessages, { id: assistantId, role: "assistant", content: "" }])
+    const assistantCreatedAt = new Date().toISOString()
+    setMessages([
+      ...baseMessages,
+      { id: assistantId, role: "assistant", content: "", createdAt: assistantCreatedAt },
+    ])
     setInput("")
     setStreaming(true)
     setStreamingMessageId(assistantId)
@@ -767,73 +826,176 @@ export function AiTutorScreen() {
     const streamController = new AbortController()
     streamAbortRef.current = streamController
 
-    await aiTutorApi.streamMessage(
-      session,
-      apiMessage,
-      history,
-      {
-        onChunk: (chunk) => {
-          setMessages((prev) =>
-            prev.map((m) => (m.id === assistantId ? { ...m, content: m.content + chunk } : m)),
-          )
-        },
-        onDone: () => {
-          streamAbortRef.current = null
-          setStreaming(false)
-          setStreamingMessageId(null)
-          void loadData()
-          setMessages((current) => {
-            const withVersion = (() => {
-              const assistantIdx = current.findIndex((m) => m.id === assistantId)
-              if (assistantIdx <= 0) return current
-              const userIdx = assistantIdx - 1
-              const user = current[userIdx]
-              const assistant = current[assistantIdx]
-              if (user?.role !== "user" || assistant?.role !== "assistant") return current
-              const updatedUser = saveAssistantOnActiveVersion(user, assistant.content)
-              return current.map((m, i) => (i === userIdx ? updatedUser : m))
-            })()
-            const toolPayload = pendingToolCacheRef.current
-            if (toolPayload) {
-              pendingToolCacheRef.current = null
-              const assistant = withVersion.find((m) => m.id === assistantId)
-              if (assistant?.content.trim()) {
-                void setCachedToolResult(toolPayload.cacheKey, assistant.content, {
-                  sourceLabel: toolPayload.sourceLabel,
-                  courseId: session.courseId,
-                })
+    const scopeRetry = scopeRetryRef.current
+    scopeRetryRef.current = null
+
+    const runStream = async (
+      opts: {
+        confirmExpensiveTask?: boolean
+        confirmScopeRelated?: boolean
+        declaredAcademicContext?: string | null
+        signal?: AbortSignal
+      } = {},
+    ) => {
+      const signal = opts.signal ?? streamController.signal
+      await aiTutorApi.streamMessage(
+        session,
+        apiMessage,
+        history,
+        {
+          onChunk: (chunk) => {
+            setMessages((prev) =>
+              prev.map((m) => (m.id === assistantId ? { ...m, content: m.content + chunk } : m)),
+            )
+          },
+          onDone: (meta) => {
+            streamAbortRef.current = null
+            setStreaming(false)
+            setStreamingMessageId(null)
+            if (!meta?.skipCreditRefresh) {
+              void loadData({ silent: true })
+            }
+            setMessages((current) => {
+              const withVersion = (() => {
+                const assistantIdx = current.findIndex((m) => m.id === assistantId)
+                if (assistantIdx <= 0) return current
+                const userIdx = assistantIdx - 1
+                const user = current[userIdx]
+                const assistant = current[assistantIdx]
+                if (user?.role !== "user" || assistant?.role !== "assistant") return current
+                const updatedUser = saveAssistantOnActiveVersion(user, assistant.content)
+                return current.map((m, i) => (i === userIdx ? updatedUser : m))
+              })()
+              let next = withMessageProposals(withVersion, assistantId, meta?.proposals)
+              next = next.map((m) => (m.id === assistantId ? applyCoraChatMeta(m, meta) : m))
+              const toolPayload = pendingToolCacheRef.current
+              if (toolPayload && !meta?.scopeFeedback && !meta?.integrityBlock && !meta?.permissionDeny) {
+                pendingToolCacheRef.current = null
+                const assistant = next.find((m) => m.id === assistantId)
+                if (assistant?.content.trim()) {
+                  void setCachedToolResult(toolPayload.cacheKey, assistant.content, {
+                    sourceLabel: toolPayload.sourceLabel,
+                    courseId: session.courseId,
+                  })
+                }
               }
-            }
-            void flushThreadSave(withVersion, toolPayload?.threadTitle)
-            if (activeFlow === "study_plan") {
-              setChatFlow(null)
-            }
-            return withVersion
-          })
+              void flushThreadSave(next, toolPayload?.threadTitle)
+              if (activeFlow === "study_plan") {
+                setChatFlow(null)
+              }
+              return next
+            })
+          },
+          onError: (err) => {
+            streamAbortRef.current = null
+            setStreaming(false)
+            setStreamingMessageId(null)
+            const message =
+              err.includes("data:") || err.includes("Streaming unavailable")
+                ? `${CORA_NAME} couldn't complete that request. Please try again.`
+                : err
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === assistantId
+                  ? { ...m, content: m.content || message, permissionDeny: true }
+                  : m,
+              ),
+            )
+          },
+          onAborted: () => handleStreamAborted(assistantId),
         },
-        onError: (err) => {
-          streamAbortRef.current = null
-          setStreaming(false)
-          setStreamingMessageId(null)
-          const message =
-            err.includes("data:") || err.includes("Streaming unavailable")
-              ? `${CORA_NAME} couldn't complete that request. Please try again.`
-              : err
-          setMessages((prev) =>
-            prev.map((m) => (m.id === assistantId ? { ...m, content: m.content || message } : m)),
-          )
+        {
+          problemContext,
+          studentContext: platformContext,
+          useAgent: true,
+          learningMemory,
+          chatConfig,
+          prepared,
+          signal,
+          threadId,
+          confirmExpensiveTask: opts.confirmExpensiveTask,
+          confirmScopeRelated: opts.confirmScopeRelated ?? scopeRetry?.confirm,
+          declaredAcademicContext:
+            opts.declaredAcademicContext ?? scopeRetry?.context ?? null,
+          onNeedsExpensiveConfirm: (payload: CoraExpensiveTaskPayload) => {
+            streamAbortRef.current = null
+            setStreaming(false)
+            setStreamingMessageId(null)
+            const confirmMsg =
+              payload.response?.trim() ||
+              `Large Cora task — estimated ${payload.estimateLow}–${payload.estimateHigh} credits (you have ${payload.creditsRemaining}). Confirm to continue.`
+            setMessages((prev) =>
+              prev.map((m) => (m.id === assistantId ? { ...m, content: confirmMsg } : m)),
+            )
+            AppAlert.alert("Confirm large task", confirmMsg.replace(/\*\*/g, ""), [
+              { text: "Cancel", style: "cancel" },
+              {
+                text: "Continue",
+                onPress: () => {
+                  setMessages((prev) =>
+                    prev.map((m) => (m.id === assistantId ? { ...m, content: "" } : m)),
+                  )
+                  setStreaming(true)
+                  setStreamingMessageId(assistantId)
+                  const retryController = new AbortController()
+                  streamAbortRef.current = retryController
+                  void runStream({
+                    confirmExpensiveTask: true,
+                    signal: retryController.signal,
+                  })
+                },
+              },
+            ])
+          },
         },
-        onAborted: () => handleStreamAborted(assistantId),
-      },
-      {
-        problemContext,
-        studentContext: platformContext,
-        useAgent: true,
-        learningMemory,
-        chatConfig,
-        prepared,
-        signal: streamController.signal,
-      },
+      )
+    }
+
+    await runStream()
+  }
+
+  const handleScopeFeedbackRelated = async (messageId: string, note: string | null) => {
+    if (!session || streaming) return
+    const assistant = messages.find((m) => m.id === messageId)
+    const feedback = assistant?.scopeFeedback
+    if (!feedback) return
+    try {
+      const result = await submitCoraScopeFeedback({
+        role: "student",
+        session,
+        related: true,
+        eventId: feedback.eventId,
+        note,
+      })
+      setMessages((prev) =>
+        prev.map((m) => (m.id === messageId ? { ...m, scopeFeedback: null } : m)),
+      )
+      if (result.allowRetry) {
+        scopeRetryRef.current = { confirm: true, context: note }
+        void sendMessage(feedback.originalMessage)
+      }
+    } catch {
+      AppAlert.alert("Could not send feedback", "Try again in a moment.")
+    }
+  }
+
+  const handleScopeFeedbackNotRelated = async (messageId: string) => {
+    if (!session) return
+    const assistant = messages.find((m) => m.id === messageId)
+    const feedback = assistant?.scopeFeedback
+    if (!feedback) return
+    try {
+      await submitCoraScopeFeedback({
+        role: "student",
+        session,
+        related: false,
+        eventId: feedback.eventId,
+      })
+    } catch {
+      /* ignore */
+    }
+    setMessages((prev) =>
+      prev.map((m) => (m.id === messageId ? { ...m, scopeFeedback: null } : m)),
     )
   }
 
@@ -906,14 +1068,17 @@ export function AiTutorScreen() {
             prev.map((m) => (m.id === assistantId ? { ...m, content: m.content + chunk } : m)),
           )
         },
-        onDone: () => {
+        onDone: (meta) => {
           streamAbortRef.current = null
           setStreaming(false)
           setStreamingMessageId(null)
           void loadData()
           setMessages((current) => {
-            void flushThreadSave(current)
-            return current
+            const withProposals = withMessageProposals(current, assistantId, meta?.proposals).map((m) =>
+              m.id === assistantId ? applyCoraChatMeta(m, meta) : m,
+            )
+            void flushThreadSave(withProposals)
+            return withProposals
           })
         },
         onError: (err) => {
@@ -937,9 +1102,10 @@ export function AiTutorScreen() {
         learningMemory,
         prepared,
         signal: streamController.signal,
+        threadId: activeThreadId,
       },
     )
-  }, [session, streaming, messages, loadData, flushThreadSave, maxExchanges, prepareNewChat, learningMemory, resolveCoraPlatformContext, membershipTier, handleStreamAborted])
+  }, [session, streaming, messages, loadData, flushThreadSave, maxExchanges, prepareNewChat, learningMemory, resolveCoraPlatformContext, membershipTier, handleStreamAborted, activeThreadId])
 
   const editUserMessage = useCallback(
     (message: ChatMessage) => {
@@ -1014,13 +1180,37 @@ export function AiTutorScreen() {
   const resumeThread = useCallback(
     (thread: AiTutorChatThread) => {
       if (streaming) return
-      setMessages(thread.messages)
-      setActiveThreadId(thread.id)
+
+      const currentId = activeThreadIdRef.current
+      const currentMessages = messagesRef.current
+      const switchingAway = Boolean(currentId && currentId !== thread.id)
+
+      const fresh =
+        threadsRef.current.find((entry) => entry.id === thread.id) ??
+        archivedThreadsRef.current.find((entry) => entry.id === thread.id) ??
+        thread
+
+      setActiveThreadId(fresh.id)
+      setMessages(fresh.messages)
       if (session) {
-        void saveSessionPrefs(session.databaseId, { activeThreadId: thread.id, activeTab: "workspace" })
+        void saveSessionPrefs(session.databaseId, { activeThreadId: fresh.id, activeTab: "workspace" })
       }
+
+      if (!session || !switchingAway) return
+
+      const meaningful = currentMessages.filter(isStorableChatMessage)
+      if (meaningful.length === 0) return
+
+      const existing = threadsRef.current.find((entry) => entry.id === currentId)
+      const currentThread = applyPendingCapability(buildThread(currentId!, currentMessages, existing))
+      InteractionManager.runAfterInteractions(() => {
+        void saveThread(session.databaseId, currentThread).then((next) => {
+          setThreads(next)
+          scheduleRemoteSync(next)
+        })
+      })
     },
-    [streaming, session],
+    [streaming, session, applyPendingCapability, scheduleRemoteSync],
   )
 
   const handleNewConversation = useCallback(async () => {
@@ -1050,6 +1240,54 @@ export function AiTutorScreen() {
       },
     ])
   }, [streaming, messages.length, prepareNewChat])
+
+  const confirmProposal = useCallback(
+    async (messageId: string, proposal: CoraActionProposal) => {
+      if (!session) return
+      const current = messages.find((m) => m.id === messageId)
+      if (!isProposalConfirmable(current, proposal.actionId)) return
+      setMessages((prev) => markProposalConfirming(prev, messageId, proposal.actionId))
+      try {
+        const result = isLocalCoraProposal(proposal)
+          ? await executeLocalCoraProposal(proposal, { role: "student", session })
+          : await confirmStudentCoraAction(session, proposal)
+
+        setMessages((prev) => {
+          const next = markProposalResult(prev, messageId, proposal.actionId, result)
+          void flushThreadSave(next)
+          return next
+        })
+
+        if (result.success) {
+          void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+        } else {
+          AppAlert.alert("Could not complete", result.message || result.error || "Action failed.")
+        }
+      } catch (err) {
+        setMessages((prev) => {
+          const next = markProposalError(prev, messageId, proposal.actionId)
+          void flushThreadSave(next)
+          return next
+        })
+        AppAlert.alert(
+          "Could not complete",
+          err instanceof Error ? err.message : "Action failed.",
+        )
+      }
+    },
+    [session, flushThreadSave, messages],
+  )
+
+  const cancelProposal = useCallback(
+    (messageId: string, proposalId: string) => {
+      setMessages((prev) => {
+        const next = removeProposal(prev, messageId, proposalId)
+        void flushThreadSave(next)
+        return next
+      })
+    },
+    [flushThreadSave],
+  )
 
   const openWorkspaceWithNewChat = useCallback(
     async (prompt: string, flow: CoraChatFlow | null = null, autoSend = true) => {
@@ -1187,8 +1425,15 @@ export function AiTutorScreen() {
         ])
         return
       }
-      if (credits && !credits.isUnlimited && credits.credits <= 0) {
-        AppAlert.alert("No credits left", `You've used your weekly ${CORA_NAME} credits. Upgrade or wait for reset.`)
+      if (credits?.coraMode === "lite" || (credits && credits.credits <= 0)) {
+        AppAlert.alert(
+          "Cora Lite",
+          `Premium tools need ${CORA_NAME} credits. Buy a pack or wait for your monthly refresh.`,
+          [
+            { text: "Not now", style: "cancel" },
+            { text: "View packs", onPress: () => router.push("/membership" as never) },
+          ],
+        )
         return
       }
 
@@ -1223,12 +1468,14 @@ export function AiTutorScreen() {
       persistTab("workspace")
       setActiveThreadId(toolThreadId)
 
+      const stamp = new Date().toISOString()
       const userMsg: ChatMessage = {
         id: `${Date.now()}`,
         role: "user",
         content: payload.sourceLabel
           ? `${payload.userMessage}\n\n— ${payload.sourceLabel}`
           : payload.userMessage,
+        createdAt: stamp,
       }
 
       if (payload.cachedResult?.trim()) {
@@ -1236,6 +1483,7 @@ export function AiTutorScreen() {
           id: `${Date.now() + 1}`,
           role: "assistant",
           content: payload.cachedResult.trim(),
+          createdAt: stamp,
         }
         const msgs = [...priorMessages, userMsg, assistantMsg]
         setMessages(msgs)
@@ -1307,14 +1555,17 @@ export function AiTutorScreen() {
               prev.map((m) => (m.id === assistantId ? { ...m, content: m.content + chunk } : m)),
             )
           },
-          onDone: () => {
+          onDone: (meta) => {
             streamAbortRef.current = null
             setStreaming(false)
             setStreamingMessageId(null)
             void loadData()
             setMessages((current) => {
+              const withProposals = withMessageProposals(current, assistantId, meta?.proposals).map((m) =>
+                m.id === assistantId ? applyCoraChatMeta(m, meta) : m,
+              )
               const toolPayload = pendingToolCacheRef.current
-              const assistant = current.find((m) => m.id === assistantId)
+              const assistant = withProposals.find((m) => m.id === assistantId)
               if (toolPayload && assistant?.content.trim()) {
                 pendingToolCacheRef.current = null
                 void setCachedToolResult(toolPayload.cacheKey, assistant.content, {
@@ -1324,10 +1575,10 @@ export function AiTutorScreen() {
               }
               const isNewToolThread = !existingToolThread
               void flushThreadSave(
-                current,
+                withProposals,
                 isNewToolThread ? getToolThreadTitle(payload.toolId) : undefined,
               )
-              return current
+              return withProposals
             })
           },
           onError: (err) => {
@@ -1351,6 +1602,7 @@ export function AiTutorScreen() {
           learningMemory,
           prepared,
           signal: streamController.signal,
+          threadId: activeThreadId,
         },
       )
     },
@@ -1373,6 +1625,7 @@ export function AiTutorScreen() {
       learningMemory,
       resolveCoraPlatformContext,
       handleStreamAborted,
+      activeThreadId,
     ],
   )
 
@@ -1393,7 +1646,7 @@ export function AiTutorScreen() {
       )
       setThreads(next)
       setArchivedThreads(nextArchived)
-      scheduleRemoteSync(next)
+      scheduleRemoteSync(next, nextArchived)
       if (activeThreadId === threadId) {
         setMessages([])
         setActiveThreadId(null)
@@ -1412,7 +1665,7 @@ export function AiTutorScreen() {
       )
       setThreads(next)
       setArchivedThreads(nextArchived)
-      scheduleRemoteSync(next)
+      scheduleRemoteSync(next, nextArchived)
     },
     [session, scheduleRemoteSync],
   )
@@ -1426,7 +1679,7 @@ export function AiTutorScreen() {
       )
       setThreads(next)
       setArchivedThreads(nextArchived)
-      scheduleRemoteSync(next)
+      scheduleRemoteSync(next, nextArchived)
     },
     [session, scheduleRemoteSync],
   )
@@ -1440,7 +1693,7 @@ export function AiTutorScreen() {
       )
       setThreads(next)
       setArchivedThreads(nextArchived)
-      scheduleRemoteSync(next)
+      scheduleRemoteSync(next, nextArchived)
       void deleteWorkspaceConversation(session, threadId).catch(() => {
         /* best-effort remote delete */
       })
@@ -1596,6 +1849,8 @@ export function AiTutorScreen() {
             <StudentCoraHubView
               session={session}
               creditsLabel={creditsLabel}
+              creditsSubtitle={creditsSubtitle}
+              onCreditsPress={() => router.push("/membership" as never)}
               recommendations={todayRecommendations}
               loading={loading}
               refreshing={refreshing}
@@ -1667,10 +1922,14 @@ export function AiTutorScreen() {
           onSend={(text, meta) => void sendMessage(text, meta)}
           onStop={stopStreaming}
           onRegenerate={() => void regenerateLastResponse()}
+          onScopeFeedbackRelated={(messageId, note) => void handleScopeFeedbackRelated(messageId, note)}
+          onScopeFeedbackNotRelated={(messageId) => void handleScopeFeedbackNotRelated(messageId)}
           onBranchChat={(message) => void branchFromMessage(message)}
           onEditUserMessage={editUserMessage}
           onReattachImport={(message, problem, label) => void reattachImportToMessage(message, problem, label)}
           onNavigateUserMessageVersion={navigateUserMessageVersion}
+          onConfirmProposal={(messageId, proposal) => void confirmProposal(messageId, proposal)}
+          onCancelProposal={cancelProposal}
           onBack={exitImmersiveChat}
           onNewFromChat={handleNewFromChat}
         />

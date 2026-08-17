@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { AppAlert } from '../../lib/app-alert'
 import { Ionicons } from "@/components/icons/AppIcon"
 import { ApiError } from "../../lib/api"
@@ -17,16 +17,37 @@ import {
   parseTradeCenterConfig,
   pointsPerEngagementCredit,
   rowMatchesTradeSearch,
-  TRADE_SOURCE_LABELS,
+  transactionMatchesTrader,
+  isTradeCenterDevFixtureId,
+  isTradeCenterRequestPending,
+  parseTradeCenterRequestRow,
+  parseTradeCenterRolloverRow,
+  rolloverTradeListDescription,
+  rolloverTradeListMeta,
+  buildTradeLogSections,
+  tradeLogRowDescription,
+  tradeLogRowStatus,
+  tradeLogRowTitle,
+  tradeLogRowWhen,
+  tradeLogSectionTitle,
+  type TradeLogSectionKey,
+  type TradeCenterRequestKind,
+  type TradeCenterRolloverTradeView,
   type TradeCenterConfig,
 } from "../../lib/faculty-trade-center-utils"
 import { studentInitials } from "../../lib/faculty-students-utils"
 import type { useFacultyScope } from "../../hooks/useFacultyScope"
 import { NativeSwitch } from "../NativeSwitch"
 import { FacultyEmptyState, FacultyStatusPill } from "./faculty-shared"
-import { FacultyAdaptiveSegmentNav } from "./faculty-module-shell"
 import { NATIVE, SYSTEM } from "../../constants/faculty-native-theme"
 import { useModuleTheme } from "../../lib/themed-module-shell"
+import { NativeSelect } from "../NativeSelect"
+import {
+  TRADE_CAP_OPTIONS,
+  TRADE_MAX_EC_OPTIONS,
+  TRADE_WEIGHT_OPTIONS,
+  withCurrentOption,
+} from "./FacultyNativePickers"
 import {
   FACULTY_TRADE_CENTER_COLOR,
   facultyTradeCenterDonationThumb,
@@ -36,6 +57,9 @@ import {
   tradeCenterHistoryTheme,
 } from "../../lib/faculty-trade-center-theme"
 import { FacultySignatureListCard } from "./FacultyCollabListCards"
+import { FacultyTradeCenterTraderSheet } from "./FacultyTradeCenterTraderSheet"
+import { FacultyTradeCenterDonationActionSheet } from "./FacultyTradeCenterDonationActionSheet"
+import { FacultyTradeCenterRolloverActionSheet } from "./FacultyTradeCenterRolloverActionSheet"
 import { SolidListThumbTile } from "../theme/SolidListThumbTile"
 
 type Scope = NonNullable<ReturnType<typeof useFacultyScope>["scope"]>
@@ -151,16 +175,18 @@ function traderMatchesSearch(trader: TradeCenterTrader, query: string): boolean 
 export function TradeCenterTraderRow({
   trader,
   showEc,
+  onPress,
 }: {
   trader: TradeCenterTrader
   showEc?: boolean
+  onPress?: () => void
 }) {
   const { native, type } = useModuleTheme()
   const ec = trader.engagement_credits ?? 0
   const points = trader.total_points ?? 0
   const thumb = facultyTradeCenterTraderThumb(trader.id ?? trader.full_name)
 
-  return (
+  const row = (
     <View style={localStyles.traderRow}>
       <SolidListThumbTile thumb={thumb} size="compact">
         <Text style={[type.caption, localStyles.avatarText, { color: thumb.icon }]}>
@@ -189,7 +215,22 @@ export function TradeCenterTraderRow({
           </>
         )}
       </View>
+      {onPress ? <Ionicons name="chevron-forward" size={18} color={native.tertiaryLabel} /> : null}
     </View>
+  )
+
+  if (!onPress) return row
+
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${trader.full_name}, view trade details`}
+      android_ripple={{ color: `${native.label}14`, borderless: false }}
+      style={({ pressed }) => [{ opacity: pressed ? 0.88 : 1 }]}
+    >
+      {row}
+    </Pressable>
   )
 }
 
@@ -284,35 +325,27 @@ function ConfigField({
   label,
   hint,
   value,
-  onChangeText,
-  keyboardType = "decimal-pad",
+  options,
+  onChange,
 }: {
   label: string
   hint?: string
   value: string
-  onChangeText: (v: string) => void
-  keyboardType?: "decimal-pad" | "number-pad"
+  options: { value: string; label: string }[]
+  onChange: (v: string) => void
 }) {
   const { native, type } = useModuleTheme()
   return (
     <View style={localStyles.configField}>
-      <Text style={[type.body, { color: native.label }]}>{label}</Text>
       {hint ? (
         <Text style={[type.caption, { color: native.tertiaryLabel, lineHeight: 17 }]}>{hint}</Text>
       ) : null}
-      <TextInput
+      <NativeSelect
+        label={label}
+        placeholder={value}
         value={value}
-        onChangeText={onChangeText}
-        keyboardType={keyboardType}
-        placeholderTextColor={native.tertiaryLabel}
-        style={[
-          localStyles.configInput,
-          {
-            color: native.label,
-            borderColor: native.separator,
-            backgroundColor: native.secondaryGrouped,
-          },
-        ]}
+        options={withCurrentOption(options, value)}
+        onChange={onChange}
       />
     </View>
   )
@@ -401,23 +434,24 @@ export function TradeCenterConfigPanel({
           label="EC conversion multiplier"
           hint={`${ptsPerEc} pts → 1 EC at current multiplier`}
           value={String(draft.ec_conversion_multiplier)}
-          onChangeText={(v) =>
+          options={TRADE_WEIGHT_OPTIONS}
+          onChange={(v) =>
             setDraft((c) => ({ ...c, ec_conversion_multiplier: Number(v) || c.ec_conversion_multiplier }))
           }
         />
         <ConfigField
           label="Max engagement credits"
           value={String(draft.max_engagement_credits)}
-          keyboardType="number-pad"
-          onChangeText={(v) =>
+          options={TRADE_MAX_EC_OPTIONS}
+          onChange={(v) =>
             setDraft((c) => ({ ...c, max_engagement_credits: parseInt(v, 10) || c.max_engagement_credits }))
           }
         />
         <ConfigField
           label="Minimum donation points"
           value={String(draft.min_donation_points)}
-          keyboardType="number-pad"
-          onChangeText={(v) =>
+          options={TRADE_CAP_OPTIONS}
+          onChange={(v) =>
             setDraft((c) => ({ ...c, min_donation_points: parseInt(v, 10) || c.min_donation_points }))
           }
         />
@@ -430,39 +464,42 @@ export function TradeCenterConfigPanel({
         <ConfigField
           label="Practice weight"
           value={String(draft.practice_weight)}
-          onChangeText={(v) => setDraft((c) => ({ ...c, practice_weight: Number(v) || c.practice_weight }))}
+          options={TRADE_WEIGHT_OPTIONS}
+          onChange={(v) => setDraft((c) => ({ ...c, practice_weight: Number(v) || c.practice_weight }))}
         />
         <ConfigField
           label="Playground weight"
           value={String(draft.playground_weight)}
-          onChangeText={(v) => setDraft((c) => ({ ...c, playground_weight: Number(v) || c.playground_weight }))}
+          options={TRADE_WEIGHT_OPTIONS}
+          onChange={(v) => setDraft((c) => ({ ...c, playground_weight: Number(v) || c.playground_weight }))}
         />
         <ConfigField
           label="Reading weight"
           value={String(draft.reading_weight)}
-          onChangeText={(v) => setDraft((c) => ({ ...c, reading_weight: Number(v) || c.reading_weight }))}
+          options={TRADE_WEIGHT_OPTIONS}
+          onChange={(v) => setDraft((c) => ({ ...c, reading_weight: Number(v) || c.reading_weight }))}
         />
         <ConfigField
           label="Weekly practice cap"
           value={String(draft.weekly_practice_cap)}
-          keyboardType="number-pad"
-          onChangeText={(v) =>
+          options={TRADE_CAP_OPTIONS}
+          onChange={(v) =>
             setDraft((c) => ({ ...c, weekly_practice_cap: parseInt(v, 10) || c.weekly_practice_cap }))
           }
         />
         <ConfigField
           label="Weekly playground cap"
           value={String(draft.weekly_playground_cap)}
-          keyboardType="number-pad"
-          onChangeText={(v) =>
+          options={TRADE_CAP_OPTIONS}
+          onChange={(v) =>
             setDraft((c) => ({ ...c, weekly_playground_cap: parseInt(v, 10) || c.weekly_playground_cap }))
           }
         />
         <ConfigField
           label="Weekly reading cap"
           value={String(draft.weekly_reading_cap)}
-          keyboardType="number-pad"
-          onChangeText={(v) =>
+          options={TRADE_CAP_OPTIONS}
+          onChange={(v) =>
             setDraft((c) => ({ ...c, weekly_reading_cap: parseInt(v, 10) || c.weekly_reading_cap }))
           }
         />
@@ -518,10 +555,15 @@ export function TradeCenterAnalyticsPanel({
   search: string
 }) {
   const { styles: moduleStyles, native, type } = useModuleTheme()
+  const [selectedTrader, setSelectedTrader] = useState<TradeCenterTrader | null>(null)
   const traders = useMemo(
     () => (analytics?.topTraders ?? []).filter((t) => traderMatchesSearch(t, search)),
     [analytics?.topTraders, search],
   )
+  const selectedTransactions = useMemo(() => {
+    if (!selectedTrader) return []
+    return (analytics?.transactions ?? []).filter((row) => transactionMatchesTrader(selectedTrader, row))
+  }, [analytics?.transactions, selectedTrader])
 
   if (!analytics) {
     return (
@@ -548,19 +590,32 @@ export function TradeCenterAnalyticsPanel({
   }
 
   return (
-    <View style={moduleStyles.card}>
-      <Text style={[type.caption, localStyles.sectionLabel, { color: native.secondaryLabel }]}>
-        Top traders by EC
-      </Text>
-      {traders.map((trader, index) => (
-        <View
-          key={trader.id}
-          style={index > 0 ? [localStyles.rowDivider, { borderTopColor: native.separator }] : undefined}
-        >
-          <TradeCenterTraderRow trader={trader} showEc />
-        </View>
-      ))}
-    </View>
+    <>
+      <View style={moduleStyles.card}>
+        <Text style={[type.caption, localStyles.sectionLabel, { color: native.secondaryLabel }]}>
+          Top traders by EC
+        </Text>
+        {traders.map((trader, index) => (
+          <View
+            key={trader.id}
+            style={index > 0 ? [localStyles.rowDivider, { borderTopColor: native.separator }] : undefined}
+          >
+            <TradeCenterTraderRow
+              trader={trader}
+              showEc
+              onPress={() => setSelectedTrader(trader)}
+            />
+          </View>
+        ))}
+      </View>
+
+      <FacultyTradeCenterTraderSheet
+        visible={selectedTrader != null}
+        trader={selectedTrader}
+        transactions={selectedTransactions}
+        onClose={() => setSelectedTrader(null)}
+      />
+    </>
   )
 }
 
@@ -577,20 +632,15 @@ function RequestCard({
   subtitle,
   status,
   meta,
-  onApprove,
-  onReject,
-  busy,
+  onPress,
 }: {
   title: string
   subtitle: string
   status: string
   meta?: string
-  onApprove?: () => void
-  onReject?: () => void
-  busy?: boolean
+  onPress: () => void
 }) {
-  const { native, tokens, type } = useModuleTheme()
-  const pending = status.toLowerCase().includes("pending")
+  const pending = isTradeCenterRequestPending(status)
   const thumb = facultyTradeCenterDonationThumb()
 
   return (
@@ -600,42 +650,12 @@ function RequestCard({
       title={title}
       description={subtitle}
       metaLine={meta}
+      onPress={onPress}
       status={{
         label: humanizeTradeStatus(status),
         color: facultyTradeCenterRequestStatusColor(status),
         icon: pending ? "time-outline" : status.toLowerCase().includes("reject") ? "close-circle-outline" : "checkmark-circle",
       }}
-      footer={
-        pending && onApprove && onReject ? (
-          <View style={localStyles.actionRow}>
-            <Pressable
-              style={({ pressed }) => [
-                localStyles.actionBtn,
-                { borderColor: native.separator, opacity: pressed || busy ? 0.7 : 1 },
-              ]}
-              disabled={busy}
-              onPress={onReject}
-            >
-              <Text style={[type.caption, { color: tokens.danger, fontWeight: "700" }]}>Reject</Text>
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [
-                localStyles.actionBtn,
-                localStyles.actionBtnPrimary,
-                { backgroundColor: FACULTY_TRADE_CENTER_COLOR.action, opacity: pressed || busy ? 0.85 : 1 },
-              ]}
-              disabled={busy}
-              onPress={onApprove}
-            >
-              {busy ? (
-                <ActivityIndicator color="#fff" size="small" />
-              ) : (
-                <Text style={[type.caption, { color: "#fff", fontWeight: "700" }]}>Approve</Text>
-              )}
-            </Pressable>
-          </View>
-        ) : undefined
-      }
     />
   )
 }
@@ -647,6 +667,7 @@ export function TradeCenterDonationsPanel({
   loading,
   search,
   onChanged,
+  onDevFixtureUpdated,
 }: {
   scope: Scope
   donations: Array<Record<string, unknown>>
@@ -654,9 +675,11 @@ export function TradeCenterDonationsPanel({
   loading: boolean
   search: string
   onChanged: () => void
+  onDevFixtureUpdated?: (id: number, patch: Record<string, unknown>) => void
 }) {
-  const { tokens } = useModuleTheme()
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [selectedKind, setSelectedKind] = useState<TradeCenterRequestKind | null>(null)
+  const [selectedRow, setSelectedRow] = useState<Record<string, unknown> | null>(null)
 
   const filteredDonations = useMemo(
     () => donations.filter((row) => rowMatchesTradeSearch(row, search)),
@@ -667,24 +690,65 @@ export function TradeCenterDonationsPanel({
     [pointRequests, search],
   )
 
-  async function act(kind: "donation" | "point", id: number, action: "approve" | "reject") {
+  function openRequest(kind: TradeCenterRequestKind, row: Record<string, unknown>) {
+    setSelectedKind(kind)
+    setSelectedRow(row)
+  }
+
+  function closeRequest() {
+    setSelectedKind(null)
+    setSelectedRow(null)
+  }
+
+  async function act(kind: TradeCenterRequestKind, id: number, action: "approve" | "reject", reason?: string) {
     const key = `${kind}-${id}-${action}`
     setBusyId(key)
     try {
+      if (__DEV__ && isTradeCenterDevFixtureId(id)) {
+        const resolvedStatus =
+          kind === "point"
+            ? action === "approve"
+              ? "approved_by_instructor"
+              : "rejected_by_instructor"
+            : action === "approve"
+              ? "approved"
+              : "rejected"
+        onDevFixtureUpdated?.(id, {
+          status: resolvedStatus,
+          reviewed_at: new Date().toISOString(),
+          instructor_responded_at: new Date().toISOString(),
+          ...(action === "reject" ? { rejection_reason: reason ?? "Rejected by instructor" } : {}),
+        })
+        closeRequest()
+        AppAlert.alert(
+          action === "approve" ? "Approved" : "Declined",
+          "Simulator QA request updated locally.",
+        )
+        return
+      }
       if (kind === "donation") {
         if (action === "approve") await instructorApi.approveTradeCenterDonation(scope, id)
-        else await instructorApi.rejectTradeCenterDonation(scope, id)
+        else await instructorApi.rejectTradeCenterDonation(scope, id, reason)
       } else {
         if (action === "approve") await instructorApi.approveTradeCenterPointRequest(scope, id)
-        else await instructorApi.rejectTradeCenterPointRequest(scope, id)
+        else await instructorApi.rejectTradeCenterPointRequest(scope, id, reason)
       }
+      closeRequest()
       onChanged()
+      AppAlert.alert(
+        action === "approve" ? "Approved" : "Declined",
+        action === "approve" ? "The request was approved." : "The request was declined.",
+      )
     } catch (err) {
       AppAlert.alert("Action failed", err instanceof ApiError ? err.message : "Could not update request.")
     } finally {
       setBusyId(null)
     }
   }
+
+  const selectedRequest =
+    selectedKind && selectedRow ? parseTradeCenterRequestRow(selectedKind, selectedRow) : null
+  const acting = selectedRequest ? busyId != null : false
 
   if (loading) {
     return <ActivityIndicator color={FACULTY_TRADE_CENTER_COLOR.link} style={localStyles.loader} />
@@ -694,55 +758,100 @@ export function TradeCenterDonationsPanel({
     return (
       <FacultyEmptyState
         icon="gift-outline"
-        title={search.trim() ? "No matches" : "No pending requests"}
+        title={search.trim() ? "No matches" : "No donation requests"}
         body={
           search.trim()
             ? "Try a different search term."
-            : "Donation and point requests awaiting your review will appear here."
+            : "Pending donation and point requests appear first. Recently reviewed requests stay visible for 90 days."
         }
       />
     )
   }
 
   return (
-    <View style={localStyles.panelGap}>
-      {filteredDonations.map((row) => {
-        const id = Number(row.id)
-        const source = TRADE_SOURCE_LABELS[String(row.source ?? row.point_source ?? "")] ?? String(row.source ?? "")
-        return (
-          <RequestCard
-            key={`donation-${id}`}
-            title={String(row.student_name ?? row.donor_name ?? "Student")}
-            subtitle={`${row.points ?? row.amount ?? 0} pts · ${source}`}
-            status={String(row.status ?? "pending")}
-            meta={row.recipient_name ? `To ${row.recipient_name}` : undefined}
-            onApprove={() => void act("donation", id, "approve")}
-            onReject={() => void act("donation", id, "reject")}
-            busy={busyId?.startsWith(`donation-${id}`) ?? false}
-          />
-        )
-      })}
-      {filteredPoints.map((row) => {
-        const id = Number(row.id)
-        const source = TRADE_SOURCE_LABELS[String(row.source ?? row.point_source ?? "")] ?? String(row.source ?? "")
-        return (
-          <RequestCard
-            key={`point-${id}`}
-            title={String(row.student_name ?? row.requester_name ?? "Student")}
-            subtitle={`${row.points ?? row.amount ?? 0} pts · ${source}`}
-            status={String(row.status ?? "pending")}
-            meta={row.reason ? String(row.reason) : "Peer-approved point request"}
-            onApprove={() => void act("point", id, "approve")}
-            onReject={() => void act("point", id, "reject")}
-            busy={busyId?.startsWith(`point-${id}`) ?? false}
-          />
-        )
-      })}
-    </View>
+    <>
+      <View style={localStyles.panelGap}>
+        {filteredDonations.map((row) => {
+          const view = parseTradeCenterRequestRow("donation", row)
+          return (
+            <RequestCard
+              key={`donation-${view.id}`}
+              title={view.title}
+              subtitle={view.subtitle}
+              status={view.status}
+              meta={view.meta}
+              onPress={() => openRequest("donation", row)}
+            />
+          )
+        })}
+        {filteredPoints.map((row) => {
+          const view = parseTradeCenterRequestRow("point", row)
+          return (
+            <RequestCard
+              key={`point-${view.id}`}
+              title={view.title}
+              subtitle={view.subtitle}
+              status={view.status}
+              meta={view.meta}
+              onPress={() => openRequest("point", row)}
+            />
+          )
+        })}
+      </View>
+
+      <FacultyTradeCenterDonationActionSheet
+        visible={selectedRequest != null}
+        kind={selectedKind}
+        row={selectedRow}
+        acting={acting}
+        onClose={closeRequest}
+        onApprove={() => {
+          if (!selectedRequest) return
+          void act(selectedRequest.kind, selectedRequest.id, "approve")
+        }}
+        onReject={(reason) => {
+          if (!selectedRequest) return
+          void act(selectedRequest.kind, selectedRequest.id, "reject", reason)
+        }}
+      />
+    </>
   )
 }
 
-type TradeLogSegment = "transactions" | "rollovers" | "donations" | "points"
+const TRADE_LOG_SECTION_ICONS: Record<
+  TradeLogSectionKey,
+  keyof typeof Ionicons.glyphMap
+> = {
+  transactions: "swap-horizontal-outline",
+  rollovers: "refresh-outline",
+  donationRequests: "gift-outline",
+  pointRequests: "hand-left-outline",
+}
+
+function tradeLogSectionThumb(key: TradeLogSectionKey, row: Record<string, unknown>) {
+  switch (key) {
+    case "transactions":
+      return facultyTradeCenterTraderThumb(String(row.student_id ?? row.id ?? row.summary ?? "trade"))
+    case "rollovers":
+      return facultyTradeCenterTraderThumb(String(row.student_id ?? row.student_name ?? "rollover"))
+    case "donationRequests":
+      return facultyTradeCenterDonationThumb()
+    case "pointRequests":
+      return facultyTradeCenterTraderThumb(String(row.requester_id ?? row.id ?? "point"))
+    default:
+      return facultyTradeCenterDonationThumb()
+  }
+}
+
+function TradeLogSectionHeader({ title, count }: { title: string; count: number }) {
+  const { native, type } = useModuleTheme()
+  return (
+    <View style={localStyles.logSectionHeader}>
+      <Text style={[type.sectionHeader, localStyles.sectionLabel, { color: native.secondaryLabel }]}>{title}</Text>
+      <Text style={[type.caption, { color: native.tertiaryLabel, fontWeight: "700" }]}>{count}</Text>
+    </View>
+  )
+}
 
 export function TradeCenterTradeLogPanel({
   tradeLog,
@@ -753,76 +862,59 @@ export function TradeCenterTradeLogPanel({
   loading: boolean
   search: string
 }) {
-  const { styles: moduleStyles, native, tokens, type } = useModuleTheme()
-  const [segment, setSegment] = useState<TradeLogSegment>("transactions")
-
-  const rows = useMemo(() => {
-    const key =
-      segment === "transactions"
-        ? "transactions"
-        : segment === "rollovers"
-          ? "rollovers"
-          : segment === "donations"
-            ? "donationRequests"
-            : "pointRequests"
-    return (tradeLog?.[key] ?? []).filter((row) => rowMatchesTradeSearch(row, search))
-  }, [tradeLog, segment, search])
+  const sections = useMemo(() => buildTradeLogSections(tradeLog, search), [tradeLog, search])
 
   if (loading) {
     return <ActivityIndicator color={FACULTY_TRADE_CENTER_COLOR.link} style={localStyles.loader} />
   }
 
+  if (sections.length === 0) {
+    return (
+      <FacultyEmptyState
+        icon="list-outline"
+        title={search.trim() ? "No matches" : "No trade log entries"}
+        body={
+          search.trim()
+            ? "Try a different search term."
+            : "Trades, rollovers, donations, and point requests will appear here as grouped activity."
+        }
+      />
+    )
+  }
+
   return (
     <View style={localStyles.panelGap}>
-      <FacultyAdaptiveSegmentNav
-        tabs={[
-          { id: "transactions", label: "Trades" },
-          { id: "rollovers", label: "Rollovers" },
-          { id: "donations", label: "Donations" },
-          { id: "points", label: "Points" },
-        ]}
-        tab={segment}
-        onChange={setSegment}
-      />
-
-      {rows.length === 0 ? (
-        <FacultyEmptyState
-          icon="list-outline"
-          title="No log entries"
-          body="Trade activity for this filter will appear here."
-        />
-      ) : (
-        <View style={moduleStyles.card}>
-          {rows.map((row, index) => {
-            const title = String(
-              row.student_name ?? row.full_name ?? row.donor_name ?? row.type ?? row.action ?? "Activity",
-            )
-            const when = formatTradeLogWhen(row.created_at ?? row.timestamp ?? row.reviewed_at)
-            const status = String(row.status ?? row.type ?? "")
+      {sections.map((section) => (
+        <View key={section.key} style={localStyles.logSectionBlock}>
+          <TradeLogSectionHeader title={tradeLogSectionTitle(section.key)} count={section.rows.length} />
+          {section.rows.map((row, index) => {
+            const status = tradeLogRowStatus(row)
+            const pending = status ? isTradeCenterRequestPending(status) : false
             return (
-              <View
-                key={`log-${segment}-${index}-${String(row.id ?? title)}`}
-                style={index > 0 ? [localStyles.rowDivider, { borderTopColor: native.separator }] : undefined}
-              >
-                <View style={localStyles.logRow}>
-                  <View style={localStyles.logCopy}>
-                    <Text style={[type.bodyEmphasis, { color: native.label }]} numberOfLines={1}>
-                      {title}
-                    </Text>
-                    <Text style={[type.caption, { color: native.secondaryLabel, fontWeight: "600" }]}>
-                      {when}
-                      {row.points != null ? ` · ${row.points} pts` : ""}
-                    </Text>
-                  </View>
-                  {status ? (
-                    <FacultyStatusPill label={humanizeTradeStatus(status)} tone={requestStatusTone(status)} />
-                  ) : null}
-                </View>
-              </View>
+              <FacultySignatureListCard
+                key={`log-${section.key}-${String(row.id ?? index)}-${tradeLogRowWhen(row)}`}
+                thumb={tradeLogSectionThumb(section.key, row)}
+                icon={TRADE_LOG_SECTION_ICONS[section.key]}
+                title={tradeLogRowTitle(section.key, row)}
+                description={tradeLogRowDescription(section.key, row)}
+                status={
+                  status
+                    ? {
+                        label: humanizeTradeStatus(status),
+                        color: facultyTradeCenterRequestStatusColor(status),
+                        icon: pending
+                          ? "time-outline"
+                          : status.toLowerCase().includes("reject")
+                            ? "close-circle-outline"
+                            : "checkmark-circle",
+                      }
+                    : undefined
+                }
+              />
             )
           })}
         </View>
-      )}
+      ))}
     </View>
   )
 }
@@ -836,11 +928,26 @@ export function TradeCenterRolloverPanel({
   loading: boolean
   search: string
 }) {
-  const { styles: moduleStyles, native, tokens, type } = useModuleTheme()
-  const trades = useMemo(
-    () => (rollover?.trades ?? []).filter((row) => rowMatchesTradeSearch(row, search)),
-    [rollover?.trades, search],
-  )
+  const [selectedTrade, setSelectedTrade] = useState<TradeCenterRolloverTradeView | null>(null)
+  const { native } = useModuleTheme()
+
+  const trades = useMemo(() => {
+    const parsed = (rollover?.trades ?? []).map((row) =>
+      parseTradeCenterRolloverRow(row as Record<string, unknown>),
+    )
+    const q = search.trim().toLowerCase()
+    if (!q) return parsed
+    return parsed.filter((trade) =>
+      [
+        trade.studentName,
+        trade.studentNumber,
+        trade.section,
+        trade.quizTitle,
+        trade.sourceLabel,
+        trade.assessmentType,
+      ].some((field) => field.toLowerCase().includes(q)),
+    )
+  }, [rollover?.trades, search])
 
   if (loading) {
     return <ActivityIndicator color={FACULTY_TRADE_CENTER_COLOR.link} style={localStyles.loader} />
@@ -861,34 +968,37 @@ export function TradeCenterRolloverPanel({
   }
 
   return (
-    <View style={moduleStyles.card}>
-      {trades.map((row, index) => (
-        <View
-          key={`rollover-${String(row.id ?? index)}`}
-          style={index > 0 ? [localStyles.rowDivider, { borderTopColor: native.separator }] : undefined}
-        >
-          <View style={localStyles.logRow}>
-            <View style={localStyles.logCopy}>
-              <Text style={[type.bodyEmphasis, { color: native.label }]} numberOfLines={1}>
-                {String(row.student_name ?? row.full_name ?? "Student")}
-              </Text>
-              <Text style={[type.caption, { color: native.secondaryLabel, fontWeight: "600" }]}>
-                {row.section ? String(row.section) : "—"}
-                {row.points != null ? ` · ${row.points} pts` : ""}
-              </Text>
-              {row.reason || row.rollover_type ? (
-                <Text style={[type.caption, { color: FACULTY_TRADE_CENTER_COLOR.link, fontWeight: "600" }]}>
-                  {String(row.reason ?? row.rollover_type)}
-                </Text>
-              ) : null}
-            </View>
-            {row.status ? (
-              <FacultyStatusPill label={humanizeTradeStatus(String(row.status))} tone="live" />
-            ) : null}
-          </View>
-        </View>
-      ))}
-    </View>
+    <>
+      <View style={localStyles.panelGap}>
+        {trades.map((trade) => {
+          const thumb = facultyTradeCenterTraderThumb(trade.studentId || trade.studentName)
+          return (
+            <FacultySignatureListCard
+              key={`rollover-${trade.id}-${trade.studentId}-${trade.quizId}`}
+              thumb={thumb}
+              icon="refresh-outline"
+              title={trade.studentName}
+              description={rolloverTradeListDescription(trade)}
+              metaLine={rolloverTradeListMeta(trade)}
+              onPress={() => setSelectedTrade(trade)}
+              status={{
+                label: trade.isActive ? "Active" : "Expired",
+                color: trade.isActive
+                  ? facultyTradeCenterRequestStatusColor("approved")
+                  : native.tertiaryLabel,
+                icon: trade.isActive ? "checkmark-circle" : "time-outline",
+              }}
+            />
+          )
+        })}
+      </View>
+
+      <FacultyTradeCenterRolloverActionSheet
+        visible={selectedTrade != null}
+        trade={selectedTrade}
+        onClose={() => setSelectedTrade(null)}
+      />
+    </>
   )
 }
 
@@ -1075,7 +1185,13 @@ const localStyles = StyleSheet.create({
     paddingVertical: 10,
   },
   actionBtnPrimary: { borderWidth: 0 },
-  logRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 10 },
-  logCopy: { flex: 1, gap: 2 },
+  logSectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 4,
+    marginBottom: 8,
+  },
+  logSectionBlock: { gap: 10 },
   errorBox: { padding: 12 },
 })

@@ -116,9 +116,9 @@ export const FACULTY_MEMBERSHIP_FEATURE_MATRIX: FacultyMembershipFeatureRow[] = 
     id: "cora",
     label: "Cora Teaching Copilot",
     icon: "sparkles-outline",
-    free: "100 requests / semester",
-    pro: "Unlimited",
-    enterprise: "Unlimited",
+    free: "500 credits / semester",
+    pro: "15,000 credits / semester",
+    enterprise: "35,000 credits / semester",
   },
   {
     id: "ai-generators",

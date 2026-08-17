@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useKpiGridCardStyle } from "../../lib/responsive-layout"
-import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, FlatList, InteractionManager, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { AppAlert } from '../../lib/app-alert'
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import * as DocumentPicker from "expo-document-picker"
@@ -19,6 +19,7 @@ import {
 } from "../../lib/cora-workspace-config"
 import { exportWorkspaceToNotes } from "../../lib/cora-api"
 import type { CoraMessageMenuActionId } from "../../lib/cora-message-actions"
+import { useChatListScrollToEnd } from "../../hooks/useChatListScrollToEnd"
 import { useCoraVoiceDictation } from "../../hooks/use-cora-voice-dictation"
 import { CoraComposerAttachMenu } from "./CoraComposerAttachMenu"
 import {
@@ -40,11 +41,16 @@ import {
 } from "./CoraUserMessageContextMenu"
 import { CoraUserMessageSelectSheet } from "./CoraUserMessageSelectSheet"
 import { CoraChatBubble } from "./CoraChatBubble"
+import { CoraScopeFeedbackBar } from "../cora/CoraScopeFeedbackBar"
 import { CoraWorkspaceComposer } from "./CoraWorkspaceComposer"
 import { CoraBrand } from "../cora/CoraBrand"
+import { CoraActionCard } from "../cora/CoraActionCard"
+import { CoraChatDayDivider } from "../cora/CoraChatDayDivider"
+import { shouldShowChatDayDivider } from "../../lib/cora/chat-day-divider"
 import { CoraEdgeBackSwipe } from "../cora/CoraEdgeBackSwipe"
 import { resolveStudentCoraCapability } from "../../lib/student-cora-context-store"
 import type { ChatMessage, CoraImportedProblem, AiTutorCredits } from "../../lib/ai-tutor-api"
+import type { CoraActionProposal } from "../../lib/cora/types"
 import {
   buildWorkspaceSendText,
   isLikelyTextFile,
@@ -64,6 +70,38 @@ import { countExchanges, type AiTutorChatThread } from "../../lib/ai-tutor-chat-
 import type { StudentSession } from "../../lib/session"
 import type { CoraComposerActionId } from "../../lib/cora-composer-actions"
 import { NATIVE } from "../../constants/faculty-native-theme"
+
+function ChatCreditNotice({
+  mode,
+  onOpenPacks,
+}: {
+  mode: "lite" | "low"
+  onOpenPacks: () => void
+}) {
+  const type = useNativeType()
+  const isLite = mode === "lite"
+  const iconColor = isLite ? "#F59E0B" : "#F97316"
+  const bg = hexToRgba(iconColor, 0.12)
+
+  return (
+    <View style={[noticeStyles.banner, { backgroundColor: bg, borderColor: hexToRgba(iconColor, 0.22) }]}>
+      <Ionicons name={isLite ? "moon-outline" : "flash-outline"} size={18} color={iconColor} />
+      <View style={noticeStyles.copy}>
+        <Text style={[type.bodyEmphasis, noticeStyles.title]}>
+          {isLite ? "Cora Lite" : "Running low on credits"}
+        </Text>
+        <Text style={[type.caption, { color: iconColor, opacity: 0.9, marginTop: 2 }]}>
+          {isLite
+            ? "Navigation & simple lookups only — packs restore premium generation."
+            : "Buy a pack or wait for your monthly refresh."}
+        </Text>
+      </View>
+      <Pressable onPress={onOpenPacks} hitSlop={8}>
+        <Text style={[noticeStyles.btn, { color: iconColor }]}>Packs</Text>
+      </Pressable>
+    </View>
+  )
+}
 
 function ChatDepthNotice({
   tone,
@@ -169,10 +207,14 @@ type Props = {
   ) => void
   onStop?: () => void
   onRegenerate: () => void
+  onScopeFeedbackRelated?: (messageId: string, note: string | null) => void
+  onScopeFeedbackNotRelated?: (messageId: string) => void
   onBranchChat: (message: ChatMessage) => void
   onEditUserMessage: (message: ChatMessage) => void
   onReattachImport?: (message: ChatMessage, problem: CoraImportedProblem, label: string) => void
   onNavigateUserMessageVersion: (message: ChatMessage, direction: "prev" | "next") => void
+  onConfirmProposal?: (messageId: string, proposal: import("../../lib/cora/types").CoraActionProposal) => void
+  onCancelProposal?: (messageId: string, proposalId: string) => void
   onBack: () => void
   onNewFromChat: () => void
   threads: AiTutorChatThread[]
@@ -208,10 +250,14 @@ export function CoraImmersiveChat({
   onSend,
   onStop,
   onRegenerate,
+  onScopeFeedbackRelated,
+  onScopeFeedbackNotRelated,
   onBranchChat,
   onEditUserMessage,
   onReattachImport,
   onNavigateUserMessageVersion,
+  onConfirmProposal,
+  onCancelProposal,
   onBack,
   onNewFromChat,
   threads,
@@ -231,6 +277,11 @@ export function CoraImmersiveChat({
   const type = useNativeType()
   const { context: studentCoraContext } = useStudentCoraContextValue()
   const listRef = useRef<FlatList>(null)
+  const threadsRef = useRef(threads)
+  threadsRef.current = threads
+  const archivedThreadsRef = useRef(archivedThreads)
+  archivedThreadsRef.current = archivedThreads
+  const scrollToEnd = useChatListScrollToEnd(listRef, 120)
   const [selectedGoalId, setSelectedGoalId] = useState<CoraLearningGoalId>("understand")
   const [attachMenuOpen, setAttachMenuOpen] = useState(false)
   const [pasteCodeOpen, setPasteCodeOpen] = useState(false)
@@ -247,6 +298,7 @@ export function CoraImmersiveChat({
   const [importedQuestionLabel, setImportedQuestionLabel] = useState<string | null>(null)
   const [menuMessage, setMenuMessage] = useState<ChatMessage | null>(null)
   const [sideNavOpen, setSideNavOpen] = useState(false)
+  const [composerHeight, setComposerHeight] = useState(128)
   const [highlightMessageId, setHighlightMessageId] = useState<string | null>(null)
   const [feedbackById, setFeedbackById] = useState<Record<string, "up" | "down">>({})
   const [userMenuMessage, setUserMenuMessage] = useState<ChatMessage | null>(null)
@@ -264,20 +316,65 @@ export function CoraImmersiveChat({
   const handleVoiceTranscript = useCallback((text: string) => setInput(text), [setInput])
   const { listening, toggleListening } = useCoraVoiceDictation(handleVoiceTranscript)
 
-  const scrollToEnd = useCallback(() => {
-    setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80)
-  }, [])
-
   const prevMessageCountRef = useRef(messages.length)
+  const prevThreadIdRef = useRef(activeThreadId)
+  const [threadPaintReady, setThreadPaintReady] = useState(true)
+
+  useEffect(() => {
+    if (activeThreadId === prevThreadIdRef.current) return
+    prevThreadIdRef.current = activeThreadId
+    setThreadPaintReady(false)
+
+    let cancelled = false
+    const startedAt = Date.now()
+    const MIN_COVER_MS = 300
+
+    const reveal = () => {
+      if (cancelled) return
+      scrollToEnd(false)
+      setThreadPaintReady(true)
+    }
+
+    const fallback = setTimeout(reveal, MIN_COVER_MS + 180)
+
+    const interaction = InteractionManager.runAfterInteractions(() => {
+      const remaining = Math.max(0, MIN_COVER_MS - (Date.now() - startedAt))
+      setTimeout(reveal, remaining)
+    })
+
+    return () => {
+      cancelled = true
+      clearTimeout(fallback)
+      interaction.cancel()
+    }
+  }, [activeThreadId, scrollToEnd])
+
   useEffect(() => {
     if (messages.length !== prevMessageCountRef.current) {
+      const countIncreased = messages.length > prevMessageCountRef.current
       prevMessageCountRef.current = messages.length
-      scrollToEnd()
+      if (countIncreased && threadPaintReady) {
+        scrollToEnd(true)
+      }
     }
-  }, [messages.length, scrollToEnd])
+  }, [messages.length, scrollToEnd, threadPaintReady])
+
+  const handleBubbleFeedback = useCallback((msg: ChatMessage, vote: "up" | "down") => {
+    setFeedbackById((prev) => ({ ...prev, [msg.id]: vote }))
+  }, [])
+
+  const handleOpenBubbleMenu = useCallback((msg: ChatMessage) => {
+    setMenuMessage(msg)
+  }, [])
+
+  const handleLongPressUserMessage = useCallback((msg: ChatMessage, anchor: UserMessageAnchor) => {
+    setUserMenuMessage(msg)
+    setUserMenuAnchor(anchor)
+    setUserMenuSentAt(new Date().toISOString())
+  }, [])
 
   const handleListContentSizeChange = useCallback(() => {
-    if (streaming) scrollToEnd()
+    if (streaming) scrollToEnd(true)
   }, [scrollToEnd, streaming])
 
   const historyThreadItems: CoraHistoryThreadItem[] = useMemo(
@@ -311,14 +408,13 @@ export function CoraImmersiveChat({
   const openHistoryThread = useCallback(
     (item: CoraHistoryThreadItem) => {
       const thread =
-        threads.find((entry) => entry.id === item.id) ??
-        archivedThreads.find((entry) => entry.id === item.id)
+        threadsRef.current.find((entry) => entry.id === item.id) ??
+        archivedThreadsRef.current.find((entry) => entry.id === item.id)
       if (thread) {
         onOpenThread(thread)
-        setSideNavOpen(false)
       }
     },
-    [archivedThreads, onOpenThread, threads],
+    [onOpenThread],
   )
 
   const threadMeta = useCallback(
@@ -656,23 +752,29 @@ export function CoraImmersiveChat({
         style={styles.keyboardShell}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
+      <View style={styles.messagesPane}>
       <FlatList
         ref={listRef}
         data={messages}
+        extraData={activeThreadId}
         keyExtractor={(item) => item.id}
         style={styles.list}
         initialNumToRender={8}
         maxToRenderPerBatch={4}
         windowSize={7}
-        removeClippedSubviews={Platform.OS === "android"}
+        removeClippedSubviews={false}
         contentContainerStyle={[
           styles.listContent,
-          { paddingTop: headerHeight + 8 },
+          {
+            paddingTop: headerHeight + 8,
+            paddingBottom: Math.max(composerHeight + 80, 260),
+          },
           showWelcome && styles.listWelcome,
         ]}
+        ListFooterComponent={<View style={{ height: 48 }} />}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
-        automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
+        automaticallyAdjustKeyboardInsets={false}
         onContentSizeChange={handleListContentSizeChange}
         onScrollToIndexFailed={(info) => {
           setTimeout(() => {
@@ -682,17 +784,30 @@ export function CoraImmersiveChat({
         ListHeaderComponent={
           showWelcome ? <NewChatWelcome studentFirstName={studentFirstName} onPickGoal={handlePickGoal} /> : null
         }
-        renderItem={({ item, index }) => (
+        renderItem={({ item, index }) => {
+          const prev = index > 0 ? messages[index - 1] : null
+          const dayDivider = shouldShowChatDayDivider(item, prev)
+          const followsActionCards =
+            item.role === "user" &&
+            !!prev &&
+            prev.role === "assistant" &&
+            !!prev.proposals?.length
+          return (
           <View
-            style={
+            style={[
+              styles.messageTurn,
+              item.role === "user" ? styles.messageTurnUser : null,
+              followsActionCards ? styles.messageTurnAfterCards : null,
+              item.role === "assistant" && item.proposals?.length ? styles.messageTurnWithCards : null,
               highlightMessageId === item.id
                 ? [
                     styles.highlightWrap,
                     { backgroundColor: hexToRgba(SN.accent, 0.08), borderColor: hexToRgba(SN.accent, 0.2) },
                   ]
-                : undefined
-            }
+                : null,
+            ]}
           >
+            {dayDivider.show && dayDivider.label ? <CoraChatDayDivider label={dayDivider.label} /> : null}
             <CoraChatBubble
               message={item}
               isStreaming={streamingMessageId === item.id}
@@ -707,21 +822,60 @@ export function CoraImmersiveChat({
                     }
                   : undefined
               }
-              onFeedback={(msg, vote) => setFeedbackById((prev) => ({ ...prev, [msg.id]: vote }))}
-              onOpenMenu={(msg) => setMenuMessage(msg)}
-              onLongPressUserMessage={(msg, anchor) => {
-                setUserMenuMessage(msg)
-                setUserMenuAnchor(anchor)
-                setUserMenuSentAt(new Date().toISOString())
-              }}
+              onFeedback={handleBubbleFeedback}
+              onOpenMenu={handleOpenBubbleMenu}
+              onLongPressUserMessage={handleLongPressUserMessage}
               suppressWhileMenuOpen={userMenuMessage?.id === item.id}
               onNavigateUserMessageVersion={onNavigateUserMessageVersion}
             />
+            {item.role === "assistant" && item.scopeFeedback ? (
+              <CoraScopeFeedbackBar
+                feedback={item.scopeFeedback}
+                onRelated={(note) => onScopeFeedbackRelated?.(item.id, note)}
+                onNotRelated={() => onScopeFeedbackNotRelated?.(item.id)}
+              />
+            ) : null}
+            {item.role === "assistant" && item.proposals?.length
+              ? item.proposals.map((proposal: CoraActionProposal) => (
+                  <View key={proposal.actionId} style={styles.proposalWrap}>
+                    <CoraActionCard
+                      proposal={proposal}
+                      status={item.proposalStatusById?.[proposal.actionId] ?? "idle"}
+                      result={item.proposalResultById?.[proposal.actionId] ?? null}
+                      resultMessage={item.proposalResultById?.[proposal.actionId]?.message}
+                      onConfirm={() => onConfirmProposal?.(item.id, proposal)}
+                      onCancel={() => onCancelProposal?.(item.id, proposal.actionId)}
+                      onOpen={(route) => router.push(route as never)}
+                    />
+                  </View>
+                ))
+              : null}
           </View>
-        )}
+          )
+        }}
       />
 
-        <View style={[styles.composerArea, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+      {!threadPaintReady ? (
+        <View pointerEvents="none" style={[styles.threadPaintCover, { backgroundColor: canvas }]} />
+      ) : null}
+
+      </View>
+
+        <View
+          style={[
+            styles.composerArea,
+            { paddingBottom: Math.max(insets.bottom, 12), backgroundColor: canvas },
+          ]}
+          onLayout={(e) => {
+            const next = Math.ceil(e.nativeEvent.layout.height)
+            setComposerHeight((prev) => (Math.abs(prev - next) > 1 ? next : prev))
+          }}
+        >
+          {credits?.coraMode === "lite" || (credits && credits.credits <= 0) ? (
+            <ChatCreditNotice mode="lite" onOpenPacks={() => router.push("/membership" as never)} />
+          ) : credits?.isLow ? (
+            <ChatCreditNotice mode="low" onOpenPacks={() => router.push("/membership" as never)} />
+          ) : null}
           {atExchangeLimit ? (
             <ChatDepthNotice tone="limit" onNewChat={onNewFromChat} />
           ) : nearExchangeLimit ? (
@@ -896,6 +1050,11 @@ const styles = StyleSheet.create({
   root: { ...StyleSheet.absoluteFillObject, zIndex: 100 },
   contentShell: { ...StyleSheet.absoluteFillObject, flex: 1 },
   keyboardShell: { flex: 1 },
+  messagesPane: { flex: 1, position: "relative" },
+  threadPaintCover: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 2,
+  },
   hydrateOverlay: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 30,
@@ -908,7 +1067,8 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    zIndex: 20,
+    zIndex: 60,
+    elevation: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   headerRow: {
@@ -937,9 +1097,28 @@ const styles = StyleSheet.create({
   },
   list: { flex: 1 },
   listContent: {
-    paddingBottom: 16,
+    paddingBottom: 160,
   },
   listWelcome: { flexGrow: 1 },
+  messageTurn: {
+    marginBottom: 8,
+    paddingBottom: 0,
+  },
+  messageTurnUser: {
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  messageTurnAfterCards: {
+    marginTop: 10,
+  },
+  messageTurnWithCards: {
+    marginBottom: 10,
+    paddingBottom: 4,
+  },
+  proposalWrap: {
+    marginTop: 6,
+    marginBottom: 8,
+  },
   welcomeWrap: {
     alignItems: "center",
     gap: 8,
@@ -964,6 +1143,7 @@ const styles = StyleSheet.create({
   goalEmoji: { fontSize: 20 },
   goalLabel: { fontSize: 14 },
   composerArea: {
+    zIndex: 20,
     paddingHorizontal: NATIVE.pagePadding,
     paddingTop: 4,
   },

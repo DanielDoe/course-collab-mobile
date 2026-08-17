@@ -1,0 +1,10 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Topics"
+- takeScreenshot: flashcards-topics-final
+- tapOn: "Config"
+- takeScreenshot: flashcards-config-final
+- tapOn: "Deleted"
+- takeScreenshot: flashcards-deleted-final2
+- tapOn: "All"
+- takeScreenshot: flashcards-all-final

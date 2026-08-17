@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -7,6 +8,7 @@ import {
   Text,
   View,
 } from "react-native"
+import { useSafeAreaInsets } from "react-native-safe-area-context"
 import Animated, {
   FadeInDown,
   FadeOut,
@@ -21,6 +23,7 @@ import { NATIVE } from "../../constants/faculty-native-theme"
 import type { CodeReplayPhase, CodeReplayStep } from "../../lib/codebench-replay"
 import { useNativeType } from "../../lib/themed-module-theme"
 import { CoraBrand } from "../cora/CoraBrand"
+import { CoraThinkingIndicator } from "../ai-tutor/CoraThinkingIndicator"
 
 const CORA_PURPLE = "#7C3AED"
 const H_PAD = 20
@@ -51,6 +54,13 @@ type Props = {
   steps: CodeReplayStep[]
   sourceCode: string
   expanded?: boolean
+  bottomInset?: number
+  fullscreen?: boolean
+  loading?: boolean
+  index?: number
+  onIndexChange?: (index: number) => void
+  onCollapse?: () => void
+  onClose?: () => void
 }
 
 function codeContextWindow(sourceCode: string, lineNumber: number, pad = 2) {
@@ -435,17 +445,36 @@ function StepDetail({
   )
 }
 
-export function CodebenchWalkthroughPanel({ steps, sourceCode, expanded = false }: Props) {
+export function CodebenchWalkthroughPanel({
+  steps,
+  sourceCode,
+  expanded = false,
+  bottomInset = 0,
+  fullscreen = false,
+  loading = false,
+  index: controlledIndex,
+  onIndexChange,
+  onCollapse,
+  onClose,
+}: Props) {
   const native = useThemedNative()
   const tokens = useAppThemeTokens()
   const type = useNativeType()
+  const insets = useSafeAreaInsets()
 
-  const [index, setIndex] = useState(0)
+  const [internalIndex, setInternalIndex] = useState(0)
+  const index = controlledIndex ?? internalIndex
   const step = steps[index]
   const total = steps.length
   const progress = total > 0 ? (index + 1) / total : 0
 
   const progressWidth = useSharedValue(progress)
+
+  useEffect(() => {
+    if (controlledIndex === undefined) {
+      setInternalIndex(0)
+    }
+  }, [controlledIndex, steps])
 
   useEffect(() => {
     progressWidth.value = withSpring(progress, { damping: 20, stiffness: 160 })
@@ -457,10 +486,135 @@ export function CodebenchWalkthroughPanel({ steps, sourceCode, expanded = false 
 
   const goTo = useCallback(
     (next: number) => {
-      setIndex(Math.max(0, Math.min(total - 1, next)))
+      const clamped = Math.max(0, Math.min(total - 1, next))
+      if (onIndexChange) onIndexChange(clamped)
+      else setInternalIndex(clamped)
     },
-    [total],
+    [onIndexChange, total],
   )
+
+  const phaseColor = step?.phase ? PHASE_COLOR[step.phase] : CORA_PURPLE
+
+  const chromeCard = step ? (
+    <View
+      style={[
+        styles.chromeCard,
+        tokens.cardShadow,
+        {
+          backgroundColor: native.secondaryGrouped,
+          borderColor: native.separator,
+        },
+      ]}
+    >
+      <View style={styles.progressHeader}>
+        <View style={styles.progressMeta}>
+          <CoraBrand size="xs" />
+          <Text style={[type.caption, { color: native.secondaryLabel, fontWeight: "600" }]}>
+            Execution trace
+          </Text>
+        </View>
+        <Text style={[type.caption, { color: native.label, fontWeight: "700" }]}>
+          {index + 1} / {total}
+        </Text>
+      </View>
+
+      <View style={[styles.progressTrack, { backgroundColor: native.fill }]}>
+        <Animated.View style={[styles.progressFill, progressAnimStyle, { backgroundColor: CORA_PURPLE }]} />
+      </View>
+
+      <StepRail steps={steps} index={index} onSelect={goTo} />
+
+      <Animated.View
+        key={`label-${index}`}
+        entering={FadeInDown.duration(240).springify().damping(20)}
+        style={styles.currentStepLabelWrap}
+      >
+        <Text style={[type.bodyEmphasis, styles.currentStepLabel, { color: native.label }]}>
+          {step.title}
+        </Text>
+        {step.lineNumber ? (
+          <Text style={[type.caption, { color: native.secondaryLabel }]}>Line {step.lineNumber}</Text>
+        ) : null}
+      </Animated.View>
+
+      <WalkthroughControls
+        index={index}
+        total={total}
+        onBack={() => goTo(index - 1)}
+        onRestart={() => goTo(0)}
+        onNext={() => goTo(index + 1)}
+      />
+    </View>
+  ) : null
+
+  const fullscreenHeader = (
+    <View style={styles.fullscreenHead}>
+      <View style={styles.fullscreenHeadBrand}>
+        <CoraBrand size="sm" />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={[type.bodyEmphasis, { color: native.label }]}>
+          {loading ? "Building walkthrough" : "Execution walkthrough"}
+        </Text>
+        <Text style={[type.caption, { color: native.secondaryLabel }]} numberOfLines={2}>
+          {loading ? "Tracing your code step by step" : "Full screen · tap collapse to return to the editor"}
+        </Text>
+      </View>
+      <View style={styles.fullscreenHeadActions}>
+        <Pressable
+          onPress={onCollapse}
+          hitSlop={8}
+          style={[styles.fullscreenHeadBtn, { backgroundColor: native.fill }]}
+          accessibilityLabel="Collapse walkthrough"
+        >
+          <Ionicons name="contract-outline" size={18} color={native.label} />
+        </Pressable>
+        <Pressable
+          onPress={onClose}
+          hitSlop={8}
+          style={styles.fullscreenHeadBtn}
+          accessibilityLabel="Close walkthrough"
+        >
+          <Ionicons name="close" size={18} color={native.secondaryLabel} />
+        </Pressable>
+      </View>
+    </View>
+  )
+
+  if (fullscreen) {
+    return (
+      <Modal visible animationType="fade" statusBarTranslucent presentationStyle="fullScreen">
+        <View style={[styles.fullscreenHost, { backgroundColor: native.secondaryGrouped }]}>
+          <View
+            style={[
+              styles.fullscreenFrame,
+              { paddingTop: insets.top, paddingBottom: insets.bottom },
+            ]}
+          >
+            {fullscreenHeader}
+            {loading || !step || total === 0 ? (
+              <View style={styles.fullscreenLoading}>
+                <CoraThinkingIndicator context="codebench" hideBrand />
+              </View>
+            ) : (
+              <ScrollView
+                style={styles.fullscreenScroll}
+                contentContainerStyle={[
+                  styles.fullscreenScrollContent,
+                  { paddingHorizontal: H_PAD, paddingBottom: 16 },
+                ]}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+              >
+                <View style={styles.chrome}>{chromeCard}</View>
+                <StepDetail key={`step-${index}`} step={step} sourceCode={sourceCode} phaseColor={phaseColor} />
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
+    )
+  }
 
   if (!step || total === 0) {
     return (
@@ -473,65 +627,16 @@ export function CodebenchWalkthroughPanel({ steps, sourceCode, expanded = false 
     )
   }
 
-  const phaseColor = step.phase ? PHASE_COLOR[step.phase] : CORA_PURPLE
-
   return (
     <View style={[styles.root, expanded && styles.rootExpanded]}>
-      <View style={[styles.chrome, { paddingHorizontal: H_PAD }]}>
-        <View
-          style={[
-            styles.chromeCard,
-            tokens.cardShadow,
-            {
-              backgroundColor: native.secondaryGrouped,
-              borderColor: native.separator,
-            },
-          ]}
-        >
-          <View style={styles.progressHeader}>
-            <View style={styles.progressMeta}>
-              <CoraBrand size="xs" />
-              <Text style={[type.caption, { color: native.secondaryLabel, fontWeight: "600" }]}>
-                Execution trace
-              </Text>
-            </View>
-            <Text style={[type.caption, { color: native.label, fontWeight: "700" }]}>
-              {index + 1} / {total}
-            </Text>
-          </View>
-
-          <View style={[styles.progressTrack, { backgroundColor: native.fill }]}>
-            <Animated.View style={[styles.progressFill, progressAnimStyle, { backgroundColor: CORA_PURPLE }]} />
-          </View>
-
-          <StepRail steps={steps} index={index} onSelect={goTo} />
-
-          <Animated.View
-            key={`label-${index}`}
-            entering={FadeInDown.duration(240).springify().damping(20)}
-            style={styles.currentStepLabelWrap}
-          >
-            <Text style={[type.bodyEmphasis, styles.currentStepLabel, { color: native.label }]}>
-              {step.title}
-            </Text>
-            {step.lineNumber ? (
-              <Text style={[type.caption, { color: native.secondaryLabel }]}>Line {step.lineNumber}</Text>
-            ) : null}
-          </Animated.View>
-
-          <WalkthroughControls
-            index={index}
-            total={total}
-            onBack={() => goTo(index - 1)}
-            onRestart={() => goTo(0)}
-            onNext={() => goTo(index + 1)}
-          />
-        </View>
-      </View>
+      <View style={[styles.chrome, { paddingHorizontal: H_PAD }]}>{chromeCard}</View>
 
       <ScrollView
         style={[styles.detailScroll, expanded && styles.detailScrollExpanded]}
-        contentContainerStyle={[styles.detailContent, { paddingHorizontal: H_PAD }]}
+        contentContainerStyle={[
+          styles.detailContent,
+          { paddingHorizontal: H_PAD, paddingBottom: expanded ? Math.max(bottomInset, 12) + 8 : 28 },
+        ]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
@@ -690,7 +795,6 @@ const styles = StyleSheet.create({
   detailContent: {
     gap: 16,
     paddingTop: 4,
-    paddingBottom: 28,
   },
   stepBody: {
     gap: 16,
@@ -803,5 +907,52 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
     padding: 16,
+  },
+  fullscreenHost: {
+    flex: 1,
+  },
+  fullscreenFrame: {
+    flex: 1,
+  },
+  fullscreenHead: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingTop: 8,
+    paddingBottom: 10,
+    flexShrink: 0,
+  },
+  fullscreenHeadBrand: {
+    flexShrink: 0,
+    alignSelf: "flex-start",
+    paddingTop: 2,
+  },
+  fullscreenHeadActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  fullscreenHeadBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  fullscreenScroll: {
+    flex: 1,
+    minHeight: 0,
+  },
+  fullscreenScrollContent: {
+    gap: 16,
+    paddingTop: 4,
+  },
+  fullscreenLoading: {
+    flex: 1,
+    alignItems: "stretch",
+    justifyContent: "flex-start",
+    paddingHorizontal: H_PAD,
+    paddingTop: 8,
   },
 })

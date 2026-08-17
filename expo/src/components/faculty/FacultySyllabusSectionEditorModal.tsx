@@ -26,8 +26,11 @@ import {
   FacultySheetSaveAction,
   FacultySheetSection,
   FacultySheetToggleRow,
+  FacultySheetTextInput,
   sheetPlaceholderColor
 } from "./faculty-collab-sheet-ui"
+import { useSuppressModuleSearchDock } from "../../context/ModuleSearchDockContext"
+import { useAppThemeTokens } from "../../context/AppearanceProvider"
 import { SHEET_SECTION } from "./faculty-sheet-semantics"
 
 type Props = {
@@ -43,8 +46,10 @@ function cloneSection(section: ApiSyllabusSection): ApiSyllabusSection {
 
 function TableEditor({
   table,
+  dangerColor,
   onChange}: {
   table: SyllabusTableBlock
+  dangerColor: string
   onChange: (table: SyllabusTableBlock) => void
 }) {
   const collabSheetStyles = useCollabSheetStyles()
@@ -103,8 +108,12 @@ function TableEditor({
               />
             ))}
           </View>
-          <Pressable style={localStyles.iconBtn} onPress={() => removeRow(ri)}>
-            <Ionicons name="trash-outline" size={18} color="#b91c1c" />
+          <Pressable
+            style={localStyles.iconBtn}
+            hitSlop={{ top: 3, bottom: 3, left: 3, right: 3 }}
+            onPress={() => removeRow(ri)}
+          >
+            <Ionicons name="trash-outline" size={18} color={dangerColor} />
           </Pressable>
         </View>
       ))}
@@ -114,7 +123,9 @@ function TableEditor({
 }
 
 export function FacultySyllabusSectionEditorModal({ visible, section, onClose, onSave }: Props) {
+  useSuppressModuleSearchDock(visible)
   const collabSheetStyles = useCollabSheetStyles()
+  const tokens = useAppThemeTokens()
   const insets = useSafeAreaInsets()
   const [draft, setDraft] = useState<ApiSyllabusSection | null>(null)
 
@@ -217,10 +228,11 @@ export function FacultySyllabusSectionEditorModal({ visible, section, onClose, o
           <FacultySheetSection label="Section settings" hint={displayTitle} tone={SHEET_SECTION.edit}>
             {!current.isRequired ? (
               <FacultySheetField label="Section title">
-                <TextInput
-                  style={collabSheetStyles.fieldInput}
+                <FacultySheetTextInput
                   value={current.title}
                   onChangeText={(title) => setDraft((prev) => (prev ? { ...prev, title } : prev))}
+                  accessibilityLabel="Section title"
+                  autoFocus={current.sectionId.startsWith("custom-") && !current.content.markdown}
                 />
               </FacultySheetField>
             ) : (
@@ -250,6 +262,7 @@ export function FacultySyllabusSectionEditorModal({ visible, section, onClose, o
                       onChangeText={(next) => updateField(label, next)}
                       multiline={label.length > 24}
                       textAlignVertical={label.length > 24 ? "top" : "center"}
+                      accessibilityLabel={label}
                     />
                   </FacultySheetField>
                 ),
@@ -272,8 +285,12 @@ export function FacultySyllabusSectionEditorModal({ visible, section, onClose, o
                     multiline
                     textAlignVertical="top"
                   />
-                  <Pressable style={localStyles.iconBtn} onPress={() => removeItem(index)}>
-                    <Ionicons name="trash-outline" size={18} color="#b91c1c" />
+                  <Pressable
+                    style={localStyles.iconBtn}
+                    hitSlop={{ top: 3, bottom: 3, left: 3, right: 3 }}
+                    onPress={() => removeItem(index)}
+                  >
+                    <Ionicons name="trash-outline" size={18} color={tokens.danger} />
                   </Pressable>
                 </View>
               ))}
@@ -294,6 +311,7 @@ export function FacultySyllabusSectionEditorModal({ visible, section, onClose, o
                 placeholder="Section text (markdown supported)"
                 placeholderTextColor={sheetPlaceholderColor}
                 textAlignVertical="top"
+                accessibilityLabel="Section text"
               />
             </FacultySheetSection>
           ) : null}
@@ -304,6 +322,7 @@ export function FacultySyllabusSectionEditorModal({ visible, section, onClose, o
                 table={{
                   columns: current.content.columns,
                   rows: current.content.rows ?? []}}
+                dangerColor={tokens.danger}
                 onChange={({ columns, rows }) => updateLegacyTable(columns, rows)}
               />
             </FacultySheetSection>
@@ -312,7 +331,7 @@ export function FacultySyllabusSectionEditorModal({ visible, section, onClose, o
           {tables.length ? (
             <FacultySheetSection label="Tables" tone={SHEET_SECTION.tools}>
               {tables.map((table, index) => (
-                <TableEditor key={index} table={table} onChange={(next) => updateTable(index, next)} />
+                <TableEditor key={index} table={table} dangerColor={tokens.danger} onChange={(next) => updateTable(index, next)} />
               ))}
             </FacultySheetSection>
           ) : null}

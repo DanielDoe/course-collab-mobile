@@ -41,6 +41,8 @@ type Props = {
   contentStyle?: StyleProp<ViewStyle>
   /** Prevent iOS ScrollView from re-applying top safe-area inset (immersive screens with custom header). */
   disableTopInsetAdjustment?: boolean
+  /** Screen stacks its own header below the status bar (e.g. NotetakerScreenHeader). */
+  stackedHeader?: boolean
 }
 
 export function ModuleScreen({
@@ -57,6 +59,7 @@ export function ModuleScreen({
   onRetryError,
   contentStyle,
   disableTopInsetAdjustment = false,
+  stackedHeader = false,
 }: Props) {
   const insets = useSafeAreaInsets()
   const native = useThemedNative()
@@ -66,6 +69,7 @@ export function ModuleScreen({
   const { height: windowHeight } = useWindowDimensions()
   const refreshEnabled = Boolean(onRefresh)
   const showBlockingLoad = Boolean(loading && refreshEnabled)
+  const stackedHeaderOffset = stackedHeader ? 52 : 0
 
   const handleRefresh = useCallback(() => {
     if (!onRefresh) return
@@ -88,7 +92,14 @@ export function ModuleScreen({
         styles.content,
         scrollPad,
         contentStyle,
-        refreshEnabled ? { minHeight: Math.max(windowHeight - insets.top - insets.bottom, 320) } : null,
+        refreshEnabled
+          ? {
+              minHeight: Math.max(
+                windowHeight - insets.top - insets.bottom - stackedHeaderOffset,
+                320,
+              ),
+            }
+          : null,
       ]}
       contentInsetAdjustmentBehavior={
         disableTopInsetAdjustment || chromeTop > 0 ? "never" : "automatic"
@@ -336,6 +347,55 @@ export function ModuleListRow({
   )
 }
 
+/**
+ * Inline "Show more" footer row for lists that are sliced instead of virtualized.
+ * ModuleScreen renders children inside a plain ScrollView, so long lists must be
+ * paged rather than mounted in full.
+ */
+export function ModuleShowMoreRow({
+  remaining,
+  onPress,
+  label,
+  variant = "inset",
+}: {
+  remaining: number
+  onPress: () => void
+  label?: string
+  /** "inset" sits at the bottom of a ModuleSection; "card" stands alone in a gapped list. */
+  variant?: "inset" | "card"
+}) {
+  const native = useThemedNative()
+  const type = useNativeType()
+
+  if (remaining <= 0) return null
+
+  const text = label ?? `Show ${remaining} more`
+
+  return (
+    <Pressable
+      style={({ pressed }) => [
+        styles.showMoreRow,
+        variant === "card"
+          ? {
+              backgroundColor: native.secondaryGrouped,
+              borderRadius: NATIVE.sectionRadius,
+              borderWidth: StyleSheet.hairlineWidth,
+              borderColor: native.separator,
+            }
+          : { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: native.separator },
+        pressed && { opacity: NATIVE.pressedOpacity },
+      ]}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={text}
+      android_ripple={Platform.OS === "android" ? { color: "rgba(128,128,128,0.12)" } : undefined}
+    >
+      <Text style={[type.caption, styles.showMoreText, { color: native.tint }]}>{text}</Text>
+      <Ionicons name="chevron-down" size={15} color={native.tint} />
+    </Pressable>
+  )
+}
+
 /** @deprecated Prefer ModuleListRow */
 export function ModuleRow({
   title,
@@ -430,6 +490,15 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   listRowLast: { borderBottomWidth: 0 },
+  showMoreRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 13,
+    paddingHorizontal: 14,
+  },
+  showMoreText: { fontWeight: "600" },
   iconTile: {
     width: NATIVE.iconTileSize,
     height: NATIVE.iconTileSize,

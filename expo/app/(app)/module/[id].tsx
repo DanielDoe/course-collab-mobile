@@ -17,5 +17,5 @@ export default function ModuleScreen() {
         : session?.portal === "guest"
           ? getGuestModuleRenderer(slug)
           : getModuleRenderer(slug)
-  return <Renderer />
+  return <Renderer key={`${session?.portal ?? "app"}:${slug}`} />
 }

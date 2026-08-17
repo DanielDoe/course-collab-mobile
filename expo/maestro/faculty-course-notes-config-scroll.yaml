@@ -1,0 +1,8 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Config"
+- swipe:
+    direction: UP
+- swipe:
+    direction: UP
+- takeScreenshot: course-notes-config-bottom

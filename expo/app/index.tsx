@@ -4,7 +4,7 @@ import * as SplashScreen from "expo-splash-screen"
 import { StyleSheet, View } from "react-native"
 import { BrandLoadingMark } from "../src/components/login/BrandLoadingMark"
 import { useSession } from "../src/context/SessionProvider"
-import { NATIVE } from "../src/constants/faculty-native-theme"
+import { sessionNeedsPasswordChange } from "../src/lib/navigation-reset"
 
 export default function Index() {
   const { session, isLoading } = useSession()
@@ -26,6 +26,9 @@ export default function Index() {
   }
 
   if (session) {
+    if (sessionNeedsPasswordChange(session)) {
+      return <Redirect href="/(auth)/change-password" />
+    }
     return <Redirect href="/(app)/dashboard" />
   }
 

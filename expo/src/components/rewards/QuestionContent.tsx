@@ -27,6 +27,10 @@ const WEBVIEW_PROPS = {
   javaScriptEnabled: true,
   domStorageEnabled: true,
   cacheEnabled: true,
+  /** Never expose Safari / Chrome inspector on a release build. */
+  webviewDebuggingEnabled: __DEV__,
+  /** iOS long-press link preview can surface a share sheet out of the app. */
+  allowsLinkPreview: false,
   ...(Platform.OS === "android" ? { cacheMode: "LOAD_DEFAULT" as const } : {}),
 }
 
@@ -35,29 +39,36 @@ export const QuestionContentWebView = memo(function QuestionContentWebView({
   embedded,
   compact,
   chatBubble,
+  textColor,
+  secure: _secure,
 }: {
   text: string
   embedded?: boolean
   compact?: boolean
   /** Immersive chat imported-question bubble — taller cap than composer compact. */
   chatBubble?: boolean
+  /** Foreground override when the host row has a solid status fill (report option rows). */
+  textColor?: string
+  /** Accepted for call sites that mark sensitive question text; rendering is unchanged. */
+  secure?: boolean
 }) {
   const tokens = useAppThemeTokens()
   const native = useThemedNative()
   const rich = useMemo(() => needsQuestionRichRender(text), [text])
   const plain = useMemo(() => questionPlainText(text), [text])
+  const fg = textColor ?? native.label
   const html = useMemo(
     () =>
       buildQuestionHtml(text, {
         compact,
         theme: {
           isDark: tokens.isDark,
-          text: native.label,
-          textSecondary: native.secondaryLabel,
-          heading: native.label,
+          text: fg,
+          textSecondary: textColor ?? native.secondaryLabel,
+          heading: fg,
         },
       }),
-    [text, compact, tokens.isDark, native.label, native.secondaryLabel],
+    [text, compact, tokens.isDark, fg, textColor, native.secondaryLabel],
   )
   const maxHeight = chatBubble ? 560 : compact ? 240 : 1200
   const [height, setHeight] = useState(chatBubble ? 72 : compact ? 36 : 80)
@@ -76,7 +87,7 @@ export const QuestionContentWebView = memo(function QuestionContentWebView({
           styles.plainText,
           compact && styles.plainTextCompact,
           embedded && styles.plainTextEmbedded,
-          { color: native.label },
+          { color: fg },
         ]}
       >
         {plain}
@@ -94,7 +105,7 @@ export const QuestionContentWebView = memo(function QuestionContentWebView({
       ]}
     >
       <WebView
-        key={`${compact ? "c" : "f"}:${text.length}:${text.slice(0, 24)}`}
+        key={`${compact ? "c" : "f"}:${tokens.isDark ? "d" : "l"}:${text.length}:${text.slice(0, 24)}`}
         source={{ html, baseUrl: "about:blank" }}
         style={[styles.webview, { height, backgroundColor: "transparent" }]}
         {...WEBVIEW_PROPS}

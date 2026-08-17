@@ -1,5 +1,5 @@
-import type { ReactNode } from "react"
-import { StyleSheet, View } from "react-native"
+import { type ReactNode, useEffect, useState } from "react"
+import { Keyboard, Platform, StyleSheet, View } from "react-native"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { GLASS_FLOATING_PILL_HEIGHT, GlassFloatingPill } from "./GlassFloatingPill"
 
@@ -22,14 +22,35 @@ type Props = {
  */
 export function GlassBottomSearchDock({ children }: Props) {
   const insets = useSafeAreaInsets()
+  const [keyboardHeight, setKeyboardHeight] = useState(0)
   const bottomPad = Math.max(insets.bottom, LIQUID_GLASS_SEARCH_DOCK_FLOAT_GAP)
+
+  useEffect(() => {
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow"
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide"
+    const show = Keyboard.addListener(showEvent, (event) => {
+      setKeyboardHeight(event.endCoordinates.height)
+    })
+    const hide = Keyboard.addListener(hideEvent, () => setKeyboardHeight(0))
+    return () => {
+      show.remove()
+      hide.remove()
+    }
+  }, [])
 
   return (
     <View
-      style={[styles.host, { paddingBottom: bottomPad }]}
+      style={[
+        styles.host,
+        keyboardHeight > 0
+          ? { bottom: keyboardHeight, paddingBottom: LIQUID_GLASS_SEARCH_DOCK_FLOAT_GAP }
+          : { paddingBottom: bottomPad },
+      ]}
       pointerEvents="box-none"
     >
-      <GlassFloatingPill>{children}</GlassFloatingPill>
+      <GlassFloatingPill glassEffectStyle="regular" frosted>
+        {children}
+      </GlassFloatingPill>
     </View>
   )
 }

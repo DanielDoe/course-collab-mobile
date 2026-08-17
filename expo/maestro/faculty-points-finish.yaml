@@ -1,0 +1,8 @@
+appId: com.coursecollab.app
+---
+- tapOn: "OK"
+- tapOn: "Clear search"
+- tapOn: "Pending"
+- tapOn: "Awards"
+- tapOn: "Overview"
+- waitForAnimationToEnd

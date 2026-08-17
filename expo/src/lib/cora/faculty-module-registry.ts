@@ -17,9 +17,6 @@ export type FacultyMembershipTier = "Free" | "Pro" | "Enterprise"
 
 export type FacultyRiskLevel = "none" | "confirm" | "high" | "forbidden"
 
-/** Alias used by transaction plans / confirmation UI. */
-export type CoraRiskLevel = FacultyRiskLevel
-
 export type FacultyCoraOperation =
   | "list"
   | "read"
@@ -58,6 +55,7 @@ export type FacultyCoraModuleId =
   | "groups"
   | "projects"
   | "summer-camp"
+  | "campers"
   | "question-bank"
   | "quizzes"
   | "homework"
@@ -162,10 +160,10 @@ export const FACULTY_CORA_MODULE_REGISTRY: Record<FacultyCoraModuleId, FacultyCo
       "announcement.archive",
     ],
     risk: { ...READ, ...COMM_WRITE, schedule: "confirm", archive: "confirm" },
-    serviceHint: "createCourseAnnouncement / POST /api/announcements",
+    serviceHint: "listCourseAnnouncements / createCourseAnnouncement / POST /api/announcements",
     route: "/module/announcements",
     denied: ["global_institution_announcement"],
-    notes: "Create often equals publish; always preview + confirm before send.",
+    notes: "List is read-only via list_course_announcements. Create often equals publish; always preview + confirm before send.",
   },
   syllabus: {
     module: "syllabus",
@@ -236,15 +234,14 @@ export const FACULTY_CORA_MODULE_REGISTRY: Record<FacultyCoraModuleId, FacultyCo
     label: "Practice",
     capabilities: [
       "practice.listTopics",
-      "practice.createTopic",
-      "practice.createQuestions",
       "practice.configure",
       "practice.analyze",
     ],
     risk: { ...READ, ...CONTENT_WRITE, configure: "confirm" },
-    serviceHint: "instructor practice / playground question services",
+    serviceHint: "instructor practice APIs",
     route: "/module/practice",
-    denied: [],
+    denied: ["practice.createTopic", "practice.createQuestions"],
+    notes: "Topics come from the question bank. Mobile configures availability, daily limits, and analytics.",
   },
   playground: {
     module: "playground",
@@ -302,6 +299,18 @@ export const FACULTY_CORA_MODULE_REGISTRY: Record<FacultyCoraModuleId, FacultyCo
     serviceHint: "summer-camp instructor APIs",
     route: "/module/summer-camp",
     denied: [],
+    notes: "Campers drawer (/module/campers) is the same hub scoped to Campers + Inbox.",
+  },
+  campers: {
+    module: "campers",
+    version: 1,
+    label: "Campers",
+    capabilities: ["summerCamp.read", "summerCamp.manage"],
+    risk: { ...READ, create: "confirm", update: "confirm", publish: "high" },
+    serviceHint: "summer-camp instructor APIs",
+    route: "/module/campers",
+    denied: [],
+    notes: "Alias of Summer Camp. Use summerCamp.read / summerCamp.manage; writes stay in the Campers UI.",
   },
   "question-bank": {
     module: "question-bank",
@@ -364,9 +373,12 @@ export const FACULTY_CORA_MODULE_REGISTRY: Record<FacultyCoraModuleId, FacultyCo
       "assessment.create",
       "assessment.update",
       "assessment.addQuestions",
+      "assessment.removeQuestion",
       "assessment.configureAvailability",
+      "assessment.configureAttempts",
       "assessment.preview",
       "assessment.publish",
+      "assessment.unpublish",
     ],
     risk: { ...ASSESS_WRITE },
     serviceHint: "homework_from_bank / instructor homework APIs",
@@ -381,9 +393,12 @@ export const FACULTY_CORA_MODULE_REGISTRY: Record<FacultyCoraModuleId, FacultyCo
       "assessment.create",
       "assessment.update",
       "assessment.addQuestions",
+      "assessment.removeQuestion",
       "assessment.configureAvailability",
+      "assessment.configureAttempts",
       "assessment.preview",
       "assessment.publish",
+      "assessment.unpublish",
     ],
     risk: {
       ...ASSESS_WRITE,
@@ -468,6 +483,7 @@ export const FACULTY_CORA_MODULE_REGISTRY: Record<FacultyCoraModuleId, FacultyCo
     serviceHint: "instructor roster / students APIs (assigned course only)",
     route: "/module/students",
     denied: ["other_instructor_private_roster", "student_passwords"],
+    notes: "Read/search/summarize only. Import, password-reset, and account-request writes stay in the directory UI.",
   },
   "office-hours": {
     module: "office-hours",
@@ -483,6 +499,7 @@ export const FACULTY_CORA_MODULE_REGISTRY: Record<FacultyCoraModuleId, FacultyCo
     serviceHint: "instructor office-hours APIs",
     route: "/module/office-hours",
     denied: [],
+    notes: "Approve, decline, and create-on-behalf stay in the Office Hours UI until faculty-cora-api tools are wired.",
   },
   recommendations: {
     module: "recommendations",
@@ -492,12 +509,12 @@ export const FACULTY_CORA_MODULE_REGISTRY: Record<FacultyCoraModuleId, FacultyCo
       "recommendation.read",
       "recommendation.draft",
       "recommendation.updateStatus",
-      "recommendation.send",
     ],
-    risk: { ...READ, create: "confirm", update: "confirm", send: "high" },
+    risk: { ...READ, create: "confirm", update: "confirm" },
     serviceHint: "instructor recommendations APIs",
     route: "/module/recommendations",
-    denied: [],
+    denied: ["recommendation.send"],
+    notes: "Send/notify is UI-only with instructor confirm. Cora must not email letters.",
   },
   "trade-center": {
     module: "trade-center",
@@ -507,7 +524,8 @@ export const FACULTY_CORA_MODULE_REGISTRY: Record<FacultyCoraModuleId, FacultyCo
     risk: { ...READ, update: "confirm", configure: "high" },
     serviceHint: "instructor trade-center APIs",
     route: "/module/trade-center",
-    denied: [],
+    denied: ["change_conversion_rules", "change_balances_directly"],
+    notes: "Configure and approve stay in the Trade Center UI. Cora must not change conversion rules or balances.",
   },
   results: {
     module: "results",
@@ -524,6 +542,7 @@ export const FACULTY_CORA_MODULE_REGISTRY: Record<FacultyCoraModuleId, FacultyCo
     route: "/module/results",
     minTier: "Pro",
     denied: ["cross_course_results"],
+    notes: "Mobile finalize, email, recalculate, and bulk re-evaluate. Per-question override edit is web-only.",
   },
   "student-progress": {
     module: "student-progress",
@@ -717,11 +736,11 @@ export const FACULTY_CORA_MODULE_REGISTRY: Record<FacultyCoraModuleId, FacultyCo
     module: "submission-issues",
     version: 1,
     label: "Submission Issues",
-    capabilities: ["submissionIssue.diagnose", "submissionIssue.resolve"],
-    risk: { ...READ, update: "confirm", approve: "high" },
+    capabilities: ["submissionIssue.diagnose"],
+    risk: { ...READ },
     serviceHint: "submission-issues APIs",
     route: "/module/submission-issues",
-    denied: [],
+    denied: ["submissionIssue.resolve"],
   },
   "teaching-assistants": {
     module: "teaching-assistants",

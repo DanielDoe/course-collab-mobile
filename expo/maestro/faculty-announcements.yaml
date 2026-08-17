@@ -1,0 +1,86 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Open navigation menu"
+- tapOn: "Announcements"
+- extendedWaitUntil:
+    visible: "Announcements"
+    timeout: 30000
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "No announcements yet|No matches|New announcement|Search title"
+    timeout: 20000
+- takeScreenshot: ann-list
+
+- tapOn: "Search title, summary, section…"
+- inputText: "zzz"
+- hideKeyboard
+- extendedWaitUntil:
+    visible: "No matches"
+    timeout: 8000
+- takeScreenshot: ann-search-empty
+- tapOn: "Clear"
+- tapOn: "Search title, summary, section…"
+- inputText: "exam"
+- hideKeyboard
+- takeScreenshot: ann-search-exam
+- tapOn:
+    text: "Clear"
+    optional: true
+
+- tapOn: "Open filters"
+- extendedWaitUntil:
+    visible: "Filter announcements|Pinned|Active|All announcements"
+    timeout: 8000
+- tapOn:
+    text: ".*Pinned.*"
+- takeScreenshot: ann-filter-pinned
+- tapOn: "Open filters"
+- tapOn: "All announcements"
+
+# Open a real announcement if any exist
+- tapOn:
+    text: ".*Quiz.*|.*Exam.*|.*Welcome.*|.*Homework.*|.*Office.*"
+    index: 0
+    optional: true
+- swipe:
+    direction: UP
+    optional: true
+- takeScreenshot: ann-detail
+- tapOn:
+    text: "Edit"
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn:
+    text: "Discard"
+    optional: true
+- tapOn:
+    text: "Keep editing"
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true
+
+# Composer — fill then discard, do not publish
+- tapOn: "New announcement"
+- extendedWaitUntil:
+    visible: "New announcement|Title|Publish"
+    timeout: 10000
+- tapOn:
+    text: "e.g. Mid-semester exam schedule"
+    optional: true
+- tapOn:
+    text: "Title"
+    optional: true
+- inputText: "QA draft — will discard"
+- tapOn:
+    text: "Write what students need to know…"
+    optional: true
+- inputText: "Do not publish this draft."
+- takeScreenshot: ann-composer
+- tapOn: "Cancel"
+- tapOn:
+    text: "Discard"
+    optional: true
+- takeScreenshot: ann-after-discard

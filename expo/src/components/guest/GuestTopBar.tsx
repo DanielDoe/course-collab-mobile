@@ -1,6 +1,6 @@
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native"
 import { Ionicons } from "@/components/icons/AppIcon"
-import { useRouter, usePathname } from "expo-router"
+import { usePathname } from "expo-router"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { getGuestNavLabel } from "../../constants/guest-nav"
 import { usePortalShell } from "../../context/PortalShellContext"
@@ -8,19 +8,23 @@ import { useGuestShell } from "../../context/GuestShellContext"
 import { useAppThemeTokens, useShellChrome } from "../../context/AppearanceProvider"
 import type { GuestSession } from "../../lib/session"
 import { GlassChromeBar } from "../theme/GlassSurface"
-import { HeaderProfileButton, NATIVE_HEADER_BAR_HEIGHT, shellTopBarStyles } from "../shell/shell-shared"
+import {
+  HeaderNotificationButton,
+  HeaderProfileButton,
+  NATIVE_HEADER_BAR_HEIGHT,
+  shellTopBarStyles,
+} from "../shell/shell-shared"
 
 type Props = { session: GuestSession }
 
 export function GuestTopBar({ session }: Props) {
   const insets = useSafeAreaInsets()
   const pathname = usePathname()
-  const router = useRouter()
   const screenTitle = getGuestNavLabel(pathname)
   const chrome = useShellChrome()
   const tokens = useAppThemeTokens()
   const { openDrawer } = useGuestShell()
-  const { toggleProfile, profileOpen } = usePortalShell()
+  const { toggleProfile, profileOpen, openNotifications, notificationCount } = usePortalShell()
 
   return (
     <GlassChromeBar
@@ -44,15 +48,10 @@ export function GuestTopBar({ session }: Props) {
           </Text>
         </View>
 
-        <Pressable
-          style={({ pressed }) => [shellTopBarStyles.iconBtn, pressed && { backgroundColor: tokens.native.fill }]}
-          onPress={() => router.push("/module/messages" as never)}
-          hitSlop={6}
-          accessibilityRole="button"
-          accessibilityLabel="Open messages"
-        >
-          <Ionicons name="mail-outline" size={22} color={chrome.label} />
-        </Pressable>
+        <HeaderNotificationButton
+          hasUnread={notificationCount > 0}
+          onPress={openNotifications}
+        />
 
         <HeaderProfileButton name={session.name} active={profileOpen} onPress={toggleProfile} />
       </View>
