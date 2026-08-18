@@ -197,7 +197,7 @@ export function FacultyRecommendationWorkspaceModal({
     try {
       if (letterHeadingDirtyRef.current) await saveLetterHeading()
       if (letterTextDirtyRef.current) await saveLetter(false)
-      setPdfPreviewSource(buildInstructorRecommendationPdfSource(scope, requestId))
+      setPdfPreviewSource(await buildInstructorRecommendationPdfSource(scope, requestId))
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not prepare PDF preview.")
     } finally {

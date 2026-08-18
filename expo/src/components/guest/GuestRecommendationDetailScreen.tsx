@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { ActivityIndicator, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { AppAlert } from '../../lib/app-alert'
 import { Ionicons } from "@/components/icons/AppIcon"
-import { useLocalSearchParams } from "expo-router"
+import { useLocalSearchParams, useRouter } from "expo-router"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { useSession } from "../../context/SessionProvider"
 import { useNotificationModuleRefresh } from "../../lib/notifications/notification-events"
@@ -20,12 +20,10 @@ import {
   recommendationStatusTone,
 } from "../../lib/faculty-recommendation-utils"
 import {
-  guestCanApproveRequest,
   guestCanCancel,
   guestCanDownload,
   guestCanEditLetter,
   guestCanEditQuestionnaire,
-  guestCanGenerateAiDrafts,
   guestCanPickDraft,
   guestCanRespondToInfo,
   guestCanSubmitLetter,
@@ -35,6 +33,7 @@ import {
 import {
   buildRecommendationPdfSource,
   hasRecommendationLetterPdf,
+  type RecommendationPdfSource,
 } from "../../lib/recommendation-letter-url"
 import type { GuestSession } from "../../lib/session"
 import { SegmentedTabs } from "../collaboration/collab-module-ui"
@@ -68,6 +67,7 @@ const TABS: Array<{ id: WorkspaceTab; label: string; icon: keyof typeof Ionicons
 export function GuestRecommendationDetailScreen() {
   const insets = useSafeAreaInsets()
   const scrollPad = useChromeScrollPadding(24)
+  const router = useRouter()
   const { id: idParam } = useLocalSearchParams<{ id: string }>()
   const requestId = Number(idParam)
   const { session } = useSession()
@@ -88,6 +88,7 @@ export function GuestRecommendationDetailScreen() {
   const [letterText, setLetterText] = useState("")
   const [infoResponse, setInfoResponse] = useState("")
   const [pdfPreviewOpen, setPdfPreviewOpen] = useState(false)
+  const [pdfSource, setPdfSource] = useState<RecommendationPdfSource | null>(null)
   const letterDirtyRef = useRef(false)
 
   const req = bundle?.request
@@ -148,8 +149,24 @@ export function GuestRecommendationDetailScreen() {
   const deliveryMode = req?.delivery_mode ?? null
   const deliveryNotice = guestDeliveryStatusLabel(deliveryMode, status)
   const canDownload = guestCanDownload(status, deliveryMode)
-  const pdfSource = guestSession && hasPdf && canDownload ? buildRecommendationPdfSource(guestSession, requestId) : null
-  const allowAi = Boolean((bundle?.settings as { allow_ai_generation?: boolean } | null)?.allow_ai_generation)
+
+  useEffect(() => {
+    let cancelled = false
+    if (!guestSession || !hasPdf || !canDownload || !Number.isFinite(requestId)) {
+      setPdfSource(null)
+      return
+    }
+    void buildRecommendationPdfSource(guestSession, requestId)
+      .then((source) => {
+        if (!cancelled) setPdfSource(source)
+      })
+      .catch(() => {
+        if (!cancelled) setPdfSource(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [guestSession, hasPdf, canDownload, requestId])
 
   async function runPatch(action: string, body: Record<string, unknown> = {}) {
     if (!guestSession || !Number.isFinite(requestId)) return
@@ -175,13 +192,12 @@ export function GuestRecommendationDetailScreen() {
   }
 
   async function saveLetter() {
-    const action =
-      req?.letter_intake_mode === "bring_own_draft"
-        ? "save_bring_own_draft"
-        : req?.status === "ai_generated"
-          ? "save_letter"
-          : "save_final_letter"
-    await runPatch(action, { finalLetterText: letterText })
+    setError("")
+    if (!letterText.trim()) {
+      setError("Write or paste your letter before submitting.")
+      return
+    }
+    setError("Letter text stays on this screen until you submit it for instructor review.")
   }
 
   async function submitLetter() {
@@ -207,7 +223,25 @@ export function GuestRecommendationDetailScreen() {
   function confirmCancel() {
     AppAlert.alert("Cancel request?", "Your instructor will no longer process this letter request.", [
       { text: "Keep request", style: "cancel" },
-      { text: "Cancel request", style: "destructive", onPress: () => void runPatch("cancel_request") },
+      {
+        text: "Cancel request",
+        style: "destructive",
+        onPress: () => {
+          void (async () => {
+            if (!guestSession || !Number.isFinite(requestId)) return
+            setBusy("cancel_request")
+            setError("")
+            try {
+              await guestApi.withdrawRecommendation(guestSession, requestId)
+              router.replace("/module/recommendations")
+            } catch (err) {
+              setError(err instanceof ApiError ? err.message : "Could not cancel this request.")
+            } finally {
+              setBusy(null)
+            }
+          })()
+        },
+      },
     ])
   }
 
@@ -361,18 +395,17 @@ export function GuestRecommendationDetailScreen() {
             </Text>
           </FacultySheetSection>
 
-          {guestCanApproveRequest(status) ? (
-            <FacultySheetSection label="Your approval">
+          {status === "requested" ? (
+            <FacultySheetSection label="Waiting on instructor">
               <Text style={[type.secondary, styles.summaryText]}>
-                Your instructor created this request. Approve it to begin the questionnaire and letter workflow.
+                Your instructor created this request. They approve it before the questionnaire and letter workflow open.
               </Text>
-              <ActionButton
-                label="Approve request"
-                icon="checkmark-circle-outline"
-                onPress={() => void runPatch("approve_request")}
-                loading={busy === "approve_request"}
-                accent={theme.primary}
-              />
+            </FacultySheetSection>
+          ) : null}
+
+          {status === "info_requested" && req.info_request_note ? (
+            <FacultySheetSection label="Instructor note">
+              <Text style={[type.secondary, styles.summaryText]}>{String(req.info_request_note)}</Text>
             </FacultySheetSection>
           ) : null}
 
@@ -450,18 +483,6 @@ export function GuestRecommendationDetailScreen() {
 
       {tab === "letter" ? (
         <>
-          {guestCanGenerateAiDrafts(status, allowAi) ? (
-            <FacultySheetSection label="AI drafts">
-              <ActionButton
-                label="Generate AI drafts"
-                icon="sparkles-outline"
-                onPress={() => void runPatch("generate_ai_drafts")}
-                loading={busy === "generate_ai_drafts"}
-                accent={theme.primary}
-              />
-            </FacultySheetSection>
-          ) : null}
-
           {guestCanPickDraft(status) && (bundle?.drafts?.length ?? 0) > 0 ? (
             <FacultySheetSection label="Choose a draft">
               {bundle?.drafts.map((draft) => (
@@ -545,7 +566,7 @@ export function GuestRecommendationDetailScreen() {
           onClose={() => setPdfPreviewOpen(false)}
           onDownloaded={() => {
             if (!guestSession || status !== "finalized") return
-            void guestApi.patchRecommendation(guestSession, requestId, "mark_downloaded").then(() => load())
+            void guestApi.markRecommendationDownloaded(guestSession, requestId).then(() => load())
           }}
         />
       ) : null}

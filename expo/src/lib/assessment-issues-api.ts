@@ -1,6 +1,6 @@
-import { API_BASE_URL } from "../constants"
+import { getStoredSession } from "./session"
 import type { StudentSession } from "./session"
-import { ApiError } from "./student-api"
+import { ApiError, studentAuthenticatedRequest } from "./student-api"
 
 export type AssessmentIssue = {
   id: number
@@ -23,29 +23,12 @@ export type IssueComment = {
   created_at: string
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const url = `${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`
-  const response = await fetch(url, init)
-  let body: unknown = null
-  const text = await response.text()
-  if (text) {
-    try {
-      body = JSON.parse(text)
-    } catch {
-      body = { error: text }
-    }
+async function requireStoredStudentSession(): Promise<StudentSession> {
+  const stored = await getStoredSession()
+  if (!stored || stored.portal !== "student") {
+    throw new ApiError("Student authentication required", 401)
   }
-  if (!response.ok) {
-    const message =
-      typeof body === "object" &&
-      body !== null &&
-      "error" in body &&
-      typeof (body as { error: unknown }).error === "string"
-        ? (body as { error: string }).error
-        : `Request failed (${response.status})`
-    throw new ApiError(message, response.status, body)
-  }
-  return body as T
+  return stored
 }
 
 export const assessmentIssuesApi = {
@@ -56,7 +39,10 @@ export const assessmentIssuesApi = {
       assessmentType,
       studentDatabaseId: session.databaseId})
     if (session.courseId != null) params.set("courseId", String(session.courseId))
-    return request<{ issues: AssessmentIssue[] }>(`/api/student/issues?${params}`)
+    return studentAuthenticatedRequest<{ issues: AssessmentIssue[] }>(
+      session,
+      `/api/student/issues?${params}`,
+    )
   },
 
   create: (
@@ -69,9 +55,8 @@ export const assessmentIssuesApi = {
       assessmentType: string
     },
   ) =>
-    request<{ issue: AssessmentIssue }>("/api/student/issues", {
+    studentAuthenticatedRequest<{ issue: AssessmentIssue }>(session, "/api/student/issues", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         quizId: payload.quizId,
         quizTitle: payload.quizTitle,
@@ -81,15 +66,22 @@ export const assessmentIssuesApi = {
         reporterId: session.id,
         assessmentType: payload.assessmentType})}),
 
-  getComments: (issueId: number) =>
-    request<{ comments: IssueComment[] }>(`/api/student/issues/${issueId}/comments`),
+  getComments: async (issueId: number) => {
+    const session = await requireStoredStudentSession()
+    return studentAuthenticatedRequest<{ comments: IssueComment[] }>(
+      session,
+      `/api/student/issues/${issueId}/comments`,
+    )
+  },
 
   addComment: (session: StudentSession, issueId: number, commentText: string) =>
-    request<{ comment: IssueComment }>(`/api/student/issues/${issueId}/comments`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        commenterName: session.name,
-        commenterId: session.id,
-        commenterRole: "student",
-        commentText})})}
+    studentAuthenticatedRequest<{ comment: IssueComment }>(
+      session,
+      `/api/student/issues/${issueId}/comments`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          commenterName: session.name,
+          commenterId: session.id,
+          commenterRole: "student",
+          commentText})})}

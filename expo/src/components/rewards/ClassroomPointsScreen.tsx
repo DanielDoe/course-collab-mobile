@@ -5,7 +5,7 @@ import { useSession } from "../../context/SessionProvider"
 import { ApiError } from "../../lib/student-api"
 import type { StudentSession } from "../../lib/session"
 import { assignmentKindLabel, isSolutionAssignment, shortenTaskTitle } from "../../lib/classroom-submission"
-import { CollabSearch } from "../collaboration/collab-shared"
+import { StudentSearchToolbar } from "../student/student-search-toolbar"
 import {
   categoryLabel,
   formatRelativeTime,
@@ -274,9 +274,10 @@ export function ClassroomPointsScreen() {
       onRefresh={() => void onRefresh()}
       error={error}
       chrome={
-        <CollabSearch
+        <StudentSearchToolbar
           value={search}
           onChange={setSearch}
+          showFilter={false}
           placeholder={
             tab === "assignments"
               ? "Search classroom tasks…"

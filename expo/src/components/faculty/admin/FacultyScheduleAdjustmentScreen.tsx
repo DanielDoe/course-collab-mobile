@@ -262,6 +262,27 @@ function FacultyScheduleAdjustmentContent() {
           <Stat label="Dept" value={request.department_approval_status ?? "pending"} />
         </View>
 
+        {request.status === "COLLECTING_AVAILABILITY" ? (
+          <ActionButton
+            label="Close poll"
+            disabled={saving}
+            onPress={() => {
+              AppAlert.alert(
+                "Close availability poll?",
+                "Students will no longer be able to submit availability. Candidate analysis will run.",
+                [
+                  { text: "Cancel", style: "cancel" },
+                  {
+                    text: "Close poll",
+                    style: "destructive",
+                    onPress: () => void postAction({ action: "close_availability" }),
+                  },
+                ],
+              )
+            }}
+          />
+        ) : null}
+
         {["REVIEWING_RESULTS", "AWAITING_DEPARTMENT_APPROVAL"].includes(request.status) ? (
           <View style={styles.requestsSection}>
             <Text style={[type.sectionHeader, styles.sectionLabel]}>Availability analysis</Text>
@@ -328,7 +349,7 @@ function FacultyScheduleAdjustmentContent() {
                   building: deptForm.building,
                   room: deptForm.room,
                   effectiveDate: deptForm.effectiveDate,
-                  instructorNotes: deptForm.notes,
+                  notes: deptForm.notes,
                   confirmationChecked: deptForm.confirmationChecked,
                 })
               }
@@ -377,7 +398,20 @@ function FacultyScheduleAdjustmentContent() {
             label="Cancel request"
             tone="danger"
             disabled={saving}
-            onPress={() => void postAction({ action: "cancel", reason: "Cancelled by instructor" })}
+            onPress={() => {
+              AppAlert.alert(
+                "Cancel this request?",
+                "Enrolled students will be notified and the original class schedule will remain unchanged.",
+                [
+                  { text: "Keep request", style: "cancel" },
+                  {
+                    text: "Cancel request",
+                    style: "destructive",
+                    onPress: () => void postAction({ action: "cancel", reason: "Cancelled by instructor" }),
+                  },
+                ],
+              )
+            }}
           />
         ) : null}
       </FacultyAdminScreen>

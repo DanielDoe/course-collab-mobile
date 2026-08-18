@@ -1,0 +1,26 @@
+{
+  "module": "ai-tutor",
+  "label": "Cora Assistant",
+  "size": "very_large",
+  "auditedAt": "2026-08-17T21:50:00-05:00",
+  "commit": null,
+  "mode": "production_readiness",
+  "note": "Ship-critical shared layer audited this run. Tool/vision/code E2E marked UNVERIFIED.",
+  "workflows": {
+    "cora:chat": "audited",
+    "cora:context": "audited",
+    "cora:membership": "audited",
+    "cora:credits": "audited",
+    "cora:guardrails": "audited",
+    "cora:permissions": "audited",
+    "cora:student-tools": "code_traced",
+    "cora:notes": "unverified_e2e",
+    "cora:flashcards": "unverified_e2e",
+    "cora:practice": "unverified_e2e",
+    "cora:walkthrough": "unverified_e2e",
+    "cora:code": "unverified_e2e",
+    "cora:files": "unverified_e2e",
+    "cora:vision": "unverified_e2e"
+  },
+  "report": "docs/audits/student-mobile/ai-tutor.md"
+}

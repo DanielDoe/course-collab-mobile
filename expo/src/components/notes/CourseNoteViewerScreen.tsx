@@ -71,8 +71,13 @@ export function CourseNoteViewerScreen() {
   }, [session, noteId])
 
   useEffect(() => {
-    if (!session || !Number.isFinite(noteId)) return
+    if (!session || !Number.isFinite(noteId)) {
+      setLoading(false)
+      setError("Note not found.")
+      return
+    }
     setLoading(true)
+    setError("")
     load()
       .catch((err) => setError(err instanceof ApiError ? err.message : "Could not load note."))
       .finally(() => setLoading(false))

@@ -54,7 +54,7 @@ export const STUDENT_NAV_GROUPS: StudentNavGroup[] = [
     icon: "bulb-outline",
     items: [
       { id: "lectures", label: "Lectures", route: "/module/lectures", icon: "easel-outline" },
-      { id: "notes", label: "My Notes", route: "/module/notes", icon: "document-text-outline" },
+      { id: "notes", label: "My Notes", route: "/module/notes", icon: "journal-outline" },
       { id: "flashcards", label: "Flashcards", route: "/module/flashcards", icon: "layers-outline" },
       { id: "ai-notetaker", label: "AI Notetaker", route: "/module/ai-notetaker", icon: "mic-outline", locked: true, minTier: "Explorer" },
       { id: "practice", label: "Practice Hub", route: "/module/practice", icon: "fitness-outline" },
@@ -81,7 +81,7 @@ export const STUDENT_NAV_GROUPS: StudentNavGroup[] = [
     label: "Collaboration",
     icon: "people-outline",
     items: [
-      { id: "forum", label: "Forum Hub", route: "/module/forum", icon: "chatbubbles-outline" },
+      { id: "forum", label: "Forum Hub", route: "/module/forum", icon: "globe-outline" },
       { id: "messages", label: "Messages", route: "/module/messages", icon: "mail-outline" },
       { id: "groups", label: "Groups", route: "/module/groups", icon: "people-outline" },
       { id: "projects", label: "Projects", route: "/module/projects", icon: "folder-open-outline" },
@@ -95,7 +95,7 @@ export const STUDENT_NAV_GROUPS: StudentNavGroup[] = [
     items: [
       { id: "classroom-points", label: "Classroom Points", route: "/module/classroom-points", icon: "trophy-outline" },
       { id: "attendance", label: "Attendance", route: "/module/attendance", icon: "checkbox-outline" },
-      { id: "trade-center", label: "Trade Center", route: "/module/trade-center", icon: "diamond-outline" },
+      { id: "trade-center", label: "Trade Center", route: "/module/trade-center", icon: "storefront-outline" },
     ],
   }),
   withSortedItems({
@@ -111,7 +111,7 @@ export const STUDENT_NAV_GROUPS: StudentNavGroup[] = [
       { id: "schedule-adjustment", label: "Schedule Adjustment", route: "/module/schedule-adjustment", icon: "swap-horizontal-outline" },
       { id: "course-policies", label: "Policies", route: "/module/course-policies", icon: "shield-outline" },
       { id: "course-evaluation", label: "Course Evaluation", route: "/module/course-evaluation", icon: "star-outline" },
-      { id: "recommendations", label: "Recommendation Letters", route: "/module/recommendations", icon: "create-outline" },
+      { id: "recommendations", label: "Recommendation Letters", route: "/module/recommendations", icon: "bookmark-outline" },
     ],
   }),
 ]
@@ -127,7 +127,7 @@ export const STUDENT_SUPPORT_GROUP: StudentNavGroup = {
   label: "Support",
   icon: "help-buoy-outline",
   items: [
-    { id: "membership", label: "View Plans", route: "/membership", icon: "card-outline" },
+    { id: "membership", label: "View Plans", route: "/membership", icon: "diamond-outline" },
     { id: "report-bug", label: "Report Bug", route: "/module/report-bug", icon: "bug-outline" },
     { id: "help-center", label: "Help Center", route: "/module/help-center", icon: "help-circle-outline" },
     { id: "submit-ticket", label: "Submit Ticket", route: "/module/submit-ticket", icon: "send-outline" },
@@ -228,6 +228,7 @@ export function getStudentActiveNavItemId(pathname: string): string | null {
   if (pathname === STUDENT_SETTINGS_LINK.route || pathname.startsWith("/settings/")) {
     return STUDENT_SETTINGS_LINK.id
   }
+  if (pathname === "/codebench/ide" || pathname.startsWith("/codebench/ide/")) return "codebench"
   if (pathname.startsWith("/messages/")) return "messages"
   for (const group of [...STUDENT_NAV_GROUPS, STUDENT_SUPPORT_GROUP]) {
     for (const item of group.items) {

@@ -1,0 +1,18 @@
+{
+  "module": "lectures",
+  "size": "large",
+  "auditedAt": "2026-08-17T21:35:00-05:00",
+  "commit": "dba7f46",
+  "mode": "production_readiness",
+  "workflows": {
+    "list": "audited",
+    "viewer": "audited",
+    "workspace": "audited",
+    "sample-practice": "audited",
+    "tools-downloads": "audited",
+    "progress": "audited",
+    "auth-isolation": "audited",
+    "faculty-downstream": "audited"
+  },
+  "report": "docs/audits/student-mobile/lectures.md"
+}

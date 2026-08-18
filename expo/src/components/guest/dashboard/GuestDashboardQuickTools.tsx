@@ -36,7 +36,7 @@ const TOOLS: Tool[] = [
     id: "cover-letter",
     label: "Cover Letter",
     detail: "Draft in seconds",
-    icon: "mail-open-outline",
+    icon: "document-text-outline",
     route: "/module/cover-letter",
   },
   {
@@ -50,7 +50,7 @@ const TOOLS: Tool[] = [
     id: "applications",
     label: "Applications",
     detail: "Track your pipeline",
-    icon: "briefcase-outline",
+    icon: "file-tray-stacked-outline",
     route: "/module/applications",
   },
   {

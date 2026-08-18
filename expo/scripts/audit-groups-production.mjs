@@ -24,6 +24,11 @@ function fail(id, detail) {
   console.error(`  ✗ ${id}${detail ? ` — ${detail}` : ""}`)
 }
 
+function skip(id, detail) {
+  results.push({ id, ok: true, skipped: true, detail })
+  console.log(`  ⊘ ${id}${detail ? ` — ${detail}` : ""}`)
+}
+
 async function fetchJson(path, init = {}) {
   const res = await fetch(`${BASE}${path}`, init)
   const text = await res.text()
@@ -82,6 +87,20 @@ async function runAuthProbes() {
     fail("F-003-invalid-student", `expected 401/404, got ${invalidStudent.status}`)
   }
 
+  const headerOnlyStudent = await fetchJson(`/api/groups?session=${encodeURIComponent(SESSION)}`, {
+    headers: studentHeaders(),
+  })
+  if ([401, 403].includes(headerOnlyStudent.status)) {
+    pass("F-003-header-only-student", `${headerOnlyStudent.status} header-only student rejected`)
+  } else if (headerOnlyStudent.ok) {
+    fail(
+      "F-003-header-only-student",
+      `expected 401, got ${headerOnlyStudent.status} — G2 not shipped (header-only student GET must not pass)`,
+    )
+  } else {
+    fail("F-003-header-only-student", `expected 401/403, got ${headerOnlyStudent.status}`)
+  }
+
   const invalidInstructor = await fetchJson("/api/groups", {
     headers: { "x-instructor-id": INSTRUCTOR_ID, "x-course-id": "999999" },
   })
@@ -94,10 +113,10 @@ async function runAuthProbes() {
   const idorList = await fetchJson("/api/groups", {
     headers: instructorHeaders(IDOR_COURSE_ID),
   })
-  if (idorList.status === 403 || idorList.status === 404) {
-    pass("F-001-idor-list", `${idorList.status} on foreign course ${IDOR_COURSE_ID}`)
+  if ([401, 403, 404].includes(idorList.status)) {
+    pass("F-001-idor-list", `${idorList.status} on foreign course ${IDOR_COURSE_ID} (header-only instructor rejected)`)
   } else {
-    fail("F-001-idor-list", `expected 403/404, got ${idorList.status}`)
+    fail("F-001-idor-list", `expected 401/403/404, got ${idorList.status}`)
   }
 
   const unauthApprove = await fetchJson("/api/groups/999999001/approve", { method: "POST" })
@@ -117,6 +136,13 @@ async function runFacultyStudentE2E() {
   const roster = await fetchJson(`/api/instructor/students?sessionCode=${encodeURIComponent(SESSION)}`, {
     headers: instructorHeaders(),
   })
+  if (roster.status === 401) {
+    skip(
+      "F-002-e2e",
+      "skipped — /api/instructor/students requires instructor session cookies; header-only 401. Not inventing cookies; create/student-visible not marked pass.",
+    )
+    return
+  }
   const students = roster.body?.students ?? []
   const leader = students.find((s) => String(s.student_id) === STUDENT_ID || String(s.id) === STUDENT_ID)
   if (!roster.ok || !leader?.id) {
@@ -168,25 +194,32 @@ async function runFacultyStudentE2E() {
     const studentList = await fetchJson(`/api/groups?session=${encodeURIComponent(SESSION)}`, {
       headers: studentHeaders(),
     })
-    if (!studentList.ok) {
-      fail("F-002-student-list", `student GET failed (${studentList.status})`)
+    if (studentList.ok) {
+      fail(
+        "F-002-student-visible",
+        `header-only student GET ${studentList.status} — G2 requires 401 until backend ships; not treating 200 as pass`,
+      )
+    } else if ([401, 403].includes(studentList.status)) {
+      skip(
+        "F-002-student-visible",
+        `${studentList.status} header-only student rejected; cannot verify visibility without student session cookies`,
+      )
     } else {
-      const visible = findGroup(studentList.body?.groups, marker)
-      if (visible) {
-        pass("F-002-student-visible", `enrolled student sees group (${visible.status})`)
-      } else {
-        fail("F-002-student-visible", "created group missing from student feed")
-      }
+      fail("F-002-student-list", `student GET failed (${studentList.status}) — header-only; cannot verify visibility`)
     }
 
     const otherList = await fetchJson(`/api/groups?session=${encodeURIComponent(SESSION)}`, {
       headers: studentHeaders(OTHER_STUDENT_ID),
     })
-    const leaked = findGroup(otherList.body?.groups, marker)
-    if (otherList.status === 403 || otherList.status === 404 || !leaked) {
-      pass("F-001-student-course-scope", `other-course student does not see ${marker}`)
+    if (otherList.ok) {
+      fail(
+        "F-001-student-course-scope",
+        `header-only student GET ${otherList.status} — G2 requires 401 until backend ships; not treating 200 as pass`,
+      )
+    } else if ([401, 403, 404].includes(otherList.status)) {
+      pass("F-001-student-course-scope", `${otherList.status} other-course header-only student rejected`)
     } else {
-      fail("F-001-student-course-scope", "group leaked to a student on another course")
+      fail("F-001-student-course-scope", `expected 401/403/404, got ${otherList.status}`)
     }
 
     if (facultyRow?.status === "pending" || created.body?.group?.status === "pending") {
@@ -207,13 +240,21 @@ async function runFacultyStudentE2E() {
     const studentAfter = await fetchJson(`/api/groups?session=${encodeURIComponent(SESSION)}`, {
       headers: studentHeaders(),
     })
-    const afterRow = findGroup(studentAfter.body?.groups, marker)
-    if (afterRow && (afterRow.status === "approved" || afterRow.status === "pending")) {
-      pass("F-002-student-after-approve", `student still sees ${afterRow.status}`)
-    } else if (afterRow) {
-      fail("F-002-student-after-approve", `unexpected status ${afterRow.status}`)
+    if (studentAfter.ok) {
+      fail(
+        "F-002-student-after-approve",
+        `header-only student GET ${studentAfter.status} — G2 requires 401 until backend ships; not treating 200 as pass`,
+      )
+    } else if ([401, 403].includes(studentAfter.status)) {
+      skip(
+        "F-002-student-after-approve",
+        `${studentAfter.status} header-only student rejected; cannot verify visibility without student session cookies`,
+      )
     } else {
-      fail("F-002-student-after-approve", "group missing after approve")
+      fail(
+        "F-002-student-after-approve",
+        `student GET failed (${studentAfter.status}) — header-only; cannot verify visibility`,
+      )
     }
 
     const deleted = await fetchJson(`/api/groups/${groupId}`, {
@@ -230,11 +271,21 @@ async function runFacultyStudentE2E() {
     const studentGone = await fetchJson(`/api/groups?session=${encodeURIComponent(SESSION)}`, {
       headers: studentHeaders(),
     })
-    const stillVisible = findGroup(studentGone.body?.groups, marker)
-    if (!stillVisible) {
-      pass("F-002-student-removed", "deleted group hidden from student feed")
+    if (studentGone.ok) {
+      fail(
+        "F-002-student-removed",
+        `header-only student GET ${studentGone.status} — G2 requires 401 until backend ships; not treating 200 as pass`,
+      )
+    } else if ([401, 403].includes(studentGone.status)) {
+      skip(
+        "F-002-student-removed",
+        `${studentGone.status} header-only student rejected; cannot verify removal without student session cookies`,
+      )
     } else {
-      fail("F-002-student-removed", "deleted group still in student feed")
+      fail(
+        "F-002-student-removed",
+        `student GET failed (${studentGone.status}) — header-only; cannot verify removal`,
+      )
     }
   } finally {
     if (groupId != null) {

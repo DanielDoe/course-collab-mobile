@@ -101,6 +101,32 @@ async function runAuthProbes() {
   expectDenied("F-003-unauth-detail", await fetchJson("/api/projects/87"), "detail without auth")
   expectDenied("F-003-unauth-leaderboard", await fetchJson("/api/projects/leaderboard"), "leaderboard without auth")
 
+  const headerStudentList = await fetchJson(`/api/projects/list?session=${encodeURIComponent(SESSION)}`, {
+    headers: studentHeaders(),
+  })
+  if ([401, 403].includes(headerStudentList.status)) {
+    pass("F-003-header-only-student-list", `${headerStudentList.status} header-only student list rejected`)
+  } else if (headerStudentList.status === 200) {
+    fail(
+      "F-003-header-only-student-list",
+      `header-only student GET list 200 — session bind required`,
+    )
+  } else {
+    fail("F-003-header-only-student-list", `expected 401/403, got ${headerStudentList.status}`)
+  }
+
+  const headerStudentDetail = await fetchJson("/api/projects/87", { headers: studentHeaders() })
+  if ([401, 403].includes(headerStudentDetail.status)) {
+    pass("F-003-header-only-student-detail", `${headerStudentDetail.status} header-only student GET 87 rejected`)
+  } else if (headerStudentDetail.status === 200) {
+    fail(
+      "F-003-header-only-student-detail",
+      `header-only student GET /api/projects/87 200 — session bind required`,
+    )
+  } else {
+    fail("F-003-header-only-student-detail", `expected 401/403, got ${headerStudentDetail.status}`)
+  }
+
   const { leader, group, createdGroupId: authGroupId } = await resolveLeaderAndGroup()
   let probeId = null
   if (leader?.id && group?.id) {
@@ -165,10 +191,10 @@ async function runAuthProbes() {
   }
 
   const idorList = await fetchJson("/api/projects/list", { headers: instructorHeaders(IDOR_COURSE_ID) })
-  if ([403, 404].includes(idorList.status)) {
+  if ([401, 403, 404].includes(idorList.status)) {
     pass("F-004-idor-list", `${idorList.status} foreign course`)
   } else {
-    fail("F-004-idor-list", `expected 403/404, got ${idorList.status}`)
+    fail("F-004-idor-list", `expected 401/403/404, got ${idorList.status}`)
   }
 
   const memberScores = await fetchJson("/api/instructor/projects/member-scores")
@@ -209,6 +235,10 @@ async function runFacultyStudentE2E() {
       }),
     })
     projectId = created.body?.project?.id
+    if (created.status === 401) {
+      fail("F-005-create", "instructor session required")
+      return
+    }
     if (!created.ok || projectId == null) {
       fail("F-005-create", `create failed (${created.status}) ${created.body?.error ?? ""}`)
       return
@@ -220,7 +250,7 @@ async function runFacultyStudentE2E() {
     })
     const draftRow = (studentDraft.body?.projects ?? []).find((p) => p.id === projectId)
     if (studentDraft.status === 401) {
-      fail("F-005-student-draft", "student list 401 — check x-student-id")
+      fail("F-005-student-draft", "student session required")
     } else if (draftRow && draftRow.status === "approved") {
       fail("F-005-student-draft", "draft already approved before faculty approve")
     } else {
@@ -232,6 +262,10 @@ async function runFacultyStudentE2E() {
       headers: { ...instructorHeaders(), "Content-Type": "application/json" },
       body: JSON.stringify({}),
     })
+    if (approved.status === 401) {
+      fail("F-005-approve", "instructor session required")
+      return
+    }
     if (!approved.ok) {
       fail("F-005-approve", `${approved.status} ${approved.body?.error ?? ""}`)
       return
@@ -242,7 +276,9 @@ async function runFacultyStudentE2E() {
       headers: studentHeaders(),
     })
     const liveRow = (studentLive.body?.projects ?? []).find((p) => p.id === projectId)
-    if (liveRow && (liveRow.status === "approved" || liveRow.title === title)) {
+    if (studentLive.status === 401) {
+      fail("F-005-student-visible", "student session required")
+    } else if (liveRow && (liveRow.status === "approved" || liveRow.title === title)) {
       pass("F-005-student-visible", `student sees ${liveRow.status}`)
     } else {
       fail("F-005-student-visible", `student list missing approved project (${studentLive.status})`)
@@ -263,7 +299,9 @@ async function runFacultyStudentE2E() {
       headers: studentHeaders(),
     })
     const afterRow = (studentAfter.body?.projects ?? []).find((p) => p.id === projectId)
-    if (!afterRow || afterRow.status === "rejected") {
+    if (studentAfter.status === 401) {
+      fail("F-005-student-hidden", "student session required")
+    } else if (!afterRow || afterRow.status === "rejected") {
       pass("F-005-student-hidden", afterRow ? "student sees rejected" : "approved row gone")
     } else {
       fail("F-005-student-hidden", `student still sees ${afterRow.status}`)

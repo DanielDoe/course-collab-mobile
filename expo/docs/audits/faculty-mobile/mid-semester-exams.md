@@ -1,5 +1,7 @@
 # Mid-Semester Exams — Faculty Mobile Production Audit
 
+> **REVALIDATION_REQUIRED (2026-08-18).** READY 91 / header-as-auth script is invalid. Independent re-probe: unauth `GET /api/student/mid-semesters?studentId=722` is **200** and leaked published disposable **215**. Unified `quizzes?type=mid_semester` is **401** without a session. Faculty header-only CRUD is **401**. Cookie create 213/215 → publish ECE2202 worked. Live Mid 2 (`167`) start created leftover attempt **4493** — do not finalize. See `docs/audits/student-mobile/mid-semester-exams.md`.
+
 **Audited at:** 2026-08-17T17:12:00.000Z  
 **Audit mode:** Production Readiness  
 **Scope:** Faculty Expo/mobile Mid-Semester Exams (`assessmentType="mid_semester"`) + shared assessment stack + `/api/instructor/quizzes*` + student downstream (`getMidSemesters`, `/api/midsem/take`, `/api/midsem/submit`)  

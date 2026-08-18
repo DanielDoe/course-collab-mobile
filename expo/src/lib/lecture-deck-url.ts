@@ -1,5 +1,7 @@
 import { API_BASE_URL } from "../constants"
 import type { InstructorLecture } from "./instructor-api"
+import type { StudentSession } from "./session"
+import { studentAuthenticatedHeaders } from "./student-api"
 
 function stringField(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value : null
@@ -57,17 +59,17 @@ export function buildAuthenticatedDeckSource(
   return { uri, headers }
 }
 
-export function buildStudentAuthenticatedDeckSource(
+export async function buildStudentAuthenticatedDeckSource(
   url: string | null | undefined,
-  session: { databaseId: string },
-): { uri: string; headers?: Record<string, string> } | null {
+  session: StudentSession,
+): Promise<{ uri: string; headers?: Record<string, string> } | null> {
   const uri = resolveLectureDeckUrl(url)
   if (!uri) return null
 
   if (uri.startsWith(API_BASE_URL)) {
     return {
       uri,
-      headers: { "x-student-id": session.databaseId },
+      headers: await studentAuthenticatedHeaders(session),
     }
   }
 

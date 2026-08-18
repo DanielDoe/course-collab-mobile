@@ -1,38 +1,11 @@
 import type { StudentSession } from "./session"
 import { API_BASE_URL } from "../constants"
-import { ApiError } from "./student-api"
+import { assertProductionHttpsUrl, createApiAbortSignal } from "./http"
+import { persistHttpCookiesFromResponse } from "./student-http-cookies"
+import { ApiError, studentAuthenticatedHeaders, studentAuthenticatedRequest } from "./student-api"
 
-function headers(session: StudentSession): HeadersInit {
-  return {
-    Accept: "application/json",
-    "Content-Type": "application/json",
-    "x-student-id": session.databaseId,
-    "x-student-session": session.section}
-}
-
-async function request<T>(session: StudentSession, path: string, init?: RequestInit): Promise<T> {
-  const url = `${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`
-  const response = await fetch(url, { ...init, headers: { ...headers(session), ...init?.headers } })
-  let body: unknown = null
-  const text = await response.text()
-  if (text) {
-    try {
-      body = JSON.parse(text)
-    } catch {
-      body = { error: text }
-    }
-  }
-  if (!response.ok) {
-    const message =
-      typeof body === "object" &&
-      body !== null &&
-      "error" in body &&
-      typeof (body as { error: unknown }).error === "string"
-        ? (body as { error: string }).error
-        : `Request failed (${response.status})`
-    throw new ApiError(message, response.status, body)
-  }
-  return body as T
+function request<T>(session: StudentSession, path: string, init?: RequestInit): Promise<T> {
+  return studentAuthenticatedRequest<T>(session, path, init)
 }
 
 export type ClassroomPointRecord = {
@@ -255,12 +228,17 @@ export const rewardsApi = {
     form.append("partId", payload.partId)
 
     const url = `${API_BASE_URL}/api/student/classroom-points/solution-upload`
+    assertProductionHttpsUrl(url)
+    const headers = await studentAuthenticatedHeaders(session)
+    delete headers["Content-Type"]
     const response = await fetch(url, {
       method: "POST",
+      credentials: "include",
+      signal: createApiAbortSignal(),
       headers: {
+        ...headers,
         Accept: "application/json",
-        "x-student-id": session.databaseId,
-        "x-student-session": session.section},
+      },
       body: form})
     let body: unknown = null
     const text = await response.text()
@@ -281,6 +259,7 @@ export const rewardsApi = {
           : `Upload failed (${response.status})`
       throw new ApiError(message, response.status, body)
     }
+    await persistHttpCookiesFromResponse(url, response.headers)
     return body as { url: string; name: string; mime: string; uploaded_at?: string }
   },
 

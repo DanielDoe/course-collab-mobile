@@ -3,9 +3,8 @@ import {
   fetchNotificationCount} from "./student-dashboard-stats"
 import { setCachedMembershipTier } from "./membership-tier-cache"
 import { parseMembershipTier } from "./membership-tier"
-import { studentApi } from "./student-api"
+import { studentApi, studentAuthenticatedRequest } from "./student-api"
 import type { StudentSession } from "./session"
-import { API_BASE_URL } from "../constants"
 import type { MembershipTier } from "../types/dashboard"
 import { setAppBadgeCount } from "./notifications/notification-service"
 
@@ -13,17 +12,11 @@ export async function fetchEffectiveMembershipTier(
   session: StudentSession,
 ): Promise<MembershipTier | null> {
   try {
-    const refreshRes = await fetch(
-      `${API_BASE_URL}/api/student/membership/refresh?studentId=${encodeURIComponent(session.databaseId)}`,
-      {
-        headers: {
-          Accept: "application/json",
-          "x-student-id": session.databaseId}},
+    const refreshPayload = await studentAuthenticatedRequest<{ tier?: string }>(
+      session,
+      `/api/student/membership/refresh?studentId=${encodeURIComponent(session.databaseId)}`,
     )
-    if (refreshRes.ok) {
-      const refreshPayload = (await refreshRes.json()) as { tier?: string }
-      if (refreshPayload.tier) return parseMembershipTier(refreshPayload.tier)
-    }
+    if (refreshPayload.tier) return parseMembershipTier(refreshPayload.tier)
   } catch {
     /* fall through */
   }
@@ -38,18 +31,12 @@ export async function fetchEffectiveMembershipTier(
   }
 
   try {
-    const infoRes = await fetch(
-      `${API_BASE_URL}/api/student/info?student_id=${encodeURIComponent(session.id)}`,
-      {
-        headers: {
-          Accept: "application/json",
-          "x-student-id": session.databaseId}},
+    const infoPayload = await studentAuthenticatedRequest<{ student?: { membership_tier?: string } }>(
+      session,
+      `/api/student/info?student_id=${encodeURIComponent(session.id)}`,
     )
-    if (infoRes.ok) {
-      const infoPayload = (await infoRes.json()) as { student?: { membership_tier?: string } }
-      if (infoPayload.student?.membership_tier) {
-        return parseMembershipTier(infoPayload.student.membership_tier)
-      }
+    if (infoPayload.student?.membership_tier) {
+      return parseMembershipTier(infoPayload.student.membership_tier)
     }
   } catch {
     /* fall through */
@@ -69,8 +56,8 @@ export async function refreshStudentShellData(
 ): Promise<void> {
   const [tier, points, notifications] = await Promise.all([
     fetchEffectiveMembershipTier(session),
-    fetchClassroomPoints(session.databaseId, session.section),
-    fetchNotificationCount(session.databaseId),
+    fetchClassroomPoints(session).catch(() => null),
+    fetchNotificationCount(session).catch(() => null),
   ])
 
   if (tier) {
@@ -78,7 +65,9 @@ export async function refreshStudentShellData(
     setters.setMembershipTier(tier)
   }
   setters.setMembershipTierLoaded(true)
-  setters.setClassroomPoints(points)
-  setters.setNotificationCount(notifications)
-  void setAppBadgeCount(notifications)
+  if (points != null) setters.setClassroomPoints(points)
+  if (notifications != null) {
+    setters.setNotificationCount(notifications)
+    void setAppBadgeCount(notifications)
+  }
 }

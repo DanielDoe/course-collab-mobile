@@ -12,6 +12,7 @@ import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProv
 import { useNativeType } from "../../lib/themed-module-theme"
 import { safeRouterBack } from "../../lib/safe-router-back"
 import { NATIVE } from "../../constants/faculty-native-theme"
+import { FlashcardInvalidRoute } from "./FlashcardInvalidRoute"
 import { FlashcardFlipCard } from "./FlashcardFlipCard"
 import { FlashcardDifficultyPicker } from "./FlashcardDifficultyPicker"
 import { FlashcardDifficultyBadge } from "./FlashcardDifficultyBadge"
@@ -151,6 +152,10 @@ export function FlashcardDeckEditorScreen() {
         },
       },
     ])
+  }
+
+  if (!Number.isFinite(deckId) || deckId < 1) {
+    return <FlashcardInvalidRoute />
   }
 
   if (loading) {

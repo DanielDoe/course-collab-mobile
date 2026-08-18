@@ -1,0 +1,24 @@
+{
+  "module": "homework",
+  "label": "Homework",
+  "size": "large",
+  "auditedAt": "2026-08-18T04:30:00.000Z",
+  "commit": "dba7f46",
+  "mode": "production_readiness",
+  "scope": "Faculty Expo Manage Homework + required backend + student Homework list/take downstream",
+  "workflows": {
+    "faculty:nav-manage": "audited",
+    "faculty:create-publish": "audited",
+    "faculty:issues-deleted": "probed",
+    "student:list": "audited",
+    "student:detail": "code_traced",
+    "student:take-submit": "partial",
+    "auth-isolation": "audited",
+    "answer-security": "audited",
+    "membership": "audited",
+    "cora": "code_traced",
+    "faculty-downstream": "audited"
+  },
+  "report": "docs/audits/student-mobile/homework.md",
+  "productionApi": "https://coursecollab.vercel.app"
+}

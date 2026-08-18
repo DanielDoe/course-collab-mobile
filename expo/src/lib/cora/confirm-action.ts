@@ -4,6 +4,7 @@ import { apiErrorMessage } from "../http-errors"
 import type { InstructorScope } from "../instructor-content-api"
 import type { StudentSession } from "../session"
 import type { PreparedCoraRequest } from "../cora-rbac/prepare-request"
+import { studentAuthenticatedRequest } from "../student-api"
 import { recordActivityFromConfirmResult } from "./activity-store"
 import type { CoraActionProposal, CoraConfirmActionResult } from "./types"
 
@@ -67,26 +68,16 @@ export async function confirmFacultyCoraAction(
   return result
 }
 
-/** Confirm a student Cora proposal. */
+/** Confirm a student Cora proposal. Session cookies + MFA trust required — never header-only. */
 export async function confirmStudentCoraAction(
   session: StudentSession,
   proposal: CoraActionProposal,
 ): Promise<CoraConfirmActionResult> {
-  const url = `${API_BASE_URL}/api/cora/actions/confirm?studentDatabaseId=${encodeURIComponent(session.databaseId)}`
-  const response = await fetch(url, {
+  const path = `/api/cora/actions/confirm?studentDatabaseId=${encodeURIComponent(session.databaseId)}`
+  const parsed = await studentAuthenticatedRequest<unknown>(session, path, {
     method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      "x-student-id": session.databaseId,
-    },
     body: JSON.stringify({ proposal }),
   })
-  const parsed = await parseJson(response)
-  if (!response.ok) {
-    const message = apiErrorMessage(parsed, response.status)
-    throw new ApiError(message, response.status, parsed)
-  }
   const result = normalizeConfirmResult(parsed)
   await recordActivityFromConfirmResult(result, "student", session.courseId)
   return result

@@ -14,6 +14,10 @@ import type {
   StudentReportSearchHit} from "./instructor-reports-utils"
 import { normalizeSavedReport } from "./instructor-reports-utils"
 import { assertProductionHttpsUrl, createApiAbortSignal, noteApiFailure } from "./http"
+import { mfaTrustRequestHeadersForInstructor } from "./mfa-device-trust"
+import { getStoredSession } from "./session"
+import { mergeCookieHeaders, persistHttpCookiesFromResponse, studentHttpCookieHeader } from "./student-http-cookies"
+import { headersHaveStudentSessionProof, STUDENT_REFRESH_HEADER } from "./student-session-proof"
 
 export type InstructorCourse = {
   id: number
@@ -1469,18 +1473,23 @@ type Scope = {
   courseId?: number
 }
 
-async function instructorRequest<T>(
-  path: string,
-  scope: Scope,
-  init?: RequestInit & { requireAuthHeader?: boolean },
-): Promise<T> {
-  const url = `${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`
-  assertProductionHttpsUrl(url)
+function refreshTokenFromCookieHeader(cookie: string | undefined): string | undefined {
+  if (!cookie) return undefined
+  const match = cookie.match(/(?:^|;\s*)cc_refresh=([^;]+)/i)
+  const token = match?.[1]?.trim()
+  return token || undefined
+}
+
+/** Same session-proof headers as instructorRequest, without fetching. */
+export async function instructorAuthenticatedHeaders(
+  scope: { instructorId: number; courseId?: number },
+  init?: { requireAuthHeader?: boolean; headers?: Record<string, string> },
+): Promise<Record<string, string>> {
   const headers: Record<string, string> = {
     Accept: "application/json",
     "Content-Type": "application/json",
     "x-instructor-id": String(scope.instructorId),
-    ...(init?.headers as Record<string, string> | undefined)}
+    ...(init?.headers)}
   if (scope.courseId != null) {
     headers["x-course-id"] = String(scope.courseId)
   }
@@ -1488,9 +1497,36 @@ async function instructorRequest<T>(
     headers.Authorization = "instructor"
   }
 
+  const stored = await getStoredSession()
+  const faculty = stored?.portal === "faculty" ? stored : undefined
+  const jarCookie = await studentHttpCookieHeader()
+  const trust = await mfaTrustRequestHeadersForInstructor(faculty)
+  Object.assign(headers, mergeCookieHeaders(trust.Cookie, jarCookie))
+  const refresh =
+    refreshTokenFromCookieHeader(jarCookie) ?? refreshTokenFromCookieHeader(trust.Cookie)
+  if (refresh) headers[STUDENT_REFRESH_HEADER] = refresh
+  if (!headersHaveStudentSessionProof(headers)) {
+    throw new ApiError("Instructor authentication required", 401)
+  }
+  return headers
+}
+
+async function instructorRequest<T>(
+  path: string,
+  scope: Scope,
+  init?: RequestInit & { requireAuthHeader?: boolean },
+): Promise<T> {
+  const url = `${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`
+  assertProductionHttpsUrl(url)
+  const headers = await instructorAuthenticatedHeaders(scope, {
+    requireAuthHeader: init?.requireAuthHeader,
+    headers: init?.headers as Record<string, string> | undefined,
+  })
+
   const { requireAuthHeader: _, ...fetchInit } = init ?? {}
   const response = await fetch(url, {
     ...fetchInit,
+    credentials: "include",
     headers,
     signal: createApiAbortSignal(undefined, fetchInit.signal ?? undefined),
   })
@@ -1522,7 +1558,18 @@ async function instructorRequest<T>(
     throw new ApiError(message, response.status, body)
   }
 
+  await persistHttpCookiesFromResponse(url, response.headers)
+
   return body as T
+}
+
+/** Session-proof faculty fetch — cookies, MFA trust, refresh, HTTPS assert. */
+export function instructorAuthenticatedRequest<T>(
+  path: string,
+  scope: Scope,
+  init?: RequestInit & { requireAuthHeader?: boolean },
+): Promise<T> {
+  return instructorRequest<T>(path, scope, init)
 }
 
 export type InstructorDashboardCharts = {
@@ -1806,14 +1853,17 @@ export const instructorApi = {
     file: { uri: string; name: string; type: string },
   ): Promise<InstructorAnnouncementAttachment> => {
     const url = `${API_BASE_URL}/api/announcements/upload`
+    assertProductionHttpsUrl(url)
     const form = new FormData()
     form.append("file", { uri: file.uri, name: file.name, type: file.type } as unknown as Blob)
-    const headers: Record<string, string> = {
-      Accept: "application/json",
-      "x-instructor-id": String(scope.instructorId),
-    }
-    if (scope.courseId != null) headers["x-course-id"] = String(scope.courseId)
-    const response = await fetch(url, { method: "POST", headers, body: form })
+    const headers = await instructorAuthenticatedHeaders(scope)
+    delete headers["Content-Type"]
+    const response = await fetch(url, {
+      method: "POST",
+      credentials: "include",
+      headers,
+      body: form,
+    })
     const text = await response.text()
     let body: unknown = null
     if (text) {
@@ -2100,14 +2150,32 @@ export const instructorApi = {
       name: file.name,
       type: file.type} as unknown as Blob)
 
+    assertProductionHttpsUrl(url)
     const headers: Record<string, string> = {
       Accept: "application/json",
       "x-instructor-id": String(scope.instructorId)}
     if (scope.courseId != null) {
       headers["x-course-id"] = String(scope.courseId)
     }
+    const stored = await getStoredSession()
+    const faculty = stored?.portal === "faculty" ? stored : undefined
+    const jarCookie = await studentHttpCookieHeader()
+    const trust = await mfaTrustRequestHeadersForInstructor(faculty)
+    Object.assign(headers, mergeCookieHeaders(trust.Cookie, jarCookie))
+    const refresh =
+      refreshTokenFromCookieHeader(jarCookie) ?? refreshTokenFromCookieHeader(trust.Cookie)
+    if (refresh) headers[STUDENT_REFRESH_HEADER] = refresh
+    if (!headersHaveStudentSessionProof(headers)) {
+      throw new ApiError("Instructor authentication required", 401)
+    }
 
-    const response = await fetch(url, { method: "POST", headers, body: form })
+    const response = await fetch(url, {
+      method: "POST",
+      credentials: "include",
+      headers,
+      body: form,
+      signal: createApiAbortSignal(),
+    })
     const text = await response.text()
     let body: unknown = null
     if (text) {
@@ -2127,6 +2195,7 @@ export const instructorApi = {
           : `Upload failed (${response.status})`
       throw new ApiError(message, response.status, body)
     }
+    await persistHttpCookiesFromResponse(url, response.headers)
     return body as { url: string; media_type?: string }
   },
 

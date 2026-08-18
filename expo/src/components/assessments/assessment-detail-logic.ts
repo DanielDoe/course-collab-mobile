@@ -1,5 +1,5 @@
 import type { QuizItem } from "../../lib/student-api"
-import { dueMeta } from "./assessment-config"
+import { dueMeta } from "./assessment-due-meta"
 
 export type AssessmentDetailActions = {
   showStart: boolean

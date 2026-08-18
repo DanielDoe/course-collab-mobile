@@ -12,6 +12,7 @@ import { useRouter } from "expo-router"
 import { ApiError } from "../../lib/api"
 import { fetchStudentLectureViewerData } from "../../lib/student-lecture-api"
 import { buildStudentAuthenticatedDeckSource } from "../../lib/lecture-deck-url"
+import { getAllowedWebViewOriginPrefixes } from "../../lib/trusted-origins"
 import { studentApi, type StudentLectureDetail } from "../../lib/student-api"
 import { useSession } from "../../context/SessionProvider"
 import type { StudentSession } from "../../lib/session"
@@ -49,6 +50,10 @@ export function StudentLectureViewerScreen({ lectureId, week }: Props) {
   const [samplePracticeLabel, setSamplePracticeLabel] = useState("Sample Practice")
   const [workspace, setWorkspace] = useState(defaultWorkspaceConfig())
   const [toolsOpen, setToolsOpen] = useState(false)
+  const [deckSource, setDeckSource] = useState<{
+    uri: string
+    headers?: Record<string, string>
+  } | null>(null)
 
   const load = useCallback(async () => {
     if (!session || !Number.isFinite(lectureId)) return
@@ -79,10 +84,24 @@ export function StudentLectureViewerScreen({ lectureId, week }: Props) {
     load().finally(() => setLoading(false))
   }, [session, load])
 
-  const deckSource = useMemo(() => {
-    if (!session || !deckUrl) return null
-    return buildStudentAuthenticatedDeckSource(deckUrl, session)
+  useEffect(() => {
+    let cancelled = false
+    if (!session || !deckUrl) {
+      setDeckSource(null)
+      return
+    }
+    void buildStudentAuthenticatedDeckSource(deckUrl, session).then((source) => {
+      if (!cancelled) setDeckSource(source)
+    })
+    return () => {
+      cancelled = true
+    }
   }, [deckUrl, session])
+
+  const webViewOrigins = useMemo(
+    () => getAllowedWebViewOriginPrefixes({ lectureDeck: true }),
+    [],
+  )
 
   const workspaceCount = workspace.questions.length
   const workspaceLabel = workspace.button_label?.trim() || workspace.title?.trim() || "Workspace"
@@ -133,7 +152,7 @@ export function StudentLectureViewerScreen({ lectureId, week }: Props) {
           <WebView
             source={deckSource}
             style={styles.webview}
-            originWhitelist={["*"]}
+            originWhitelist={webViewOrigins}
             startInLoadingState
             renderLoading={() => (
               <View style={[styles.loading, { backgroundColor: tokens.surface }]}>

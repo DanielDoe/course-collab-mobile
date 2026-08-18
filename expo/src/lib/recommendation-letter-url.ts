@@ -1,5 +1,7 @@
 import { API_BASE_URL } from "../constants"
-import type { StudentSession } from "./session"
+import { instructorAuthenticatedHeaders } from "./instructor-api"
+import { studentAuthenticatedHeaders } from "./student-api"
+import type { StudentAuthSession } from "./student-session-proof"
 
 type PdfFileRef = { pdf_url?: string | null; file_url?: string | null }
 
@@ -41,28 +43,24 @@ export function buildRecommendationPdfApiPath(requestId: number, studentId: stri
 }
 
 /** Authenticated PDF source for WebView preview and file download. */
-export function buildRecommendationPdfSource(
-  session: Pick<StudentSession, "databaseId">,
+export async function buildRecommendationPdfSource(
+  session: StudentAuthSession,
   requestId: number,
-): RecommendationPdfSource {
+): Promise<RecommendationPdfSource> {
   const path = buildRecommendationPdfApiPath(requestId, session.databaseId)
   return {
     uri: `${API_BASE_URL}${path}`,
-    headers: { "x-student-id": String(session.databaseId) },
+    headers: await studentAuthenticatedHeaders(session),
   }
 }
 
 /** Instructor letterhead PDF — generated on demand from saved final_letter_text. */
-export function buildInstructorRecommendationPdfSource(
+export async function buildInstructorRecommendationPdfSource(
   scope: { instructorId: number; courseId?: number },
   requestId: number,
-): RecommendationPdfSource {
-  const headers: Record<string, string> = {
-    "x-instructor-id": String(scope.instructorId),
-  }
-  if (scope.courseId != null) headers["x-course-id"] = String(scope.courseId)
+): Promise<RecommendationPdfSource> {
   return {
     uri: `${API_BASE_URL}/api/instructor/recommendations/${requestId}/pdf`,
-    headers,
+    headers: await instructorAuthenticatedHeaders(scope),
   }
 }

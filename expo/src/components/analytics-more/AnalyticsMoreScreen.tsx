@@ -821,7 +821,7 @@ function StreakPanel({ streak, onOpenIde }: { streak: CodebenchStreak; onOpenIde
                     borderColor: day.active ? ANALYTICS_CALENDAR_ACTIVE : native.separator,
                   },
                 ]}
-                accessibilityLabel={day.label}
+                accessibilityLabel={`${day.label}, ${day.active ? "active" : "inactive"}`}
               />
             ))}
           </View>

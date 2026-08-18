@@ -1,6 +1,5 @@
-import { API_BASE_URL } from "../constants"
 import type { StudentSession } from "./session"
-import { ApiError } from "./student-api"
+import { ApiError, studentAuthenticatedRequest } from "./student-api"
 
 export type StudentDigitalNote = {
   id: number
@@ -39,55 +38,12 @@ export type RosterStudent = {
   student_id?: string
 }
 
-function headers(session: StudentSession): HeadersInit {
-  return {
-    Accept: "application/json",
-    "Content-Type": "application/json",
-    "x-student-id": session.databaseId,
-  }
-}
-
-async function parseBody(response: Response): Promise<unknown> {
-  const text = await response.text()
-  if (!text) return null
-  try {
-    return JSON.parse(text)
-  } catch {
-    return { error: text }
-  }
-}
-
-function errorMessage(body: unknown, fallback: string): string {
-  if (
-    typeof body === "object" &&
-    body !== null &&
-    "error" in body &&
-    typeof (body as { error: unknown }).error === "string"
-  ) {
-    return (body as { error: string }).error
-  }
-  return fallback
-}
-
 async function studentRequest<T>(
   session: StudentSession,
   path: string,
   init?: RequestInit,
 ): Promise<T> {
-  const url = `${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`
-  const hasQuery = url.includes("?")
-  const fullUrl = hasQuery
-    ? url
-    : `${url}?studentDatabaseId=${encodeURIComponent(session.databaseId)}`
-  const response = await fetch(fullUrl, {
-    ...init,
-    headers: { ...headers(session), ...(init?.headers as object) },
-  })
-  const body = await parseBody(response)
-  if (!response.ok) {
-    throw new ApiError(errorMessage(body, `Request failed (${response.status})`), response.status, body)
-  }
-  return body as T
+  return studentAuthenticatedRequest<T>(session, path, init)
 }
 
 export const digitalNotesApi = {

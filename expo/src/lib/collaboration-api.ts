@@ -1,45 +1,9 @@
 import type { StudentSession } from "./session"
 import { normalizePlaygroundQuestions } from "./playground-question-utils"
-import { API_BASE_URL } from "../constants"
-import { ApiError } from "./student-api"
+import { studentAuthenticatedRequest } from "./student-api"
 
-function headers(session: StudentSession): HeadersInit {
-  return {
-    Accept: "application/json",
-    "Content-Type": "application/json",
-    "x-student-id": session.databaseId}
-}
-
-async function request<T>(session: StudentSession, path: string, init?: RequestInit): Promise<T> {
-  const url = `${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`
-  const response = await fetch(url, { ...init, headers: { ...headers(session), ...init?.headers } })
-  let body: unknown = null
-  const text = await response.text()
-  if (text) {
-    try {
-      body = JSON.parse(text)
-    } catch {
-      body = { error: text }
-    }
-  }
-  if (!response.ok) {
-    const message =
-      typeof body === "object" &&
-      body !== null &&
-      "error" in body &&
-      typeof (body as { error: unknown }).error === "string"
-        ? (body as { error: string }).error
-        : typeof body === "object" &&
-            body !== null &&
-            "ok" in body &&
-            (body as { ok: boolean }).ok === false &&
-            "error" in body &&
-            typeof (body as { error: unknown }).error === "string"
-          ? (body as { error: string }).error
-          : `Request failed (${response.status})`
-    throw new ApiError(message, response.status, body)
-  }
-  return body as T
+function request<T>(session: StudentSession, path: string, init?: RequestInit): Promise<T> {
+  return studentAuthenticatedRequest<T>(session, path, init)
 }
 
 export type ForumThread = {

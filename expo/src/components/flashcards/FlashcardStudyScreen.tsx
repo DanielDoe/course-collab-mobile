@@ -44,6 +44,7 @@ import {
   FlashcardKnownCelebration,
   type FlashcardCelebrationPayload,
 } from "./FlashcardKnownCelebration"
+import { FlashcardInvalidRoute } from "./FlashcardInvalidRoute"
 import { FlashcardMcqChoices, FlashcardMcqPrompt } from "./FlashcardMcqUI"
 import { WaterBreakDurationDialog, WaterBreakOverlay } from "./FlashcardWaterBreak"
 import { FLASHCARD_WABI_STAGE_HEIGHT, FLASHCARD_WABI_SPRING } from "../../lib/flashcard-wabi-theme"
@@ -601,6 +602,10 @@ export function FlashcardStudyScreen() {
   }, [cards, deck?.requireMcqValidation])
 
   const masteredCount = sessionMastered.size
+
+  if (!Number.isFinite(deckId) || deckId < 1) {
+    return <FlashcardInvalidRoute />
+  }
 
   if (loading) {
     return (

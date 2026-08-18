@@ -1,16 +1,29 @@
 #!/usr/bin/env node
 /**
- * Faculty mid-semester production audit — auth/IDOR + shared quiz-attempt leak + create → publish → student list.
- * Uses disposable QA titles only. Does not mutate live Mid-Semester Exam 2.
+ * Mid-semester production audit — honest auth probes.
+ *
+ * Header-only x-instructor-id / x-student-id is NOT authentication.
+ * HTTP 200/201 on those probes is the vulnerability (FAIL). HTTP 500 is never a pass.
+ * Expected reject is 401.
+ *
+ * Unauth GET /api/student/mid-semesters?studentId=722 returning 200 is FAIL (MS1).
+ *
+ * Does not start, take, save, finalize, or submit live Mid-Semester Exam 1/2
+ * (166, 167) or Final Exam 1 (162). Does not finalize leftover attempt 4493.
+ * Does not cookie-login E2E that starts 166/167. Create probes use
+ * AUDIT-DELETE titles and delete any created mid in `finally` only when the
+ * id is not in that live set.
  *
  * Run: npm run audit:mid-semester-production
  */
 const BASE = (process.env.AUDIT_API_BASE || "https://coursecollab.vercel.app").replace(/\/$/, "")
 const INSTRUCTOR_ID = process.env.AUDIT_INSTRUCTOR_ID || "15"
 const COURSE_ID = process.env.AUDIT_COURSE_ID || "16"
-const STUDENT_ID = process.env.AUDIT_STUDENT_ID || "910000001"
-const IDOR_COURSE_ID = process.env.AUDIT_IDOR_COURSE_ID || "1"
-const SESSION = process.env.AUDIT_SESSION || "ECE2202"
+const STUDENT_DB_ID = process.env.AUDIT_STUDENT_DB_ID || "722"
+const LIVE_MID_IDS = new Set([166, 167, 162])
+const FACULTY_DETAIL_ID = 167
+const FAKE_MID_ID = 999999001
+const FAKE_ATTEMPT_ID = 999999001
 
 const results = []
 
@@ -36,219 +49,212 @@ async function fetchJson(path, init = {}) {
   return { status: res.status, ok: res.ok, body }
 }
 
-function instructorHeaders(courseId = COURSE_ID) {
+function headerOnlyInstructor(courseId = COURSE_ID) {
   return {
     "x-instructor-id": INSTRUCTOR_ID,
     "x-course-id": String(courseId),
   }
 }
 
-function studentHeaders(studentId = STUDENT_ID) {
+function headerOnlyStudent(studentId = STUDENT_DB_ID) {
   return { "x-student-id": String(studentId) }
 }
 
-async function runAuthProbes() {
-  console.log("\n=== F-001 Auth / scope / IDOR ===\n")
+/** Header-only identity must be rejected. 200 is the vuln. 500 is never a pass. */
+function expectHeaderOnlyRejected(id, status, extra = "") {
+  if (status === 200 || status === 201) {
+    fail(id, `header-only accepted (${status})${extra ? ` ${extra}` : ""}`)
+    return
+  }
+  if (status === 500) {
+    fail(id, `HTTP 500 is not a pass${extra ? ` ${extra}` : ""}`)
+    return
+  }
+  if (status === 401) {
+    pass(id, `401 rejected header-only${extra ? ` ${extra}` : ""}`)
+    return
+  }
+  fail(id, `expected 401, got ${status}${extra ? ` ${extra}` : ""}`)
+}
+
+function midIdFromBody(body) {
+  const id = body?.quiz_id ?? body?.quiz?.id ?? null
+  const n = Number(id)
+  return Number.isFinite(n) && n > 0 ? n : null
+}
+
+async function deleteAuditMid(midId) {
+  if (midId == null || LIVE_MID_IDS.has(midId)) return
+  const deleted = await fetchJson(`/api/instructor/quizzes/${midId}`, {
+    method: "DELETE",
+    headers: headerOnlyInstructor(),
+  })
+  if (deleted.ok) {
+    console.log(`  cleaned up header-only create mid ${midId} (${deleted.status})`)
+  } else {
+    console.error(`  cleanup failed for mid ${midId}: ${deleted.status}`)
+  }
+}
+
+async function run() {
+  console.log(`\nMid-semester production audit → ${BASE}`)
+  console.log("Header-only x-instructor-id / x-student-id is not auth. 200 = FAIL.")
+  console.log("Does not start or submit live Mid 1/2 (166/167) or exam 162. Does not finalize 4493.\n")
+
+  console.log("=== Unauthenticated faculty list ===\n")
 
   const missing = await fetchJson("/api/instructor/quizzes?assessment_type=mid_semester")
   if (missing.status === 401) {
-    pass("F-001-unauth-list", "401 without auth")
+    pass("MS-unauth-faculty-list", "401 without auth")
+  } else if (missing.status === 500) {
+    fail("MS-unauth-faculty-list", "HTTP 500 is not a pass")
   } else {
-    fail("F-001-unauth-list", `expected 401, got ${missing.status}`)
+    fail("MS-unauth-faculty-list", `expected 401, got ${missing.status}`)
   }
 
-  const invalidCourse = await fetchJson("/api/instructor/quizzes?assessment_type=mid_semester", {
-    headers: instructorHeaders("999999"),
+  console.log("\n=== Header-only faculty (must not be 200) ===\n")
+
+  const headerList = await fetchJson("/api/instructor/quizzes?assessment_type=mid_semester", {
+    headers: headerOnlyInstructor(),
   })
-  if ([401, 403, 404].includes(invalidCourse.status)) {
-    pass("F-001-invalid-course", `${invalidCourse.status} invalid course`)
-  } else {
-    fail("F-001-invalid-course", `expected 401/403/404, got ${invalidCourse.status}`)
-  }
+  expectHeaderOnlyRejected("MS-header-only-faculty-list", headerList.status)
 
-  const idorList = await fetchJson("/api/instructor/quizzes?assessment_type=mid_semester", {
-    headers: instructorHeaders(IDOR_COURSE_ID),
+  const detailId = FACULTY_DETAIL_ID === 162 ? 1 : FACULTY_DETAIL_ID
+  const headerDetail = await fetchJson(`/api/instructor/quizzes/${detailId}`, {
+    headers: headerOnlyInstructor(),
   })
-  if ([403, 404].includes(idorList.status)) {
-    pass("F-001-idor-list", `${idorList.status} foreign course`)
-  } else {
-    fail("F-001-idor-list", `expected 403/404, got ${idorList.status}`)
-  }
+  expectHeaderOnlyRejected("MS-header-only-faculty-detail", headerDetail.status, `mid ${detailId}`)
 
-  const idorCreate = await fetchJson("/api/instructor/quizzes/create-from-bank", {
-    method: "POST",
-    headers: { ...instructorHeaders(IDOR_COURSE_ID), "Content-Type": "application/json" },
-    body: JSON.stringify({
-      title: "IDOR probe",
-      question_ids: [999999001],
-      assessment_type: "mid_semester",
-      time_limit: 30,
-    }),
-  })
-  if ([403, 404].includes(idorCreate.status)) {
-    pass("F-001-idor-create", `${idorCreate.status} foreign course create`)
-  } else {
-    fail("F-001-idor-create", `expected 403/404, got ${idorCreate.status}`)
-  }
-
-  const unknownInstructor = await fetchJson("/api/instructor/quizzes?assessment_type=mid_semester", {
-    headers: { "x-instructor-id": "999999", "x-course-id": COURSE_ID },
-  })
-  if ([401, 403, 404].includes(unknownInstructor.status)) {
-    pass("F-001-unknown-instructor", `${unknownInstructor.status} blocks unknown instructor`)
-  } else {
-    fail("F-001-unknown-instructor", `expected 401/403/404, got ${unknownInstructor.status}`)
-  }
-
-  const studentList = await fetchJson("/api/student/mid-semesters")
-  if ([400, 401, 404].includes(studentList.status)) {
-    pass("F-001-student-list", `${studentList.status} without student`)
-  } else {
-    fail("F-001-student-list", `expected 400/401/404, got ${studentList.status}`)
-  }
-
-  const unauthTake = await fetchJson("/api/midsem/take/1")
-  if ([401, 403, 404].includes(unauthTake.status)) {
-    pass("F-001-unauth-take", `${unauthTake.status} midsem take without auth`)
-  } else {
-    fail("F-001-unauth-take", `expected 401/403/404, got ${unauthTake.status}`)
-  }
-
-  const unauthSubmit = await fetchJson("/api/midsem/submit", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({}),
-  })
-  if ([400, 401, 403, 404].includes(unauthSubmit.status)) {
-    pass("F-001-unauth-submit", `${unauthSubmit.status} midsem submit without auth`)
-  } else {
-    fail("F-001-unauth-submit", `expected 400/401/403/404, got ${unauthSubmit.status}`)
-  }
-}
-
-async function runStudentAttemptAuth() {
-  console.log("\n=== F-002 Shared quiz-attempt auth (mid-semester resume) ===\n")
-
-  const unauth = await fetchJson("/api/student/quiz-attempt/1?studentId=999999")
-  if ([401, 403, 404].includes(unauth.status)) {
-    pass("F-002-unauth-attempt", `${unauth.status} invalid student without auth`)
-  } else {
-    fail("F-002-unauth-attempt", `expected 401/403/404, got ${unauth.status}`)
-  }
-
-  const mismatch = await fetchJson("/api/student/quiz-attempt/1?studentId=999999", {
-    headers: studentHeaders(),
-  })
-  if ([401, 403, 404].includes(mismatch.status)) {
-    pass("F-002-mismatch-attempt", `${mismatch.status} caller vs invalid studentId`)
-  } else {
-    fail("F-002-mismatch-attempt", `expected 401/403/404, got ${mismatch.status}`)
-  }
-}
-
-async function runE2E() {
-  console.log("\n=== F-003 Create mid-semester → publish → student list → cleanup ===\n")
-
-  const topics = await fetchJson("/api/instructor/question-bank/topics", {
-    headers: instructorHeaders(),
-  })
-  const topicNames = (topics.body?.topics ?? []).map((t) => t.topic ?? t.name).filter(Boolean)
-  if (!topics.ok || topicNames.length === 0) {
-    fail("F-003-topics", "no question bank topics available")
-    return
-  }
-  pass("F-003-topics", `${topicNames.length} topics`)
-
-  const questions = await fetchJson(
-    `/api/instructor/question-bank?topic=${encodeURIComponent(topicNames[0])}&limit=1`,
-    { headers: instructorHeaders() },
-  )
-  const questionIds = (questions.body?.questions ?? []).slice(0, 1).map((q) => q.id)
-  if (questionIds.length === 0) {
-    fail("F-003-questions", "no question bank questions in first topic")
-    return
-  }
-  pass("F-003-questions", `question ${questionIds[0]}`)
-
-  const title = `Audit Mid-Semester ${Date.now()}`
-  let quizId = null
-
+  const title = `AUDIT-DELETE Mid ${Date.now()}`
+  let createdId = null
   try {
     const created = await fetchJson("/api/instructor/quizzes/create-from-bank", {
       method: "POST",
-      headers: { ...instructorHeaders(), "Content-Type": "application/json" },
+      headers: { ...headerOnlyInstructor(), "Content-Type": "application/json" },
       body: JSON.stringify({
         title,
-        description: "Production audit probe — safe to delete",
-        question_ids: questionIds,
+        description: "Audit probe — delete immediately",
+        question_ids: [FAKE_MID_ID],
         assessment_type: "mid_semester",
         time_limit: 30,
       }),
     })
-    quizId = created.body?.quiz_id ?? created.body?.quiz?.id ?? null
-    if (!created.ok || quizId == null) {
-      const bodyText = typeof created.body === "string" ? created.body : JSON.stringify(created.body)
-      fail("F-003-create", `create failed (${created.status}) ${bodyText?.slice(0, 180)}`)
-      return
-    }
-    pass("F-003-create", `mid-semester ${quizId}`)
-
-    const studentBefore = await fetchJson(
-      `/api/student/mid-semesters?studentId=${STUDENT_ID}`,
-      { headers: studentHeaders() },
-    )
-    const beforeRows = studentBefore.body?.midSemesters ?? studentBefore.body?.exams ?? []
-    if (studentBefore.ok && beforeRows.some((q) => q.id === quizId)) {
-      fail("F-003-student-draft", "unpublished mid-semester visible to students")
+    createdId = midIdFromBody(created.body)
+    if (createdId != null && LIVE_MID_IDS.has(createdId)) {
+      fail("MS-header-only-faculty-create", `refusing to treat live mid ${createdId} as an audit create`)
+      createdId = null
     } else {
-      pass("F-003-student-draft", "draft hidden")
+      expectHeaderOnlyRejected(
+        "MS-header-only-faculty-create",
+        created.status,
+        createdId != null ? `mid ${createdId}` : "",
+      )
     }
 
-    const detail = await fetchJson(`/api/instructor/quizzes/${quizId}`, { headers: instructorHeaders() })
-    if (!detail.ok) {
-      fail("F-003-detail", `detail failed (${detail.status})`)
-    } else {
-      pass("F-003-detail", `loaded mid-semester ${quizId}`)
-    }
-
-    const toggle = await fetchJson(`/api/instructor/quizzes/${quizId}/toggle-session`, {
+    const toggle = await fetchJson(`/api/instructor/quizzes/${FAKE_MID_ID}/toggle-session`, {
       method: "PATCH",
-      headers: { ...instructorHeaders(), "Content-Type": "application/json" },
-      body: JSON.stringify({ session_code: SESSION, is_active: true }),
+      headers: { ...headerOnlyInstructor(), "Content-Type": "application/json" },
+      body: JSON.stringify({ session_code: "ECE2202", is_active: true }),
     })
-    if (!toggle.ok) {
-      fail("F-003-publish", `toggle ${SESSION} failed (${toggle.status}) ${JSON.stringify(toggle.body)?.slice(0, 160)}`)
-      return
-    }
-    pass("F-003-publish", `published to ${SESSION}`)
+    expectHeaderOnlyRejected("MS-header-only-faculty-toggle", toggle.status, `mid ${FAKE_MID_ID}`)
 
-    const studentAfter = await fetchJson(
-      `/api/student/mid-semesters?studentId=${STUDENT_ID}`,
-      { headers: studentHeaders() },
-    )
-    const afterRows = studentAfter.body?.midSemesters ?? studentAfter.body?.exams ?? []
-    if (studentAfter.ok && afterRows.some((q) => q.id === quizId)) {
-      pass("F-003-student-visible", "student sees mid-semester")
-    } else {
-      fail("F-003-student-visible", `student list missing mid-semester (${studentAfter.status})`)
-    }
+    const deleted = await fetchJson(`/api/instructor/quizzes/${FAKE_MID_ID}`, {
+      method: "DELETE",
+      headers: headerOnlyInstructor(),
+    })
+    expectHeaderOnlyRejected("MS-header-only-faculty-delete", deleted.status, `mid ${FAKE_MID_ID}`)
   } finally {
-    if (quizId != null) {
-      const deleted = await fetchJson(`/api/instructor/quizzes/${quizId}`, {
-        method: "DELETE",
-        headers: instructorHeaders(),
-      })
-      if (deleted.ok) pass("F-003-cleanup", `deleted ${quizId}`)
-      else fail("F-003-cleanup", `${deleted.status} ${deleted.body?.error ?? ""}`)
-    }
+    await deleteAuditMid(createdId)
   }
+
+  console.log("\n=== Unauth / header-only student mid-semester (must not be 200) ===\n")
+
+  const unauthMidList = await fetchJson(
+    `/api/student/mid-semesters?studentId=${encodeURIComponent(STUDENT_DB_ID)}`,
+  )
+  expectHeaderOnlyRejected("MS-unauth-mid-semesters", unauthMidList.status)
+
+  const headerMidList = await fetchJson(
+    `/api/student/mid-semesters?studentId=${encodeURIComponent(STUDENT_DB_ID)}`,
+    { headers: headerOnlyStudent() },
+  )
+  expectHeaderOnlyRejected("MS-header-only-mid-semesters", headerMidList.status)
+
+  const headerQuizzesMid = await fetchJson(
+    `/api/student/quizzes?studentDatabaseId=${encodeURIComponent(STUDENT_DB_ID)}&type=mid_semester`,
+    { headers: headerOnlyStudent() },
+  )
+  expectHeaderOnlyRejected("MS-header-only-quizzes-mid", headerQuizzesMid.status)
+
+  const headerStart = await fetchJson("/api/student/start-quiz", {
+    method: "POST",
+    headers: { ...headerOnlyStudent(), "Content-Type": "application/json" },
+    body: JSON.stringify({ studentId: Number(STUDENT_DB_ID), quizId: 1 }),
+  })
+  expectHeaderOnlyRejected("MS-header-only-start-quiz", headerStart.status)
+
+  const headerTake = await fetchJson("/api/midsem/take/1", {
+    headers: headerOnlyStudent(),
+  })
+  expectHeaderOnlyRejected("MS-header-only-midsem-take", headerTake.status)
+
+  const headerSubmit = await fetchJson("/api/midsem/submit", {
+    method: "POST",
+    headers: { ...headerOnlyStudent(), "Content-Type": "application/json" },
+    body: JSON.stringify({
+      attemptId: FAKE_ATTEMPT_ID,
+      questionId: 1,
+      answer: "",
+    }),
+  })
+  expectHeaderOnlyRejected("MS-header-only-midsem-submit", headerSubmit.status)
+
+  const headerProgress = await fetchJson("/api/student/quiz-progress", {
+    method: "POST",
+    headers: { ...headerOnlyStudent(), "Content-Type": "application/json" },
+    body: JSON.stringify({ attemptId: FAKE_ATTEMPT_ID }),
+  })
+  expectHeaderOnlyRejected("MS-header-only-quiz-progress", headerProgress.status)
+
+  const headerViolation = await fetchJson("/api/quiz/log-violation", {
+    method: "POST",
+    headers: { ...headerOnlyStudent(), "Content-Type": "application/json" },
+    body: JSON.stringify({
+      attemptId: FAKE_ATTEMPT_ID,
+      violation: { type: "audit_probe", reason: "header-only", source: "audit" },
+    }),
+  })
+  expectHeaderOnlyRejected("MS-header-only-log-violation", headerViolation.status)
+
+  const headerIssues = await fetchJson(
+    `/api/student/issues?studentId=${encodeURIComponent(STUDENT_DB_ID)}`,
+    { headers: headerOnlyStudent() },
+  )
+  expectHeaderOnlyRejected("MS-header-only-issues", headerIssues.status)
+
+  const headerSave = await fetchJson("/api/student/save-answer", {
+    method: "POST",
+    headers: { ...headerOnlyStudent(), "Content-Type": "application/json" },
+    body: JSON.stringify({
+      attemptId: FAKE_ATTEMPT_ID,
+      questionId: 1,
+      answer: "",
+      questionType: "mcq",
+    }),
+  })
+  expectHeaderOnlyRejected("MS-header-only-save-answer", headerSave.status)
+
+  const passed = results.filter((row) => row.ok).length
+  const failed = results.filter((row) => row.ok === false).length
+  console.log(`\n${passed} PASS / ${failed} FAIL of ${results.length}`)
+  if (failed > 0) {
+    console.error("MS1–MS6 remain OPEN on production until the server is patched. Local clients are not a deploy.")
+    process.exit(1)
+  }
+  console.log("Header-only and unauthenticated mid-semester probes were rejected.")
 }
 
-await runAuthProbes()
-await runStudentAttemptAuth()
-await runE2E()
-
-const passed = results.filter((r) => r.ok).length
-const failed = results.filter((r) => r.ok === false).length
-console.log(`\n${passed}/${results.length} PASS${failed ? ` — ${failed} failed` : ""}`)
-process.exit(failed ? 1 : 0)
+run().catch((error) => {
+  console.error("audit-mid-semester-production failed:", error)
+  process.exit(1)
+})

@@ -1,15 +1,15 @@
+import { useEffect } from "react"
 import { Pressable, StyleSheet, Text, View } from "react-native"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useRouter } from "expo-router"
 import { ModuleScreen } from "../modules/ModuleScreen"
 import { NotetakerScreenHeader } from "../notetaker/NotetakerScreenHeader"
-import { AiDataDisclosureContent } from "./AiDataDisclosureContent"
 import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
 import { NATIVE } from "../../constants/faculty-native-theme"
 import { useNativeType } from "../../lib/themed-module-theme"
-import { openPrivacyPolicy, openSupportSite, openTermsOfService } from "../../lib/open-legal-url"
 import { settingsRowThumb } from "../../lib/support-color-theme"
 import { SolidListThumbTile } from "../theme/SolidListThumbTile"
+import { prefetchLegalContentCatalog } from "../../lib/legal-content-api"
 
 function SectionHeader({ title }: { title: string }) {
   const native = useThemedNative()
@@ -86,14 +86,27 @@ export function PrivacySecurityScreen() {
   const router = useRouter()
   const native = useThemedNative()
 
+  useEffect(() => {
+    void prefetchLegalContentCatalog()
+  }, [])
+
   return (
     <View style={[styles.screenRoot, { backgroundColor: native.groupedBackground }]}>
-      <NotetakerScreenHeader title="Privacy & Security" fallbackHref="/settings" />
+      <NotetakerScreenHeader title="Privacy & legal" fallbackHref="/settings" />
       <ModuleScreen disableTopInsetAdjustment>
         <SectionHeader title="Legal" />
         <SettingsGroup>
-          <SettingsRow icon="document-text-outline" label="Privacy Policy" onPress={() => void openPrivacyPolicy()} />
-          <SettingsRow icon="reader-outline" label="Terms of Service" onPress={() => void openTermsOfService()} isLast />
+          <SettingsRow
+            icon="document-text-outline"
+            label="Privacy Policy"
+            onPress={() => router.push("/settings/legal/privacy" as never)}
+          />
+          <SettingsRow
+            icon="reader-outline"
+            label="Terms of Service"
+            onPress={() => router.push("/settings/legal/terms" as never)}
+            isLast
+          />
         </SettingsGroup>
 
         <SectionHeader title="AI & Data" />
@@ -106,13 +119,8 @@ export function PrivacySecurityScreen() {
           />
         </SettingsGroup>
 
-        <SectionHeader title="Account" />
+        <SectionHeader title="Your data" />
         <SettingsGroup>
-          <SettingsRow
-            icon="lock-closed-outline"
-            label="Account Security"
-            onPress={() => router.push("/settings?open=security" as never)}
-          />
           <SettingsRow
             icon="trash-outline"
             label="Delete account"
@@ -124,13 +132,13 @@ export function PrivacySecurityScreen() {
 
         <SectionHeader title="Support" />
         <SettingsGroup>
-          <SettingsRow icon="help-circle-outline" label="Contact support" onPress={() => void openSupportSite()} isLast />
+          <SettingsRow
+            icon="help-circle-outline"
+            label="Support"
+            onPress={() => router.push("/settings/legal/support" as never)}
+            isLast
+          />
         </SettingsGroup>
-
-        <SectionHeader title="AI & Data Summary" />
-        <View style={[styles.disclosureCard, { backgroundColor: native.secondaryGrouped, borderColor: native.separator }]}>
-          <AiDataDisclosureContent />
-        </View>
       </ModuleScreen>
     </View>
   )
@@ -162,10 +170,4 @@ const styles = StyleSheet.create({
   },
   rowIconTile: { width: 36, height: 36, borderRadius: 10 },
   rowLabel: { flex: 1, minWidth: 0 },
-  disclosureCard: {
-    borderRadius: NATIVE.sectionRadius,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: 16,
-    marginTop: 4,
-  },
 })

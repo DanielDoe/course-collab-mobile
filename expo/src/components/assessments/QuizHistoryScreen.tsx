@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import {
   ActivityIndicator,
+  Pressable,
   RefreshControl,
   StyleSheet,
   Text,
@@ -9,6 +10,7 @@ import {
 import { ScrollView } from "react-native-gesture-handler"
 import { useRouter } from "expo-router"
 import { useSession } from "../../context/SessionProvider"
+import { mergeAssessmentHistoryById, quizHistoryToAssessmentItems } from "../../lib/assessment-history-map"
 import { ApiError, studentApi, type AssessmentHistoryItem } from "../../lib/student-api"
 import type { StudentSession } from "../../lib/session"
 import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
@@ -101,11 +103,20 @@ export function QuizHistoryScreen() {
     if (!session) return
     setError("")
     try {
-      const data = await studentApi.getAssessmentHistory(session)
-      setItems(data.history ?? data.assessmentHistory ?? [])
+      const quizPayload = await studentApi.getQuizHistory(session)
+      const mapped = quizHistoryToAssessmentItems(quizPayload.quizHistory ?? quizPayload)
+
+      let assessmentRows: AssessmentHistoryItem[] = []
+      try {
+        const assessmentPayload = await studentApi.getAssessmentHistory(session)
+        assessmentRows = assessmentPayload.history ?? assessmentPayload.assessmentHistory ?? []
+      } catch {
+        // assessment-history is optional overlay; quiz-history is the required list.
+      }
+
+      setItems(assessmentRows.length > 0 ? mergeAssessmentHistoryById(mapped, assessmentRows) : mapped)
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Failed to load history.")
-      setItems([])
     }
   }, [session])
 
@@ -177,6 +188,14 @@ export function QuizHistoryScreen() {
         {error ? (
           <View style={[styles.errorBox, { backgroundColor: `${tokens.danger}18` }]}>
             <Text style={[type.destructive, styles.errorText]}>{error}</Text>
+            <Pressable
+              onPress={() => void onRefresh()}
+              accessibilityRole="button"
+              accessibilityLabel="Try again"
+              hitSlop={8}
+            >
+              <Text style={[type.callout, { color: tokens.accent, fontWeight: "600" }]}>Try again</Text>
+            </Pressable>
           </View>
         ) : null}
 
@@ -194,25 +213,35 @@ export function QuizHistoryScreen() {
           <ActivityIndicator size="large" color={tokens.accent} />
           <Text style={[type.caption, { color: SN.secondaryLabel }]}>Loading history…</Text>
         </View>
-      ) : items.length === 0 ? (
-        <View style={styles.center}>
-          <CommEmptyState
-            icon="time-outline"
-            title="No assessment history"
-            body="Your completed quizzes and exams will appear here."
-          />
-        </View>
       ) : (
         <ScrollView
           style={styles.scroll}
-          contentContainerStyle={scrollContentStyle}
+          contentContainerStyle={
+            items.length === 0 ? [scrollContentStyle, styles.emptyScroll] : scrollContentStyle
+          }
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={tokens.accent} />
           }
         >
-          {filtered.length > 0 ? (
+          {items.length === 0 ? (
+            <View style={styles.emptyBlock}>
+              <CommEmptyState
+                icon="time-outline"
+                title="No assessment history"
+                body="Your completed quizzes and exams will appear here."
+              />
+              <Pressable
+                onPress={() => void onRefresh()}
+                accessibilityRole="button"
+                accessibilityLabel="Try again"
+                hitSlop={8}
+              >
+                <Text style={[type.callout, { color: tokens.accent, fontWeight: "600" }]}>Try again</Text>
+              </Pressable>
+            </View>
+          ) : filtered.length > 0 ? (
             <View style={styles.timelineList}>
               {filtered.map((item, index) => (
                 <AssessmentHistoryTimelineItem
@@ -254,7 +283,7 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingVertical: 48,
   },
-  errorBox: { padding: 12, borderRadius: NATIVE.sectionRadius },
+  errorBox: { padding: 12, borderRadius: NATIVE.sectionRadius, gap: 8 },
   errorText: { fontSize: 14, lineHeight: 20 },
   timelineList: {
     paddingTop: 4,
@@ -263,5 +292,13 @@ const styles = StyleSheet.create({
   emptyFilter: {
     paddingHorizontal: 14,
     paddingVertical: 16,
+  },
+  emptyScroll: {
+    justifyContent: "center",
+  },
+  emptyBlock: {
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 24,
   },
 })

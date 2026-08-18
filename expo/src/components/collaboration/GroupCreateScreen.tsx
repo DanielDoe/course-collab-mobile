@@ -29,16 +29,21 @@ export function GroupCreateScreen() {
   const [selected, setSelected] = useState<number[]>([])
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState("")
 
   useEffect(() => {
     if (!session) {
       setLoading(false)
       return
     }
+    setError("")
     collaborationApi
       .getRoster(session)
       .then((res) => setRoster(res.students ?? []))
-      .catch(() => setRoster([]))
+      .catch((err) => {
+        setRoster([])
+        setError(err instanceof ApiError ? err.message : "Could not load roster.")
+      })
       .finally(() => setLoading(false))
   }, [session])
 
@@ -93,6 +98,7 @@ export function GroupCreateScreen() {
         <Text style={[styles.label, { color: theme.primaryDark }]}>
           Invite classmates ({selected.length}/3)
         </Text>
+        {error ? <Text style={styles.errorText}>{error}</Text> : null}
         {loading ? (
           <ActivityIndicator color={theme.primary} />
         ) : (
@@ -159,6 +165,7 @@ const styles = StyleSheet.create({
   rosterCopy: { flex: 1 },
   rosterName: { fontSize: 14, fontWeight: "700", color: NATIVE.label },
   rosterId: { fontSize: 11 },
+  errorText: { fontSize: 13, color: "#b91c1c" },
   submitBtn: {
     flexDirection: "row",
     alignItems: "center",

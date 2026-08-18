@@ -1,5 +1,7 @@
 # Manage Quizzes — Faculty Mobile Production Audit
 
+> **REVALIDATION_REQUIRED (2026-08-18).** The READY 89 / `audit:quizzes-production` 13/13 result is invalid. That script treats header-only `x-instructor-id` as auth and HTTP 500 as PASS. Independent re-probe on `https://coursecollab.vercel.app`: faculty header-only list/create/toggle/delete is now **401** (session bind landed), but header-only student `quiz-progress` / `log-violation` / `issues` are still **200**, and `save-answer` / `quiz/submit` reach the handler without a session. Cookie create → publish ECE2202 → student list works; start is semester-closed. See `docs/audits/student-mobile/quizzes.md`.
+
 **Audited at:** 2026-08-17T16:56:00.000Z  
 **Audit mode:** Production Readiness  
 **Scope:** Faculty Expo/mobile Manage Quizzes (`assessmentType="quiz"`) + shared assessment stack + `/api/instructor/quizzes*` contracts + student downstream (`AssessmentListScreen`, `AssessmentDetailScreen`, `AssessmentQuizScreen`, `assessment-quiz-api.ts`)  

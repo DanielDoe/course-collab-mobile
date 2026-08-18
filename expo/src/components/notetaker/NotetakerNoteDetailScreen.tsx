@@ -26,9 +26,9 @@ import type { StudentSession } from "../../lib/session"
 import { ApiError } from "../../lib/student-api"
 import { safeRouterBack } from "../../lib/safe-router-back"
 import {
+  buildNotetakerAuthenticatedAudioSource,
   isNotetakerProcessing,
   notetakerApi,
-  notetakerAudioUrl,
   notetakerNoteSegment,
   type NotetakerKeyPoints,
   type NotetakerLimits,
@@ -117,6 +117,9 @@ export function NotetakerNoteDetailScreen() {
   const [roster, setRoster] = useState<RosterStudent[]>([])
   const [selectedShareIds, setSelectedShareIds] = useState<number[]>([])
   const [saveFlashVisible, setSaveFlashVisible] = useState(false)
+  const [audioSource, setAudioSource] = useState<{ uri: string; headers?: Record<string, string> } | null>(
+    null,
+  )
 
   const isDirty = useMemo(() => {
     if (!note) return false
@@ -354,16 +357,25 @@ export function NotetakerNoteDetailScreen() {
     ])
   }, [session, note, router])
 
-  const audioUrl = useMemo(() => {
-    if (!session || !note?.audio_storage_key) return null
-    return notetakerAudioUrl(session, notetakerNoteSegment(note))
+  useEffect(() => {
+    let cancelled = false
+    if (!session || !note?.audio_storage_key) {
+      setAudioSource(null)
+      return
+    }
+    void buildNotetakerAuthenticatedAudioSource(session, notetakerNoteSegment(note)).then((source) => {
+      if (!cancelled) setAudioSource(source)
+    })
+    return () => {
+      cancelled = true
+    }
   }, [session, note])
 
-  const audioPlayer = useAudioPlayer(audioUrl)
+  const audioPlayer = useAudioPlayer(audioSource)
   const audioStatus = useAudioPlayerStatus(audioPlayer)
 
   const togglePlayback = useCallback(() => {
-    if (!audioUrl) return
+    if (!audioSource?.uri) return
     if (audioStatus.playing) {
       audioPlayer.pause()
       return
@@ -372,7 +384,7 @@ export function NotetakerNoteDetailScreen() {
       audioPlayer.seekTo(0)
     }
     audioPlayer.play()
-  }, [audioUrl, audioStatus.playing, audioStatus.currentTime, audioStatus.duration, audioPlayer])
+  }, [audioSource?.uri, audioStatus.playing, audioStatus.currentTime, audioStatus.duration, audioPlayer])
 
   const playbackLabel = useMemo(() => {
     if (!audioStatus.duration) return "Play recording"
@@ -483,7 +495,7 @@ export function NotetakerNoteDetailScreen() {
 
           {!processing && !failed ? (
             <>
-              {audioUrl ? (
+              {audioSource?.uri ? (
                 <ModuleSection>
                   <ModuleListRow
                     title={playbackLabel}

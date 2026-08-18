@@ -1,4 +1,5 @@
-import { api, type Announcement } from "./api"
+import { type Announcement } from "./api"
+import { studentApi } from "./student-api"
 import { instructorApi, type InstructorCourse } from "./instructor-api"
 import {
   fetchNotificationCount,
@@ -57,10 +58,10 @@ export function resetAppBootstrapState() {
 
 async function bootstrapStudent(session: StudentSession) {
   const [dashboard, announcementData, tier, notifications] = await Promise.all([
-    fetchStudentDashboardBundle(session.databaseId, session.id, session.section),
-    api.getAnnouncements(session.databaseId).catch(() => ({ announcements: [] as Announcement[] })),
+    fetchStudentDashboardBundle(session),
+    studentApi.getAnnouncements(session).catch(() => ({ announcements: [] as Announcement[] })),
     fetchEffectiveMembershipTier(session),
-    fetchNotificationCount(session.databaseId),
+    fetchNotificationCount(session),
   ])
 
   setStudentDashboardBootstrap({

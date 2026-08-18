@@ -117,6 +117,10 @@ export function FacultyRecommendationCreateModal({
       setError("Select a student and course section.")
       return
     }
+    if (!deadline.trim()) {
+      setError("Deadline is required.")
+      return
+    }
     setSubmitting(true)
     setError("")
     try {

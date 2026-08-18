@@ -1,21 +1,32 @@
-import { ApiError, studentApi, type QuizItem } from "../../lib/student-api"
+import { ApiError, studentApi, type QuizItem, type QuizListRolloverPolicy } from "../../lib/student-api"
 import type { StudentSession } from "../../lib/session"
 import type { AssessmentListKind } from "./assessment-config"
 import { getAssessmentListMeta, isInProgressAttempt } from "./assessment-detail-logic"
 
+export { assessmentListEmptyCopy } from "./assessment-list-empty-copy"
+
+export type AssessmentListPayload = {
+  items: QuizItem[]
+  rolloverPolicy?: QuizListRolloverPolicy
+}
+
 /** Match web QuizList — finals/midterms use the unified quizzes API where applicable. */
+export async function fetchAssessmentListForKind(
+  session: StudentSession,
+  kind: AssessmentListKind | string,
+): Promise<AssessmentListPayload> {
+  const apiType =
+    kind === "final" ? "final" : kind === "homework" ? "homework" : kind === "mid_semester" ? "mid_semester" : kind
+  const data = await studentApi.getQuizzes(session, apiType)
+  return { items: data.quizzes ?? [], rolloverPolicy: data.rollover_policy }
+}
+
 export async function fetchAssessmentsForKind(
   session: StudentSession,
   kind: AssessmentListKind | string,
 ): Promise<QuizItem[]> {
-  if (kind === "mid_semester") {
-    const data = await studentApi.getMidSemesters(session)
-    return data.midSemesters ?? data.exams ?? []
-  }
-
-  const apiType = kind === "final" ? "final" : kind === "homework" ? "homework" : kind
-  const data = await studentApi.getQuizzes(session, apiType)
-  return data.quizzes ?? []
+  const { items } = await fetchAssessmentListForKind(session, kind)
+  return items
 }
 
 export function quizItemDisplayScore(item: QuizItem): number | null {

@@ -3,7 +3,8 @@ import { AppAlert } from './app-alert'
 import * as ImagePicker from "expo-image-picker"
 import { API_BASE_URL } from "../constants"
 import type { StudentSession } from "./session"
-import { ApiError } from "./student-api"
+import { ApiError, studentAuthenticatedHeaders } from "./student-api"
+import { persistHttpCookiesFromResponse } from "./student-http-cookies"
 import { isMarkdownNoteContent } from "./markdown-note-content"
 import { isNoteHtml } from "./digital-note-content"
 
@@ -71,14 +72,18 @@ export async function uploadNoteImage(
   form.append("noteId", String(noteId))
 
   const url = `${API_BASE_URL}/api/student/digital-notes/upload-image`
+  const headers = await studentAuthenticatedHeaders(session)
+  delete headers["Content-Type"]
   const response = await fetch(url, {
     method: "POST",
+    credentials: "include",
     headers: {
+      ...headers,
       Accept: "application/json",
-      "x-student-id": session.databaseId,
     },
     body: form,
   })
+  await persistHttpCookiesFromResponse(url, response.headers)
 
   if (response.status === 404 || response.status === 405) return null
 

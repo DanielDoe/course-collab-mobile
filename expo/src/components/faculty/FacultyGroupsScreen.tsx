@@ -146,6 +146,8 @@ export function FacultyGroupsScreen() {
     setRefreshing(true)
     try {
       await load()
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not load groups.")
     } finally {
       setRefreshing(false)
     }

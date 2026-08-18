@@ -1,6 +1,5 @@
 import type { StudentSession } from "./session"
-import { API_BASE_URL } from "../constants"
-import { ApiError } from "./student-api"
+import { studentAuthenticatedRequest } from "./student-api"
 
 export type AiFeedback = {
   score?: number
@@ -51,42 +50,6 @@ export type SampleAnswer = {
   approach: string
   description: string
   code: string
-}
-
-function headers(session: StudentSession): HeadersInit {
-  return {
-    Accept: "application/json",
-    "Content-Type": "application/json",
-    "x-student-id": session.databaseId}
-}
-
-async function request<T>(
-  session: StudentSession,
-  path: string,
-  init?: Pick<RequestInit, "method">,
-): Promise<T> {
-  const url = `${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`
-  const response = await fetch(url, { method: init?.method ?? "GET", headers: headers(session) })
-  let body: unknown = null
-  const text = await response.text()
-  if (text) {
-    try {
-      body = JSON.parse(text)
-    } catch {
-      body = { error: text }
-    }
-  }
-  if (!response.ok) {
-    const message =
-      typeof body === "object" &&
-      body !== null &&
-      "error" in body &&
-      typeof (body as { error: unknown }).error === "string"
-        ? (body as { error: string }).error
-        : `Request failed (${response.status})`
-    throw new ApiError(message, response.status, body)
-  }
-  return body as T
 }
 
 export type AssessmentResultQuestion = {
@@ -185,10 +148,13 @@ export type AssessmentAttemptResults = {
 
 export const assessmentResultsApi = {
   getAttemptResults: (session: StudentSession, attemptId: number) =>
-    request<AssessmentAttemptResults>(session, `/api/student/results/${attemptId}`),
+    studentAuthenticatedRequest<AssessmentAttemptResults>(
+      session,
+      `/api/student/results/${attemptId}`,
+    ),
 
   markPdfDownloaded: (session: StudentSession, attemptId: number) =>
-    request<{ success: boolean; pdf_downloaded_at?: string }>(
+    studentAuthenticatedRequest<{ success: boolean; pdf_downloaded_at?: string }>(
       session,
       `/api/student/results/${attemptId}/mark-pdf-downloaded`,
       { method: "POST" },

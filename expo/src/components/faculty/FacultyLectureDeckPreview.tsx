@@ -6,6 +6,7 @@ import { useFacultyScope } from "../../hooks/useFacultyScope"
 import { FACULTY_SHEET_COLOR } from "../../lib/faculty-sheet-theme"
 import { semanticSoft } from "../../lib/themed-module-theme"
 import { buildAuthenticatedDeckSource } from "../../lib/lecture-deck-url"
+import { getAllowedWebViewOriginPrefixes } from "../../lib/trusted-origins"
 
 type Props = {
   pdfUrl: string
@@ -50,7 +51,7 @@ export function FacultyLectureDeckPreview({ pdfUrl, title }: Props) {
         <WebView
           source={source}
           style={[styles.webview, { backgroundColor: tokens.surface }]}
-          originWhitelist={["*"]}
+          originWhitelist={getAllowedWebViewOriginPrefixes({ lectureDeck: true })}
           startInLoadingState
           renderLoading={() => (
             <View style={[styles.loading, { backgroundColor: tokens.surface }]}>

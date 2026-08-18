@@ -14,10 +14,10 @@ export function PortalNotificationShellSync({ session }: Props) {
   const { setNotificationCount } = usePortalShell()
 
   const refreshCount = useCallback(async () => {
-    const result = await fetchStudentNotifications(session.databaseId)
+    const result = await fetchStudentNotifications(session)
     setNotificationCount(result.unreadCount)
     void setAppBadgeCount(result.unreadCount)
-  }, [session.databaseId, setNotificationCount])
+  }, [session, setNotificationCount])
 
   useEffect(() => {
     void refreshCount()

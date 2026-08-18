@@ -1,18 +1,32 @@
 #!/usr/bin/env node
 /**
- * Faculty announcements production audit — closes F-001 (auth/IDOR) and F-002 (publish→student).
+ * Announcements production audit — faculty + student session bind.
+ *
+ * Expected after v0 deploy:
+ *   unauth + header-only faculty GET/POST/PUT/DELETE + upload → 401
+ *   unauth + header-only student GET :id, view, react, comments GET/POST → 401
+ *   cookie Alex list 200; Alex + Jordan header 403
+ *   cookie faculty course 16 200; course 1 403
+ *   cookie create title contains AUDIT-DELETE; student cookie sees it; DELETE in finally
+ *
+ * Live today (unpatched) will FAIL. Do not treat header-only 200 as PASS.
+ * Do not view/react/comment live 133/134/135/1.
  *
  * Run: npm run audit:announcements-production
- *
- * Uses App Store review demo scope by default (instructor 15 / course 16 / student 910000001).
- * Publish probe creates a disposable announcement, verifies student visibility + pin + delete, then cleans up.
  */
 const BASE = (process.env.AUDIT_API_BASE || "https://coursecollab.vercel.app").replace(/\/$/, "")
 const INSTRUCTOR_ID = process.env.AUDIT_INSTRUCTOR_ID || "15"
 const COURSE_ID = process.env.AUDIT_COURSE_ID || "16"
-const STUDENT_ID = process.env.AUDIT_STUDENT_ID || "910000001"
-const OTHER_STUDENT_ID = process.env.AUDIT_OTHER_STUDENT_ID || "910100001"
+const ALEX_ROSTER = process.env.AUDIT_STUDENT_ID || "910000001"
+const ALEX_DB = process.env.AUDIT_STUDENT_DB_ID || "722"
+const JORDAN_DB = process.env.AUDIT_PEER_STUDENT_DB_ID || "723"
+const UNIVERSITY_ID = Number(process.env.AUDIT_UNIVERSITY_ID || 2)
+const STUDENT_PASSWORD = process.env.AUDIT_STUDENT_PASSWORD || "Review26!"
+const FACULTY_USER = process.env.AUDIT_FACULTY_USER || "mchen"
+const FACULTY_PASSWORD = process.env.AUDIT_FACULTY_PASSWORD || "Review26!"
 const IDOR_COURSE_ID = process.env.AUDIT_IDOR_COURSE_ID || "1"
+/** Disposable probe id — never live 133/134/135/1. */
+const PROBE_ID = process.env.AUDIT_ANNOUNCEMENT_PROBE_ID || "99999133"
 
 const results = []
 
@@ -26,6 +40,46 @@ function fail(id, detail) {
   console.error(`  ✗ ${id}${detail ? ` — ${detail}` : ""}`)
 }
 
+function expectStatus(id, actual, expected, extra = "") {
+  const allowed = Array.isArray(expected) ? expected : [expected]
+  if (actual === 500) {
+    fail(id, `HTTP 500${extra}`)
+    return false
+  }
+  if (allowed.includes(actual)) {
+    pass(id, `${actual}${extra}`)
+    return true
+  }
+  fail(id, `expected ${allowed.join("/")}, got ${actual}${extra}`)
+  return false
+}
+
+/** Unauth / header-only probes must be 401 or 403. Never 200/201/400/404/500. */
+function expectAuthRejected(id, status, extra = "") {
+  if (status === 500) {
+    fail(id, `HTTP 500${extra}`)
+    return false
+  }
+  if (status === 200 || status === 201) {
+    fail(id, `handler ran (${status}) — not auth-closed${extra}`)
+    return false
+  }
+  if (status === 400) {
+    fail(id, `400 is not auth-closed — expected 401/403${extra}`)
+    return false
+  }
+  if (status === 404) {
+    fail(id, `404 means handler ran — expected 401 until session bind${extra}`)
+    return false
+  }
+  if (status === 401 || status === 403) {
+    pass(id, `${status}${extra}`)
+    return true
+  }
+  fail(id, `expected 401/403, got ${status}${extra}`)
+  return false
+}
+
 async function fetchJson(path, init = {}) {
   const res = await fetch(`${BASE}${path}`, init)
   const text = await res.text()
@@ -33,257 +87,339 @@ async function fetchJson(path, init = {}) {
   try {
     body = text ? JSON.parse(text) : null
   } catch {
-    body = text
+    body = text ? { error: "[non-json]" } : null
   }
-  return { status: res.status, ok: res.ok, body }
+  return { status: res.status, ok: res.ok, body, headers: res.headers }
 }
 
-function instructorHeaders(courseId = COURSE_ID) {
-  return {
-    "x-instructor-id": INSTRUCTOR_ID,
-    "x-course-id": String(courseId),
+function cookieHeaderFromResponse(res) {
+  const setter = typeof res.headers.getSetCookie === "function" ? res.headers.getSetCookie() : []
+  if (setter.length) {
+    return setter.map((part) => part.split(";")[0]).filter(Boolean).join("; ")
   }
+  const single = res.headers.get("set-cookie")
+  return single ? single.split(";")[0] : ""
 }
 
-function studentHeaders(studentId = STUDENT_ID) {
+function refreshFromCookie(cookie) {
+  const match = cookie.match(/(?:^|;\s*)cc_refresh=([^;]+)/i)
+  return match?.[1]?.trim() || ""
+}
+
+function jsonHeaders(extra = {}) {
+  return { "Content-Type": "application/json", ...extra }
+}
+
+function headerOnlyFaculty(courseId = COURSE_ID) {
+  return { "x-instructor-id": INSTRUCTOR_ID, "x-course-id": String(courseId) }
+}
+
+function headerOnlyStudent(studentId = ALEX_DB) {
   return { "x-student-id": String(studentId) }
 }
 
 function findAnnouncement(items, marker) {
-  return (items ?? []).find((a) => a.title === marker || a.title?.includes(marker))
+  return (items ?? []).find((row) => row.title === marker || row.title?.includes(marker))
 }
 
-async function runAuthProbes() {
-  console.log("\n=== F-001 Auth / scope / IDOR ===\n")
-
-  const missingIdentity = await fetchJson("/api/announcements")
-  if (missingIdentity.status === 400 || missingIdentity.status === 401) {
-    pass("F-001-missing-identity", `${missingIdentity.status} without student or instructor`)
-  } else {
-    fail("F-001-missing-identity", `expected 400/401, got ${missingIdentity.status}`)
-  }
-
-  const invalidInstructor = await fetchJson(
-    `/api/announcements?instructorId=999999&courseId=${COURSE_ID}`,
-  )
-  if ([401, 403, 404].includes(invalidInstructor.status)) {
-    pass("F-001-unknown-instructor", `${invalidInstructor.status} blocks unknown instructor list`)
-  } else {
-    fail("F-001-unknown-instructor", `expected 401/403/404, got ${invalidInstructor.status}`)
-  }
-
-  const idorList = await fetchJson(`/api/announcements?instructorId=${INSTRUCTOR_ID}&courseId=${IDOR_COURSE_ID}`, {
-    headers: instructorHeaders(IDOR_COURSE_ID),
-  })
-  if (idorList.status === 403) {
-    pass("F-001-idor-list", `403 Forbidden on foreign course ${IDOR_COURSE_ID}`)
-  } else {
-    fail("F-001-idor-list", `expected 403, got ${idorList.status}`)
-  }
-
-  const missingInstructorPost = await fetchJson("/api/announcements", {
+async function loginAlex() {
+  const res = await fetchJson("/api/auth/student/login", {
     method: "POST",
-    headers: { "Content-Type": "application/json", "x-course-id": COURSE_ID },
-    body: JSON.stringify({ title: "IDOR probe", content: "no instructor header", course_id: Number(COURSE_ID) }),
-  })
-  if (missingInstructorPost.status === 401) {
-    pass("F-001-missing-instructor-post", "401 Unauthorized")
-  } else {
-    fail("F-001-missing-instructor-post", `expected 401, got ${missingInstructorPost.status}`)
-  }
-
-  const idorCreate = await fetchJson("/api/announcements", {
-    method: "POST",
-    headers: { ...instructorHeaders(IDOR_COURSE_ID), "Content-Type": "application/json" },
+    headers: jsonHeaders(),
     body: JSON.stringify({
-      title: "IDOR probe",
-      content: "should not publish",
-      course_id: Number(IDOR_COURSE_ID),
+      universityId: UNIVERSITY_ID,
+      identifier: ALEX_ROSTER,
+      password: STUDENT_PASSWORD,
+      courseId: Number(COURSE_ID),
+      rememberMe: true,
     }),
   })
-  if (idorCreate.status === 403 || idorCreate.status === 400) {
-    pass("F-001-idor-create", `${idorCreate.status} blocks foreign course POST`)
-  } else {
-    fail("F-001-idor-create", `expected 403/400, got ${idorCreate.status}`)
-  }
-
-  const invalidStudent = await fetchJson("/api/announcements?studentId=999999")
-  if (invalidStudent.status === 404) {
-    pass("F-001-invalid-student", "404 Student not found")
-  } else {
-    fail("F-001-invalid-student", `expected 404, got ${invalidStudent.status}`)
-  }
+  const cookie = cookieHeaderFromResponse(res)
+  const refresh = refreshFromCookie(cookie)
+  return { status: res.status, body: res.body, cookie, refresh }
 }
 
-async function runPublishStudentE2E() {
-  console.log("\n=== F-002 Publish → student feed ===\n")
+async function loginFaculty() {
+  const res = await fetchJson("/api/instructor/login", {
+    method: "POST",
+    headers: jsonHeaders(),
+    body: JSON.stringify({ username: FACULTY_USER, password: FACULTY_PASSWORD }),
+  })
+  const cookie = cookieHeaderFromResponse(res)
+  const refresh = refreshFromCookie(cookie)
+  return { status: res.status, body: res.body, cookie, refresh }
+}
 
-  const marker = `Audit Announcement ${Date.now()}`
-  let announcementId = null
+async function run() {
+  console.log(`Announcements production audit → ${BASE}\n`)
+  console.log("Live 200 on header-only faculty/student probes is FAIL until v0 is deployed.\n")
+
+  console.log("=== Unauth + header-only faculty CRUD ===\n")
+
+  const facultyListPath = `/api/announcements?instructorId=${INSTRUCTOR_ID}&courseId=${COURSE_ID}`
+  expectAuthRejected("AN1-unauth-faculty-list", (await fetchJson(facultyListPath)).status)
+  expectAuthRejected(
+    "AN1-header-only-faculty-list",
+    (await fetchJson(facultyListPath, { headers: headerOnlyFaculty() })).status,
+  )
+  expectAuthRejected(
+    "AN1-header-only-faculty-list-foreign",
+    (await fetchJson(`/api/announcements?instructorId=${INSTRUCTOR_ID}&courseId=${IDOR_COURSE_ID}`, {
+      headers: headerOnlyFaculty(IDOR_COURSE_ID),
+    })).status,
+  )
+
+  const unauthPost = await fetchJson("/api/announcements", {
+    method: "POST",
+    headers: jsonHeaders(),
+    body: JSON.stringify({ title: "should-not-create", content: "no session", course_id: Number(COURSE_ID) }),
+  })
+  expectAuthRejected("AN1-unauth-faculty-post", unauthPost.status)
+
+  const headerPost = await fetchJson("/api/announcements", {
+    method: "POST",
+    headers: jsonHeaders(headerOnlyFaculty()),
+    body: JSON.stringify({ title: "should-not-create", content: "header only", course_id: Number(COURSE_ID) }),
+  })
+  expectAuthRejected("AN1-header-only-faculty-post", headerPost.status)
+
+  const unauthPut = await fetchJson(`/api/announcements/${PROBE_ID}`, {
+    method: "PUT",
+    headers: jsonHeaders(),
+    body: JSON.stringify({ pinned: true }),
+  })
+  expectAuthRejected("AN1-unauth-faculty-put", unauthPut.status)
+
+  const headerPut = await fetchJson(`/api/announcements/${PROBE_ID}`, {
+    method: "PUT",
+    headers: jsonHeaders(headerOnlyFaculty()),
+    body: JSON.stringify({ pinned: true }),
+  })
+  expectAuthRejected("AN1-header-only-faculty-put", headerPut.status)
+
+  expectAuthRejected(
+    "AN1-unauth-faculty-delete",
+    (await fetchJson(`/api/announcements/${PROBE_ID}`, { method: "DELETE" })).status,
+  )
+  expectAuthRejected(
+    "AN1-header-only-faculty-delete",
+    (await fetchJson(`/api/announcements/${PROBE_ID}`, {
+      method: "DELETE",
+      headers: headerOnlyFaculty(),
+    })).status,
+  )
+
+  expectAuthRejected("AN5-unauth-upload", (await fetchJson("/api/announcements/upload", { method: "POST" })).status)
+  expectAuthRejected(
+    "AN5-header-only-upload",
+    (await fetchJson("/api/announcements/upload", { method: "POST", headers: headerOnlyFaculty() })).status,
+  )
+
+  console.log("\n=== Unauth + header-only student GET :id / writes / comments ===\n")
+
+  expectAuthRejected("AN2-unauth-get-id", (await fetchJson(`/api/announcements/${PROBE_ID}`)).status)
+  expectAuthRejected(
+    "AN2-header-only-student-get-id",
+    (await fetchJson(`/api/announcements/${PROBE_ID}?studentId=${ALEX_DB}`, {
+      headers: headerOnlyStudent(),
+    })).status,
+  )
+  expectAuthRejected(
+    "AN2-header-only-faculty-get-id",
+    (await fetchJson(`/api/announcements/${PROBE_ID}?instructorId=${INSTRUCTOR_ID}`, {
+      headers: headerOnlyFaculty(),
+    })).status,
+  )
+
+  const viewBody = JSON.stringify({ studentId: Number(ALEX_DB) })
+  expectAuthRejected(
+    "AN3-unauth-view",
+    (await fetchJson(`/api/announcements/${PROBE_ID}/view`, {
+      method: "POST",
+      headers: jsonHeaders(),
+      body: viewBody,
+    })).status,
+  )
+  expectAuthRejected(
+    "AN3-header-only-view",
+    (await fetchJson(`/api/announcements/${PROBE_ID}/view`, {
+      method: "POST",
+      headers: jsonHeaders(headerOnlyStudent()),
+      body: viewBody,
+    })).status,
+  )
+
+  const reactBody = JSON.stringify({ studentId: Number(ALEX_DB), reactionType: "like" })
+  expectAuthRejected(
+    "AN3-unauth-react",
+    (await fetchJson(`/api/announcements/${PROBE_ID}/react`, {
+      method: "POST",
+      headers: jsonHeaders(),
+      body: reactBody,
+    })).status,
+  )
+  expectAuthRejected(
+    "AN3-header-only-react",
+    (await fetchJson(`/api/announcements/${PROBE_ID}/react`, {
+      method: "POST",
+      headers: jsonHeaders(headerOnlyStudent()),
+      body: reactBody,
+    })).status,
+  )
+
+  expectAuthRejected(
+    "AN4-unauth-comments-get",
+    (await fetchJson(`/api/announcements/${PROBE_ID}/comments`)).status,
+  )
+  expectAuthRejected(
+    "AN4-header-only-comments-get",
+    (await fetchJson(`/api/announcements/${PROBE_ID}/comments`, { headers: headerOnlyStudent() })).status,
+  )
+
+  const commentBody = JSON.stringify({ studentId: Number(ALEX_DB), content: "should-not-post" })
+  expectAuthRejected(
+    "AN3-unauth-comments-post",
+    (await fetchJson(`/api/announcements/${PROBE_ID}/comments`, {
+      method: "POST",
+      headers: jsonHeaders(),
+      body: commentBody,
+    })).status,
+  )
+  expectAuthRejected(
+    "AN3-header-only-comments-post",
+    (await fetchJson(`/api/announcements/${PROBE_ID}/comments`, {
+      method: "POST",
+      headers: jsonHeaders(headerOnlyStudent()),
+      body: commentBody,
+    })).status,
+  )
+
+  console.log("\n=== Student list (already session-bound in production) ===\n")
+
+  expectAuthRejected("AN-unauth-student-list", (await fetchJson(`/api/announcements?studentId=${ALEX_DB}`)).status)
+  expectAuthRejected(
+    "AN-header-only-student-list",
+    (await fetchJson(`/api/announcements?studentId=${ALEX_DB}`, { headers: headerOnlyStudent() })).status,
+  )
+
+  console.log("\n=== Cookie Alex ===\n")
+
+  const alexLogin = await loginAlex()
+  const alexProof = {
+    Cookie: alexLogin.cookie,
+    ...(alexLogin.refresh ? { "x-cc-refresh": alexLogin.refresh } : {}),
+    "x-student-id": ALEX_DB,
+  }
+
+  if (!alexLogin.cookie && !alexLogin.refresh) {
+    pass("cookie-alex-login", `skipped — no session (HTTP ${alexLogin.status})`)
+  } else {
+    pass("cookie-alex-login", "session proof collected")
+    const ownList = await fetchJson(`/api/announcements?studentId=${ALEX_DB}`, { headers: alexProof })
+    if (ownList.status === 200) {
+      pass("cookie-alex-list", `200 n=${(ownList.body?.announcements ?? []).length}`)
+    } else {
+      fail("cookie-alex-list", `expected 200, got ${ownList.status}`)
+    }
+
+    const spoof = await fetchJson(`/api/announcements?studentId=${JORDAN_DB}`, {
+      headers: { ...alexProof, "x-student-id": JORDAN_DB },
+    })
+    expectStatus("cookie-alex-jordan-header", spoof.status, 403)
+  }
+
+  console.log("\n=== Cookie faculty + AUDIT-DELETE create ===\n")
+
+  const facLogin = await loginFaculty()
+  const facProof = {
+    Cookie: facLogin.cookie,
+    ...(facLogin.refresh ? { "x-cc-refresh": facLogin.refresh } : {}),
+    "x-instructor-id": INSTRUCTOR_ID,
+    "x-course-id": COURSE_ID,
+  }
+
+  let createdId = null
+  const marker = `AUDIT-DELETE announcements production script — do not keep ${Date.now()}`
 
   try {
-    const created = await fetchJson("/api/announcements", {
-      method: "POST",
-      headers: { ...instructorHeaders(), "Content-Type": "application/json" },
-      body: JSON.stringify({
-        title: marker,
-        content: "Production audit probe — safe to ignore.",
-        pinned: false,
-        course_id: Number(COURSE_ID),
-      }),
-    })
-    const createdId = created.body?.announcement?.id
-    if (!created.ok || createdId == null) {
-      fail("F-002-create", `create failed (${created.status})`)
-      return
-    }
-    announcementId = Number(createdId)
-    pass("F-002-create", `announcement id ${announcementId}`)
-
-    const facultyGet = await fetchJson(
-      `/api/announcements/${announcementId}?instructorId=${encodeURIComponent(INSTRUCTOR_ID)}`,
-      { headers: instructorHeaders() },
-    )
-    if (facultyGet.ok && facultyGet.body?.announcement?.id === announcementId) {
-      pass("F-001-faculty-get", "owner can read by id")
+    if (!facLogin.cookie && !facLogin.refresh) {
+      pass("cookie-faculty-login", `skipped — no session (HTTP ${facLogin.status})`)
     } else {
-      fail("F-001-faculty-get", `expected 200, got ${facultyGet.status}`)
-    }
+      pass("cookie-faculty-login", "session proof collected")
 
-    const unauthGet = await fetchJson(`/api/announcements/${announcementId}`)
-    if ([401, 403, 404].includes(unauthGet.status)) {
-      pass("F-001-idor-get-unauth", `${unauthGet.status} without student or instructor`)
-    } else {
-      fail(
-        "F-001-idor-get-unauth",
-        `expected 401/403/404, got ${unauthGet.status} — deploy announcement-request-auth if still 200`,
+      const ownCourse = await fetchJson(
+        `/api/announcements?instructorId=${INSTRUCTOR_ID}&courseId=${COURSE_ID}`,
+        { headers: facProof },
       )
-    }
+      if (ownCourse.status === 200) {
+        pass("cookie-faculty-course-16", `200 n=${(ownCourse.body?.announcements ?? []).length}`)
+      } else {
+        fail("cookie-faculty-course-16", `expected 200, got ${ownCourse.status}`)
+      }
 
-    const unknownInstructorGet = await fetchJson(
-      `/api/announcements/${announcementId}?instructorId=999999`,
-    )
-    if ([401, 403, 404].includes(unknownInstructorGet.status)) {
-      pass("F-001-idor-get-unknown", `${unknownInstructorGet.status} blocks unknown instructor :id`)
-    } else {
-      fail(
-        "F-001-idor-get-unknown",
-        `expected 401/403/404, got ${unknownInstructorGet.status} — deploy GET :id course check if still 200`,
+      const foreign = await fetchJson(
+        `/api/announcements?instructorId=${INSTRUCTOR_ID}&courseId=${IDOR_COURSE_ID}`,
+        { headers: { ...facProof, "x-course-id": IDOR_COURSE_ID } },
       )
-    }
+      expectStatus("cookie-faculty-course-1", foreign.status, 403)
 
-    const studentList = await fetchJson(`/api/announcements?studentId=${encodeURIComponent(STUDENT_ID)}`, {
-      headers: studentHeaders(),
-    })
-    if (!studentList.ok) {
-      fail("F-002-student-list", `student GET failed (${studentList.status})`)
-      return
-    }
-    const visible = findAnnouncement(studentList.body?.announcements, marker)
-    if (visible) {
-      pass("F-002-student-visible", "enrolled student sees published announcement")
-    } else {
-      fail("F-002-student-visible", "published announcement missing from student feed")
-    }
+      if (!marker.includes("AUDIT-DELETE")) {
+        fail("cookie-faculty-create", "payload title missing AUDIT-DELETE")
+      } else {
+        const created = await fetchJson("/api/announcements", {
+          method: "POST",
+          headers: jsonHeaders(facProof),
+          body: JSON.stringify({
+            title: marker,
+            content: "AUDIT-DELETE disposable probe — delete in finally.",
+            pinned: false,
+            course_id: Number(COURSE_ID),
+          }),
+        })
+        createdId = created.body?.announcement?.id ?? null
+        if (!created.ok || createdId == null) {
+          fail("cookie-faculty-create", `expected 201 after session bind, got ${created.status}`)
+        } else {
+          pass("cookie-faculty-create", `id ${createdId}`)
+        }
+      }
 
-    const otherStudentList = await fetchJson(
-      `/api/announcements?studentId=${encodeURIComponent(OTHER_STUDENT_ID)}`,
-      { headers: studentHeaders(OTHER_STUDENT_ID) },
-    )
-    const leaked = findAnnouncement(otherStudentList.body?.announcements, marker)
-    if (!leaked) {
-      pass("F-001-student-course-scope", `other-course student ${OTHER_STUDENT_ID} does not see it`)
-    } else {
-      fail("F-001-student-course-scope", "announcement leaked to a student on another course")
-    }
-
-    const otherStudentGet = await fetchJson(
-      `/api/announcements/${announcementId}?studentId=${encodeURIComponent(OTHER_STUDENT_ID)}`,
-      { headers: studentHeaders(OTHER_STUDENT_ID) },
-    )
-    if (otherStudentGet.status === 404) {
-      pass("F-001-idor-student-get", "404 for other-course student GET :id")
-    } else {
-      fail("F-001-idor-student-get", `expected 404, got ${otherStudentGet.status}`)
-    }
-
-    const pin = await fetchJson(`/api/announcements/${announcementId}`, {
-      method: "PUT",
-      headers: { ...instructorHeaders(), "Content-Type": "application/json" },
-      body: JSON.stringify({ pinned: true }),
-    })
-    if (pin.ok && pin.body?.announcement?.pinned === true) {
-      pass("F-002-pin", "faculty pinned announcement")
-    } else {
-      fail("F-002-pin", `pin failed (${pin.status})`)
-    }
-
-    const studentPinned = await fetchJson(`/api/announcements?studentId=${encodeURIComponent(STUDENT_ID)}`, {
-      headers: studentHeaders(),
-    })
-    const pinnedRow = findAnnouncement(studentPinned.body?.announcements, marker)
-    const first = studentPinned.body?.announcements?.[0]
-    if (pinnedRow?.pinned === true) {
-      pass("F-002-student-pinned", "student feed shows pinned=true")
-    } else {
-      fail("F-002-student-pinned", "pinned announcement missing or not pinned for student")
-    }
-    if (first && (first.id === announcementId || first.title === marker)) {
-      pass("F-002-pin-order", "pinned announcement is first in student feed")
-    } else {
-      fail("F-002-pin-order", "pinned announcement is not first in student feed")
-    }
-
-    const deleted = await fetchJson(`/api/announcements/${announcementId}`, {
-      method: "DELETE",
-      headers: instructorHeaders(),
-    })
-    if (deleted.ok) {
-      pass("F-002-delete", `faculty deleted announcement ${announcementId}`)
-      announcementId = null
-    } else {
-      fail("F-002-delete", `delete failed (${deleted.status})`)
-    }
-
-    const studentAfterDelete = await fetchJson(`/api/announcements?studentId=${encodeURIComponent(STUDENT_ID)}`, {
-      headers: studentHeaders(),
-    })
-    const stillVisible = findAnnouncement(studentAfterDelete.body?.announcements, marker)
-    if (!stillVisible) {
-      pass("F-002-student-removed", "deleted announcement hidden from student feed")
-    } else {
-      fail("F-002-student-removed", "deleted announcement still in student feed")
+      if (createdId != null && (alexLogin.cookie || alexLogin.refresh)) {
+        const studentSees = await fetchJson(`/api/announcements?studentId=${ALEX_DB}`, { headers: alexProof })
+        const visible = findAnnouncement(studentSees.body?.announcements, marker)
+        if (studentSees.status === 200 && visible) {
+          pass("cookie-student-sees-create", `id ${createdId}`)
+        } else {
+          fail(
+            "cookie-student-sees-create",
+            `student list ${studentSees.status} missing AUDIT-DELETE id ${createdId}`,
+          )
+        }
+      }
     }
   } finally {
-    if (announcementId != null) {
-      const cleanup = await fetchJson(`/api/announcements/${announcementId}`, {
+    if (createdId != null && (facLogin.cookie || facLogin.refresh)) {
+      const removed = await fetchJson(`/api/announcements/${createdId}`, {
         method: "DELETE",
-        headers: instructorHeaders(),
+        headers: facProof,
       })
-      if (cleanup.ok || cleanup.status === 404) {
-        pass("F-002-cleanup", `removed audit announcement ${announcementId}`)
+      if (removed.ok || removed.status === 404) {
+        pass("cookie-faculty-delete", `removed AUDIT-DELETE ${createdId}`)
       } else {
-        fail("F-002-cleanup", `cleanup failed (${cleanup.status}) — announcement ${announcementId} may remain`)
+        fail("cookie-faculty-delete", `${removed.status} — announcement ${createdId} may remain`)
       }
     }
   }
+
+  const failed = results.filter((row) => !row.ok)
+  console.log(`\n${results.length - failed.length}/${results.length} passed`)
+  if (failed.length) {
+    console.error("Production still unpatched or probes failed. Do not mark READY.")
+    process.exitCode = 1
+  }
 }
 
-async function main() {
-  console.log(`Announcements production audit → ${BASE}`)
-  console.log(
-    `Scope: instructor=${INSTRUCTOR_ID} course=${COURSE_ID} student=${STUDENT_ID} otherStudent=${OTHER_STUDENT_ID}`,
-  )
-
-  await runAuthProbes()
-  await runPublishStudentE2E()
-
-  const failed = results.filter((r) => !r.ok)
-  console.log(`\n${failed.length ? "FAILED" : "PASSED"} — ${results.length - failed.length}/${results.length} checks\n`)
-  if (failed.length) process.exit(1)
-}
-
-main().catch((err) => {
-  console.error(err)
-  process.exit(1)
+run().catch((error) => {
+  console.error(error)
+  process.exitCode = 1
 })

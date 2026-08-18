@@ -101,8 +101,8 @@ export const FACULTY_NAV_GROUPS: FacultyNavGroup[] = [
       { id: "students", label: "Student Directory", route: "/module/students", icon: "people-outline" },
       { id: "campers", label: "Campers", route: "/module/campers", icon: "walk-outline" },
       { id: "office-hours", label: "Office Hours", route: "/module/office-hours", icon: "time-outline", badgeKey: "officeHours" },
-      { id: "recommendations", label: "Recommendation Letters", route: "/module/recommendations", icon: "create-outline" },
-      { id: "trade-center", label: "Trade Center", route: "/module/trade-center", icon: "diamond-outline" },
+      { id: "recommendations", label: "Recommendation Letters", route: "/module/recommendations", icon: "bookmark-outline" },
+      { id: "trade-center", label: "Trade Center", route: "/module/trade-center", icon: "storefront-outline" },
     ],
   }),
   withSortedItems({
@@ -125,7 +125,7 @@ export const FACULTY_NAV_GROUPS: FacultyNavGroup[] = [
       { id: "notifications", label: "Notifications", route: "/module/notifications", icon: "notifications-outline", badgeKey: "notifications" },
       { id: "messages", label: "Messages", route: "/module/messages", icon: "mail-outline" },
       { id: "discussions", label: "Course Discussions", route: "/module/discussions", icon: "chatbubbles-outline" },
-      { id: "student-support", label: "Student Support", route: "/module/student-support", icon: "help-circle-outline" },
+      { id: "student-support", label: "Student Support", route: "/module/student-support", icon: "help-buoy-outline" },
     ],
   }),
   withSortedItems({
@@ -135,7 +135,7 @@ export const FACULTY_NAV_GROUPS: FacultyNavGroup[] = [
     items: [
       { id: "course-settings", label: "Course Settings", route: "/module/course-settings", icon: "options-outline" },
       { id: "schedule-adjustment", label: "Schedule Adjustment", route: "/module/schedule-adjustment", icon: "swap-horizontal-outline" },
-      { id: "assessment-governance", label: "Assessment Governance", route: "/module/assessment-governance", icon: "shield-checkmark-outline" },
+      { id: "assessment-governance", label: "Assessment Governance", route: "/module/assessment-governance", icon: "lock-closed-outline" },
       { id: "assessment-defaults", label: "Assessment Defaults", route: "/module/assessment-defaults", icon: "list-outline" },
       { id: "my-courses", label: "My Courses", route: "/module/my-courses", icon: "albums-outline" },
       { id: "grading-policies", label: "Grading Policies", route: "/module/grading-policies", icon: "scale-outline" },
@@ -144,7 +144,7 @@ export const FACULTY_NAV_GROUPS: FacultyNavGroup[] = [
       { id: "playground-rules", label: "Playground Rules", route: "/module/playground-rules", icon: "game-controller-outline" },
       { id: "ai-assistant-settings", label: "AI Assistant Settings", route: "/module/ai-assistant-settings", icon: "hardware-chip-outline", locked: true, minTier: "Pro" },
       { id: "team-project-policies", label: "Team & Project Policies", route: "/module/team-project-policies", icon: "git-network-outline" },
-      { id: "submission-issues", label: "Submission Issues", route: "/module/submission-issues", icon: "alert-circle-outline" },
+      { id: "submission-issues", label: "Submission Issues", route: "/module/submission-issues", icon: "warning-outline" },
       { id: "teaching-assistants", label: "Teaching Assistants", route: "/module/teaching-assistants", icon: "person-add-outline", locked: true, minTier: "Enterprise" },
     ],
   }),
@@ -162,7 +162,7 @@ export const FACULTY_SUPPORT_GROUP: FacultyNavGroup = {
   label: "Support",
   icon: "help-buoy-outline",
   items: [
-    { id: "membership", label: "View Plans", route: "/membership", icon: "card-outline" },
+    { id: "membership", label: "View Plans", route: "/membership", icon: "diamond-outline" },
     { id: "report-bug", label: "Report Bug", route: "/module/report-bug", icon: "bug-outline" },
     { id: "help-center", label: "Help Center", route: "/module/help-center", icon: "information-circle-outline" },
     { id: "submit-ticket", label: "Submit Ticket", route: "/module/submit-ticket", icon: "send-outline" },

@@ -1,0 +1,19 @@
+{
+  "module": "practice",
+  "size": "large",
+  "auditedAt": "2026-08-18T02:50:00.000Z",
+  "commit": "dba7f46",
+  "mode": "production_readiness",
+  "workflows": {
+    "hub": "audited",
+    "topic-start": "audited",
+    "quiz-attempt": "audited",
+    "leaderboard": "audited",
+    "auth-isolation": "audited",
+    "membership": "audited",
+    "answer-security": "audited",
+    "cora": "audited",
+    "faculty-downstream": "audited"
+  },
+  "report": "docs/audits/student-mobile/practice.md"
+}

@@ -1,5 +1,4 @@
-import { resolveThemeTokens, type AppThemeTokens } from "../constants/app-themes"
-import { DEFAULT_APPEARANCE_PREFS } from "./appearance-preferences"
+import type { AppThemeTokens } from "../constants/app-themes"
 
 export type GradeWeights = {
   quiz_weight?: number
@@ -95,16 +94,6 @@ export type GradeCategoryView = {
   isEngagement: boolean
 }
 
-const DEFAULT_WEIGHTS: GradeWeights = {
-  quiz_weight: 10,
-  homework_weight: 10,
-  midterm_weight: 20,
-  final_weight: 25,
-  attendance_weight: 10,
-  project_weight: 15,
-  classroom_weight: 5,
-  engagement_weight: 5}
-
 export function toNumber(value: unknown, fallback = 0): number {
   if (typeof value === "number" && Number.isFinite(value)) return value
   if (typeof value === "string" && value.trim() !== "") {
@@ -144,7 +133,7 @@ function isPending(status: GradeCategoryStatus | undefined, key: GradeCategoryKe
 
 export function buildGradeCategories(data: StudentGradesResponse): GradeCategoryView[] {
   const grade = data.grade ?? {}
-  const weights = { ...DEFAULT_WEIGHTS, ...(data.weights ?? {}) }
+  const weights = data.weights ?? {}
   const averages = data.classAverages ?? {}
   const status = data.provisional?.categoryStatus
 
@@ -188,15 +177,12 @@ export function formatCategoryScore(category: GradeCategoryView): string {
 
 import { gradePerformanceColor } from "./grades-theme"
 
-export function gradeColorForTokens(score: number, _tokens: AppThemeTokens): string {
+export function gradeColorForTokens(score: number, _tokens?: AppThemeTokens): string {
   return gradePerformanceColor(score)
 }
 
 export function gradeColor(score: number): string {
-  return gradeColorForTokens(
-    score,
-    resolveThemeTokens(DEFAULT_APPEARANCE_PREFS.themeId, DEFAULT_APPEARANCE_PREFS.appearanceMode, null),
-  )
+  return gradeColorForTokens(score)
 }
 
 export function compareToClass(score: number, classAverage: number): "above" | "below" | "even" | "none" {

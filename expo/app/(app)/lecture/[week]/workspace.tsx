@@ -1,21 +1,15 @@
-import { StyleSheet, View } from "react-native"
 import { useLocalSearchParams } from "expo-router"
-import { useThemedNative } from "../../../../src/context/AppearanceProvider"
+import { LectureInvalidRoute } from "../../../../src/components/lectures/LectureInvalidRoute"
 import { StudentLectureWorkspaceScreen } from "../../../../src/components/lectures/StudentLectureWorkspaceScreen"
 
 export default function LectureWorkspaceRoute() {
-  const native = useThemedNative()
   const { week, lectureId } = useLocalSearchParams<{ week: string; lectureId: string }>()
   const weekNum = typeof week === "string" ? Number(week) : NaN
   const lectureNum = typeof lectureId === "string" ? Number(lectureId) : NaN
 
-  if (!Number.isFinite(weekNum) || !Number.isFinite(lectureNum)) {
-    return <View style={[styles.root, { backgroundColor: native.groupedBackground }]} />
+  if (!Number.isFinite(weekNum) || weekNum < 1 || !Number.isFinite(lectureNum) || lectureNum < 1) {
+    return <LectureInvalidRoute />
   }
 
   return <StudentLectureWorkspaceScreen lectureId={lectureNum} week={weekNum} />
 }
-
-const styles = StyleSheet.create({
-  root: { flex: 1 },
-})

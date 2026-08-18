@@ -110,13 +110,19 @@ export function GroupsScreen() {
 
   useNotificationModuleRefresh("groups", onRefresh)
 
+  function isMyGroup(g: GroupRecord, student: StudentSession): boolean {
+    if (Number(g.created_by) === Number(student.databaseId)) return true
+    if (String(g.leader_student_id) === String(student.id)) return true
+    return (g.members ?? []).some(
+      (m) =>
+        String(m.id) === String(student.databaseId) ||
+        String(m.student_id) === String(student.id),
+    )
+  }
+
   const myGroups = useMemo(() => {
     if (!session) return []
-    return groups.filter((g) =>
-      (g.members ?? []).some(
-        (m) => m.student_id === session.id || String(m.student_id) === session.id,
-      ),
-    )
+    return groups.filter((g) => isMyGroup(g, session))
   }, [groups, session])
 
   const navTabs = useMemo(

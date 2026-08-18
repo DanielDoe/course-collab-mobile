@@ -4,6 +4,7 @@ import {
   buildTrustedApiHosts,
   isAllowedDeepLinkHost,
   isAllowedWebViewHost,
+  isVercelBlobHost,
   sanitizeExternalUrl,
   sanitizeNativeNavigateRoute,
 } from "./trusted-origins-core"
@@ -16,6 +17,14 @@ describe("trusted origins", () => {
     assert.equal(isAllowedDeepLinkHost("course-collab.com", trustedHosts), true)
     assert.equal(isAllowedWebViewHost("checkout.stripe.com", trustedHosts, { membershipFlow: true }), true)
     assert.equal(isAllowedWebViewHost("checkout.stripe.com", trustedHosts), false)
+    assert.equal(isVercelBlobHost("abc.public.blob.vercel-storage.com"), true)
+    assert.equal(
+      isAllowedWebViewHost("abc.public.blob.vercel-storage.com", trustedHosts, {
+        lectureDeck: true,
+      }),
+      true,
+    )
+    assert.equal(isAllowedWebViewHost("abc.public.blob.vercel-storage.com", trustedHosts), false)
   })
 
   it("rejects untrusted hosts and unsafe schemes", () => {

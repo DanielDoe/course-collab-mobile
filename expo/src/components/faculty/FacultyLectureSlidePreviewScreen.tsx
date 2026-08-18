@@ -6,6 +6,7 @@ import { WebView } from "react-native-webview"
 import { ApiError } from "../../lib/api"
 import { instructorApi, type InstructorLecture } from "../../lib/instructor-api"
 import { buildAuthenticatedDeckSource, mergeLectureDeckFromContent } from "../../lib/lecture-deck-url"
+import { getAllowedWebViewOriginPrefixes } from "../../lib/trusted-origins"
 import { useFacultyScope } from "../../hooks/useFacultyScope"
 import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
 import { LectureSlidePreviewToolbar } from "../lectures/LectureSlidePreviewToolbar"
@@ -124,7 +125,7 @@ export function FacultyLectureSlidePreviewScreen({ lectureId }: Props) {
           <WebView
             source={deckSource}
             style={styles.webview}
-            originWhitelist={["*"]}
+            originWhitelist={getAllowedWebViewOriginPrefixes({ lectureDeck: true })}
             startInLoadingState
             renderLoading={() => (
               <View style={[styles.loading, { backgroundColor: tokens.surface }]}>

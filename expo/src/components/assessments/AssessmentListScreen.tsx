@@ -4,7 +4,7 @@ import { Ionicons } from "@/components/icons/AppIcon"
 import { useRouter } from "expo-router"
 import { ModuleScreen } from "../modules/ModuleScreen"
 import { useSession } from "../../context/SessionProvider"
-import { ApiError, type QuizItem } from "../../lib/student-api"
+import { ApiError, type QuizItem, type QuizListRolloverPolicy } from "../../lib/student-api"
 import type { StudentSession } from "../../lib/session"
 import { assessmentIssuesApi } from "../../lib/assessment-issues-api"
 import { ModuleSectionHeader } from "../modules/ModuleScreen"
@@ -18,7 +18,8 @@ import {
   issuesAssessmentType,
 } from "./assessment-config"
 import {
-  fetchAssessmentsForKind,
+  assessmentListEmptyCopy,
+  fetchAssessmentListForKind,
   quizItemCardScore,
   quizItemIsDone,
   quizItemListStatus,
@@ -48,6 +49,7 @@ export function AssessmentListScreen({ type, title }: Props) {
     type in configs ? configs[type as AssessmentListKind] : configs.quiz
 
   const [items, setItems] = useState<QuizItem[]>([])
+  const [rolloverPolicy, setRolloverPolicy] = useState<QuizListRolloverPolicy | undefined>()
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState("")
@@ -72,10 +74,13 @@ export function AssessmentListScreen({ type, title }: Props) {
     if (!session) return
     setError("")
     try {
-      setItems(await fetchAssessmentsForKind(session, type))
+      const list = await fetchAssessmentListForKind(session, type)
+      setItems(list.items)
+      setRolloverPolicy(list.rolloverPolicy)
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Failed to load assessments.")
       setItems([])
+      setRolloverPolicy(undefined)
     }
   }, [session, type])
 
@@ -107,6 +112,10 @@ export function AssessmentListScreen({ type, title }: Props) {
   const doneSection = filtered.filter((i) => quizItemIsDone(i))
 
   const displayTitle = title ?? config.title
+  const emptyCopy = useMemo(
+    () => assessmentListEmptyCopy(type, rolloverPolicy, displayTitle),
+    [type, rolloverPolicy, displayTitle],
+  )
 
   const isRefreshing = loading || refreshing
 
@@ -131,8 +140,8 @@ export function AssessmentListScreen({ type, title }: Props) {
         <View style={styles.emptyWrap}>
           <FacultyEmptyState
             icon={config.icon}
-            title={`No ${displayTitle.toLowerCase()} yet`}
-            body="Check back when your instructor publishes new assessments."
+            title={emptyCopy.title}
+            body={emptyCopy.body}
           />
           <Pressable
             style={({ pressed }) => [

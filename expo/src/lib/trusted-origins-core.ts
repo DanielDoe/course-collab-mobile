@@ -46,12 +46,23 @@ export function isAllowedDeepLinkHost(hostname: string, trustedHosts: readonly s
   return isTrustedApiHost(hostname, trustedHosts)
 }
 
+export function isVercelBlobHost(hostname: string): boolean {
+  const host = hostname.trim().toLowerCase()
+  return (
+    host.endsWith(".public.blob.vercel-storage.com") ||
+    host.endsWith(".blob.vercel-storage.com") ||
+    host === "public.blob.vercel-storage.com" ||
+    host === "blob.vercel-storage.com"
+  )
+}
+
 export function isAllowedWebViewHost(
   hostname: string,
   trustedHosts: readonly string[],
-  options?: { membershipFlow?: boolean },
+  options?: { membershipFlow?: boolean; lectureDeck?: boolean },
 ): boolean {
   if (isTrustedApiHost(hostname, trustedHosts)) return true
+  if (options?.lectureDeck && isVercelBlobHost(hostname)) return true
   return Boolean(options?.membershipFlow && isStripeCheckoutHost(hostname))
 }
 

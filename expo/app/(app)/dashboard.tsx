@@ -11,7 +11,8 @@ import {
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useRouter } from "expo-router"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
-import { ApiError, api, type Announcement } from "../../src/lib/api"
+import { ApiError, type Announcement } from "../../src/lib/api"
+import { studentApi } from "../../src/lib/student-api"
 import {
   fetchStudentDashboardBundle,
 } from "../../src/lib/student-dashboard-stats"
@@ -98,22 +99,31 @@ function StudentDashboard({ session }: { session: import("../../src/lib/session"
     }
 
     try {
-      const [dashboard, announcementData] = await Promise.all([
-        fetchStudentDashboardBundle(session.databaseId, session.id, session.section),
-        api.getAnnouncements(session.databaseId),
+      const [dashboardResult, announcementResult] = await Promise.allSettled([
+        fetchStudentDashboardBundle(session),
+        studentApi.getAnnouncements(session),
       ])
 
-      setStats(dashboard.stats)
-      setTrend(dashboard.trend)
-      setComparison(dashboard.comparison)
-      setInsights(dashboard.insights)
-      setAnnouncements(announcementData.announcements ?? [])
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not load dashboard data.")
+      if (dashboardResult.status === "fulfilled") {
+        setStats(dashboardResult.value.stats)
+        setTrend(dashboardResult.value.trend)
+        setComparison(dashboardResult.value.comparison)
+        setInsights(dashboardResult.value.insights)
+        if (dashboardResult.value.stats.partialError) {
+          setError(dashboardResult.value.stats.partialError)
+        }
+      } else {
+        const err = dashboardResult.reason
+        setError(err instanceof ApiError ? err.message : "Could not load dashboard data.")
+      }
+
+      if (announcementResult.status === "fulfilled") {
+        setAnnouncements(announcementResult.value.announcements ?? [])
+      }
     } finally {
       setChartsLoading(false)
     }
-  }, [session.databaseId, session.id, session.section])
+  }, [session])
 
   useEffect(() => {
     setChartsLoading(true)
@@ -158,25 +168,27 @@ function StudentDashboard({ session }: { session: import("../../src/lib/session"
           badge={session.courseCode ?? undefined}
         />
 
-        {!stats ? (
+        {error ? (
+          <View
+            style={[
+              styles.errorBox,
+              { backgroundColor: semanticSoft(tokens.danger, tokens.isDark, tokens.isDark ? 0.22 : 0.12) },
+            ]}
+          >
+            <Ionicons name="alert-circle-outline" size={18} color={tokens.danger} />
+            <Text style={[type.destructive, styles.errorText]}>{error}</Text>
+          </View>
+        ) : null}
+
+        {!stats && !error ? (
           <View style={styles.loadingBox}>
             <ActivityIndicator size="large" color={native.tint} />
             <Text style={[type.caption, { color: native.secondaryLabel }]}>Loading your dashboard…</Text>
           </View>
-        ) : (
-          <>
-            {error ? (
-              <View
-                style={[
-                  styles.errorBox,
-                  { backgroundColor: semanticSoft(tokens.danger, tokens.isDark, tokens.isDark ? 0.22 : 0.12) },
-                ]}
-              >
-                <Ionicons name="alert-circle-outline" size={18} color={tokens.danger} />
-                <Text style={[type.destructive, styles.errorText]}>{error}</Text>
-              </View>
-            ) : null}
+        ) : null}
 
+        {stats ? (
+          <>
             <KpiGrid stats={stats} />
 
             <GradeTrendChart data={trend} loading={chartsLoading} />
@@ -184,13 +196,21 @@ function StudentDashboard({ session }: { session: import("../../src/lib/session"
             <PerformanceInsightsCard insights={insights} loading={chartsLoading} />
             <EngagementStats stats={stats} />
             <QuickActionsPanel />
-
-            <AnnouncementsSection
-              announcements={announcements}
-              onViewAll={() => router.push("/announcements" as never)}
-            />
           </>
-        )}
+        ) : null}
+
+        {stats || announcements.length > 0 || error ? (
+          <AnnouncementsSection
+            announcements={announcements}
+            onViewAll={() => router.push("/announcements" as never)}
+            onOpen={(id) =>
+              router.push({
+                pathname: "/announcements/[id]",
+                params: { id: String(id) },
+              } as never)
+            }
+          />
+        ) : null}
       </ScrollView>
 
       {offline ? <ConnectivityOverlay mode="offline" onRetry={() => void handleRefresh()} /> : null}
@@ -201,9 +221,11 @@ function StudentDashboard({ session }: { session: import("../../src/lib/session"
 function AnnouncementsSection({
   announcements,
   onViewAll,
+  onOpen,
 }: {
   announcements: Announcement[]
   onViewAll: () => void
+  onOpen: (id: number | string) => void
 }) {
   const native = useThemedNative()
   const tokens = useAppThemeTokens()
@@ -235,8 +257,12 @@ function AnnouncementsSection({
       ) : (
         <View style={styles.announcementList}>
           {recent.map((item, index) => (
-            <View
+            <Pressable
               key={item.id}
+              onPress={() => onOpen(item.id)}
+              accessibilityRole="button"
+              accessibilityLabel={item.title}
+              android_ripple={{ color: native.fill }}
               style={[
                 styles.announcementCard,
                 tokens.cardShadow,
@@ -256,7 +282,7 @@ function AnnouncementsSection({
                   </Text>
                 ) : null}
               </View>
-            </View>
+            </Pressable>
           ))}
         </View>
       )}

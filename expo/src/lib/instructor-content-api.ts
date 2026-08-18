@@ -3,6 +3,10 @@ import { ApiError } from "./api"
 import type { CourseDigitalNote } from "./digital-notes-api"
 import type { FlashcardCard, FlashcardDeck } from "./flashcards-api"
 import type { FlashcardDifficulty } from "./flashcard-difficulty"
+import { mfaTrustRequestHeadersForInstructor } from "./mfa-device-trust"
+import { getStoredSession } from "./session"
+import { mergeCookieHeaders, persistHttpCookiesFromResponse, studentHttpCookieHeader } from "./student-http-cookies"
+import { headersHaveStudentSessionProof, STUDENT_REFRESH_HEADER } from "./student-session-proof"
 
 export type InstructorScope = {
   instructorId: number
@@ -48,6 +52,13 @@ export type DeletedContent = {
   notes?: CourseDigitalNote[]
 }
 
+function refreshTokenFromCookieHeader(cookie: string | undefined): string | undefined {
+  if (!cookie) return undefined
+  const match = cookie.match(/(?:^|;\s*)cc_refresh=([^;]+)/i)
+  const token = match?.[1]?.trim()
+  return token || undefined
+}
+
 async function instructorRequest<T>(
   path: string,
   scope: InstructorScope,
@@ -62,7 +73,19 @@ async function instructorRequest<T>(
   }
   if (scope.courseId != null) headers["x-course-id"] = String(scope.courseId)
 
-  const response = await fetch(url, { ...init, headers })
+  const stored = await getStoredSession()
+  const faculty = stored?.portal === "faculty" ? stored : undefined
+  const jarCookie = await studentHttpCookieHeader()
+  const trust = await mfaTrustRequestHeadersForInstructor(faculty)
+  Object.assign(headers, mergeCookieHeaders(trust.Cookie, jarCookie))
+  const refresh =
+    refreshTokenFromCookieHeader(jarCookie) ?? refreshTokenFromCookieHeader(trust.Cookie)
+  if (refresh) headers[STUDENT_REFRESH_HEADER] = refresh
+  if (!headersHaveStudentSessionProof(headers)) {
+    throw new ApiError("Instructor authentication required", 401)
+  }
+
+  const response = await fetch(url, { ...init, credentials: "include", headers })
   let body: unknown = null
   const text = await response.text()
   if (text) {
@@ -82,6 +105,7 @@ async function instructorRequest<T>(
         : `Request failed (${response.status})`
     throw new ApiError(message, response.status, body)
   }
+  await persistHttpCookiesFromResponse(url, response.headers)
   return body as T
 }
 

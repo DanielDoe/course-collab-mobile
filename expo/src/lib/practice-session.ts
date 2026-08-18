@@ -18,7 +18,7 @@ export type PracticeQuestion = {
   option_c: string
   option_d: string
   option_e?: string
-  correct_answer: string
+  correct_answer?: string
   question_media?: unknown
   subquestions?: unknown
   solution_upload_config?: unknown

@@ -5,24 +5,23 @@ import {
   type CodebenchLeaderboardEntry,
   type CodebenchLearningPlan,
   type CodebenchStreak,
-  type CodebenchSubmissions,
-  type DailyChallenge,
 } from "./codebench-api"
-import { loadCodebenchLatestCode, loadCodebenchXp } from "./codebench-prefs"
+import {
+  codebenchFailureMessage,
+  flattenSubmissions,
+  latestSubmissionCode,
+  submissionXpTotal,
+  type NormalizedSubmission,
+} from "./codebench-progress-logic"
+import { loadCodebenchLatestCode } from "./codebench-prefs"
 import type { StudentSession } from "./session"
 
-type RawSubmission = {
-  code?: string
-  points_awarded?: number
-  pointsAwarded?: number
-  submitted_at?: string
-  submittedAt?: string
-}
-
-export type NormalizedSubmission = {
-  code?: string
-  pointsAwarded: number
-  submittedAt?: string
+export {
+  codebenchFailureMessage,
+  flattenSubmissions,
+  latestSubmissionCode,
+  submissionXpTotal,
+  type NormalizedSubmission,
 }
 
 export type CodebenchProgressSnapshot = {
@@ -30,7 +29,7 @@ export type CodebenchProgressSnapshot = {
   badges: Record<string, boolean>
   badgeDetails: Record<string, CodebenchBadgeDetail>
   leaderboard: CodebenchLeaderboardEntry[]
-  dailyChallenge: DailyChallenge | null
+  dailyChallenge: import("./codebench-api").DailyChallenge | null
   submissions: NormalizedSubmission[]
   submissionCount: number
   totalXp: number
@@ -40,16 +39,6 @@ export type CodebenchProgressSnapshot = {
   hasCodeSample: boolean
   /** Non-empty when one or more core requests failed — safe to surface as a retryable error. */
   error: string
-}
-
-/** Human-readable message for the core CodeBench requests that failed to load. */
-export function codebenchFailureMessage(failed: string[]): string {
-  if (failed.length === 0) return ""
-  const list =
-    failed.length === 1
-      ? failed[0]
-      : `${failed.slice(0, -1).join(", ")} and ${failed[failed.length - 1]}`
-  return `Couldn't load your CodeBench ${list}. Check your connection and try again.`
 }
 
 function normalizeStreak(raw: CodebenchStreak & Record<string, unknown>): CodebenchStreak {
@@ -85,52 +74,33 @@ function normalizeLeaderboard(raw: CodebenchLeaderboardEntry): CodebenchLeaderbo
   }
 }
 
-function normalizeSubmission(raw: RawSubmission): NormalizedSubmission {
-  return {
-    code: raw.code,
-    pointsAwarded: Number(raw.points_awarded ?? raw.pointsAwarded ?? 0),
-    submittedAt: raw.submitted_at ?? raw.submittedAt,
-  }
-}
-
-export function flattenSubmissions(subs: CodebenchSubmissions): NormalizedSubmission[] {
-  const buckets: RawSubmission[][] = [
-    subs.codeSubmissions ?? [],
-    (subs.practiceSubmissions as RawSubmission[] | undefined) ?? [],
-    (subs.dailyChallengeSubmissions as RawSubmission[] | undefined) ?? [],
-  ]
-  return buckets.flatMap((bucket) => bucket.map(normalizeSubmission))
-}
-
-export function submissionXpTotal(rows: NormalizedSubmission[]): number {
-  return Math.round(rows.reduce((sum, row) => sum + row.pointsAwarded, 0))
-}
-
-export function latestSubmissionCode(rows: NormalizedSubmission[]): string {
-  const sorted = [...rows].sort((a, b) => {
-    const ta = a.submittedAt ? Date.parse(a.submittedAt) : 0
-    const tb = b.submittedAt ? Date.parse(b.submittedAt) : 0
-    return tb - ta
-  })
-  return sorted.find((row) => row.code?.trim())?.code?.trim() ?? ""
-}
-
 async function loadInsights(session: StudentSession, code: string) {
   if (!code.trim()) {
-    return { analysis: null as CodebenchAnalysis | null, learningPlan: null as CodebenchLearningPlan | null }
+    return {
+      analysis: null as CodebenchAnalysis | null,
+      learningPlan: null as CodebenchLearningPlan | null,
+      failed: [] as string[],
+    }
   }
 
+  const failed: string[] = []
   const [analysis, learningPlan] = await Promise.all([
-    codebenchApi.analyze(session, code).catch(() => null),
-    codebenchApi.getLearningPlan(session, code).catch(() => null),
+    codebenchApi.analyze(session, code).catch(() => {
+      failed.push("analysis")
+      return null
+    }),
+    codebenchApi.getLearningPlan(session, code).catch(() => {
+      failed.push("learning plan")
+      return null
+    }),
   ])
 
-  return { analysis, learningPlan }
+  return { analysis, learningPlan, failed }
 }
 
 export async function fetchCodebenchProgress(session: StudentSession): Promise<CodebenchProgressSnapshot> {
   const failed: string[] = []
-  const [streakRes, badgesRes, lbRes, subsRes, localXp, localCode] = await Promise.all([
+  const [streakRes, badgesRes, lbRes, subsRes, localCode] = await Promise.all([
     codebenchApi.getStreak(session).catch(() => {
       failed.push("streak")
       return { streakDays: 0 }
@@ -151,21 +121,25 @@ export async function fetchCodebenchProgress(session: StudentSession): Promise<C
         dailyChallengeSubmissions: [],
       }
     }),
-    loadCodebenchXp(),
     loadCodebenchLatestCode(),
   ])
 
   const submissions = flattenSubmissions(subsRes)
   const apiXp = submissionXpTotal(submissions)
   const latestCode = latestSubmissionCode(submissions) || localCode.trim()
-  const totalXp = Math.max(apiXp, localXp)
+  const totalXp = apiXp
 
   const dailyChallenge = await codebenchApi
     .getDailyChallenge(session)
     .then((res) => (res && "title" in res ? res : null))
-    .catch(() => null)
+    .catch(() => {
+      failed.push("daily challenge")
+      return null
+    })
 
-  const { analysis, learningPlan } = await loadInsights(session, latestCode)
+  const insights = await loadInsights(session, latestCode)
+  failed.push(...insights.failed)
+  const { analysis, learningPlan } = insights
 
   return {
     streak: normalizeStreak(streakRes as CodebenchStreak & Record<string, unknown>),

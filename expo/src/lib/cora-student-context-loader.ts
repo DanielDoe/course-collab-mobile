@@ -163,17 +163,17 @@ export async function loadCoraStudentContext(session: StudentSession): Promise<S
     studentApi.getCalendarEvents(session, { startDate: start, endDate: end }).catch(() => ({ events: [] })),
     studentApi.getQuizzes(session, "quiz").catch(() => ({ quizzes: [] as QuizItem[] })),
     studentApi.getQuizzes(session, "homework").catch(() => ({ quizzes: [] as QuizItem[] })),
-    studentApi.getMidSemesters(session).catch(() => ({ midSemesters: [] as QuizItem[], exams: [] as QuizItem[] })),
+    studentApi.getQuizzes(session, "mid_semester").catch(() => ({ quizzes: [] as QuizItem[] })),
     studentApi.getFinals(session).catch(() => ({ finals: [] as QuizItem[] })),
     studentApi.getGrades(session).catch(() => null),
     studentApi.getAssessmentHistory(session).catch(() => ({ history: [], assessmentHistory: [] })),
-    fetchStudentNotifications(session.databaseId).catch(() => null),
+    fetchStudentNotifications(session).catch(() => null),
   ])
 
   const allQuizzes = [
     ...(quizRes.quizzes ?? []),
     ...(homeworkRes.quizzes ?? []),
-    ...(midtermRes.midSemesters ?? midtermRes.exams ?? []),
+    ...(midtermRes.quizzes ?? []),
     ...(finalRes.finals ?? []),
   ]
 

@@ -6,9 +6,8 @@ import {
   workspaceQuestionsFromRecord,
 } from "./lecture-workspace-utils"
 import type { LectureSamplePracticeConfig, LectureWorkspaceConfig } from "./lecture-types"
-import { mfaTrustRequestHeadersForStudent } from "./mfa-device-trust"
-import { mergeCookieHeaders, persistHttpCookiesFromResponse, studentHttpCookieHeader } from "./student-http-cookies"
-import { ApiError, studentApi, type StudentLectureDetail } from "./student-api"
+import { persistHttpCookiesFromResponse } from "./student-http-cookies"
+import { ApiError, studentApi, studentAuthenticatedHeaders, type StudentLectureDetail } from "./student-api"
 import type { StudentSession } from "./session"
 import { API_BASE_URL } from "../constants"
 
@@ -104,19 +103,11 @@ async function studentLectureRequestHeaders(
   session: StudentSession,
   options?: { webWorkspaceParity?: boolean },
 ): Promise<Record<string, string>> {
-  const headers: Record<string, string> = {
-    Accept: "application/json",
+  const headers = await studentAuthenticatedHeaders(session)
+  if (options?.webWorkspaceParity) {
+    delete headers["Content-Type"]
+    delete headers["x-student-id"]
   }
-
-  if (!options?.webWorkspaceParity) {
-    headers["Content-Type"] = "application/json"
-    headers["x-student-id"] = session.databaseId
-  }
-
-  const jarCookie = await studentHttpCookieHeader()
-  const trust = await mfaTrustRequestHeadersForStudent(session)
-  Object.assign(headers, mergeCookieHeaders(trust.Cookie, jarCookie))
-
   return headers
 }
 
@@ -304,76 +295,38 @@ export async function fetchStudentLectureViewerData(
   session: StudentSession,
   lectureId: number,
 ): Promise<StudentLectureViewerData> {
-  const list = await studentApi.getLectures(session)
-  const summary = list.lectures?.find((item) => item.id === lectureId) ?? null
-  if (!summary) {
-    throw new ApiError("This lecture could not be found.", 404)
+  try {
+    const bundled = await studentApi.getLectureViewer(session, lectureId)
+    const lecture = bundled.lecture
+    if (!lecture) {
+      throw new ApiError("This lecture could not be found.", 404)
+    }
+    return {
+      lecture,
+      samplePractice: parseLectureSamplePractice(
+        extractSamplePracticeRaw(bundled.samplePractice, lecture),
+      ),
+      workspace: parseLectureWorkspaceStudentApiResponse(
+        bundled.workspace ?? lecture,
+      ),
+      deckUrl: bundled.deckUrl || lectureDeckUrl(lecture),
+    }
+  } catch (error) {
+    if (!(error instanceof ApiError) || error.status !== 404) throw error
   }
 
-  let detail: StudentLectureDetail | undefined
-  let content: Record<string, unknown> = {}
-  let samplePracticePayload: unknown = null
-  let workspacePayload: unknown = null
-
-  await Promise.all([
-    studentApi
-      .getLectureById(session, lectureId)
-      .then((response) => {
-        detail = response.lecture
-      })
-      .catch(() => undefined),
-    studentApi
-      .getLectureContent(session, lectureId)
-      .then((response) => {
-        content = response
-      })
-      .catch(() => undefined),
-    studentApi
-      .getLectureSamplePractice(session, lectureId)
-      .then((response) => {
-        samplePracticePayload = response
-      })
-      .catch(() => undefined),
-    studentApi
-      .getLectureWorkspace(session, lectureId)
-      .then((response) => {
-        workspacePayload = response
-      })
-      .catch(() => undefined),
-  ])
-
-  const contentLecture =
-    content.lecture && typeof content.lecture === "object"
-      ? (content.lecture as StudentLectureDetail)
-      : undefined
-
-  const lecture = mergeLecture(summary, detail, contentLecture)
+  const detail = await studentApi.getLectureById(session, lectureId)
+  const lecture = detail.lecture
+  if (!lecture) {
+    throw new ApiError("This lecture could not be found.", 404)
+  }
   const lectureFields = lectureConfigFields(lecture)
-  const samplePracticeRaw = extractSamplePracticeRaw(
-    samplePracticePayload,
-    content,
-    contentLecture,
-    detail,
-    lectureFields?.sample_practice,
-    lectureFields?.sample_practice_config,
-    lectureFields?.samplePractice,
-    lectureFields?.slides,
-  )
-  const samplePractice = parseLectureSamplePractice(samplePracticeRaw)
-  const workspace = await fetchStudentLectureWorkspaceConfig(session, lectureId, [
-    workspacePayload,
-    content,
-    contentLecture,
-    detail,
-    lectureFields?.workspace,
-    lectureFields?.workspace_config,
-    lectureFields?.lecture_workspace,
-  ])
-
   return {
     lecture,
-    samplePractice,
-    workspace,
+    samplePractice: parseLectureSamplePractice(extractSamplePracticeRaw(lecture, lectureFields)),
+    workspace: parseLectureWorkspace(
+      extractWorkspaceRaw(lecture, lectureFields?.workspace, lectureFields?.lecture_workspace),
+    ),
     deckUrl: lectureDeckUrl(lecture),
   }
 }

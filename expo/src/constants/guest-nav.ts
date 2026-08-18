@@ -123,7 +123,7 @@ export const GUEST_CAREER_TOOLS_GROUP: GuestNavGroup = {
       id: "cover-letter",
       label: "Cover Letter",
       route: "/module/cover-letter",
-      icon: "mail-open-outline",
+      icon: "document-text-outline",
       native: true,
     },
     {

@@ -1,7 +1,19 @@
 import { getApiBaseUrl } from "../constants"
 import { ApiError } from "./api"
+import { assertProductionHttpsUrl, createApiAbortSignal } from "./http"
 import type { MessageDeleteMode, MessageEditVersion } from "./message-lifecycle"
-import type { AppSession, FacultySession, GuestSession, StudentSession, SummerSession } from "./session"
+import { mfaTrustRequestHeadersForInstructor } from "./mfa-device-trust"
+import {
+  getStoredSession,
+  type AppSession,
+  type FacultySession,
+  type GuestSession,
+  type StudentSession,
+  type SummerSession,
+} from "./session"
+import { studentAuthenticatedHeaders, studentAuthenticatedRequest } from "./student-api"
+import { mergeCookieHeaders, persistHttpCookiesFromResponse, studentHttpCookieHeader } from "./student-http-cookies"
+import { headersHaveStudentSessionProof, STUDENT_REFRESH_HEADER } from "./student-session-proof"
 
 export type ParticipantKind = "student" | "instructor"
 
@@ -118,17 +130,46 @@ export function resolveAttachmentUrl(fileUrl: string): string {
   return `${getApiBaseUrl()}${fileUrl.startsWith("/") ? fileUrl : `/${fileUrl}`}`
 }
 
-function authHeaders(auth: MessagesAuth): Record<string, string> {
-  if (auth.kind === "student") {
-    return {
-      Accept: "application/json",
-      "x-student-id": auth.databaseId,
-    }
+function refreshTokenFromCookieHeader(cookie: string | undefined): string | undefined {
+  if (!cookie) return undefined
+  const match = cookie.match(/(?:^|;\s*)cc_refresh=([^;]+)/i)
+  const token = match?.[1]?.trim()
+  return token || undefined
+}
+
+function learnerSessionMatchingAuth(
+  stored: AppSession | null,
+  auth: Extract<MessagesAuth, { kind: "student" }>,
+): StudentSession | GuestSession | SummerSession | null {
+  if (!stored) return null
+  if (stored.portal !== "student" && stored.portal !== "guest" && stored.portal !== "summer") {
+    return null
   }
-  return {
+  if (stored.databaseId !== auth.databaseId) return null
+  return stored
+}
+
+async function instructorAuthenticatedHeaders(
+  auth: Extract<MessagesAuth, { kind: "instructor" }>,
+  extra?: Record<string, string>,
+): Promise<Record<string, string>> {
+  const headers: Record<string, string> = {
     Accept: "application/json",
     "x-instructor-id": String(auth.instructorId),
+    ...extra,
   }
+  const stored = await getStoredSession()
+  const faculty = stored?.portal === "faculty" ? stored : undefined
+  const jarCookie = await studentHttpCookieHeader()
+  const trust = await mfaTrustRequestHeadersForInstructor(faculty)
+  Object.assign(headers, mergeCookieHeaders(trust.Cookie, jarCookie))
+  const refresh =
+    refreshTokenFromCookieHeader(jarCookie) ?? refreshTokenFromCookieHeader(trust.Cookie)
+  if (refresh) headers[STUDENT_REFRESH_HEADER] = refresh
+  if (!headersHaveStudentSessionProof(headers)) {
+    throw new ApiError("Instructor authentication required", 401)
+  }
+  return headers
 }
 
 async function parseJsonResponse(response: Response): Promise<unknown> {
@@ -169,20 +210,35 @@ async function messagesRequest<T>(
   path: string,
   init?: RequestInit,
 ): Promise<T> {
-  const url = `${getApiBaseUrl()}${path.startsWith("/") ? path : `/${path}`}`
-  const headers: Record<string, string> = {
-    ...authHeaders(auth),
-    ...(init?.headers as Record<string, string> | undefined),
-  }
-  if (init?.body && !headers["Content-Type"]) {
-    headers["Content-Type"] = "application/json"
+  if (auth.kind === "student") {
+    const stored = await getStoredSession()
+    const session = learnerSessionMatchingAuth(stored, auth)
+    if (!session) {
+      throw new ApiError("Student authentication required", 401)
+    }
+    return studentAuthenticatedRequest<T>(session, path, init)
   }
 
-  const response = await fetch(url, { ...init, headers })
+  const url = `${getApiBaseUrl()}${path.startsWith("/") ? path : `/${path}`}`
+  assertProductionHttpsUrl(url)
+  const extra: Record<string, string> = {
+    ...(init?.headers as Record<string, string> | undefined),
+  }
+  if (init?.body && !extra["Content-Type"]) {
+    extra["Content-Type"] = "application/json"
+  }
+  const headers = await instructorAuthenticatedHeaders(auth, extra)
+  const response = await fetch(url, {
+    ...init,
+    credentials: "include",
+    headers,
+    signal: createApiAbortSignal(undefined, init?.signal ?? undefined),
+  })
   const body = await parseJsonResponse(response)
   if (!response.ok) {
     throw new ApiError(errorMessage(body, response.status), response.status, body)
   }
+  await persistHttpCookiesFromResponse(url, response.headers)
   return body as T
 }
 
@@ -304,15 +360,33 @@ export const messagesApi = {
       type: file.mimeType,
     } as unknown as Blob)
 
+    assertProductionHttpsUrl(url)
+    let headers: Record<string, string>
+    if (auth.kind === "student") {
+      const stored = await getStoredSession()
+      const session = learnerSessionMatchingAuth(stored, auth)
+      if (!session) {
+        throw new ApiError("Student authentication required", 401)
+      }
+      headers = await studentAuthenticatedHeaders(session)
+      delete headers["Content-Type"]
+    } else {
+      headers = await instructorAuthenticatedHeaders(auth)
+      delete headers["Content-Type"]
+    }
+
     const response = await fetch(url, {
       method: "POST",
-      headers: authHeaders(auth),
+      credentials: "include",
+      headers,
       body: formData,
+      signal: createApiAbortSignal(),
     })
     const body = await parseJsonResponse(response)
     if (!response.ok) {
       throw new ApiError(errorMessage(body, response.status), response.status, body)
     }
+    await persistHttpCookiesFromResponse(url, response.headers)
     return body as MessageAttachmentDraft
   },
 }

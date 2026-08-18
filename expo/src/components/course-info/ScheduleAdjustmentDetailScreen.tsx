@@ -95,6 +95,10 @@ export function ScheduleAdjustmentDetailScreen({ requestId }: { requestId: numbe
 
   const submitConsent = async (agreed: boolean) => {
     if (!session) return
+    if (!agreed && !declineReason.trim()) {
+      AppAlert.alert("Missing explanation", "A brief explanation is required to record disagreement.")
+      return
+    }
     setSaving(true)
     try {
       await scheduleAdjustmentApi.submitConsent(session, requestId, {
@@ -236,8 +240,12 @@ export function ScheduleAdjustmentDetailScreen({ requestId }: { requestId: numbe
                 multiline
               />
               <Pressable
+                disabled={!declineReason.trim() || saving}
                 onPress={() => void submitConsent(false)}
-                style={[styles.ctaOutline, { borderColor: native.separator }]}
+                style={[
+                  styles.ctaOutline,
+                  { borderColor: native.separator, opacity: !declineReason.trim() ? 0.5 : 1 },
+                ]}
               >
                 <Text style={type.bodyEmphasis}>Submit disagreement</Text>
               </Pressable>

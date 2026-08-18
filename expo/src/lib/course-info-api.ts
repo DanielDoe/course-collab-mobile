@@ -203,6 +203,9 @@ export const courseInfoApi = {
     return (data.requests ?? []) as RecommendationRequest[]
   },
 
+  getRecommendationDetail: (session: StudentSession, requestId: number) =>
+    studentApi.getRecommendationDetail(session, requestId),
+
   getRecommendationMeta: (session: StudentSession) =>
     studentApi.getRecommendationMeta(session) as Promise<RecommendationMeta>,
 

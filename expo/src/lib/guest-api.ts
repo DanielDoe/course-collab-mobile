@@ -399,21 +399,15 @@ export const guestApi = {
     studentApi.updateProfile(guestAsStudentSession(session), payload),
 
   getRecommendationBrief: async (session: GuestSession, requestId: number) => {
-    const url = `${API_BASE_URL}/api/student/recommendations/${requestId}/brief?studentDatabaseId=${encodeURIComponent(session.databaseId)}`
-    const response = await fetch(url, {
-      headers: { Accept: "application/json", "x-student-id": session.databaseId },
-    })
-    const text = await response.text()
-    const body = text ? JSON.parse(text) : null
-    if (response.status === 404) return { brief: null }
-    if (!response.ok) {
-      throw new ApiError(
-        typeof body?.error === "string" ? body.error : "Could not load brief",
-        response.status,
-        body,
-      )
+    try {
+      return (await studentApi.getRecommendationBrief(
+        guestAsStudentSession(session),
+        requestId,
+      )) as { brief?: GuestRecommendationBrief | null }
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404) return { brief: null }
+      throw err
     }
-    return body as { brief?: GuestRecommendationBrief | null }
   },
 
   saveRecommendationBrief: (
@@ -421,54 +415,16 @@ export const guestApi = {
     requestId: number,
     fields: Partial<Pick<GuestRecommendationBrief, "highlights" | "achievements" | "goals" | "context">>,
   ) =>
-    fetch(
-      `${API_BASE_URL}/api/student/recommendations/${requestId}/brief?studentDatabaseId=${encodeURIComponent(session.databaseId)}`,
-      {
-        method: "PATCH",
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/json",
-          "x-student-id": session.databaseId,
-        },
-        body: JSON.stringify({ studentDatabaseId: session.databaseId, ...fields }),
-      },
-    ).then(async (response) => {
-      const text = await response.text()
-      const body = text ? JSON.parse(text) : null
-      if (!response.ok) {
-        throw new ApiError(
-          typeof body?.error === "string" ? body.error : "Could not save brief",
-          response.status,
-          body,
-        )
-      }
-      return body as { brief?: GuestRecommendationBrief; creditFree?: boolean }
-    }),
+    studentApi.saveRecommendationBrief(guestAsStudentSession(session), requestId, fields) as Promise<{
+      brief?: GuestRecommendationBrief
+      creditFree?: boolean
+    }>,
 
   generateRecommendationBrief: (session: GuestSession, requestId: number) =>
-    fetch(
-      `${API_BASE_URL}/api/student/recommendations/${requestId}/brief?studentDatabaseId=${encodeURIComponent(session.databaseId)}`,
-      {
-        method: "POST",
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/json",
-          "x-student-id": session.databaseId,
-        },
-        body: JSON.stringify({ studentDatabaseId: session.databaseId }),
-      },
-    ).then(async (response) => {
-      const text = await response.text()
-      const body = text ? JSON.parse(text) : null
-      if (!response.ok) {
-        throw new ApiError(
-          typeof body?.error === "string" ? body.error : "Could not generate brief",
-          response.status,
-          body,
-        )
-      }
-      return body as { brief?: GuestRecommendationBrief; creditFree?: boolean }
-    }),
+    studentApi.generateRecommendationBrief(guestAsStudentSession(session), requestId) as Promise<{
+      brief?: GuestRecommendationBrief
+      creditFree?: boolean
+    }>,
 
   getRecommendations: async (session: GuestSession) => {
     const data = await studentApi.getRecommendations(guestAsStudentSession(session))
@@ -496,6 +452,33 @@ export const guestApi = {
 
   getRecommendationDetail: (session: GuestSession, requestId: number) =>
     studentApi.getRecommendationDetail(guestAsStudentSession(session), requestId),
+
+  saveRecommendationQuestionnaire: (
+    session: GuestSession,
+    requestId: number,
+    fields: Record<string, unknown> = {},
+  ) => studentApi.saveRecommendationQuestionnaire(guestAsStudentSession(session), requestId, fields),
+
+  generateRecommendationDrafts: (session: GuestSession, requestId: number) =>
+    studentApi.generateRecommendationDrafts(guestAsStudentSession(session), requestId),
+
+  selectRecommendationDraft: (session: GuestSession, requestId: number, draftId: number) =>
+    studentApi.selectRecommendationDraft(guestAsStudentSession(session), requestId, draftId),
+
+  submitRecommendationLetter: (session: GuestSession, requestId: number, letterText: string) =>
+    studentApi.submitRecommendationLetter(guestAsStudentSession(session), requestId, letterText),
+
+  markRecommendationDownloaded: (session: GuestSession, requestId: number) =>
+    studentApi.markRecommendationDownloaded(guestAsStudentSession(session), requestId),
+
+  patchRecommendationRequestDetails: (
+    session: GuestSession,
+    requestId: number,
+    body: Record<string, unknown> = {},
+  ) => studentApi.patchRecommendationRequestDetails(guestAsStudentSession(session), requestId, body),
+
+  withdrawRecommendation: (session: GuestSession, requestId: number) =>
+    studentApi.withdrawRecommendation(guestAsStudentSession(session), requestId),
 
   patchRecommendation: (
     session: GuestSession,

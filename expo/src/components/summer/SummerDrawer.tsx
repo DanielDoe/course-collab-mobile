@@ -24,6 +24,7 @@ import {
 import { useSummerShell } from "../../context/SummerShellContext"
 import { useAppThemeTokens } from "../../context/AppearanceProvider"
 import { useDrawerNavTheme } from "../../lib/drawer-nav-theme"
+import { drawerShellLayout } from "../../lib/drawer-shell-layout"
 import { useNativeType } from "../../lib/themed-module-theme"
 import type { SummerSession } from "../../lib/session"
 import { formatSummerRole } from "./summer-utils"
@@ -95,6 +96,7 @@ export function SummerDrawer({ session }: Props) {
   }
 
   const roleLabel = formatSummerRole(session.studentProgramRole)
+  const layout = drawerShellLayout(panelWidth, insets, drawerTheme)
 
   if (!drawerMounted) return null
 
@@ -109,19 +111,14 @@ export function SummerDrawer({ session }: Props) {
           style={[
             styles.panel,
             panelStyle,
-            {
-              width: panelWidth,
-              paddingBottom: insets.bottom + 12,
-              backgroundColor: drawerTheme.panelBg,
-              borderRightColor: drawerTheme.headerBorder,
-            },
+            layout.panel,
           ]}
         >
           <View
             style={[
               styles.header,
+              layout.header,
               {
-                paddingTop: insets.top + 12,
                 backgroundColor: drawerTheme.headerBg,
                 borderBottomColor: drawerTheme.headerBorder,
               },
@@ -167,8 +164,8 @@ export function SummerDrawer({ session }: Props) {
 
           <ScrollView
             ref={scrollRef}
-            style={[styles.scroll, { backgroundColor: tokens.background }]}
-            contentContainerStyle={styles.scrollContent}
+            style={[styles.scroll, { backgroundColor: layout.scrollBackground }]}
+            contentContainerStyle={[styles.scrollContent, layout.scrollContent]}
             showsVerticalScrollIndicator={false}
           >
             <View ref={contentRef} collapsable={false}>

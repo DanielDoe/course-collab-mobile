@@ -157,15 +157,16 @@ export function buildGradeTrendSeries(
 /** Mirrors web PerformanceComparisonChart rows. */
 export function buildPerformanceComparison(
   quizYou: number,
-  quizClass: number,
+  quizClass: number | null,
   hwYou: number,
-  hwClass: number,
+  hwClass: number | null,
   attYou: number,
+  attClass: number | null = null,
 ): PerformanceComparison[] {
   return [
     { label: "Quiz Avg", you: quizYou, classAvg: quizClass },
     { label: "Homework Avg", you: hwYou, classAvg: hwClass },
-    { label: "Attendance", you: attYou, classAvg: 90 },
+    { label: "Attendance", you: attYou, classAvg: attClass },
   ]
 }
 

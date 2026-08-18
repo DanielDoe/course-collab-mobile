@@ -24,9 +24,10 @@ import { useAppThemeTokens, useShellChrome, useThemedNative } from "../../contex
 import { nativeType } from "../../constants/faculty-native-theme"
 import { hexToRgba } from "../../constants/app-themes"
 import { GlassBottomSheetModal } from "../theme/GlassBottomSheetModal"
+import type { StudentAuthSession } from "../../lib/student-session-proof"
 
 type Props = {
-  databaseId: string
+  session: StudentAuthSession
   notificationsOpen: boolean
   closeNotifications: () => void
   setNotificationCount: (count: number) => void
@@ -115,7 +116,7 @@ function NotificationRow({
 }
 
 export function NotificationsSheet({
-  databaseId,
+  session,
   notificationsOpen,
   closeNotifications,
   setNotificationCount,
@@ -134,7 +135,7 @@ export function NotificationsSheet({
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const result = await fetchStudentNotifications(databaseId)
+      const result = await fetchStudentNotifications(session)
       setNotifications(result.notifications)
       setUnreadCount(result.unreadCount)
       setNotificationCount(result.unreadCount)
@@ -144,7 +145,7 @@ export function NotificationsSheet({
     } finally {
       setLoading(false)
     }
-  }, [databaseId, setNotificationCount])
+  }, [session, setNotificationCount])
 
   useEffect(() => {
     if (notificationsOpen) {
@@ -161,7 +162,7 @@ export function NotificationsSheet({
 
   async function handleOpen(item: StudentNotification) {
     if (!item.is_read) {
-      const ok = await markNotificationRead(databaseId, item.id)
+      const ok = await markNotificationRead(session, item.id)
       if (ok) {
         setNotifications((prev) =>
           prev.map((n) => (n.id === item.id ? { ...n, is_read: true, read_at: new Date().toISOString() } : n)),
@@ -178,7 +179,7 @@ export function NotificationsSheet({
   }
 
   async function handleDismiss(item: StudentNotification) {
-    const ok = await dismissNotification(databaseId, item.id)
+    const ok = await dismissNotification(session, item.id)
     if (!ok) return
     setNotifications((prev) => prev.filter((n) => n.id !== item.id))
     if (!item.is_read) {
@@ -189,7 +190,7 @@ export function NotificationsSheet({
   }
 
   async function handleMarkAllRead() {
-    const ok = await markAllNotificationsRead(databaseId)
+    const ok = await markAllNotificationsRead(session)
     if (!ok) return
     setNotifications((prev) =>
       prev.map((n) => ({ ...n, is_read: true, read_at: n.read_at ?? new Date().toISOString() })),

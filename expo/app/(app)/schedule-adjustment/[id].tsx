@@ -1,11 +1,33 @@
-import { useLocalSearchParams } from "expo-router"
+import { Pressable, StyleSheet, Text, View } from "react-native"
+import { useLocalSearchParams, useRouter } from "expo-router"
 import { ScheduleAdjustmentDetailScreen } from "../../../src/components/course-info/ScheduleAdjustmentDetailScreen"
+import { useCourseInfoTheme } from "../../../src/components/course-info/course-info-shared"
+import { useNativeType } from "../../../src/lib/themed-module-theme"
+
+function InvalidScheduleAdjustment() {
+  const router = useRouter()
+  const theme = useCourseInfoTheme()
+  const type = useNativeType()
+  return (
+    <View style={styles.center}>
+      <Text style={type.secondary}>Request not found.</Text>
+      <Pressable onPress={() => router.back()} style={styles.backBtn}>
+        <Text style={{ color: theme.primary }}>Go back</Text>
+      </Pressable>
+    </View>
+  )
+}
 
 export default function ScheduleAdjustmentDetailRoute() {
   const { id } = useLocalSearchParams<{ id: string }>()
   const requestId = Number(id)
   if (!Number.isFinite(requestId) || requestId <= 0) {
-    return null
+    return <InvalidScheduleAdjustment />
   }
   return <ScheduleAdjustmentDetailScreen requestId={requestId} />
 }
+
+const styles = StyleSheet.create({
+  center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
+  backBtn: { marginTop: 12 },
+})

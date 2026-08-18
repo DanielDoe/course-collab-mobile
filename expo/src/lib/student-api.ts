@@ -5,6 +5,11 @@ import type {
 } from "./instructor-api"
 import type { StudentSession } from "./session"
 import { mfaTrustRequestHeadersForStudent } from "./mfa-device-trust"
+import {
+  flattenRequestHeaders,
+  headersHaveStudentSessionProof,
+  type StudentAuthSession,
+} from "./student-session-proof"
 import { mergeCookieHeaders, persistHttpCookiesFromResponse, studentHttpCookieHeader } from "./student-http-cookies"
 import { API_BASE_URL } from "../constants"
 import { extractApiErrorMessage } from "./api-error-message"
@@ -22,7 +27,16 @@ export class ApiError extends Error {
   }
 }
 
-async function studentHeaders(session: StudentSession): Promise<HeadersInit> {
+const REFRESH_TOKEN_HEADER = "x-cc-refresh"
+
+function refreshTokenFromCookieHeader(cookie: string | undefined): string | undefined {
+  if (!cookie) return undefined
+  const match = cookie.match(/(?:^|;\s*)cc_refresh=([^;]+)/i)
+  const token = match?.[1]?.trim()
+  return token || undefined
+}
+
+async function studentHeaders(session: StudentAuthSession): Promise<Record<string, string>> {
   const headers: Record<string, string> = {
     Accept: "application/json",
     "Content-Type": "application/json",
@@ -34,17 +48,38 @@ async function studentHeaders(session: StudentSession): Promise<HeadersInit> {
   const jarCookie = await studentHttpCookieHeader()
   const trust = await mfaTrustRequestHeadersForStudent(session)
   Object.assign(headers, mergeCookieHeaders(trust.Cookie, jarCookie))
+  const refresh =
+    refreshTokenFromCookieHeader(jarCookie) ?? refreshTokenFromCookieHeader(trust.Cookie)
+  if (refresh) headers[REFRESH_TOKEN_HEADER] = refresh
+  return headers
+}
+
+function requireStudentSessionProof(headers: Record<string, string>): void {
+  if (headersHaveStudentSessionProof(headers)) return
+  throw new ApiError("Student authentication required", 401)
+}
+
+/** Cookies + MFA trust + refresh header. Refuses to build header-only identity. */
+export async function studentAuthenticatedHeaders(
+  session: StudentAuthSession,
+): Promise<Record<string, string>> {
+  const headers = await studentHeaders(session)
+  requireStudentSessionProof(headers)
   return headers
 }
 
 /** Web lecture workspace GET — roster id in query, session cookies, no x-student-id. */
-async function studentWorkspaceHeaders(session: StudentSession): Promise<HeadersInit> {
+async function studentWorkspaceHeaders(session: StudentAuthSession): Promise<Record<string, string>> {
   const headers: Record<string, string> = {
     Accept: "application/json",
   }
   const jarCookie = await studentHttpCookieHeader()
   const trust = await mfaTrustRequestHeadersForStudent(session)
   Object.assign(headers, mergeCookieHeaders(trust.Cookie, jarCookie))
+  const refresh =
+    refreshTokenFromCookieHeader(jarCookie) ?? refreshTokenFromCookieHeader(trust.Cookie)
+  if (refresh) headers[REFRESH_TOKEN_HEADER] = refresh
+  requireStudentSessionProof(headers)
   return headers
 }
 
@@ -83,20 +118,22 @@ async function studentWorkspaceRequest<T>(
 }
 
 async function studentRequest<T>(
-  session: StudentSession,
+  session: StudentAuthSession,
   path: string,
   init?: RequestInit,
 ): Promise<T> {
   const url = `${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`
   assertProductionHttpsUrl(url)
+  const headers = {
+    ...(await studentHeaders(session)),
+    ...flattenRequestHeaders(init?.headers),
+  }
+  requireStudentSessionProof(headers)
   const response = await fetch(url, {
     ...init,
     credentials: "include",
     signal: createApiAbortSignal(undefined, init?.signal ?? undefined),
-    headers: {
-      ...(await studentHeaders(session)),
-      ...init?.headers,
-    },
+    headers,
   })
 
   let body: unknown = null
@@ -142,7 +179,7 @@ async function studentRequest<T>(
 
 /** Authenticated student API fetch — cookies, MFA trust, and x-student-id. */
 export function studentAuthenticatedRequest<T>(
-  session: StudentSession,
+  session: StudentAuthSession,
   path: string,
   init?: RequestInit,
 ): Promise<T> {
@@ -220,6 +257,17 @@ export type QuizItem = {
   expired_retake_slots?: number | null
   attempts_remaining?: number | null
   quiz_type?: string
+}
+
+/** Observed on GET /api/student/quizzes (production 2026-08-18). */
+export type QuizListRolloverPolicy = {
+  show_closed_notice: boolean
+  academic_term_label: string
+  semester_end_iso: string
+  self_service_open?: boolean
+  apply_deadline_iso?: string
+  cutoff_days_before_semester_end?: number
+  assessment_perks_grace_days_after_deadline?: number
 }
 
 export type AssessmentHistoryAttempt = {
@@ -321,7 +369,7 @@ export type OfficeHoursRequest = {
 
 export const studentApi = {
   getQuizzes: (session: StudentSession, type: string) =>
-    studentRequest<{ quizzes: QuizItem[] }>(
+    studentRequest<{ quizzes: QuizItem[]; rollover_policy?: QuizListRolloverPolicy }>(
       session,
       `/api/student/quizzes?studentDatabaseId=${encodeURIComponent(session.databaseId)}&type=${encodeURIComponent(type)}`,
     ),
@@ -332,6 +380,19 @@ export const studentApi = {
       `/api/student/assessment-history?studentDatabaseId=${encodeURIComponent(session.databaseId)}&session=${encodeURIComponent(session.section)}`,
     ),
 
+  getQuizHistory: (session: StudentSession) =>
+    studentAuthenticatedRequest<{
+      quizHistory?: {
+        quiz_id?: number
+        quiz_title?: string
+        attempts?: { attempt_id?: number; percentage?: number; completed_at?: string | null }[]
+      }[]
+    }>(
+      session,
+      `/api/student/quiz-history?studentId=${encodeURIComponent(session.databaseId)}`,
+    ),
+
+  // Production GET /api/student/mid-semesters is unauth-200; list callers must use getQuizzes(..., "mid_semester").
   getMidSemesters: (session: StudentSession) =>
     studentRequest<{ midSemesters?: QuizItem[]; exams?: QuizItem[] }>(
       session,
@@ -378,6 +439,17 @@ export const studentApi = {
     studentRequest<{ lecture: StudentLectureDetail }>(
       session,
       `/api/student/lectures/${lectureId}?studentId=${encodeURIComponent(session.id)}`,
+    ),
+
+  getLectureViewer: (session: StudentSession, lectureId: number) =>
+    studentRequest<{
+      lecture: StudentLectureDetail
+      samplePractice?: unknown
+      workspace?: unknown
+      deckUrl?: string | null
+    }>(
+      session,
+      `/api/student/lectures/${lectureId}/viewer?studentId=${encodeURIComponent(session.id)}`,
     ),
 
   getLectureContent: (session: StudentSession, lectureId: number) =>
@@ -819,18 +891,187 @@ export const studentApi = {
       `/api/student/recommendations/${requestId}?studentId=${encodeURIComponent(session.databaseId)}`,
     ),
 
+  saveRecommendationQuestionnaire: (
+    session: StudentSession,
+    requestId: number,
+    fields: Record<string, unknown> = {},
+  ) => {
+    const profile =
+      typeof fields.profile === "object" && fields.profile != null
+        ? (fields.profile as Record<string, unknown>)
+        : fields
+    return studentAuthenticatedRequest<{ ok?: boolean; status?: string }>(
+      session,
+      `/api/student/recommendations/${requestId}?studentId=${encodeURIComponent(session.databaseId)}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({
+          studentId: session.databaseId,
+          contentSource: fields.contentSource ?? fields.content_source ?? profile.content_mode ?? "own_details",
+          studentStrengths: profile.studentStrengths ?? profile.student_strengths,
+          achievements: profile.achievements,
+          projects: profile.projects,
+          skills: profile.skills,
+          leadershipExamples: profile.leadershipExamples ?? profile.leadership_examples,
+          goals: profile.goals,
+          specialInstructions: profile.specialInstructions ?? profile.special_instructions,
+          letterFor: profile.letterFor ?? profile.letter_for,
+          classExperience: profile.classExperience ?? profile.class_experience,
+          personalQualities: profile.personalQualities ?? profile.personal_qualities,
+          tone: profile.tone,
+        }),
+      },
+    )
+  },
+
+  generateRecommendationDrafts: (session: StudentSession, requestId: number) =>
+    studentAuthenticatedRequest<{ drafts?: Record<string, unknown>[] }>(
+      session,
+      `/api/student/recommendations/${requestId}/generate`,
+      {
+        method: "POST",
+        body: JSON.stringify({ studentDatabaseId: session.databaseId }),
+      },
+    ),
+
+  selectRecommendationDraft: (session: StudentSession, requestId: number, draftId: number) =>
+    studentAuthenticatedRequest(
+      session,
+      `/api/student/recommendations/${requestId}/select-draft`,
+      {
+        method: "POST",
+        body: JSON.stringify({ studentDatabaseId: session.databaseId, draftId }),
+      },
+    ),
+
+  submitRecommendationLetter: (session: StudentSession, requestId: number, letterText: string) =>
+    studentAuthenticatedRequest<{ ok?: boolean; status?: string }>(
+      session,
+      `/api/student/recommendations/${requestId}/submit-letter`,
+      {
+        method: "POST",
+        body: JSON.stringify({ studentDatabaseId: session.databaseId, letterText }),
+      },
+    ),
+
+  markRecommendationDownloaded: (session: StudentSession, requestId: number) =>
+    studentAuthenticatedRequest<{ ok?: boolean }>(
+      session,
+      `/api/student/recommendations/${requestId}/mark-downloaded`,
+      {
+        method: "POST",
+        body: JSON.stringify({ studentDatabaseId: session.databaseId }),
+      },
+    ),
+
+  patchRecommendationRequestDetails: (
+    session: StudentSession,
+    requestId: number,
+    body: Record<string, unknown> = {},
+  ) =>
+    studentAuthenticatedRequest<{ ok?: boolean; request?: Record<string, unknown> }>(
+      session,
+      `/api/student/recommendations/${requestId}/request-details`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ studentDatabaseId: session.databaseId, ...body }),
+      },
+    ),
+
   patchRecommendation: (
     session: StudentSession,
     requestId: number,
     action: StudentRecommendationPatchAction,
     body: Record<string, unknown> = {},
-  ) =>
-    studentRequest<{ request?: Record<string, unknown> }>(
+  ) => {
+    if (action === "save_profile" || action === "submit_questionnaire" || action === "update_profile") {
+      return studentApi.saveRecommendationQuestionnaire(session, requestId, body)
+    }
+    if (action === "generate_ai_drafts") {
+      return studentApi.generateRecommendationDrafts(session, requestId)
+    }
+    if (action === "pick_ai_draft" || action === "select_draft") {
+      const draftId = Number(body.draftId ?? body.draft_id)
+      if (!Number.isFinite(draftId)) {
+        return Promise.reject(new ApiError("Draft id required", 400))
+      }
+      return studentApi.selectRecommendationDraft(session, requestId, draftId)
+    }
+    if (action === "submit_letter" || action === "submit_for_review") {
+      const letterText = String(body.letterText ?? body.finalLetterText ?? body.letter_text ?? "").trim()
+      if (!letterText) {
+        return Promise.reject(new ApiError("Letter text is required", 400))
+      }
+      return studentApi.submitRecommendationLetter(session, requestId, letterText)
+    }
+    if (action === "download_letter" || action === "mark_downloaded") {
+      return studentApi.markRecommendationDownloaded(session, requestId)
+    }
+    if (action === "cancel_request") {
+      return studentApi.withdrawRecommendation(session, requestId)
+    }
+    if (action === "respond_to_info_request") {
+      const note = String(body.response ?? body.studentRequestDescription ?? "").trim()
+      if (!note) {
+        return Promise.reject(new ApiError("A response is required", 400))
+      }
+      return studentApi.patchRecommendationRequestDetails(session, requestId, {
+        studentRequestDescription: note,
+      })
+    }
+    if (
+      action === "save_letter" ||
+      action === "save_bring_own_draft" ||
+      action === "save_own_draft" ||
+      action === "save_draft" ||
+      action === "save_final_letter"
+    ) {
+      return Promise.reject(
+        new ApiError("Letter text is kept on this screen until you submit it for instructor review.", 400),
+      )
+    }
+    if (action === "approve_request") {
+      return Promise.reject(
+        new ApiError("Your instructor approves this request. Wait for approval, or withdraw if you no longer need it.", 400),
+      )
+    }
+    return Promise.reject(new ApiError("This recommendation action is not available.", 400))
+  },
+
+  withdrawRecommendation: (session: StudentSession, requestId: number) =>
+    studentAuthenticatedRequest<{ ok?: boolean }>(
       session,
       `/api/student/recommendations/${requestId}?studentId=${encodeURIComponent(session.databaseId)}`,
+      { method: "DELETE" },
+    ),
+
+  getRecommendationBrief: (session: StudentSession, requestId: number) =>
+    studentAuthenticatedRequest<{ brief?: Record<string, unknown> | null }>(
+      session,
+      `/api/student/recommendations/${requestId}/brief?studentDatabaseId=${encodeURIComponent(session.databaseId)}`,
+    ),
+
+  saveRecommendationBrief: (
+    session: StudentSession,
+    requestId: number,
+    fields: Record<string, unknown>,
+  ) =>
+    studentAuthenticatedRequest<{ brief?: Record<string, unknown>; creditFree?: boolean }>(
+      session,
+      `/api/student/recommendations/${requestId}/brief?studentDatabaseId=${encodeURIComponent(session.databaseId)}`,
       {
         method: "PATCH",
-        body: JSON.stringify({ studentId: session.databaseId, action, ...body }),
+        body: JSON.stringify({ studentDatabaseId: session.databaseId, ...fields }),
+      },
+    ),
+
+  generateRecommendationBrief: (session: StudentSession, requestId: number) =>
+    studentAuthenticatedRequest<{ brief?: Record<string, unknown>; creditFree?: boolean }>(
+      session,
+      `/api/student/recommendations/${requestId}/brief?studentDatabaseId=${encodeURIComponent(session.databaseId)}`,
+      {
+        method: "POST",
+        body: JSON.stringify({ studentDatabaseId: session.databaseId }),
       },
     ),
 

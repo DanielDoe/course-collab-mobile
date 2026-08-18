@@ -12,7 +12,7 @@ import { useNativeType, useThemedStudentNative } from "../../lib/themed-module-t
 import { NATIVE } from "../../constants/faculty-native-theme"
 import { useSession } from "../../context/SessionProvider"
 import { useStudentShell } from "../../context/StudentShellContext"
-import { ApiError } from "../../lib/student-api"
+import { ApiError, formatStudentModuleError } from "../../lib/student-api"
 import { practiceApi, type PracticeAccess, type PracticeConfigResponse, type TopicProgress } from "../../lib/practice-api"
 import {
   isPracticeTopicLocked,
@@ -230,6 +230,7 @@ export function PracticeTopicScreen() {
 
   const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [topic, setTopic] = useState<TopicProgress | null>(null)
   const [practiceAccess, setPracticeAccess] = useState<PracticeAccess | null>(null)
   const [practiceConfig, setPracticeConfig] = useState<PracticeConfigResponse | null>(null)
@@ -258,14 +259,16 @@ export function PracticeTopicScreen() {
       setPracticeAccess(progress.access ?? config.access ?? null)
       setPracticeConfig(config)
       const match = progress.topics?.find((t) => t.name === topicName) ?? null
+      setLoadError(null)
       setTopic(match)
       if (match && membershipTierLoaded) {
         setSessionQuestionCount(resolvePracticeSessionQuestionCount(membershipTier, match, config))
       } else {
         setSessionQuestionCount(config.numQuestions ?? 10)
       }
-    } catch {
+    } catch (err) {
       setTopic(null)
+      setLoadError(formatStudentModuleError(err, "Failed to load this topic."))
     }
   }, [session, topicName, membershipTier, membershipTierLoaded])
 
@@ -413,7 +416,7 @@ export function PracticeTopicScreen() {
       ) : !topic ? (
         <View style={styles.center}>
           <Text style={[type.caption, { color: SN.secondaryLabel, textAlign: "center", paddingHorizontal: 24 }]}>
-            This topic is no longer available.
+            {loadError ?? "This topic is no longer available."}
           </Text>
         </View>
       ) : (

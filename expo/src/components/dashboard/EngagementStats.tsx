@@ -25,6 +25,7 @@ const STREAK_DOT_COUNT = 8
 const POINTS_VISUAL_MAX = 250
 
 function buildEngagementStats(stats: StudentDashboardStats): EngagementStat[] {
+  const unavailable = stats.unavailable ?? {}
   const streakLabel =
     stats.attendanceStreak === 1 ? "1 day" : `${stats.attendanceStreak} days`
 
@@ -33,30 +34,30 @@ function buildEngagementStats(stats: StudentDashboardStats): EngagementStat[] {
       id: "points",
       icon: "flash-outline",
       label: "Classroom points",
-      value: formatPoints(stats.classroomPoints),
-      progress: Math.min(stats.classroomPoints / POINTS_VISUAL_MAX, 1),
+      value: unavailable.points ? "—" : formatPoints(stats.classroomPoints),
+      progress: unavailable.points ? 0 : Math.min(stats.classroomPoints / POINTS_VISUAL_MAX, 1),
     },
     {
       id: "streak",
       icon: "flame-outline",
       label: "Attendance streak",
-      value: streakLabel,
-      progress: Math.min(stats.attendanceStreak / STREAK_DOT_COUNT, 1),
-      streakDays: stats.attendanceStreak,
+      value: unavailable.streaks ? "—" : streakLabel,
+      progress: unavailable.streaks ? 0 : Math.min(stats.attendanceStreak / STREAK_DOT_COUNT, 1),
+      streakDays: unavailable.streaks ? 0 : stats.attendanceStreak,
     },
     {
       id: "credits",
       icon: "sparkles-outline",
       label: "Engagement credits",
-      value: `${stats.engagementCredits}/100`,
-      progress: Math.min(stats.engagementCredits / 100, 1),
+      value: unavailable.grade ? "—" : `${stats.engagementCredits}/100`,
+      progress: unavailable.grade ? 0 : Math.min(stats.engagementCredits / 100, 1),
     },
     {
       id: "attendance",
       icon: "shield-checkmark-outline",
       label: "Attendance",
-      value: `${stats.attendancePct}%`,
-      progress: Math.min(stats.attendancePct / 100, 1),
+      value: unavailable.attendance ? "—" : `${stats.attendancePct}%`,
+      progress: unavailable.attendance ? 0 : Math.min(stats.attendancePct / 100, 1),
     },
   ]
 }

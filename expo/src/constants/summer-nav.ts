@@ -42,7 +42,7 @@ export const SUMMER_NAV_GROUP: SummerNavGroup = {
     { id: "gallery", label: "Project Gallery", route: "/module/gallery", icon: "images-outline", native: true },
     { id: "graduation", label: "Camp Graduation", route: "/module/graduation", icon: "ribbon-outline", native: true },
     { id: "leaderboard", label: "Leaderboard", route: "/module/leaderboard", icon: "podium-outline", native: true },
-    { id: "achievements", label: "Certificates & Achievements", route: "/module/achievements", icon: "medal-outline", native: true },
+    { id: "achievements", label: "Certificates & Achievements", route: "/module/achievements", icon: "trophy-outline", native: true },
   ],
 }
 

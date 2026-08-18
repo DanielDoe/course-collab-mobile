@@ -219,7 +219,7 @@ export function GuestSettingsScreen() {
           />
           <GuestSettingsRow
             icon="shield-outline"
-            label="Privacy & security"
+            label="Privacy & legal"
             onPress={() => router.push("/settings/privacy-security" as never)}
             isLast
           />

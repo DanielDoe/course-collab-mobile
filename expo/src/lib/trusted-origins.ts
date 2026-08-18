@@ -28,14 +28,23 @@ export function isAllowedDeepLinkHost(hostname: string): boolean {
   return isAllowedDeepLinkHostCore(hostname, getTrustedApiHosts())
 }
 
-export function isAllowedWebViewHost(hostname: string, options?: { membershipFlow?: boolean }): boolean {
+export function isAllowedWebViewHost(
+  hostname: string,
+  options?: { membershipFlow?: boolean; lectureDeck?: boolean },
+): boolean {
   return isAllowedWebViewHostCore(hostname, getTrustedApiHosts(), options)
 }
 
-export function getAllowedWebViewOriginPrefixes(options?: { membershipFlow?: boolean }): string[] {
+export function getAllowedWebViewOriginPrefixes(options?: {
+  membershipFlow?: boolean
+  lectureDeck?: boolean
+}): string[] {
   const prefixes = getTrustedApiHosts().map((host) => `https://${host}`)
   if (options?.membershipFlow) {
     prefixes.push("https://checkout.stripe.com", "https://js.stripe.com", "https://hooks.stripe.com")
+  }
+  if (options?.lectureDeck) {
+    prefixes.push("https://*.public.blob.vercel-storage.com", "https://*.blob.vercel-storage.com")
   }
   return prefixes
 }

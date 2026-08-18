@@ -11,7 +11,7 @@ import type { StudentSession } from "../../lib/session"
 import { useNotificationModuleRefresh } from "../../lib/notifications/notification-events"
 import { useNativeType, useThemedStudentNative } from "../../lib/themed-module-theme"
 import { NATIVE } from "../../constants/faculty-native-theme"
-import { CollabSearch } from "../collaboration/collab-shared"
+import { StudentSearchToolbar } from "../student/student-search-toolbar"
 import { SignatureListCard } from "../theme/SignatureListCard"
 import { PillSwipeTabs } from "../theme/PillSwipeTabs"
 import type { MobbinPillSegmentOption } from "../theme/MobbinPillSegmentControl"
@@ -581,24 +581,25 @@ export function TradeCenterScreen() {
             <Text style={[type.destructive, styles.errorText]}>{error}</Text>
           </View>
         ) : null}
-
-        <CollabSearch
-          value={search}
-          onChange={setSearch}
-          placeholder={
-            tab === "history"
-              ? "Search trade history…"
-              : tab === "requests"
-                ? "Search point requests…"
-                : "Search trade center…"
-          }
-          trailingAction={{
-            onPress: () => void handleSync(),
-            accessibilityLabel: "Sync balances",
-            icon: "refresh-outline",
-          }}
-        />
       </View>
+
+      <StudentSearchToolbar
+        value={search}
+        onChange={setSearch}
+        placeholder={
+          tab === "history"
+            ? "Search trade history…"
+            : tab === "requests"
+              ? "Search point requests…"
+              : "Search trade center…"
+        }
+        showFilter={false}
+        trailingAction={{
+          onPress: () => void handleSync(),
+          accessibilityLabel: "Sync balances",
+          icon: "refresh-outline",
+        }}
+      />
 
       <View style={styles.topBar}>
         <PillSwipeTabs

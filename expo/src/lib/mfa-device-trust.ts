@@ -263,6 +263,25 @@ export async function mfaLoginCookieHeadersForStudent(
   return buildMergedMfaTrustCookie(trust.token)
 }
 
+/** Trust cookie for authenticated instructor API calls. */
+export async function mfaTrustRequestHeadersForInstructor(
+  session?: Pick<FacultySession, "username" | "email" | "authIdentifier">,
+): Promise<Record<string, string>> {
+  const keys = session
+    ? instructorMfaAliasKeys(session.authIdentifier ?? session.username, session)
+    : []
+  let trust = keys.length > 0 ? await findActiveMfaTrust(keys) : null
+  if (!trust && keys[0]) {
+    trust = await ensureTrustFromJar(keys[0], keys, "instructor")
+  }
+  if (!trust) {
+    const records = await readAll()
+    trust = records.find((entry) => entry.userType === "instructor" && isActive(entry)) ?? null
+  }
+  if (!trust) return {}
+  return buildMergedMfaTrustCookie(trust.token)
+}
+
 /** Trust cookie for authenticated student API calls — checks all aliased login keys. */
 export async function mfaTrustRequestHeadersForStudent(
   session: Pick<StudentSession, "universityId" | "id" | "authIdentifier" | "email">,

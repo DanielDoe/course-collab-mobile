@@ -1,5 +1,4 @@
-import { API_BASE_URL } from "../constants"
-import { ApiError } from "./api"
+import { instructorAuthenticatedRequest } from "./instructor-api"
 
 export type AdminScope = { instructorId: number; courseId: number }
 
@@ -39,47 +38,21 @@ export type InstructorScheduleDashboard = {
   safeguardNotice?: string
 }
 
-async function instructorRequest<T>(path: string, scope: AdminScope, init?: RequestInit): Promise<T> {
-  const url = `${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`
-  const headers: Record<string, string> = {
-    Accept: "application/json",
-    "Content-Type": "application/json",
-    "x-instructor-id": String(scope.instructorId),
-    "x-course-id": String(scope.courseId),
-    ...(init?.headers as Record<string, string> | undefined),
-  }
-  const response = await fetch(url, { ...init, headers })
-  let body: unknown = null
-  const text = await response.text()
-  if (text) {
-    try {
-      body = JSON.parse(text)
-    } catch {
-      body = { error: text }
-    }
-  }
-  if (!response.ok) {
-    const message =
-      typeof body === "object" && body !== null && "error" in body && typeof (body as { error: unknown }).error === "string"
-        ? (body as { error: string }).error
-        : `Request failed (${response.status})`
-    throw new ApiError(message, response.status, body)
-  }
-  return body as T
-}
-
 export const instructorScheduleAdjustmentApi = {
   list: (scope: AdminScope) =>
-    instructorRequest<{ success?: boolean; requests: InstructorScheduleRequest[] }>(
+    instructorAuthenticatedRequest<{ success?: boolean; requests: InstructorScheduleRequest[] }>(
       "/api/instructor/schedule-adjustments",
       scope,
     ),
 
   getDashboard: (scope: AdminScope, requestId: number) =>
-    instructorRequest<InstructorScheduleDashboard>(`/api/instructor/schedule-adjustments/${requestId}`, scope),
+    instructorAuthenticatedRequest<InstructorScheduleDashboard>(
+      `/api/instructor/schedule-adjustments/${requestId}`,
+      scope,
+    ),
 
   getCandidates: (scope: AdminScope, requestId: number) =>
-    instructorRequest<{ success?: boolean; candidates: InstructorScheduleCandidate[] }>(
+    instructorAuthenticatedRequest<{ success?: boolean; candidates: InstructorScheduleCandidate[] }>(
       `/api/instructor/schedule-adjustments/${requestId}/actions?view=candidates`,
       scope,
     ),
@@ -101,14 +74,14 @@ export const instructorScheduleAdjustmentApi = {
       instructorNotes?: string
     },
   ) =>
-    instructorRequest<{ success?: boolean; request: InstructorScheduleRequest }>(
+    instructorAuthenticatedRequest<{ success?: boolean; request: InstructorScheduleRequest }>(
       "/api/instructor/schedule-adjustments",
       scope,
       { method: "POST", body: JSON.stringify(payload) },
     ),
 
   action: (scope: AdminScope, requestId: number, body: Record<string, unknown>) =>
-    instructorRequest<{ success?: boolean; request?: InstructorScheduleRequest }>(
+    instructorAuthenticatedRequest<{ success?: boolean; request?: InstructorScheduleRequest }>(
       `/api/instructor/schedule-adjustments/${requestId}/actions`,
       scope,
       { method: "POST", body: JSON.stringify(body) },

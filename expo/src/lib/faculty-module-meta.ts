@@ -109,7 +109,7 @@ export const FACULTY_MODULE_META: Record<string, FacultyModuleMeta> = {
     id: "student-support",
     title: "Student Support",
     summary: "Help queues, password resets, and instructor guides.",
-    icon: "help-circle-outline",
+    icon: "help-buoy-outline",
     features: ["Support queues", "Password resets", "Instructor guides"]},
   "course-settings": {
     id: "course-settings",
@@ -127,7 +127,7 @@ export const FACULTY_MODULE_META: Record<string, FacultyModuleMeta> = {
     id: "assessment-governance",
     title: "Assessment Governance",
     summary: "Policies for publishing, retakes, and academic integrity.",
-    icon: "shield-checkmark-outline",
+    icon: "lock-closed-outline",
     features: ["Publish rules", "Retake policy", "Integrity settings"]},
   "assessment-defaults": {
     id: "assessment-defaults",
@@ -244,7 +244,7 @@ export const FACULTY_MODULE_META: Record<string, FacultyModuleMeta> = {
     id: "submission-issues",
     title: "Submission Issues",
     summary: "Administration view of cross-assessment submission problems.",
-    icon: "alert-circle-outline",
+    icon: "warning-outline",
     features: ["Issue triage", "Open in Results", "Recent items"]},
   "teaching-assistants": {
     id: "teaching-assistants",
@@ -277,14 +277,14 @@ export const FACULTY_MODULE_META: Record<string, FacultyModuleMeta> = {
     id: "recommendations",
     title: "Recommendation Letters",
     summary: "Draft, finalize, and notify students about recommendation letters.",
-    icon: "create-outline",
+    icon: "bookmark-outline",
     features: ["Letter workspace", "Guest requests", "AI suggest"],
   },
   "trade-center": {
     id: "trade-center",
     title: "Trade Center",
     summary: "Conversion rules, donation review, analytics, and trade logs.",
-    icon: "diamond-outline",
+    icon: "storefront-outline",
     features: ["Conversion rules", "Donation review", "Analytics & logs"],
   },
   cora: {

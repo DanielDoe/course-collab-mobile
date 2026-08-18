@@ -34,6 +34,7 @@ import { useAppThemeTokens } from "../../context/AppearanceProvider"
 import { getMembershipPlan, nextUpgradeTier } from "../../lib/membership-plans"
 import { membershipTierSolidBadge } from "../../lib/membership-plan-theme"
 import { useDrawerNavTheme } from "../../lib/drawer-nav-theme"
+import { drawerShellLayout } from "../../lib/drawer-shell-layout"
 import { useNativeType } from "../../lib/themed-module-theme"
 import { GLASS_SHEET_BACKDROP } from "../theme/GlassActionSheetMenu"
 import { LinearGradient } from "expo-linear-gradient"
@@ -132,6 +133,7 @@ export function StudentDrawer({ session }: Props) {
   const tierLabel = membershipTierLoaded ? membershipTier : "…"
   const tierPlan = membershipTierLoaded ? getMembershipPlan(membershipTier) : null
   const tierBadge = membershipTierLoaded ? membershipTierSolidBadge(membershipTier) : null
+  const layout = drawerShellLayout(panelWidth, insets, drawerTheme)
 
   if (!drawerMounted) return null
 
@@ -146,19 +148,14 @@ export function StudentDrawer({ session }: Props) {
           style={[
             styles.panel,
             panelStyle,
-            {
-              width: panelWidth,
-              paddingBottom: insets.bottom + 12,
-              backgroundColor: drawerTheme.panelBg,
-              borderRightColor: drawerTheme.headerBorder,
-            },
+            layout.panel,
           ]}
         >
           <View
             style={[
               styles.header,
+              layout.header,
               {
-                paddingTop: insets.top + 12,
                 backgroundColor: drawerTheme.headerBg,
                 borderBottomColor: drawerTheme.headerBorder,
               },
@@ -210,8 +207,8 @@ export function StudentDrawer({ session }: Props) {
 
           <ScrollView
             ref={scrollRef}
-            style={[styles.scroll, { backgroundColor: tokens.background }]}
-            contentContainerStyle={styles.scrollContent}
+            style={[styles.scroll, { backgroundColor: layout.scrollBackground }]}
+            contentContainerStyle={[styles.scrollContent, layout.scrollContent]}
             showsVerticalScrollIndicator={false}
           >
               <View ref={contentRef} collapsable={false}>

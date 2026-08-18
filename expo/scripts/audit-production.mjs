@@ -62,6 +62,13 @@ printSection("Required compliance routes (mobile source)")
 const requiredRoutes = [
   "app/(app)/settings/privacy-security.tsx",
   "app/(app)/settings/delete-account.tsx",
+  "app/(app)/settings/legal/privacy.tsx",
+  "app/(app)/settings/legal/terms.tsx",
+  "app/(app)/settings/legal/support.tsx",
+  "app/(app)/settings/ai-data.tsx",
+  "src/lib/legal-content-api.ts",
+  "src/hooks/useLegalDocument.ts",
+  "src/content/legal/fallback.ts",
   "src/lib/account-deletion-api.ts",
   "src/lib/clear-user-local-state.ts",
   "src/lib/trusted-origins.ts",

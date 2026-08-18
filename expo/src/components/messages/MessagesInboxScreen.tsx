@@ -94,7 +94,14 @@ export function MessagesInboxScreen() {
         skipNextFocusRefresh.current = false
         return
       }
-      void load().catch(() => {})
+      void load().catch((err) => {
+        setError(
+          presentApiError(err, {
+            feature: "Messages",
+            fallbackMessage: "Could not load your conversations.",
+          }),
+        )
+      })
     }, [auth, load]),
   )
 
@@ -127,7 +134,14 @@ export function MessagesInboxScreen() {
           ),
         )
       }
-      void load().catch(() => {})
+      void load().catch((err) => {
+        setError(
+          presentApiError(err, {
+            feature: "Messages",
+            fallbackMessage: "Could not load your conversations.",
+          }),
+        )
+      })
     })
   }, [load])
 

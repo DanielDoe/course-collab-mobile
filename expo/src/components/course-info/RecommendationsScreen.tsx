@@ -6,7 +6,7 @@ import {
   TextInput,
   View} from "react-native"
 import { Ionicons } from "@/components/icons/AppIcon"
-import { useLocalSearchParams } from "expo-router"
+import { useLocalSearchParams, useRouter } from "expo-router"
 import { useSession } from "../../context/SessionProvider"
 import { ApiError } from "../../lib/student-api"
 import type { StudentSession } from "../../lib/session"
@@ -33,12 +33,17 @@ function useStudentSession(): StudentSession | null {
 
 type Tab = "requests" | "new"
 
-function RequestCard({ item }: { item: RecommendationRequest }) {
+function RequestCard({ item, onPress }: { item: RecommendationRequest; onPress: () => void }) {
   const theme = useCourseInfoTheme()
   const native = useThemedNative()
   const type = useNativeType()
   return (
-    <View style={[styles.requestCard, { backgroundColor: native.secondaryGrouped, borderColor: native.separator }]}>
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      android_ripple={{ color: native.separator }}
+      style={[styles.requestCard, { backgroundColor: native.secondaryGrouped, borderColor: native.separator }]}
+    >
       <View style={styles.requestHead}>
         <SolidListThumbTile thumb={COURSE_INFO_RECOMMENDATION.request} icon="document-text-outline" size="compact" />
         <View style={styles.requestBody}>
@@ -62,12 +67,13 @@ function RequestCard({ item }: { item: RecommendationRequest }) {
           {item.draft_count} draft(s) available on web
         </Text>
       ) : null}
-    </View>
+    </Pressable>
   )
 }
 
 export function RecommendationsScreen() {
-  const params = useLocalSearchParams<{ tab?: string }>()
+  const params = useLocalSearchParams<{ tab?: string; request?: string }>()
+  const router = useRouter()
   const session = useStudentSession()
   const theme = useCourseInfoTheme()
   const native = useThemedNative()
@@ -113,6 +119,12 @@ export function RecommendationsScreen() {
   useEffect(() => {
     if (params.tab === "new") setTab("new")
   }, [params.tab])
+
+  useEffect(() => {
+    const requestId = Number(params.request)
+    if (!Number.isFinite(requestId) || requestId <= 0) return
+    router.replace(`/recommendations/${requestId}`)
+  }, [params.request, router])
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true)
@@ -171,7 +183,11 @@ export function RecommendationsScreen() {
     return (
       <View style={signatureListStyles.list}>
         {requests.map((item) => (
-          <RequestCard key={item.id} item={item} />
+          <RequestCard
+            key={item.id}
+            item={item}
+            onPress={() => router.push(`/recommendations/${item.id}` as never)}
+          />
         ))}
       </View>
     )

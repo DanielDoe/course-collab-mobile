@@ -40,9 +40,11 @@ export function ProjectSubmitScreen() {
   const [projectLink, setProjectLink] = useState("")
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState("")
 
   const load = useCallback(async () => {
     if (!session) return
+    setError("")
     try {
       const groupRes = await collaborationApi.getGroups(session)
       const leaderGroups = (groupRes.groups ?? []).filter(
@@ -66,7 +68,8 @@ export function ProjectSubmitScreen() {
       } else if (leaderGroups.length === 1) {
         setSelectedGroupId(String(leaderGroups[0].id))
       }
-    } catch {
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to load groups.")
       setGroups([])
     }
   }, [session, editProjectId, presetGroupId])
@@ -122,6 +125,7 @@ export function ProjectSubmitScreen() {
         title={editProjectId ? "Edit project" : "Submit project"}
         subtitle="Group deliverable proposal"
       />
+        {error ? <Text style={styles.errorText}>{error}</Text> : null}
         {loading ? (
           <ActivityIndicator color={theme.primary} />
         ) : (
@@ -219,6 +223,7 @@ const styles = StyleSheet.create({
   content: { padding: 16, gap: 8 },
   label: { fontSize: 13, fontWeight: "700", marginTop: 8 },
   hint: { fontSize: 13, marginBottom: 8 },
+  errorText: { fontSize: 13, color: "#b91c1c" },
   input: {
     borderWidth: 1,
     borderRadius: 14,

@@ -22,7 +22,7 @@ export async function markNotificationReadFromPush(
   if (!notificationId) return false
 
   if (session.portal === "student" || session.portal === "guest" || session.portal === "summer") {
-    const ok = await markNotificationRead(session.databaseId, notificationId)
+    const ok = await markNotificationRead(session, notificationId)
     if (ok) emitNotificationsRefresh()
     return ok
   }

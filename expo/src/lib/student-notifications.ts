@@ -1,5 +1,5 @@
-import { API_BASE_URL } from "../constants"
-import { abortTimeout } from "./abort-timeout"
+import { studentAuthenticatedRequest } from "./student-api"
+import type { StudentAuthSession } from "./student-session-proof"
 
 export type StudentNotification = {
   id: number
@@ -19,63 +19,69 @@ type NotificationsPayload = {
   throttled?: boolean
 }
 
-async function notificationRequest<T>(
-  databaseId: string,
-  init?: RequestInit,
-): Promise<T | null> {
-  try {
-    const res = await fetch(`${API_BASE_URL}/api/student/notifications${init?.method ? "" : "?limit=50"}`, {
-      ...init,
-      headers: {
-        Accept: "application/json",
-        "x-student-id": databaseId,
-        ...(init?.headers ?? {})},
-      signal: init?.signal ?? abortTimeout(12_000)})
-    if (!res.ok) return null
-    return (await res.json()) as T
-  } catch {
-    return null
-  }
-}
-
-export async function fetchStudentNotifications(databaseId: string): Promise<{
+export async function fetchStudentNotifications(session: StudentAuthSession): Promise<{
   notifications: StudentNotification[]
   unreadCount: number
   throttled?: boolean
 }> {
-  const payload = await notificationRequest<NotificationsPayload>(databaseId)
-  const notifications = payload?.notifications ?? []
-  const apiUnread = Number(payload?.unread_count ?? payload?.unreadCount ?? 0)
-  const derivedUnread = notifications.filter((n) => !n.is_read).length
-
-  return {
-    notifications,
-    unreadCount: Math.max(apiUnread, derivedUnread),
-    throttled: payload?.throttled}
+  try {
+    const payload = await studentAuthenticatedRequest<NotificationsPayload>(
+      session,
+      `/api/student/notifications?studentId=${encodeURIComponent(session.databaseId)}&limit=50`,
+    )
+    const notifications = payload.notifications ?? []
+    const apiUnread = Number(payload.unread_count ?? payload.unreadCount ?? 0)
+    const derivedUnread = notifications.filter((n) => !n.is_read).length
+    return {
+      notifications,
+      unreadCount: Math.max(apiUnread, derivedUnread),
+      throttled: payload.throttled,
+    }
+  } catch {
+    return { notifications: [], unreadCount: 0 }
+  }
 }
 
-export async function markNotificationRead(databaseId: string, notificationId: number): Promise<boolean> {
-  const payload = await notificationRequest<{ ok?: boolean }>(databaseId, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ notification_id: notificationId })})
-  return payload != null
+export async function markNotificationRead(
+  session: StudentAuthSession,
+  notificationId: number,
+): Promise<boolean> {
+  try {
+    await studentAuthenticatedRequest(session, "/api/student/notifications", {
+      method: "PATCH",
+      body: JSON.stringify({ notification_id: notificationId }),
+    })
+    return true
+  } catch {
+    return false
+  }
 }
 
-export async function markAllNotificationsRead(databaseId: string): Promise<boolean> {
-  const payload = await notificationRequest<{ ok?: boolean }>(databaseId, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ mark_all_read: true })})
-  return payload != null
+export async function markAllNotificationsRead(session: StudentAuthSession): Promise<boolean> {
+  try {
+    await studentAuthenticatedRequest(session, "/api/student/notifications", {
+      method: "PATCH",
+      body: JSON.stringify({ mark_all_read: true }),
+    })
+    return true
+  } catch {
+    return false
+  }
 }
 
-export async function dismissNotification(databaseId: string, notificationId: number): Promise<boolean> {
-  const payload = await notificationRequest<{ ok?: boolean }>(databaseId, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ notification_id: notificationId, dismiss: true })})
-  return payload != null
+export async function dismissNotification(
+  session: StudentAuthSession,
+  notificationId: number,
+): Promise<boolean> {
+  try {
+    await studentAuthenticatedRequest(session, "/api/student/notifications", {
+      method: "PATCH",
+      body: JSON.stringify({ notification_id: notificationId, dismiss: true }),
+    })
+    return true
+  } catch {
+    return false
+  }
 }
 
 export function formatNotificationTime(value: string): string {

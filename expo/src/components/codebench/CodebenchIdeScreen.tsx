@@ -4,9 +4,11 @@ import { AppAlert } from '../../lib/app-alert'
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useLocalSearchParams, useRouter } from "expo-router"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
+import { useModuleContentTopPadding } from "../../context/ChromeInsetContext"
 import { useSession } from "../../context/SessionProvider"
 import { useStudentShell } from "../../context/StudentShellContext"
-import { isCoraAccessDeniedError, prepareCoraRequest } from "../../lib/cora-rbac"
+import { hasNavAccess } from "../../constants/student-nav"
+import { prepareCoraRequest } from "../../lib/cora-rbac"
 import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
 import { hexToRgba } from "../../constants/app-themes"
 import { NATIVE } from "../../constants/faculty-native-theme"
@@ -49,6 +51,7 @@ import { CodebenchAiFullscreenShell } from "./CodebenchAiFullscreenShell"
 import { CodebenchAskCoraPanel } from "./CodebenchAskCoraPanel"
 import { CodebenchWalkthroughPanel } from "./CodebenchWalkthroughPanel"
 import { MarkdownContentWebView } from "../course-info/MarkdownContentWebView"
+import { StudentThemedLocked } from "../student/student-themed-hero"
 import { GlassBottomSheetModal } from "../theme/GlassBottomSheetModal"
 import { GlassSheetHandle } from "../theme/GlassActionSheetMenu"
 
@@ -125,9 +128,11 @@ function formatToolResult(tool: ToolId, data: Record<string, unknown>): string {
 
 export function CodebenchIdeScreen() {
   const { session } = useSession()
-  const { membershipTier } = useStudentShell()
+  const { membershipTier, membershipTierLoaded } = useStudentShell()
   const router = useRouter()
   const insets = useSafeAreaInsets()
+  const lockedTopPad = useModuleContentTopPadding(24)
+  const isLocked = membershipTierLoaded && !hasNavAccess(membershipTier, "Trailblazer")
   const editorMinHeight = useCodebenchEditorMinHeight()
   const aiPanelMinHeight = useCodebenchAiPanelMinHeight()
   const compactPhone = useCompactPhoneLayout()
@@ -207,6 +212,10 @@ export function CodebenchIdeScreen() {
     let cancelled = false
     ;(async () => {
       if (!session || session.portal !== "student") return
+      if (membershipTierLoaded && !hasNavAccess(membershipTier, "Trailblazer")) {
+        setReady(true)
+        return
+      }
       const [lang, mode, currentXp, classroom] = await Promise.all([
         loadCodebenchLanguageId(),
         loadCodebenchLearningMode(),
@@ -227,7 +236,7 @@ export function CodebenchIdeScreen() {
     return () => {
       cancelled = true
     }
-  }, [session])
+  }, [session, membershipTier, membershipTierLoaded])
 
   const toolPayload = useMemo(
     () => ({ code, language: language.apiLanguage, learningMode }),
@@ -245,6 +254,7 @@ export function CodebenchIdeScreen() {
   const runWalkthrough = useCallback(
     async (codeOverride?: string) => {
       if (!session || session.portal !== "student") return
+      if (membershipTierLoaded && !hasNavAccess(membershipTier, "Trailblazer")) return
 
       const codeToWalk =
         codeOverride ?? (code.trim().length >= 10 ? code : CODEBENCH_CPP_WALKTHROUGH_SAMPLE)
@@ -286,12 +296,13 @@ export function CodebenchIdeScreen() {
         setBusy(false)
       }
     },
-    [session, code, language.apiLanguage, learningMode],
+    [session, code, language.apiLanguage, learningMode, membershipTier, membershipTierLoaded],
   )
 
   const runTool = useCallback(
     async (tool: ToolId) => {
       if (!session || session.portal !== "student") return
+      if (membershipTierLoaded && !hasNavAccess(membershipTier, "Trailblazer")) return
       if (tool === "tutor") {
         setPanel("tutor")
         setAiExpanded(true)
@@ -357,15 +368,15 @@ export function CodebenchIdeScreen() {
         setBusy(false)
       }
     },
-    [session, code, language.apiLanguage, learningMode, toolPayload, tutorMessages.length, runWalkthrough],
+    [session, code, language.apiLanguage, learningMode, toolPayload, tutorMessages.length, runWalkthrough, membershipTier, membershipTierLoaded],
   )
 
   useEffect(() => {
-    if (!ready || !bootTool.current) return
+    if (!ready || isLocked || !bootTool.current) return
     const tool = bootTool.current as ToolId
     bootTool.current = ""
     if (CORA_TOOLS.some((t) => t.id === tool)) void runTool(tool)
-  }, [ready, runTool])
+  }, [ready, runTool, isLocked])
 
   async function walkThroughWithCora() {
     await runWalkthrough()
@@ -378,6 +389,7 @@ export function CodebenchIdeScreen() {
     importedLabel?: string | null
   }) {
     if (!session || session.portal !== "student") return
+    if (membershipTierLoaded && !hasNavAccess(membershipTier, "Trailblazer")) return
     const message = (payload?.message ?? tutorInput).trim()
     if (!message && !payload?.importedProblem) return
     setTutorInput("")
@@ -424,13 +436,13 @@ export function CodebenchIdeScreen() {
 
   async function submitPractice() {
     if (!session || session.portal !== "student") return
+    if (membershipTierLoaded && !hasNavAccess(membershipTier, "Trailblazer")) return
     if (!requireCode()) return
     setBusy(true)
     try {
       await codebenchApi.submitPractice(session, {
         code,
         problem: practiceProblem.slice(0, 2000),
-        score: 7,
         feedback: "Submitted from native CodeBench IDE",
       })
       await saveCodebenchLatestCode(code)
@@ -447,27 +459,19 @@ export function CodebenchIdeScreen() {
 
   async function finishEvaluate() {
     if (!session || session.portal !== "student") return
+    if (membershipTierLoaded && !hasNavAccess(membershipTier, "Trailblazer")) return
     const responses = evalQuestions.map((q, i) => ({
       question: q.question,
       answer: evalAnswers[i] ?? "",
     }))
-    let correct = 0
-    evalQuestions.forEach((q, i) => {
-      const answer = (evalAnswers[i] ?? "").trim().toLowerCase()
-      const expected = (q.correctAnswer ?? "").trim().toLowerCase()
-      if (answer && expected && (answer === expected || expected.includes(answer) || answer.includes(expected))) {
-        correct += 1
-      }
-    })
-    const score = Math.round((correct / Math.max(evalQuestions.length, 1)) * 10)
     setBusy(true)
     try {
       const submissionId =
         assignmentId !== "practice" && /^\d+$/.test(assignmentId) ? Number(assignmentId) : null
       const res = await codebenchApi.submit(session, {
         code,
-        score,
-        feedback: `Native evaluate score ${score}/10 (${correct}/${evalQuestions.length} matched).`,
+        score: 0,
+        feedback: "Submitted from native CodeBench evaluate.",
         evaluationResponses: responses,
         submissionId,
       })
@@ -477,7 +481,6 @@ export function CodebenchIdeScreen() {
       setResultTitle("Evaluation complete")
       setResultBody(
         [
-          `Score: ${score}/10`,
           res.pointsAwarded != null ? `Points awarded: ${res.pointsAwarded}` : "",
           res.evaluation?.feedback || res.message || "Submitted for review.",
         ]
@@ -513,6 +516,17 @@ export function CodebenchIdeScreen() {
       <View style={[styles.center, { backgroundColor: native.groupedBackground }]}>
         <Text style={[type.caption, { color: native.secondaryLabel }]}>Student session required.</Text>
       </View>
+    )
+  }
+
+  if (isLocked) {
+    return (
+      <StudentThemedLocked
+        icon="code-slash"
+        subtitle="Write, run, and improve code in many languages with AI — available on Trailblazer."
+        paddingTop={lockedTopPad}
+        onUpgrade={() => router.push("/membership" as never)}
+      />
     )
   }
 
@@ -755,7 +769,7 @@ export function CodebenchIdeScreen() {
             ) : (
               <>
                 <Ionicons name="paper-plane" size={15} color="#1a1025" />
-                <Text style={styles.runText}>Run</Text>
+                <Text style={styles.runText}>Evaluate</Text>
               </>
             )}
           </Pressable>
@@ -1309,16 +1323,6 @@ export function CodebenchIdeScreen() {
       </GlassBottomSheetModal>
     </View>
   )
-}
-
-function hashText(input: string): string {
-  let hash = 0
-  const normalized = input.trim().replace(/\s+/g, " ")
-  for (let i = 0; i < normalized.length; i += 1) {
-    hash = (hash << 5) - hash + normalized.charCodeAt(i)
-    hash |= 0
-  }
-  return Math.abs(hash).toString(36)
 }
 
 const styles = StyleSheet.create({

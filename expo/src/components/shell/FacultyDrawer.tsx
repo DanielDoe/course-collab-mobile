@@ -30,6 +30,7 @@ import { getFacultyMembershipPlan, nextFacultyUpgradeTier } from "../../lib/facu
 import { facultyMembershipTierSolidBadge } from "../../lib/faculty-membership-plan-theme"
 import { useAppThemeTokens } from "../../context/AppearanceProvider"
 import { useDrawerNavTheme } from "../../lib/drawer-nav-theme"
+import { drawerShellLayout } from "../../lib/drawer-shell-layout"
 import { DrawerGlassBackground, drawerGlassStyles } from "../../lib/drawer-glass-ui"
 import { useNativeType } from "../../lib/themed-module-theme"
 import { GLASS_SHEET_BACKDROP } from "../theme/GlassActionSheetMenu"
@@ -138,6 +139,7 @@ export function FacultyDrawer({ session }: Props) {
   const tierLabel = membershipTierLoaded ? facultyMembershipTierShortLabel(membershipTier) : "…"
   const tierPlan = membershipTierLoaded ? getFacultyMembershipPlan(membershipTier) : null
   const tierBadge = membershipTierLoaded ? facultyMembershipTierSolidBadge(membershipTier) : null
+  const layout = drawerShellLayout(panelWidth, insets, drawerTheme)
 
   if (!drawerMounted) return null
 
@@ -157,12 +159,7 @@ export function FacultyDrawer({ session }: Props) {
           style={[
             styles.panel,
             panelStyle,
-            {
-              width: panelWidth,
-              paddingBottom: insets.bottom + 12,
-              backgroundColor: drawerTheme.panelBg,
-              borderRightColor: drawerTheme.headerBorder,
-            },
+            layout.panel,
             glassChrome && drawerGlassStyles.panelBorder,
           ]}
         >
@@ -170,8 +167,8 @@ export function FacultyDrawer({ session }: Props) {
           <View
             style={[
               styles.header,
+              layout.header,
               {
-                paddingTop: insets.top + 12,
                 backgroundColor: drawerTheme.headerBg,
                 borderBottomColor: drawerTheme.headerBorder,
               },
@@ -231,8 +228,8 @@ export function FacultyDrawer({ session }: Props) {
 
           <ScrollView
             ref={scrollRef}
-            style={[styles.scroll, { backgroundColor: drawerTheme.isGlass ? "transparent" : tokens.background }]}
-            contentContainerStyle={styles.scrollContent}
+            style={[styles.scroll, { backgroundColor: layout.scrollBackground }]}
+            contentContainerStyle={[styles.scrollContent, layout.scrollContent]}
             showsVerticalScrollIndicator={false}
           >
             <View ref={contentRef} collapsable={false}>

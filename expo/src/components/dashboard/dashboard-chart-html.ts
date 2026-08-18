@@ -188,7 +188,7 @@ export function buildPerformanceComparisonChartHtml(
     const classY = groupTop + barH + barGap;
     const labelY = groupTop + blockH / 2 + 4;
     const youWidth = Math.max(2, (row.you / 100) * innerW);
-    const classWidth = Math.max(2, (row.classAvg / 100) * innerW);
+    const classWidth = Math.max(2, ((row.classAvg ?? 0) / 100) * innerW);
 
     svg += '<text x="' + (pad.left - 8) + '" y="' + labelY + '" fill="${colors.textMuted}" font-size="10" text-anchor="end" font-weight="500">' + row.label + '</text>';
     svg += '<rect x="' + pad.left + '" y="' + youY + '" width="' + youWidth + '" height="' + barH + '" rx="4" fill="' + youColors[index % 3] + '"/>';

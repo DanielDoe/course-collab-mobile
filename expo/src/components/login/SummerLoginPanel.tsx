@@ -1,4 +1,5 @@
 import { StyleSheet, Text, View } from "react-native"
+import Animated, { Easing, FadeIn, FadeInDown, ZoomIn, useReducedMotion } from "react-native-reanimated"
 import { Ionicons, type IoniconName } from "@/components/icons/AppIcon"
 import { LOGIN_PORTAL_THUMBS } from "../../lib/login-color-theme"
 import { SolidListThumbTile } from "../theme/SolidListThumbTile"
@@ -8,6 +9,32 @@ import { useLoginTheme } from "./login-theme"
 
 type Props = {
   onBack?: () => void
+}
+
+const MOTION = {
+  step: 55,
+  fade: 380,
+  badgeSpring: { damping: 22, stiffness: 120, mass: 0.9 },
+} as const
+
+function summerEnter(index: number, reduceMotion: boolean | null) {
+  if (reduceMotion) {
+    return FadeIn.delay(index * 40).duration(220)
+  }
+  return FadeInDown.delay(index * MOTION.step)
+    .duration(MOTION.fade)
+    .easing(Easing.out(Easing.cubic))
+}
+
+function summerBadgeEnter(reduceMotion: boolean | null) {
+  if (reduceMotion) {
+    return FadeIn.duration(220)
+  }
+  return ZoomIn.delay(MOTION.step)
+    .springify()
+    .damping(MOTION.badgeSpring.damping)
+    .stiffness(MOTION.badgeSpring.stiffness)
+    .mass(MOTION.badgeSpring.mass)
 }
 
 const EXPECTATIONS: Array<{ icon: IoniconName; title: string; body: string }> = [
@@ -36,32 +63,43 @@ const EXPECTATIONS: Array<{ icon: IoniconName; title: string; body: string }> = 
 export function SummerLoginPanel({ onBack }: Props) {
   const { LOGIN, loginType } = useLoginTheme()
   const thumb = LOGIN_PORTAL_THUMBS.summer
+  const reduceMotion = useReducedMotion()
+  const nextBoxIndex = 4 + EXPECTATIONS.length
 
   return (
     <LoginPortalStack>
-      <LoginBrandHeader
-        title="Summer Camp"
-        subtitle="Camper sign-in opens when camp starts."
-      />
+      <Animated.View entering={summerEnter(0, reduceMotion)}>
+        <LoginBrandHeader
+          title="Summer Camp"
+          subtitle="Camper sign-in opens when camp starts."
+        />
+      </Animated.View>
 
-      <View
-        style={[
-          styles.badge,
-          { backgroundColor: LOGIN.goldSoft, borderColor: `${LOGIN.gold}55` },
-        ]}
-        accessibilityRole="text"
-        accessibilityLabel="Coming soon"
-      >
-        <Ionicons name="time-outline" size={16} color={LOGIN.goldInk} />
-        <Text style={[styles.badgeLabel, { color: LOGIN.goldInk }]}>Coming Soon</Text>
-      </View>
+      <Animated.View entering={summerBadgeEnter(reduceMotion)} style={styles.badgeWrap}>
+        <View
+          style={[
+            styles.badge,
+            {
+              backgroundColor: LOGIN.gold,
+              borderColor: LOGIN.isDark ? `${LOGIN.goldInk}44` : `${LOGIN.goldInk}22`,
+            },
+          ]}
+          accessibilityRole="text"
+          accessibilityLabel="Coming soon"
+        >
+          <Ionicons name="time-outline" size={16} color={LOGIN.goldInk} />
+          <Text style={[styles.badgeLabel, { color: LOGIN.goldInk }]}>Coming Soon</Text>
+        </View>
+      </Animated.View>
 
-      <Text style={[loginType.panelDescription, styles.intro, { color: LOGIN.secondaryLabel }]}>
-        Summer Camp sign-in is not open in this release. When camp starts, campers will sign in
-        with the welcome email and password from their instructor.
-      </Text>
+      <Animated.View entering={summerEnter(2, reduceMotion)}>
+        <Text style={[loginType.panelDescription, styles.intro, { color: LOGIN.secondaryLabel }]}>
+          Summer Camp sign-in is not open in this release. When camp starts, campers will sign in
+          with the welcome email and password from their instructor.
+        </Text>
+      </Animated.View>
 
-      <View style={styles.section}>
+      <Animated.View entering={summerEnter(3, reduceMotion)} style={styles.section}>
         <Text style={[loginType.stepLabel, { color: LOGIN.label }]}>What To Expect</Text>
         <View
           style={[
@@ -74,8 +112,9 @@ export function SummerLoginPanel({ onBack }: Props) {
           ]}
         >
           {EXPECTATIONS.map((item, index) => (
-            <View
+            <Animated.View
               key={item.title}
+              entering={summerEnter(4 + index, reduceMotion)}
               style={[
                 styles.row,
                 index < EXPECTATIONS.length - 1 && {
@@ -91,38 +130,44 @@ export function SummerLoginPanel({ onBack }: Props) {
                 </Text>
                 <Text style={[loginType.info, { color: LOGIN.secondaryLabel }]}>{item.body}</Text>
               </View>
-            </View>
+            </Animated.View>
           ))}
         </View>
-      </View>
+      </Animated.View>
 
-      <View
-        style={[
-          styles.nextBox,
-          {
-            backgroundColor: LOGIN.accentSoft,
-            borderColor: LOGIN.softBorder,
-            borderRadius: LOGIN.sectionRadius,
-          },
-        ]}
-      >
-        <Text style={[loginType.stepLabel, styles.nextTitle, { color: LOGIN.label }]}>
-          What You Can Do Now
-        </Text>
-        <Text style={[loginType.info, { color: LOGIN.secondaryLabel }]}>
-          Watch for a camp welcome email when enrollment opens. If you already have a university
-          course this term, use Student sign-in instead.
-        </Text>
-      </View>
+      <Animated.View entering={summerEnter(nextBoxIndex, reduceMotion)}>
+        <View
+          style={[
+            styles.nextBox,
+            {
+              backgroundColor: LOGIN.accentSoft,
+              borderColor: LOGIN.softBorder,
+              borderRadius: LOGIN.sectionRadius,
+            },
+          ]}
+        >
+          <Text style={[loginType.stepLabel, styles.nextTitle, { color: LOGIN.label }]}>
+            What You Can Do Now
+          </Text>
+          <Text style={[loginType.info, { color: LOGIN.secondaryLabel }]}>
+            Watch for a camp welcome email when enrollment opens. If you already have a university
+            course this term, use Student sign-in instead.
+          </Text>
+        </View>
+      </Animated.View>
 
-      {onBack ? <LoginBackLink label="Other sign-in options" onPress={onBack} /> : null}
+      {onBack ? (
+        <Animated.View entering={summerEnter(nextBoxIndex + 1, reduceMotion)}>
+          <LoginBackLink label="Other sign-in options" onPress={onBack} />
+        </Animated.View>
+      ) : null}
     </LoginPortalStack>
   )
 }
 
 const styles = StyleSheet.create({
+  badgeWrap: { alignSelf: "center" },
   badge: {
-    alignSelf: "center",
     flexDirection: "row",
     alignItems: "center",
     gap: 6,

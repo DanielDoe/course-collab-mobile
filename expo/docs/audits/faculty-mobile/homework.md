@@ -1,5 +1,7 @@
 # Manage Homework — Faculty Mobile Production Audit
 
+> **REVALIDATION_REQUIRED (2026-08-18).** The READY 89 / `audit:homework-production` 13/13 result is invalid. That script treats header-only `x-instructor-id` as auth, HTTP 500 as PASS, and unauth submit 400 as PASS. Independent re-probe: faculty header-only list/create/toggle/delete and `/api/homework/take|submit` are **401**, but header-only `quiz-progress` / `log-violation` / `issues` are still **200**. Cookie create homework 211 → publish ECE2202 → student list worked; start is semester-closed. See `docs/audits/student-mobile/homework.md`.
+
 **Audited at:** 2026-08-17T17:06:00.000Z  
 **Audit mode:** Production Readiness  
 **Scope:** Faculty Expo/mobile Manage Homework (`assessmentType="homework"`) + shared assessment stack + `/api/instructor/quizzes*` contracts + student downstream (`AssessmentListScreen`, `AssessmentDetailScreen`, `AssessmentQuizScreen`, `/api/homework/take`, `/api/homework/submit`)  

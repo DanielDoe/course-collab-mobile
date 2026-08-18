@@ -1,21 +1,25 @@
 import { API_BASE_URL } from "../constants"
 import type { CodebenchLearningMode } from "../constants/codebench-languages"
+import { assertProductionHttpsUrl, createApiAbortSignal } from "./http"
 import type { StudentSession } from "./session"
-import { ApiError } from "./student-api"
+import { persistHttpCookiesFromResponse } from "./student-http-cookies"
+import { ApiError, studentAuthenticatedHeaders } from "./student-api"
 import type { PreparedCoraRequest } from "./cora-rbac/prepare-request"
-
-function headers(session: StudentSession): HeadersInit {
-  return {
-    Accept: "application/json",
-    "Content-Type": "application/json",
-    "x-student-id": session.databaseId,
-    "x-student-session": session.section,
-  }
-}
+import { flattenRequestHeaders } from "./student-session-proof"
 
 async function request<T>(session: StudentSession, path: string, init?: RequestInit): Promise<T> {
   const url = `${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`
-  const response = await fetch(url, { ...init, headers: { ...headers(session), ...init?.headers } })
+  assertProductionHttpsUrl(url)
+  const headers = {
+    ...(await studentAuthenticatedHeaders(session)),
+    ...flattenRequestHeaders(init?.headers),
+  }
+  const response = await fetch(url, {
+    ...init,
+    credentials: "include",
+    signal: createApiAbortSignal(undefined, init?.signal ?? undefined),
+    headers,
+  })
   let body: unknown = null
   const text = await response.text()
   if (text) {
@@ -35,6 +39,7 @@ async function request<T>(session: StudentSession, path: string, init?: RequestI
         : `Request failed (${response.status})`
     throw new ApiError(message, response.status, body)
   }
+  await persistHttpCookiesFromResponse(url, response.headers)
   return body as T
 }
 
@@ -119,8 +124,8 @@ export type CodebenchEvaluateQuestion = {
   question: string
   type: "multiple_choice" | "short_answer"
   options?: string[]
-  correctAnswer: string
-  explanation: string
+  correctAnswer?: string
+  explanation?: string
 }
 
 export type ClassroomAssignmentOption = {
@@ -296,7 +301,7 @@ export const codebenchApi = {
     session: StudentSession,
     payload: {
       code: string
-      score: number
+      score?: number
       feedback?: string
       evaluationResponses?: Array<{ question: string; answer: string }>
       submissionId?: number | null
@@ -312,7 +317,7 @@ export const codebenchApi = {
       body: JSON.stringify({
         studentId: session.databaseId,
         code: payload.code,
-        score: payload.score,
+        score: payload.score ?? 0,
         feedback: payload.feedback,
         evaluationResponses: payload.evaluationResponses,
         submissionId: payload.submissionId ?? null,
@@ -324,7 +329,7 @@ export const codebenchApi = {
     payload: {
       code: string
       problem: string
-      score: number
+      score?: number
       feedback?: string
       constraints?: string
       sampleInput?: string
@@ -335,7 +340,12 @@ export const codebenchApi = {
       method: "POST",
       body: JSON.stringify({
         studentId: session.databaseId,
-        ...payload,
+        code: payload.code,
+        problem: payload.problem,
+        feedback: payload.feedback,
+        constraints: payload.constraints,
+        sampleInput: payload.sampleInput,
+        sampleOutput: payload.sampleOutput,
       }),
     }),
 

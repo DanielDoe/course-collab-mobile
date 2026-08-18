@@ -1,7 +1,9 @@
 import { createAudioPlayer } from "expo-audio"
 import { API_BASE_URL } from "../constants"
+import { assertProductionHttpsUrl, createApiAbortSignal } from "./http"
+import { persistHttpCookiesFromResponse } from "./student-http-cookies"
 import type { StudentSession } from "./session"
-import { ApiError } from "./student-api"
+import { ApiError, studentAuthenticatedHeaders } from "./student-api"
 
 export type NotetakerKeyPoints = {
   shortSummary: string
@@ -73,13 +75,40 @@ export class NotetakerTierError extends ApiError {
   }
 }
 
-function headers(session: StudentSession, json = false): HeadersInit {
-  const base: Record<string, string> = {
+function headersWithoutJsonContentType(authHeaders: Record<string, string>): Record<string, string> {
+  const next = { ...authHeaders }
+  delete next["Content-Type"]
+  return next
+}
+
+async function notetakerRequest(
+  session: StudentSession,
+  path: string,
+  init?: RequestInit & { json?: boolean },
+): Promise<{ response: Response; body: unknown }> {
+  const url = `${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`
+  assertProductionHttpsUrl(url)
+  const authHeaders = await studentAuthenticatedHeaders(session)
+  const headers: Record<string, string> = {
+    ...authHeaders,
     Accept: "application/json",
-    "x-student-database-id": session.databaseId,
+    ...(init?.json ? { "Content-Type": "application/json" } : {}),
   }
-  if (json) base["Content-Type"] = "application/json"
-  return base
+  const response = await fetch(url, {
+    ...init,
+    credentials: "include",
+    signal: createApiAbortSignal(undefined, init?.signal ?? undefined),
+    headers: {
+      ...headers,
+      ...(init?.headers && typeof init.headers === "object" && !(init.headers instanceof Headers)
+        ? (init.headers as Record<string, string>)
+        : {}),
+    },
+  })
+  await persistHttpCookiesFromResponse(url, response.headers)
+  const body = await parseBody(response)
+  tierErrorIfNeeded(response, body)
+  return { response, body }
 }
 
 async function parseBody(response: Response): Promise<unknown> {
@@ -134,16 +163,25 @@ export function notetakerAudioUrl(session: StudentSession, noteRef: string): str
   return `${API_BASE_URL}/api/student/ai-notetaker/${seg}/audio?studentDatabaseId=${encodeURIComponent(session.databaseId)}`
 }
 
+export async function buildNotetakerAuthenticatedAudioSource(
+  session: StudentSession,
+  noteRef: string,
+): Promise<{ uri: string; headers: Record<string, string> } | null> {
+  const uri = notetakerAudioUrl(session, noteRef)
+  assertProductionHttpsUrl(uri)
+  return {
+    uri,
+    headers: await studentAuthenticatedHeaders(session),
+  }
+}
+
 export function isNotetakerProcessing(status: string): boolean {
   return status === "transcribing" || status === "summarizing" || status === "draft"
 }
 
 export const notetakerApi = {
   async list(session: StudentSession, q?: string): Promise<NotetakerListResponse> {
-    const url = `${API_BASE_URL}${listUrl(session, q)}`
-    const response = await fetch(url, { headers: headers(session) })
-    const body = await parseBody(response)
-    tierErrorIfNeeded(response, body)
+    const { response, body } = await notetakerRequest(session, listUrl(session, q))
 
     if (!response.ok) {
       throw new ApiError(errorMessage(body, `Request failed (${response.status})`), response.status, body)
@@ -156,10 +194,9 @@ export const notetakerApi = {
     session: StudentSession,
     payload?: { title?: string; course_name?: string | null; lecture_date?: string | null },
   ): Promise<NotetakerNoteDetail> {
-    const url = `${API_BASE_URL}/api/student/ai-notetaker`
-    const response = await fetch(url, {
+    const { response, body } = await notetakerRequest(session, "/api/student/ai-notetaker", {
       method: "POST",
-      headers: headers(session, true),
+      json: true,
       body: JSON.stringify({
         studentDatabaseId: session.databaseId,
         title: payload?.title,
@@ -167,8 +204,6 @@ export const notetakerApi = {
         lecture_date: payload?.lecture_date,
       }),
     })
-    const body = await parseBody(response)
-    tierErrorIfNeeded(response, body)
 
     if (!response.ok) {
       throw new ApiError(errorMessage(body, "Could not create note"), response.status, body)
@@ -179,10 +214,10 @@ export const notetakerApi = {
 
   async getNote(session: StudentSession, noteRef: string): Promise<NotetakerNoteResponse> {
     const seg = notetakerNoteSegment(noteRef)
-    const url = `${API_BASE_URL}/api/student/ai-notetaker/${seg}?studentDatabaseId=${encodeURIComponent(session.databaseId)}`
-    const response = await fetch(url, { headers: headers(session) })
-    const body = await parseBody(response)
-    tierErrorIfNeeded(response, body)
+    const { response, body } = await notetakerRequest(
+      session,
+      `/api/student/ai-notetaker/${seg}?studentDatabaseId=${encodeURIComponent(session.databaseId)}`,
+    )
 
     if (!response.ok) {
       throw new ApiError(errorMessage(body, "Could not load note"), response.status, body)
@@ -197,17 +232,14 @@ export const notetakerApi = {
     message: string,
   ): Promise<NotetakerChatResponse> {
     const seg = notetakerNoteSegment(noteRef)
-    const url = `${API_BASE_URL}/api/student/ai-notetaker/${seg}/chat`
-    const response = await fetch(url, {
+    const { response, body } = await notetakerRequest(session, `/api/student/ai-notetaker/${seg}/chat`, {
       method: "POST",
-      headers: headers(session, true),
+      json: true,
       body: JSON.stringify({
         studentDatabaseId: session.databaseId,
         message,
       }),
     })
-    const body = await parseBody(response)
-    tierErrorIfNeeded(response, body)
 
     if (!response.ok) {
       const upgrade =
@@ -228,17 +260,18 @@ export const notetakerApi = {
     payload: { title?: string; course_name?: string | null; lecture_date?: string | null },
   ): Promise<NotetakerNoteDetail> {
     const seg = notetakerNoteSegment(noteRef)
-    const url = `${API_BASE_URL}/api/student/ai-notetaker/${seg}?studentDatabaseId=${encodeURIComponent(session.databaseId)}`
-    const response = await fetch(url, {
-      method: "PATCH",
-      headers: headers(session, true),
-      body: JSON.stringify({
-        studentDatabaseId: session.databaseId,
-        ...payload,
-      }),
-    })
-    const body = await parseBody(response)
-    tierErrorIfNeeded(response, body)
+    const { response, body } = await notetakerRequest(
+      session,
+      `/api/student/ai-notetaker/${seg}?studentDatabaseId=${encodeURIComponent(session.databaseId)}`,
+      {
+        method: "PATCH",
+        json: true,
+        body: JSON.stringify({
+          studentDatabaseId: session.databaseId,
+          ...payload,
+        }),
+      },
+    )
 
     if (!response.ok) {
       throw new ApiError(errorMessage(body, "Could not save changes"), response.status, body)
@@ -254,7 +287,6 @@ export const notetakerApi = {
     options: { durationSeconds: number; displayTitle?: string },
   ): Promise<NotetakerNoteDetail> {
     const seg = notetakerNoteSegment(noteRef)
-    const url = `${API_BASE_URL}/api/student/ai-notetaker/${seg}/audio`
     const form = new FormData()
     form.append("studentDatabaseId", session.databaseId)
     form.append("durationSeconds", String(Math.max(0, Math.round(options.durationSeconds))))
@@ -267,11 +299,17 @@ export const notetakerApi = {
       type: file.type || "audio/m4a",
     } as unknown as Blob)
 
+    const authHeaders = headersWithoutJsonContentType(await studentAuthenticatedHeaders(session))
+    const url = `${API_BASE_URL}/api/student/ai-notetaker/${seg}/audio`
+    assertProductionHttpsUrl(url)
     const response = await fetch(url, {
       method: "POST",
-      headers: { Accept: "application/json", "x-student-database-id": session.databaseId },
+      credentials: "include",
+      signal: createApiAbortSignal(),
+      headers: { Accept: "application/json", ...authHeaders },
       body: form,
     })
+    await persistHttpCookiesFromResponse(url, response.headers)
     const body = await parseBody(response)
     tierErrorIfNeeded(response, body)
 
@@ -284,9 +322,11 @@ export const notetakerApi = {
 
   async deleteNote(session: StudentSession, note: Pick<NotetakerNote, "id" | "slug">): Promise<void> {
     const seg = notetakerNoteSegment(note)
-    const url = `${API_BASE_URL}/api/student/ai-notetaker/${seg}?studentDatabaseId=${encodeURIComponent(session.databaseId)}`
-    const response = await fetch(url, { method: "DELETE", headers: headers(session) })
-    const body = await parseBody(response)
+    const { response, body } = await notetakerRequest(
+      session,
+      `/api/student/ai-notetaker/${seg}?studentDatabaseId=${encodeURIComponent(session.databaseId)}`,
+      { method: "DELETE" },
+    )
     if (!response.ok) {
       throw new ApiError(errorMessage(body, "Delete failed"), response.status, body)
     }

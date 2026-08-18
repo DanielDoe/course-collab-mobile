@@ -141,7 +141,7 @@ export function PerformanceComparisonChart({
             const isActive = activeIndex === i
             const dim = activeIndex != null && !isActive ? 0.38 : 1
             const youTop = scale.yAt(d.you)
-            const avgTop = scale.yAt(d.classAvg)
+            const avgTop = d.classAvg != null ? scale.yAt(d.classAvg) : null
             const youLabel = String(Math.round(d.you))
             const labelW = Math.max(22, youLabel.length * 7.2 + 10)
             const fitsAbove = youTop - 20 >= scale.padTop
@@ -154,14 +154,18 @@ export function PerformanceComparisonChart({
                   d={barPath(youX, scale.padTop, barW, scale.baselineY, 8)}
                   fill={palette.barTrack}
                 />
-                <Path
-                  d={barPath(avgX, scale.padTop, barW, scale.baselineY, 8)}
-                  fill={palette.barTrack}
-                />
-                <Path
-                  d={barPath(avgX, avgTop, barW, scale.baselineY, 8)}
-                  fill="url(#barAvg)"
-                />
+                {avgTop != null ? (
+                  <>
+                    <Path
+                      d={barPath(avgX, scale.padTop, barW, scale.baselineY, 8)}
+                      fill={palette.barTrack}
+                    />
+                    <Path
+                      d={barPath(avgX, avgTop, barW, scale.baselineY, 8)}
+                      fill="url(#barAvg)"
+                    />
+                  </>
+                ) : null}
                 <Path
                   d={barPath(youX, youTop, barW, scale.baselineY, 8)}
                   fill="url(#barYou)"
@@ -219,7 +223,11 @@ export function PerformanceComparisonChart({
               style={styles.hit}
               onPress={() => toggle(i)}
               accessibilityRole="button"
-              accessibilityLabel={`${d.label}. You ${Math.round(d.you)} percent, class average ${Math.round(d.classAvg)} percent`}
+              accessibilityLabel={
+                d.classAvg != null
+                  ? `${d.label}. You ${Math.round(d.you)} percent, class average ${Math.round(d.classAvg)} percent`
+                  : `${d.label}. You ${Math.round(d.you)} percent, class average unavailable`
+              }
             />
           ))}
         </View>
@@ -239,7 +247,7 @@ export function PerformanceComparisonChart({
           <View style={styles.readoutItem}>
             <View style={[styles.swatch, { backgroundColor: palette.comparison.classAvg }]} />
             <Text style={[type.caption, { color: native.label }]}>
-              {active ? `${Math.round(active.classAvg)}%` : "—"}
+              {active?.classAvg != null ? `${Math.round(active.classAvg)}%` : "Unavailable"}
             </Text>
           </View>
         </View>

@@ -63,8 +63,23 @@ export function resolveNotificationLink(link: string | null | undefined): string
       const threadId = params?.get("thread")
       return threadId ? `/messages/${threadId}` : "/module/messages"
     }
+    if (segment === "recommendations") {
+      if (tail[0] && /^\d+$/.test(tail[0])) return `/recommendations/${tail[0]}`
+      const requestId = params?.get("request")
+      if (requestId && /^\d+$/.test(requestId)) return `/recommendations/${requestId}`
+      return "/module/recommendations"
+    }
     const nativeModule = CLASSIC_MODULE_MAP[segment]
     if (nativeModule) return `/module/${nativeModule}`
+  }
+
+  if (path === "/module/recommendations" || path.startsWith("/module/recommendations/")) {
+    const rest = path.slice("/module/recommendations".length).replace(/^\//, "")
+    const detailId = rest.split("/")[0]
+    if (detailId && /^\d+$/.test(detailId)) return `/recommendations/${detailId}`
+    const requestId = params?.get("request")
+    if (requestId && /^\d+$/.test(requestId)) return `/recommendations/${requestId}`
+    return "/module/recommendations"
   }
 
   if (path.startsWith("/module/")) return path
@@ -158,7 +173,8 @@ function mapStudentDashboardSegment(segment: string, tail: string[], search: str
     return mapIssuesPath(segment, tail)
   }
   if (segment === "recommendations") {
-    return tail.length ? `/module/recommendations?request=${tail[0]}` : "/module/recommendations"
+    const requestId = tail[0] && /^\d+$/.test(tail[0]) ? tail[0] : new URLSearchParams(search).get("request")
+    return requestId && /^\d+$/.test(requestId) ? `/recommendations/${requestId}` : "/module/recommendations"
   }
   if (segment === "progress-review" || segment === "progress-reviews") {
     return "/module/progress-review"
