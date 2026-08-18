@@ -137,7 +137,7 @@ export const GUEST_CAREER_TOOLS_GROUP: GuestNavGroup = {
       id: "applications",
       label: "Applications",
       route: "/module/applications",
-      icon: "briefcase-outline",
+      icon: "file-tray-stacked-outline",
       native: true,
     },
   ],
@@ -149,7 +149,7 @@ export const GUEST_SUPPORT_GROUP: GuestNavGroup = {
   icon: "help-buoy-outline",
   items: [
     { id: "help-center", label: "Help Center", route: "/module/help-center", icon: "help-circle-outline", native: true },
-    { id: "submit-ticket", label: "Submit Ticket", route: "/module/submit-ticket", icon: "create-outline", native: true },
+    { id: "submit-ticket", label: "Submit Ticket", route: "/module/submit-ticket", icon: "send-outline", native: true },
     { id: "report-bug", label: "Report Bug", route: "/module/report-bug", icon: "bug-outline", native: true },
     { id: "feature-requests", label: "Feature Requests", route: "/module/feature-requests", icon: "bulb-outline", native: true },
   ],

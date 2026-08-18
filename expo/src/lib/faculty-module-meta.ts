@@ -25,7 +25,7 @@ export const FACULTY_MODULE_META: Record<string, FacultyModuleMeta> = {
     id: "course-notes",
     title: "Course Notes",
     summary: "Publish typed course notes for students by topic and section.",
-    icon: "document-text-outline",
+    icon: "reader-outline",
     features: ["All notes", "Topic availability", "Soft delete & restore"]},
   "academic-terms": {
     id: "academic-terms",
@@ -97,7 +97,7 @@ export const FACULTY_MODULE_META: Record<string, FacultyModuleMeta> = {
     id: "progress-reviews",
     title: "Progress Reviews",
     summary: "Structured progress check-ins and review workflows.",
-    icon: "sparkles-outline",
+    icon: "trending-up-outline",
     features: ["Review cycles", "Instructor notes", "Student feedback"]},
   discussions: {
     id: "discussions",
@@ -121,7 +121,7 @@ export const FACULTY_MODULE_META: Record<string, FacultyModuleMeta> = {
     id: "schedule-adjustment",
     title: "Schedule Adjustment",
     summary: "Poll availability, collect consent, and finalize class time changes.",
-    icon: "calendar-outline",
+    icon: "swap-horizontal-outline",
     features: ["Availability polls", "Department confirmation", "Student consent", "Calendar updates"]},
   "assessment-governance": {
     id: "assessment-governance",
@@ -133,13 +133,13 @@ export const FACULTY_MODULE_META: Record<string, FacultyModuleMeta> = {
     id: "assessment-defaults",
     title: "Assessment Defaults",
     summary: "Default timers, anti-cheat, and AI grading for new assessments.",
-    icon: "clipboard-outline",
+    icon: "list-outline",
     features: ["Default timers", "Anti-cheat presets", "AI strictness"]},
   "my-courses": {
     id: "my-courses",
     title: "My Courses",
     summary: "All courses you teach across terms and institutions.",
-    icon: "school-outline",
+    icon: "albums-outline",
     features: ["Course list", "Term switching", "Role overview"]},
   "grading-policies": {
     id: "grading-policies",
@@ -158,13 +158,13 @@ export const FACULTY_MODULE_META: Record<string, FacultyModuleMeta> = {
     id: "attendance-policies",
     title: "Attendance Policies",
     summary: "Rules for attendance tracking and excused absences.",
-    icon: "calendar-outline",
+    icon: "today-outline",
     features: ["Thresholds", "Excused codes", "Grade impact"]},
   "course-evaluations": {
     id: "course-evaluations",
     title: "Course Evaluations",
     summary: "Review Canvas evaluation proofs and award engagement credits.",
-    icon: "clipboard-outline",
+    icon: "thumbs-up-outline",
     features: ["Pending queue", "Approve & return", "50 EC on approval", "Survey analytics"],
   },
   "classroom-points": {
@@ -198,7 +198,7 @@ export const FACULTY_MODULE_META: Record<string, FacultyModuleMeta> = {
     id: "homework",
     title: "Manage Homework",
     summary: "Create, publish, and manage homework with section access and issue tracking.",
-    icon: "document-text-outline",
+    icon: "pencil-outline",
     features: ["Question bank create", "Section access", "Issues & restore"],
   },
   "mid-semester-exams": {
@@ -226,19 +226,19 @@ export const FACULTY_MODULE_META: Record<string, FacultyModuleMeta> = {
     id: "playground-rules",
     title: "Playground Rules",
     summary: "Live session defaults, topics, and scoring for playground.",
-    icon: "flash-outline",
+    icon: "game-controller-outline",
     features: ["Session defaults", "Topic pools", "Leaderboard rules"]},
   "ai-assistant-settings": {
     id: "ai-assistant-settings",
     title: "AI Assistant Settings",
     summary: "Configure AI tutor, grading models, and assistant behavior.",
-    icon: "sparkles-outline",
+    icon: "hardware-chip-outline",
     features: ["Model selection", "Tutor access", "Safety filters"]},
   "team-project-policies": {
     id: "team-project-policies",
     title: "Team & Project Policies",
     summary: "Rules for group work, peer review, and project submissions.",
-    icon: "people-outline",
+    icon: "git-network-outline",
     features: ["Team size limits", "Peer review", "Late policies"]},
   "submission-issues": {
     id: "submission-issues",
@@ -263,7 +263,7 @@ export const FACULTY_MODULE_META: Record<string, FacultyModuleMeta> = {
     id: "campers",
     title: "Campers",
     summary: "Summer camper accounts and the request inbox for this course.",
-    icon: "sunny-outline",
+    icon: "walk-outline",
     features: ["Camper roster", "Create account", "Request inbox"],
   },
   "office-hours": {
