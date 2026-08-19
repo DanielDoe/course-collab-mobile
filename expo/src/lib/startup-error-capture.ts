@@ -1,5 +1,5 @@
 import { ErrorUtils } from "react-native"
-import { startupBootDiagnosticId } from "./startup-boot-id"
+import { bootLog } from "./boot-diagnostics"
 
 let capturedMessage: string | null = null
 let installed = false
@@ -26,9 +26,7 @@ export function installEarlyStartupErrorCapture(onError?: (message: string) => v
     const message = formatStartupError(error)
     if (!capturedMessage) {
       capturedMessage = message
-      if (typeof __DEV__ === "undefined" || !__DEV__) {
-        console.error(`[BOOT_ERROR] ${startupBootDiagnosticId(message)}`, message)
-      }
+      bootLog(`Global handler (${isFatal ? "fatal" : "error"}): ${message}`, "error")
       onError?.(message)
     }
     previous?.(error, isFatal)
@@ -44,4 +42,5 @@ export function recordStartupImportError(error: unknown): void {
   if (!capturedMessage) capturedMessage = message
   ;(globalThis as { __COURSECOLLAB_STARTUP_IMPORT_ERROR__?: string }).__COURSECOLLAB_STARTUP_IMPORT_ERROR__ =
     message
+  bootLog(`Import error: ${message}`, "error")
 }

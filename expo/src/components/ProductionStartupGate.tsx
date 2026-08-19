@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react"
 import * as SplashScreen from "expo-splash-screen"
 import { runProductionGuard } from "../config/production-guard"
+import { bootLog } from "../lib/boot-diagnostics"
 import { installEarlyStartupErrorCapture, peekStartupError } from "../lib/startup-error-capture"
 import { StartupFatalScreen } from "./StartupFatalScreen"
 
@@ -23,6 +24,10 @@ export function ProductionStartupGate({ children }: Props) {
   const [fatalError, setFatalError] = useState<string | null>(readProductionStartupError)
 
   useEffect(() => {
+    bootLog("ProductionStartupGate mounted")
+  }, [])
+
+  useEffect(() => {
     installEarlyStartupErrorCapture((message) => {
       setFatalError((current) => current ?? message)
     })
@@ -37,6 +42,12 @@ export function ProductionStartupGate({ children }: Props) {
 
   useEffect(() => {
     if (fatalError) void SplashScreen.hideAsync().catch(() => {})
+  }, [fatalError])
+
+  useEffect(() => {
+    if (fatalError) {
+      bootLog(`Production startup gate blocked: ${fatalError}`, "error")
+    }
   }, [fatalError])
 
   if (fatalError) {

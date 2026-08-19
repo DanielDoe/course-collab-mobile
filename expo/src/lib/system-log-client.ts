@@ -176,6 +176,15 @@ function scheduleFlush() {
   }, BATCH_INTERVAL)
 }
 
+/** Immediately POST queued mobile logs (boot reports). */
+export async function flushMobileLogsNow(): Promise<void> {
+  if (batchTimer) {
+    clearTimeout(batchTimer)
+    batchTimer = null
+  }
+  await flushQueue()
+}
+
 export function reportMobileClientError(
   partial: Partial<MobileClientLogPayload> & { errorMessage: string },
 ): void {

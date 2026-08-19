@@ -4,6 +4,7 @@ import * as SplashScreen from "expo-splash-screen"
 import { StyleSheet, View } from "react-native"
 import { BrandLoadingMark } from "../src/components/login/BrandLoadingMark"
 import { useSession } from "../src/context/SessionProvider"
+import { bootLog, markBootComplete } from "../src/lib/boot-diagnostics"
 import { resolvePostLoginRoute } from "../src/lib/onboarding"
 import { toAppHref, toAuthHref } from "../src/lib/navigation-reset"
 import type { AppSession } from "../src/lib/session"
@@ -19,6 +20,14 @@ export default function Index() {
   const { session, isLoading } = useSession()
   const [resolvedHref, setResolvedHref] = useState<string | null>(null)
 
+  useEffect(() => {
+    bootLog("Index route mounted")
+  }, [])
+
+  useEffect(() => {
+    bootLog(`Session loading=${isLoading} hasSession=${Boolean(session)}`)
+  }, [isLoading, session])
+
   const hideNativeSplash = useCallback(() => {
     void SplashScreen.hideAsync()
   }, [])
@@ -31,9 +40,11 @@ export default function Index() {
     if (isLoading) return
     if (!session) {
       setResolvedHref("/(auth)/login")
+      bootLog("No session — routing to login")
       return
     }
 
+    bootLog("Resolving post-login route")
     let cancelled = false
     const timeout = setTimeout(() => {
       if (cancelled) return
@@ -43,6 +54,7 @@ export default function Index() {
     void resolvePostLoginRoute(session)
       .then((route) => {
         if (cancelled) return
+        bootLog(`Post-login route resolved: ${route}`)
         const href =
           route === "/dashboard" ||
           route === "/faculty-select-course" ||
@@ -52,8 +64,14 @@ export default function Index() {
             : toAuthHref(route)
         setResolvedHref(href)
       })
-      .catch(() => {
-        if (!cancelled) setResolvedHref(fallbackHrefForSession(session))
+      .catch((error) => {
+        if (!cancelled) {
+          bootLog(
+            `Post-login route failed: ${error instanceof Error ? error.message : String(error)}`,
+            "warn",
+          )
+          setResolvedHref(fallbackHrefForSession(session))
+        }
       })
       .finally(() => {
         clearTimeout(timeout)
@@ -64,6 +82,12 @@ export default function Index() {
       clearTimeout(timeout)
     }
   }, [isLoading, session])
+
+  useEffect(() => {
+    if (!resolvedHref) return
+    bootLog(`Redirecting to ${resolvedHref}`)
+    markBootComplete(`redirect ${resolvedHref}`)
+  }, [resolvedHref])
 
   if (isLoading || (session && !resolvedHref)) {
     return (

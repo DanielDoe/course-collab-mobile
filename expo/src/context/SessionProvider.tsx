@@ -19,6 +19,9 @@ import { persistRememberedLoginPortal } from "../lib/remembered-login-portal"
 import { api } from "../lib/api"
 import { clearUserLocalState } from "../lib/clear-user-local-state"
 import { subscribeSessionExpired } from "../lib/session-expiry"
+import { bootLog } from "../lib/boot-diagnostics"
+
+const SESSION_RESTORE_TIMEOUT_MS = 8_000
 
 type SessionContextValue = {
   session: AppSession | null
@@ -36,15 +39,36 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let mounted = true
+    bootLog("Session restore started")
+
+    const timeout = setTimeout(() => {
+      if (!mounted) return
+      bootLog("Session restore timed out — continuing without session", "warn")
+      setIsLoading(false)
+    }, SESSION_RESTORE_TIMEOUT_MS)
+
     getStoredSession()
       .then((stored) => {
-        if (mounted) setSession(stored)
+        if (mounted) {
+          bootLog(stored ? `Session restore completed (${stored.portal})` : "Session restore completed (signed out)")
+          setSession(stored)
+        }
+      })
+      .catch((error) => {
+        if (mounted) {
+          bootLog(
+            `Session restore failed: ${error instanceof Error ? error.message : String(error)}`,
+            "warn",
+          )
+        }
       })
       .finally(() => {
+        clearTimeout(timeout)
         if (mounted) setIsLoading(false)
       })
     return () => {
       mounted = false
+      clearTimeout(timeout)
     }
   }, [])
 
