@@ -6,6 +6,14 @@ import { BrandLoadingMark } from "../src/components/login/BrandLoadingMark"
 import { useSession } from "../src/context/SessionProvider"
 import { resolvePostLoginRoute } from "../src/lib/onboarding"
 import { toAppHref, toAuthHref } from "../src/lib/navigation-reset"
+import type { AppSession } from "../src/lib/session"
+
+const STARTUP_ROUTE_TIMEOUT_MS = 12_000
+
+function fallbackHrefForSession(session: AppSession): string {
+  if (session.portal === "faculty") return toAppHref("/faculty-select-course")
+  return toAppHref("/dashboard")
+}
 
 export default function Index() {
   const { session, isLoading } = useSession()
@@ -27,20 +35,33 @@ export default function Index() {
     }
 
     let cancelled = false
-    void resolvePostLoginRoute(session).then((route) => {
+    const timeout = setTimeout(() => {
       if (cancelled) return
-      const href =
-        route === "/dashboard" ||
-        route === "/faculty-select-course" ||
-        route.startsWith("/module") ||
-        route.startsWith("/settings")
-          ? toAppHref(route)
-          : toAuthHref(route)
-      setResolvedHref(href)
-    })
+      setResolvedHref(fallbackHrefForSession(session))
+    }, STARTUP_ROUTE_TIMEOUT_MS)
+
+    void resolvePostLoginRoute(session)
+      .then((route) => {
+        if (cancelled) return
+        const href =
+          route === "/dashboard" ||
+          route === "/faculty-select-course" ||
+          route.startsWith("/module") ||
+          route.startsWith("/settings")
+            ? toAppHref(route)
+            : toAuthHref(route)
+        setResolvedHref(href)
+      })
+      .catch(() => {
+        if (!cancelled) setResolvedHref(fallbackHrefForSession(session))
+      })
+      .finally(() => {
+        clearTimeout(timeout)
+      })
 
     return () => {
       cancelled = true
+      clearTimeout(timeout)
     }
   }, [isLoading, session])
 

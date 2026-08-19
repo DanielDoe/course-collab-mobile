@@ -1,5 +1,3 @@
-import "react-native-gesture-handler"
-import "react-native-reanimated"
 import * as SplashScreen from "expo-splash-screen"
 import { Stack } from "expo-router"
 import { GestureHandlerRootView } from "react-native-gesture-handler"
@@ -13,19 +11,15 @@ import { PresenceSelfProvider } from "../src/context/PresenceSelfProvider"
 import { StripeAppProvider } from "../src/context/StripeAppProvider"
 import { SystemErrorBoundary } from "../src/components/SystemErrorBoundary"
 import { SystemErrorCapture } from "../src/components/SystemErrorCapture"
-import { runProductionGuard } from "../src/config/production-guard"
+import { ProductionStartupGate } from "../src/components/ProductionStartupGate"
+import { installEarlyStartupErrorCapture } from "../src/lib/startup-error-capture"
 
 void SplashScreen.preventAutoHideAsync().catch(() => {})
-
-if (typeof __DEV__ === "undefined" || !__DEV__) {
-  const productionGuard = runProductionGuard()
-  if (!productionGuard.ok) {
-    throw new Error(`Production configuration invalid:\n${productionGuard.errors.join("\n")}`)
-  }
-}
+installEarlyStartupErrorCapture()
 
 export default function RootLayout() {
   return (
+    <ProductionStartupGate>
     <GestureHandlerRootView style={styles.root}>
       <SafeAreaProvider>
         <SessionProvider>
@@ -60,6 +54,7 @@ export default function RootLayout() {
         </SessionProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
+    </ProductionStartupGate>
   )
 }
 

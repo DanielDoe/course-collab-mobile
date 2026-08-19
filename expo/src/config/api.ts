@@ -26,9 +26,7 @@ export function resolveApiBaseUrl(): string {
   if (typeof configured === "string" && configured.trim()) {
     const normalized = normalizeApiBaseUrl(configured.trim())
     if (isProductionEnvironment() && isLocalOrLanHost(normalized)) {
-      throw new Error(
-        `Production build cannot use local API URL (${normalized}). Set expo.extra.appUrl to ${PRODUCTION_API_BASE_URL}.`,
-      )
+      return PRODUCTION_API_BASE_URL
     }
     if (!isLocalOrLanHost(normalized)) {
       return normalized
