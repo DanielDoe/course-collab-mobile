@@ -1,12 +1,15 @@
 import type { Ionicons } from "@expo/vector-icons"
 import type { FacultyMembershipTier } from "../types/dashboard"
+import { canManageCourseSettings } from "../lib/course-exchange-shared"
+import type { InstructorCourse } from "../lib/instructor-api"
 
 export type FacultyNavItem = {
   id: string
   label: string
   route: string
   icon: keyof typeof Ionicons.glyphMap
-  badgeKey?: "pendingPoints" | "pendingIssues" | "officeHours" | "notifications"
+  badgeKey?: "pendingPoints" | "pendingIssues" | "officeHours" | "notifications" | "courseExchange"
+  requiresManageCourseSettings?: boolean
   locked?: boolean
   minTier?: FacultyMembershipTier
 }
@@ -46,6 +49,11 @@ export function hasFacultyNavAccess(tier: FacultyMembershipTier, minTier?: Facul
   return TIER_ORDER[tier] >= TIER_ORDER[minTier]
 }
 
+export function isFacultyNavItemVisible(item: FacultyNavItem, selectedCourse?: InstructorCourse | null): boolean {
+  if (!item.requiresManageCourseSettings) return true
+  return canManageCourseSettings(selectedCourse?.staff_role)
+}
+
 function sortNavItemsByLabelLength<T extends { label: string }>(items: T[]): T[] {
   return [...items].sort((a, b) => {
     const byLength = a.label.length - b.label.length
@@ -70,6 +78,7 @@ export const FACULTY_NAV_GROUPS: FacultyNavGroup[] = [
       { id: "syllabus", label: "Syllabus", route: "/module/syllabus", icon: "document-text-outline" },
       { id: "lectures", label: "Manage Lectures", route: "/module/lectures", icon: "easel-outline" },
       { id: "course-notes", label: "Course Notes", route: "/module/course-notes", icon: "reader-outline" },
+      { id: "course-exchange", label: "Course Exchange", route: "/module/course-exchange", icon: "repeat-outline", badgeKey: "courseExchange", requiresManageCourseSettings: true },
       { id: "flashcards", label: "Flashcards", route: "/module/flashcards", icon: "layers-outline" },
       { id: "practice", label: "Manage Practice", route: "/module/practice", icon: "bulb-outline" },
       { id: "playground", label: "Manage Playground", route: "/module/playground", icon: "flash-outline" },
@@ -99,6 +108,7 @@ export const FACULTY_NAV_GROUPS: FacultyNavGroup[] = [
     icon: "people-outline",
     items: [
       { id: "students", label: "Student Directory", route: "/module/students", icon: "people-outline" },
+      { id: "access-requests", label: "Access Requests", route: "/module/access-requests", icon: "shield-checkmark-outline" },
       { id: "campers", label: "Campers", route: "/module/campers", icon: "walk-outline" },
       { id: "office-hours", label: "Office Hours", route: "/module/office-hours", icon: "time-outline", badgeKey: "officeHours" },
       { id: "recommendations", label: "Recommendation Letters", route: "/module/recommendations", icon: "bookmark-outline" },
@@ -142,7 +152,7 @@ export const FACULTY_NAV_GROUPS: FacultyNavGroup[] = [
       { id: "attendance-policies", label: "Attendance Policies", route: "/module/attendance-policies", icon: "today-outline" },
       { id: "classroom-points-rules", label: "Classroom Points Rules", route: "/module/classroom-points-rules", icon: "trophy-outline" },
       { id: "playground-rules", label: "Playground Rules", route: "/module/playground-rules", icon: "game-controller-outline" },
-      { id: "ai-assistant-settings", label: "AI Assistant Settings", route: "/module/ai-assistant-settings", icon: "hardware-chip-outline", locked: true, minTier: "Pro" },
+      { id: "ai-assistant-settings", label: "Cora Assistant Settings", route: "/module/ai-assistant-settings", icon: "hardware-chip-outline", locked: true, minTier: "Pro" },
       { id: "team-project-policies", label: "Team & Project Policies", route: "/module/team-project-policies", icon: "git-network-outline" },
       { id: "submission-issues", label: "Submission Issues", route: "/module/submission-issues", icon: "warning-outline" },
       { id: "teaching-assistants", label: "Teaching Assistants", route: "/module/teaching-assistants", icon: "person-add-outline", locked: true, minTier: "Enterprise" },
@@ -264,6 +274,12 @@ export function facultyNativeRouteFromLink(link: string | undefined): string {
   if (path.includes("content/syllabus") || path.includes("/syllabus")) return "/module/syllabus"
   if (path.includes("content/lectures") || path.includes("/lectures")) return "/module/lectures"
   if (path.includes("content/notes") || path.includes("course-notes")) return "/module/course-notes"
+  if (path.includes("course/exchange") || path.includes("course-exchange")) {
+    const tabMatch = link.match(/[?&]tab=([^&#]+)/i)
+    const tab = tabMatch?.[1]?.trim().toLowerCase()
+    if (tab) return `/module/course-exchange?tab=${encodeURIComponent(tab)}`
+    return "/module/course-exchange"
+  }
   if (path.includes("content/flashcards") || path.includes("/flashcards")) return "/module/flashcards"
   if (path.includes("content/practice") || path.includes("/practice")) return "/module/practice"
   if (path.includes("playground")) return "/module/playground"

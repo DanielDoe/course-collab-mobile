@@ -19,6 +19,7 @@ import {
   rewardsApi,
   type ClassroomPointRecord,
 } from "../../lib/rewards-api"
+import { QuestionContentWebView } from "./QuestionContent"
 import { TaskMetaChip, TaskSectionCard, useRewardsTheme } from "./rewards-shared"
 
 function useStudentSession(): StudentSession | null {
@@ -193,7 +194,9 @@ export function ClassroomPointDetailScreen() {
                 ]}
               >
                 <Ionicons name="chatbubble-ellipses-outline" size={16} color={tokens.warning} />
-                <Text style={[styles.feedbackText, { color: tokens.text }]}>{feedbackText}</Text>
+                <View style={styles.feedbackCopy}>
+                  <QuestionContentWebView text={feedbackText} embedded compact />
+                </View>
               </View>
             ) : null}
 
@@ -242,5 +245,6 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1,
   },
+  feedbackCopy: { flex: 1, minWidth: 0 },
   feedbackText: { flex: 1, fontSize: 13, lineHeight: 18 },
 })

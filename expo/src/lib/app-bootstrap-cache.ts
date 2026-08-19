@@ -37,6 +37,7 @@ export type FacultyShellBootstrap = {
     pendingPoints: number
     pendingIssues: number
     officeHours: number
+    courseExchange: number
   }
 }
 

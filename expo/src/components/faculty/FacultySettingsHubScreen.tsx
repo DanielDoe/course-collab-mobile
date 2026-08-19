@@ -469,7 +469,7 @@ export function FacultySettingsHubScreen() {
       <SettingsGroup>
         <SettingsRow
           icon="sparkles-outline"
-          label="AI assistant settings"
+          label="Cora Assistant Settings"
           onPress={() => router.push("/module/ai-assistant-settings" as never)}
         />
         <SettingsRow

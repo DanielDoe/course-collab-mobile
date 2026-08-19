@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { ActivityIndicator, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { AppAlert } from '../../lib/app-alert'
+import { AppAlertHost } from "../../context/AppAlertProvider"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { ApiError } from "../../lib/api"
@@ -9,7 +10,7 @@ import { useFacultyScope } from "../../hooks/useFacultyScope"
 import { useFacultyShell } from "../../context/FacultyShellContext"
 import { useNotificationModuleRefresh } from "../../lib/notifications/notification-events"
 import { NATIVE, SYSTEM } from "../../constants/faculty-native-theme"
-import { FacultyEmptyState } from "./faculty-shared"
+import { FacultyEmptyState, FacultyStatusPill } from "./faculty-shared"
 import { FacultyOfficeHourCreateModal } from "./FacultyOfficeHourCreateModal"
 import { FacultyOfficeHoursActionSheet } from "./FacultyOfficeHoursActionSheet"
 import { FacultyRegularOfficeHoursSheet } from "./FacultyRegularOfficeHoursSheet"
@@ -22,12 +23,17 @@ import {
   useCollabSheetStyles,
   FacultySheetChrome,
   FacultySheetField,
+  FacultySheetNotice,
   FacultySheetSection,
-  sheetPlaceholderColor
+  useSheetPlaceholderColor,
 } from "./faculty-collab-sheet-ui"
 import { SHEET_SECTION } from "./faculty-sheet-semantics"
 import { useModuleTheme } from "../../lib/themed-module-shell"
-import { FACULTY_OFFICE_HOURS_COLOR } from "../../lib/faculty-office-hours-theme"
+import {
+  FACULTY_OFFICE_HOURS_COLOR,
+  facultyOfficeHoursRequestStatus,
+  isPendingOfficeHourStatus,
+} from "../../lib/faculty-office-hours-theme"
 import {
   FacultyOfficeHoursRequestCard,
   FacultyOfficeHoursScheduleCard,
@@ -38,8 +44,9 @@ type OfficeHoursTab = "requests" | "schedule"
 export function FacultyOfficeHoursScreen() {
   const { styles: moduleStyles, native, type } = useModuleTheme()
   const collabSheetStyles = useCollabSheetStyles()
+  const sheetPlaceholder = useSheetPlaceholderColor()
   const insets = useSafeAreaInsets()
-  const { listScrollPad, scrollPad } = useFacultyStickyHeaderScrollLayout()
+  const { listScrollPad } = useFacultyStickyHeaderScrollLayout()
   const { scope, ready } = useFacultyScope()
   const { refreshFacultyData } = useFacultyShell()
 
@@ -140,11 +147,55 @@ export function FacultyOfficeHoursScreen() {
       await instructorApi.updateOfficeHourRequest(scope, request.id, { status, ...extra })
       setSelected(null)
       await handleRefresh()
+      const approved = status === "approved"
+      AppAlert.alert(
+        approved ? "Request approved" : "Request declined",
+        approved
+          ? `${request.full_name} will see the approved office hours.`
+          : `${request.full_name} will see the declined status.`,
+        undefined,
+        { tone: approved ? "success" : "info" },
+      )
     } catch (err) {
       AppAlert.alert("Update failed", err instanceof ApiError ? err.message : "Try again.")
     } finally {
       setSubmitting(false)
     }
+  }
+
+  function confirmDecline(request: OfficeHourRequest, extra?: Record<string, unknown>) {
+    AppAlert.alert(
+      "Decline this request?",
+      "The student will see the declined status.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Decline",
+          style: "destructive",
+          onPress: () => void updateStatus(request, "declined", extra),
+        },
+      ],
+    )
+  }
+
+  function confirmApprove(request: OfficeHourRequest, extra?: Record<string, unknown>) {
+    const hasDetails = Boolean(
+      (typeof extra?.meetingLink === "string" && extra.meetingLink) ||
+        (typeof extra?.meetingVenue === "string" && extra.meetingVenue),
+    )
+    AppAlert.alert(
+      "Approve this request?",
+      hasDetails
+        ? `${request.full_name} will be notified with the meeting details you entered.`
+        : `${request.full_name} will see the approved office hours.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Approve",
+          onPress: () => void updateStatus(request, "approved", extra),
+        },
+      ],
+    )
   }
 
   function openDetail(request: OfficeHourRequest) {
@@ -268,20 +319,7 @@ export function FacultyOfficeHoursScreen() {
                     key={request.id}
                     request={request}
                     onPress={() => openDetail(request)}
-                    onDecline={() => {
-                      AppAlert.alert(
-                        "Decline this request?",
-                        "The student will see the declined status.",
-                        [
-                          { text: "Cancel", style: "cancel" },
-                          {
-                            text: "Decline",
-                            style: "destructive",
-                            onPress: () => void updateStatus(request, "declined"),
-                          },
-                        ],
-                      )
-                    }}
+                    onDecline={() => confirmDecline(request)}
                   />
                 ))}
               </View>
@@ -291,6 +329,7 @@ export function FacultyOfficeHoursScreen() {
       </ScrollView>
 
       <Modal visible={selected != null} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setSelected(null)}>
+        <View style={styles.sheetHost}>
         {selected ? (
           <FacultySheetContainer>
             <FacultySheetChrome
@@ -300,85 +339,120 @@ export function FacultyOfficeHoursScreen() {
               accentColor={FACULTY_OFFICE_HOURS_COLOR.link}
             />
             <ScrollView
-              contentContainerStyle={[collabSheetStyles.scroll, scrollPad]}
+              contentContainerStyle={[
+                collabSheetStyles.scroll,
+                { paddingTop: 8, gap: 12, paddingBottom: insets.bottom + 20 },
+              ]}
               keyboardShouldPersistTaps="handled"
             >
-              <Text style={styles.sheetTopic}>{selected.topic}</Text>
+              <View style={styles.sheetTopicRow}>
+                <Text style={[styles.sheetTopic, { color: native.label }]}>{selected.topic}</Text>
+                <FacultyStatusPill
+                  label={facultyOfficeHoursRequestStatus(selected.status).label}
+                  tone={
+                    isPendingOfficeHourStatus(selected.status)
+                      ? "warning"
+                      : selected.status.toLowerCase() === "declined" ||
+                          selected.status.toLowerCase() === "rejected" ||
+                          selected.status.toLowerCase() === "cancelled"
+                        ? "danger"
+                        : "success"
+                  }
+                />
+              </View>
               {selected.description ? <Text style={collabSheetStyles.bodyText}>{selected.description}</Text> : null}
               {selected.preferredDates?.length ? (
                 <FacultySheetSection label="Preferred times" tone={SHEET_SECTION.highlight}>
                   {selected.preferredDates.map((d) => (
-                    <Text key={d} style={styles.prefItem}>
+                    <Text key={d} style={[styles.prefItem, { color: native.label }]}>
                       {d}
                     </Text>
                   ))}
                 </FacultySheetSection>
               ) : null}
-              <FacultySheetSection label="Approval details" tone={SHEET_SECTION.edit}>
-                <FacultySheetField label="Meeting link (optional)">
-                  <TextInput
-                    style={collabSheetStyles.fieldInput}
-                    value={meetingLink}
-                    onChangeText={setMeetingLink}
-                    placeholder="Zoom / Teams URL"
-                    placeholderTextColor={sheetPlaceholderColor}
-                    autoCapitalize="none"
-                  />
-                </FacultySheetField>
-                <FacultySheetField label="Venue (optional)">
-                  <TextInput
-                    style={collabSheetStyles.fieldInput}
-                    value={meetingVenue}
-                    onChangeText={setMeetingVenue}
-                    placeholder="Room or location"
-                    placeholderTextColor={sheetPlaceholderColor}
-                  />
-                </FacultySheetField>
-                <FacultySheetField label="Notes for student">
-                  <TextInput
-                    style={[collabSheetStyles.fieldInput, collabSheetStyles.textArea]}
-                    value={notes}
-                    onChangeText={setNotes}
-                    placeholder="Optional message"
-                    placeholderTextColor={sheetPlaceholderColor}
-                    multiline
-                  />
-                </FacultySheetField>
-              </FacultySheetSection>
-              <View style={styles.sheetActions}>
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.btn,
-                    styles.secondaryBtn,
-                    { backgroundColor: native.fill, borderColor: native.separator },
-                    pressed && { opacity: NATIVE.pressedOpacity },
-                  ]}
-                  disabled={submitting}
-                  onPress={() => void updateStatus(selected, "declined", { instructorNotes: notes.trim() || undefined })}
-                >
-                  <Text style={[type.caption, styles.secondaryText, { color: native.label }]}>Decline</Text>
-                </Pressable>
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.btn,
-                    styles.primaryBtn,
-                    { backgroundColor: FACULTY_OFFICE_HOURS_COLOR.action },
-                    pressed && { opacity: NATIVE.pressedOpacity },
-                  ]}
-                  disabled={submitting}
-                  onPress={() =>
-                    void updateStatus(selected, "approved", {
-                      meetingLink: meetingLink.trim() || undefined,
-                      meetingVenue: meetingVenue.trim() || undefined,
-                      instructorNotes: notes.trim() || undefined})
+              {isPendingOfficeHourStatus(selected.status) ? (
+                <>
+                  <FacultySheetSection label="Approval details" tone={SHEET_SECTION.edit}>
+                    <FacultySheetField label="Meeting link (optional)">
+                      <TextInput
+                        style={collabSheetStyles.fieldInput}
+                        value={meetingLink}
+                        onChangeText={setMeetingLink}
+                        placeholder="Zoom / Teams URL"
+                        placeholderTextColor={sheetPlaceholder}
+                        autoCapitalize="none"
+                      />
+                    </FacultySheetField>
+                    <FacultySheetField label="Venue (optional)">
+                      <TextInput
+                        style={collabSheetStyles.fieldInput}
+                        value={meetingVenue}
+                        onChangeText={setMeetingVenue}
+                        placeholder="Room or location"
+                        placeholderTextColor={sheetPlaceholder}
+                      />
+                    </FacultySheetField>
+                    <FacultySheetField label="Notes for student">
+                      <TextInput
+                        style={[collabSheetStyles.fieldInput, collabSheetStyles.textArea]}
+                        value={notes}
+                        onChangeText={setNotes}
+                        placeholder="Optional message"
+                        placeholderTextColor={sheetPlaceholder}
+                        multiline
+                      />
+                    </FacultySheetField>
+                  </FacultySheetSection>
+                  <View style={styles.sheetActions}>
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.btn,
+                        styles.secondaryBtn,
+                        { backgroundColor: native.fill, borderColor: native.separator },
+                        pressed && { opacity: NATIVE.pressedOpacity },
+                      ]}
+                      disabled={submitting}
+                      onPress={() =>
+                        confirmDecline(selected, { instructorNotes: notes.trim() || undefined })
+                      }
+                    >
+                      <Text style={[type.caption, styles.secondaryText, { color: native.label }]}>Decline</Text>
+                    </Pressable>
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.btn,
+                        styles.primaryBtn,
+                        { backgroundColor: FACULTY_OFFICE_HOURS_COLOR.action },
+                        pressed && { opacity: NATIVE.pressedOpacity },
+                      ]}
+                      disabled={submitting}
+                      onPress={() =>
+                        confirmApprove(selected, {
+                          meetingLink: meetingLink.trim() || undefined,
+                          meetingVenue: meetingVenue.trim() || undefined,
+                          instructorNotes: notes.trim() || undefined,
+                        })
+                      }
+                    >
+                      <Text style={[type.caption, styles.primaryText]}>{submitting ? "Saving…" : "Approve"}</Text>
+                    </Pressable>
+                  </View>
+                </>
+              ) : (
+                <FacultySheetNotice
+                  message={
+                    selected.status.toLowerCase() === "declined" ||
+                    selected.status.toLowerCase() === "rejected"
+                      ? "This request was already declined."
+                      : "This request is already approved."
                   }
-                >
-                  <Text style={[type.caption, styles.primaryText]}>{submitting ? "Saving…" : "Approve"}</Text>
-                </Pressable>
-              </View>
+                />
+              )}
             </ScrollView>
           </FacultySheetContainer>
         ) : null}
+        <AppAlertHost enabled={selected != null} />
+        </View>
       </Modal>
 
       <FacultyOfficeHoursActionSheet
@@ -411,6 +485,7 @@ export function FacultyOfficeHoursScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1},
+  sheetHost: { flex: 1 },
   content: { padding: NATIVE.pagePadding, gap: 14 },
   center: { flex: 1, justifyContent: "center", padding: 24},
   loadingBox: { paddingVertical: 48, alignItems: "center" },
@@ -443,7 +518,8 @@ const styles = StyleSheet.create({
   primaryText: { color: "#ffffff", fontWeight: "700" },
   secondaryBtn: { borderWidth: StyleSheet.hairlineWidth },
   secondaryText: { fontWeight: "600" },
-  sheetTopic: { fontSize: 16, fontWeight: "600", color: NATIVE.label },
-  prefItem: { fontSize: 14, color: NATIVE.label },
-  sheetActions: { flexDirection: "row", gap: 8, marginTop: 8 },
+  sheetTopicRow: { gap: 8 },
+  sheetTopic: { fontSize: 16, fontWeight: "600" },
+  prefItem: { fontSize: 14, fontWeight: "600" },
+  sheetActions: { flexDirection: "row", gap: 8 },
 })

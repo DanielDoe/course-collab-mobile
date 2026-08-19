@@ -1,5 +1,5 @@
 import type { ClassroomPointAssignment } from "./instructor-api"
-import { formatClassroomDisplayText } from "./faculty-classroom-points-utils"
+import { formatClassroomDisplayText, formatClassroomMarkdownText } from "./faculty-classroom-points-utils"
 import {
   isSolutionAssignment,
   resolveAssignmentQuestionConfig,
@@ -47,7 +47,7 @@ export function assignmentFormFromRow(row: ClassroomPointAssignment): ClassroomA
   const parsed = resolveAssignmentQuestionConfig(row)
   return {
     title: formatClassroomDisplayText(row.title),
-    description: formatClassroomDisplayText(row.description ?? ""),
+    description: formatClassroomMarkdownText(row.description ?? ""),
     submissionKind,
     questionConfig:
       submissionKind === "solution"

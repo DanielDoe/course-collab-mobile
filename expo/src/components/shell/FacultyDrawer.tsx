@@ -22,6 +22,7 @@ import {
   getFacultyActiveNavItemId,
   getFacultyNavGroupIdForPath,
   hasFacultyNavAccess,
+  isFacultyNavItemVisible,
   type FacultyNavGroup,
   type FacultyNavItem,
 } from "../../constants/faculty-nav"
@@ -113,6 +114,7 @@ export function FacultyDrawer({ session }: Props) {
     if (item.badgeKey === "pendingPoints") return badges.pendingPoints || null
     if (item.badgeKey === "pendingIssues") return badges.pendingIssues || null
     if (item.badgeKey === "officeHours") return badges.officeHours || null
+    if (item.badgeKey === "courseExchange") return badges.courseExchange || null
     if (item.badgeKey === "notifications") return notificationCount || null
     return null
   }
@@ -266,6 +268,7 @@ export function FacultyDrawer({ session }: Props) {
                   unregisterRow={unregisterRow}
                   tier={membershipTier}
                   tierLoaded={membershipTierLoaded}
+                  selectedCourse={selectedCourse}
                 />
               ))}
 
@@ -278,6 +281,7 @@ export function FacultyDrawer({ session }: Props) {
                 unregisterRow={unregisterRow}
                 tier={membershipTier}
                 tierLoaded={membershipTierLoaded}
+                selectedCourse={selectedCourse}
               />
 
               <View style={[styles.divider, { backgroundColor: drawerTheme.headerBorder }]} />
@@ -360,6 +364,7 @@ function FlatNavSection({
   unregisterRow,
   tier,
   tierLoaded,
+  selectedCourse,
 }: {
   group: FacultyNavGroup
   pathname: string
@@ -369,14 +374,18 @@ function FlatNavSection({
   unregisterRow: (itemId: string) => void
   tier: FacultyMembershipTier
   tierLoaded: boolean
+  selectedCourse: import("../../lib/instructor-api").InstructorCourse | null
 }) {
   const theme = useDrawerNavTheme()
+  const visibleItems = group.items.filter((item) => isFacultyNavItemVisible(item, selectedCourse))
+
+  if (!visibleItems.length) return null
 
   return (
     <View style={styles.section}>
       <View style={[styles.divider, { backgroundColor: theme.headerBorder }]} />
       <Text style={[styles.sectionLabel, { color: theme.secondaryLabel }]}>{group.label}</Text>
-      {group.items.map((item) => (
+      {visibleItems.map((item) => (
         <DrawerNavAnchor key={item.id} itemId={item.id} registerRow={registerRow} unregisterRow={unregisterRow}>
           <NavRow
             item={item}

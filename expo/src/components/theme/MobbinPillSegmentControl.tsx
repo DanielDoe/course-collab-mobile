@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react"
-import { LayoutChangeEvent, Platform, Pressable, ScrollView, StyleSheet, View } from "react-native"
+import { LayoutChangeEvent, Platform, Pressable, StyleSheet, View } from "react-native"
+import { ScrollView } from "react-native-gesture-handler"
 import Animated, {
   interpolateColor,
   type SharedValue,
@@ -162,35 +163,32 @@ export function MobbinPillSegmentControl<T extends string>({
   pageWidth = 0,
   insetRight = 0,
   scrollable = false,
-  visibleCount = 3,
+  visibleCount: _visibleCount = 3,
 }: Props<T>) {
   const native = useThemedNative()
   const tokens = useAppThemeTokens()
 
   const scrollRef = useRef<ScrollView>(null)
+  const tabScrollXRef = useRef(0)
   const [viewportWidth, setViewportWidth] = useState(0)
   const [trackWidth, setTrackWidth] = useState(0)
-  const [tabScrollX, setTabScrollX] = useState(0)
   const thumbX = useSharedValue(0)
+  const thumbW = useSharedValue(0)
   const segmentWidthShared = useSharedValue(0)
+  const layoutsShared = useSharedValue<Array<{ x: number; width: number }>>([])
 
   const activeIndex = Math.max(
     0,
     options.findIndex((option) => option.id === value),
   )
 
-  const segmentWidth = scrollable
-    ? viewportWidth > 0
-      ? (viewportWidth - TRACK_PADDING * 2) / Math.max(visibleCount, 1)
-      : 0
-    : trackWidth > 0
+  const segmentWidth =
+    !scrollable && trackWidth > 0
       ? (trackWidth - TRACK_PADDING * 2) / Math.max(options.length, 1)
       : 0
 
-  const scrollTrackWidth =
-    scrollable && segmentWidth > 0 ? segmentWidth * options.length + TRACK_PADDING * 2 : trackWidth
-
   const compact = options.length >= 4
+  const dense = !scrollable && options.length >= 5
 
   useEffect(() => {
     segmentWidthShared.value = segmentWidth
@@ -228,10 +226,24 @@ export function MobbinPillSegmentControl<T extends string>({
   }, [native, tokens])
 
   const thumbStyle = useAnimatedStyle(() => {
+    const items = layoutsShared.value
+    if (scrollable && scrollX && pageWidth > 0 && items.length > 0) {
+      const progress = Math.max(0, Math.min(items.length - 1, scrollX.value / pageWidth))
+      const i = Math.floor(progress)
+      const t = progress - i
+      const a = items[i]
+      const b = items[Math.min(i + 1, items.length - 1)]
+      if (!a) return { opacity: 0 }
+      const x = a.x + ((b?.x ?? a.x) - a.x) * t
+      const w = a.width + ((b?.width ?? a.width) - a.width) * t
+      return { width: w, transform: [{ translateX: x - TRACK_PADDING }] }
+    }
+    if (scrollable && thumbW.value > 0) {
+      return { width: thumbW.value, transform: [{ translateX: thumbX.value - TRACK_PADDING }] }
+    }
     const segW = segmentWidthShared.value
     if (scrollX && pageWidth > 0 && segW > 0) {
-      const progress = scrollX.value / pageWidth
-      return { transform: [{ translateX: progress * segW }] }
+      return { transform: [{ translateX: (scrollX.value / pageWidth) * segW }] }
     }
     return { transform: [{ translateX: thumbX.value }] }
   })
@@ -247,39 +259,52 @@ export function MobbinPillSegmentControl<T extends string>({
     if (width > 0 && width !== viewportWidth) setViewportWidth(width)
   }
 
+  const tabLayoutsRef = useRef<Array<{ x: number; width: number }>>([])
+
+  function onSegmentLayout(index: number, event: LayoutChangeEvent) {
+    const { x, width } = event.nativeEvent.layout
+    const prev = tabLayoutsRef.current[index]
+    if (prev && Math.abs(prev.x - x) < 0.5 && Math.abs(prev.width - width) < 0.5) return
+    const next = tabLayoutsRef.current.slice()
+    next[index] = { x, width }
+    tabLayoutsRef.current = next
+    layoutsShared.value = next
+    if (index === activeIndex && width > 0) {
+      thumbX.value = x
+      thumbW.value = width
+    }
+  }
+
   useEffect(() => {
-    if (!scrollable || segmentWidth <= 0 || viewportWidth <= 0) return
-    const maxScroll = Math.max(0, scrollTrackWidth - viewportWidth)
-    const tabLeft = TRACK_PADDING + activeIndex * segmentWidth
-    const tabRight = tabLeft + segmentWidth
-    let target = tabScrollX
-    if (tabLeft < tabScrollX + TRACK_PADDING) {
-      target = Math.max(0, tabLeft - TRACK_PADDING)
-    } else if (tabRight > tabScrollX + viewportWidth - TRACK_PADDING) {
-      target = tabRight - viewportWidth + TRACK_PADDING
+    if (!scrollable || viewportWidth <= 0) return
+    const layout = tabLayoutsRef.current[activeIndex]
+    if (!layout) return
+    const current = tabScrollXRef.current
+    const maxScroll = Math.max(0, (tabLayoutsRef.current.at(-1)?.x ?? 0) + (tabLayoutsRef.current.at(-1)?.width ?? 0) - viewportWidth + TRACK_PADDING)
+    let target = current
+    if (layout.x < current + TRACK_PADDING) {
+      target = Math.max(0, layout.x - TRACK_PADDING)
+    } else if (layout.x + layout.width > current + viewportWidth - TRACK_PADDING) {
+      target = layout.x + layout.width - viewportWidth + TRACK_PADDING
     }
     target = Math.max(0, Math.min(target, maxScroll))
-    if (Math.abs(target - tabScrollX) > 1) {
+    if (Math.abs(target - current) > 2) {
       scrollRef.current?.scrollTo({ x: target, animated: true })
     }
-  }, [activeIndex, scrollable, scrollTrackWidth, segmentWidth, tabScrollX, viewportWidth])
+  }, [activeIndex, scrollable, viewportWidth])
 
   const track = (
     <View
-      style={[
-        styles.track,
-        scrollable && scrollTrackWidth > 0 && { width: scrollTrackWidth },
-        { backgroundColor: palette.trackBg },
-      ]}
+      style={[styles.track, { backgroundColor: palette.trackBg }]}
       onLayout={onTrackLayout}
     >
-      {segmentWidth > 0 ? (
+      {(!scrollable && segmentWidth > 0) || scrollable ? (
         <Animated.View
           pointerEvents="none"
           style={[
             styles.thumb,
             {
-              width: segmentWidth,
+              width: scrollable ? undefined : segmentWidth,
               backgroundColor: palette.thumbBg,
               borderColor: palette.thumbBorder,
             },
@@ -296,16 +321,18 @@ export function MobbinPillSegmentControl<T extends string>({
             key={option.id}
             style={({ pressed }) => [
               styles.segment,
-              scrollable && segmentWidth > 0 && { width: segmentWidth, flex: 0 },
+              scrollable && styles.segmentFit,
+              dense && styles.segmentDense,
               pressed && !active && styles.segmentPressed,
             ]}
             onPress={() => onChange(option.id)}
+            onLayout={(event) => onSegmentLayout(index, event)}
             accessibilityRole="tab"
             accessibilityState={{ selected: active }}
             accessibilityLabel={option.label}
             android_ripple={{ color: palette.ripple, borderless: false }}
           >
-            <View style={[styles.segmentInner, compact && styles.segmentInnerCompact]}>
+            <View style={[styles.segmentInner, compact && styles.segmentInnerCompact, dense && styles.segmentInnerDense]}>
               {option.icon ? (
                 <SegmentIcon
                   name={option.icon}
@@ -339,16 +366,21 @@ export function MobbinPillSegmentControl<T extends string>({
     <View
       style={[styles.wrap, insetRight > 0 && { paddingRight: 16 + insetRight }]}
       accessibilityRole="tablist"
-      onLayout={scrollable ? onViewportLayout : undefined}
     >
       {scrollable ? (
         <ScrollView
           ref={scrollRef}
           horizontal
+          style={styles.scroll}
           showsHorizontalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+          directionalLockEnabled
+          decelerationRate="fast"
           scrollEventThrottle={16}
-          onScroll={(event) => setTabScrollX(event.nativeEvent.contentOffset.x)}
+          onLayout={onViewportLayout}
+          onScroll={(event) => {
+            tabScrollXRef.current = event.nativeEvent.contentOffset.x
+          }}
         >
           {track}
         </ScrollView>
@@ -364,6 +396,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 4,
     paddingBottom: 10,
+  },
+  scroll: {
+    width: "100%",
   },
   track: {
     flexDirection: "row",
@@ -389,6 +424,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     borderRadius: 999,
   },
+  segmentFit: {
+    flex: 0,
+    flexGrow: 0,
+    paddingHorizontal: 14,
+  },
+  segmentDense: {
+    paddingHorizontal: 4,
+    minHeight: 36,
+  },
   segmentInner: {
     flexDirection: "row",
     alignItems: "center",
@@ -398,6 +442,9 @@ const styles = StyleSheet.create({
   },
   segmentInnerCompact: {
     gap: 4,
+  },
+  segmentInnerDense: {
+    gap: 2,
   },
   segmentPressed: {
     opacity: 0.75,

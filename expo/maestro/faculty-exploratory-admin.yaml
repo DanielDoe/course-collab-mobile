@@ -193,10 +193,10 @@ appId: com.coursecollab.app
 
 - tapOn: "Open navigation menu"
 - scrollUntilVisible:
-    element: "AI Assistant Settings"
+    element: "Cora Assistant Settings"
     direction: DOWN
     timeout: 12000
-- tapOn: "AI Assistant Settings"
+- tapOn: "Cora Assistant Settings"
 - extendedWaitUntil:
     visible: "Assistant|Trailblazer|View plans|Not now"
     timeout: 30000

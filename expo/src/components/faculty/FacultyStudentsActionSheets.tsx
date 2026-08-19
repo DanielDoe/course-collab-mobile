@@ -356,6 +356,17 @@ export function FacultyAccountRequestActionSheet({
             <FacultySheetGroupedList>
               <FacultySheetMetricRow icon="person-outline" label="Student ID" value={row.student_id} />
               {row.email ? <FacultySheetMetricRow icon="mail-outline" label="Email" value={row.email} /> : null}
+              {row.email_verified_at ? (
+                <FacultySheetMetricRow icon="checkmark-circle-outline" label="Email verification" value="Verified" />
+              ) : row.email ? (
+                <FacultySheetMetricRow icon="time-outline" label="Email verification" value="Pending" />
+              ) : null}
+              {row.camp_name ? (
+                <FacultySheetMetricRow icon="sunny-outline" label="Summer program" value={row.camp_name} />
+              ) : null}
+              {row.invitation_id ? (
+                <FacultySheetMetricRow icon="link-outline" label="Invitation" value={`#${row.invitation_id}`} />
+              ) : null}
               {row.organization ? (
                 <FacultySheetMetricRow icon="business-outline" label="Organization" value={row.organization} />
               ) : null}
@@ -382,8 +393,10 @@ export function FacultyAccountRequestActionSheet({
                   title="Pending review"
                   body={
                     row.request_kind === "guest"
-                      ? "Approving creates or links a guest account so they can access course materials."
-                      : "Approving enrolls this student in the course roster."
+                      ? "Approving activates Career Member platform access only. Course enrollment is not granted."
+                      : row.request_kind === "summer_student" || row.request_kind === "summer_camper"
+                        ? "Approving activates summer program access only. Semester course enrollment is not created."
+                        : "Approving activates the student account and creates course enrollment."
                   }
                   acting={acting}
                   approveLabel="Approve request"

@@ -96,9 +96,10 @@ function SignatureListCard({
         ) : null}
       </View>
 
-      {trailing ?? (
-        <Ionicons name="chevron-forward" size={16} color={native.tertiaryLabel} style={styles.chevron} />
-      )}
+      {trailing ??
+        (onPress ? (
+          <Ionicons name="chevron-forward" size={16} color={native.tertiaryLabel} style={styles.chevron} />
+        ) : null)}
     </>
   )
 
@@ -376,6 +377,8 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: 12,
     paddingVertical: 10,
+    alignSelf: "stretch",
+    width: "100%",
   },
   quickActions: {
     flexDirection: "row",

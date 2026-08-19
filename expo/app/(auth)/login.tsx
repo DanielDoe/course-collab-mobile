@@ -12,7 +12,7 @@ import {
   View,
 } from "react-native"
 import Animated, { FadeIn, FadeInDown, FadeOut } from "react-native-reanimated"
-import { Redirect } from "expo-router"
+import { Redirect, useLocalSearchParams, useRouter } from "expo-router"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { type LoginPortal } from "../../src/components/login/PortalSwitcher"
@@ -34,7 +34,13 @@ import {
   persistRememberedLoginPortal,
   readRememberedLoginPortal,
 } from "../../src/lib/remembered-login-portal"
+import { StudentInviteSignupPanel } from "../../src/components/login/StudentInviteSignupPanel"
 import { portalMeta } from "../../src/constants/portals"
+
+function normalizeInviteParam(value: string | string[] | undefined): string {
+  if (Array.isArray(value)) return value[0]?.trim() ?? ""
+  return typeof value === "string" ? value.trim() : ""
+}
 
 type FocusedPortal = Exclude<LoginPortal, "admin">
 
@@ -42,7 +48,10 @@ const SECONDARY_PORTALS = ["faculty", "guest", "summer"] as const satisfies read
 
 export default function LoginScreen() {
   const insets = useSafeAreaInsets()
+  const router = useRouter()
   const { height: windowHeight } = useWindowDimensions()
+  const { invite } = useLocalSearchParams<{ invite?: string | string[] }>()
+  const inviteToken = normalizeInviteParam(invite)
   const { session, isLoading: sessionLoading } = useSession()
   const { offline } = useNetworkStatus()
   const { LOGIN: themeLogin, loginType: themeType } = useLoginTheme()
@@ -66,6 +75,10 @@ export default function LoginScreen() {
   }, [focusedPortal])
 
   useEffect(() => {
+    if (inviteToken) {
+      setBootstrappingUniversity(false)
+      return
+    }
     let mounted = true
     void (async () => {
       try {
@@ -86,7 +99,7 @@ export default function LoginScreen() {
     return () => {
       mounted = false
     }
-  }, [])
+  }, [inviteToken])
 
   function focusPortal(id: FocusedPortal) {
     setFocusedPortal(id)
@@ -99,10 +112,13 @@ export default function LoginScreen() {
 
   function goWelcome() {
     setFocusedPortal(null)
+    if (inviteToken) {
+      router.replace("/login")
+    }
   }
 
   const scrollMinHeight = windowHeight - insets.top - insets.bottom
-  const portalFocused = focusedPortal != null
+  const portalFocused = focusedPortal != null || Boolean(inviteToken)
   const welcomeVerticalPad = Math.max(20, Math.round(windowHeight * 0.04))
   const portalVerticallyCentered = portalFocused && !keyboardVisible
 
@@ -144,7 +160,16 @@ export default function LoginScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.shell}>
-          {!focusedPortal ? (
+          {inviteToken ? (
+            <Animated.View
+              key="invite-signup"
+              entering={FadeInDown.duration(420)}
+              exiting={FadeOut.duration(220)}
+              style={styles.portalBleed}
+            >
+              <StudentInviteSignupPanel token={inviteToken} onBack={goWelcome} />
+            </Animated.View>
+          ) : !focusedPortal ? (
             <Animated.View
               key="welcome"
               entering={FadeIn.duration(380)}
@@ -216,6 +241,22 @@ export default function LoginScreen() {
                   )
                 })}
               </View>
+
+              {__DEV__ ? (
+                <Pressable
+                  onPress={() => router.push("/dev-onboarding-preview" as never)}
+                  style={({ pressed }) => [
+                    styles.devPreviewLink,
+                    { borderColor: themeLogin.separator, opacity: pressed ? 0.85 : 1 },
+                  ]}
+                  accessibilityRole="button"
+                >
+                  <Ionicons name="images-outline" size={16} color={themeLogin.purple} />
+                  <Text style={[themeType.link, { color: themeLogin.purple }]}>
+                    Preview onboarding screens (dev)
+                  </Text>
+                </Pressable>
+              ) : null}
             </Animated.View>
           ) : (
             <Animated.View
@@ -301,5 +342,14 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   secondaryText: { flex: 1, gap: 2, minWidth: 0 },
+  devPreviewLink: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    marginTop: 8,
+    paddingVertical: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
   pressed: { opacity: 0.86 },
 })

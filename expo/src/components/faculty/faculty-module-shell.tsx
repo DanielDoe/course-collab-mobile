@@ -84,7 +84,7 @@ export function useModuleStickyHeaderContext(): boolean {
 export function FacultyModuleStickyHeader({
   children,
   style,
-  bordered = true,
+  bordered = false,
 }: {
   children: ReactNode
   style?: StyleProp<ViewStyle>
@@ -389,7 +389,9 @@ export function resolveSessionFilterCode(
   if (filter === "ALL") return undefined
   const byId = sections.find((s) => String(s.id) === filter)
   if (byId) return byId.code
-  return filter
+  const byCode = sections.find((s) => s.code === filter)
+  if (byCode) return byCode.code
+  return undefined
 }
 
 export function sessionFilterDisplayLabel(sections: InstructorSession[], filter: string): string {
@@ -437,7 +439,7 @@ export function FacultySignatureTabBar<T extends string>({
         style={({ pressed }) => [
           shellStyles.signatureTab,
           !scrollable && shellStyles.signatureTabFlex,
-          active && { borderBottomColor: accent },
+          active && { borderBottomWidth: 2, borderBottomColor: accent },
           pressed && { opacity: NATIVE.pressedOpacity },
         ]}
         onPress={() => onChange(item.id)}
@@ -477,10 +479,7 @@ export function FacultySignatureTabBar<T extends string>({
 
   return (
     <View
-      style={[
-        embedded ? shellStyles.signatureTabWrapEmbedded : shellStyles.signatureTabWrap,
-        { borderBottomColor: native.separator },
-      ]}
+        style={embedded ? shellStyles.signatureTabWrapEmbedded : shellStyles.signatureTabWrap}
       accessibilityRole="tablist"
     >
       {scrollable ? (
@@ -1157,9 +1156,7 @@ const shellStyles = StyleSheet.create({
     borderColor: NATIVE.separatorOpaque},
   mainTabText: { ...nativeType.caption, fontWeight: "600", color: NATIVE.secondaryLabel },
   mainTabTextActive: { color: NATIVE.label, fontWeight: NATIVE.titleWeight },
-  underlineTabBarWrap: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: NATIVE.separator},
+  underlineTabBarWrap: {},
   underlineTabBar: { paddingHorizontal: 12, gap: 4 },
   underlineTabItem: {
     flexDirection: "row",
@@ -1173,12 +1170,9 @@ const shellStyles = StyleSheet.create({
   underlineTabLabel: { fontSize: 14, fontWeight: "600", color: NATIVE.secondaryLabel },
   underlineTabLabelActive: { color: NATIVE.label, fontWeight: "600" },
   signatureTabWrap: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
     paddingTop: 2,
   },
-  signatureTabWrapEmbedded: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
+  signatureTabWrapEmbedded: {},
   signatureTabScroll: {
     paddingHorizontal: 16,
     gap: 4,
@@ -1196,9 +1190,6 @@ const shellStyles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingTop: 10,
     paddingBottom: 12,
-    borderBottomWidth: 2,
-    borderBottomColor: "transparent",
-    marginBottom: -StyleSheet.hairlineWidth,
   },
   signatureTabFlex: {
     flex: 1,

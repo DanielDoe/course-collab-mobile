@@ -35,6 +35,20 @@ export type ScheduleAdjustmentDetail = {
   conflictDisclaimer?: string
 }
 
+export type SlotHeatmapCell = {
+  available: number
+  preferred: number
+}
+
+export type TopMeetingWindow = {
+  dayOfWeek: string
+  startTime: string
+  endTime: string
+  availableCount: number
+  agreementPercentage: number
+  consensusCategory: string
+}
+
 export type AvailabilityGridConfig = {
   pollKind?: "recurring" | "one_off"
   missedClassDate?: string | null
@@ -46,6 +60,10 @@ export type AvailabilityGridConfig = {
   availabilityMode: "binary" | "ternary"
   allowMultipleSelections: boolean
   deadline?: string
+  meetingDurationMinutes?: number
+  pollStats?: { responded: number; enrolled: number; responseRate?: number } | null
+  slotHeatmap?: Record<string, SlotHeatmapCell> | null
+  topWindows?: TopMeetingWindow[] | null
 }
 
 function qs(session: StudentSession) {

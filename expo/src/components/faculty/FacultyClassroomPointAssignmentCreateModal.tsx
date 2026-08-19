@@ -24,6 +24,7 @@ import {
 } from "./faculty-collab-sheet-ui"
 import { SHEET_CLASSROOM_POINTS } from "./faculty-sheet-semantics"
 import { FacultyDateTimeField } from "./FacultyNativePickers"
+import { FacultyMarkdownEditorField } from "./faculty-markdown-editor-field"
 
 type Scope = { instructorId: number; courseId: number }
 
@@ -189,14 +190,11 @@ export function FacultyClassroomPointAssignmentCreateModal({
               />
             </FacultySheetField>
             <FacultySheetField label="Description">
-              <FacultySheetTextInput
-                style={collabSheetStyles.textArea}
+              <FacultyMarkdownEditorField
                 value={description}
                 onChangeText={setDescription}
-                placeholder="Instructions for students…"
+                placeholder="Instructions for students. Markdown and LaTeX are supported."
                 accessibilityLabel="Description"
-                multiline
-                textAlignVertical="top"
               />
             </FacultySheetField>
           </FacultySheetSection>
@@ -221,13 +219,11 @@ export function FacultyClassroomPointAssignmentCreateModal({
           {submissionKind === "solution" ? (
             <FacultySheetSection label="Problem statement" tone={SHEET_CLASSROOM_POINTS.assignment}>
               <FacultySheetField label="Statement">
-                <FacultySheetTextInput
-                  style={collabSheetStyles.textAreaLg}
+                <FacultyMarkdownEditorField
+                  large
                   value={problemStatement}
                   onChangeText={setProblemStatement}
                   placeholder="Describe the problem students should solve…"
-                  multiline
-                  textAlignVertical="top"
                 />
               </FacultySheetField>
             </FacultySheetSection>

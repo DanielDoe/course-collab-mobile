@@ -14,7 +14,14 @@ import {
   type ViewStyle,
 } from "react-native"
 import { Ionicons } from "@/components/icons/AppIcon"
-import { Children, cloneElement, forwardRef, Fragment, isValidElement, useEffect, useMemo, type ReactElement, type ReactNode } from "react"
+import { Children, cloneElement, forwardRef, Fragment, isValidElement, useCallback, useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from "react"
+import Animated, {
+  Easing,
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated"
 import { useSuppressModuleSearchDock } from "../../context/ModuleSearchDockContext"
 import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
 import { BRAND } from "../../constants"
@@ -577,17 +584,65 @@ export function FacultySheetErrorBanner({ message }: { message: string }) {
 
 export function FacultySheetNotice({
   message,
-  tone = "warning"}: {
+  tone = "warning",
+  dismissible = false,
+  autoDismissMs = 8000,
+  onDismiss,
+}: {
   message: string
   tone?: "warning" | "danger"
+  dismissible?: boolean
+  autoDismissMs?: number
+  onDismiss?: () => void
 }) {
   const native = useThemedNative()
   const tokens = useAppThemeTokens()
   const accent = tone === "danger" ? FACULTY_SHEET_COLOR.danger : FACULTY_SHEET_COLOR.nudge
   const solid = tone === "danger" ? FACULTY_SHEET_SOLID.red : FACULTY_SHEET_SOLID.orange
   const icon = tone === "danger" ? "alert-circle-outline" : "information-circle-outline"
+  const [mounted, setMounted] = useState(true)
+  const progress = useSharedValue(dismissible ? 0 : 1)
+  const autoDismissRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const dismissingRef = useRef(false)
 
-  return (
+  const dismiss = useCallback(() => {
+    if (!dismissible || dismissingRef.current) return
+    dismissingRef.current = true
+    if (autoDismissRef.current) clearTimeout(autoDismissRef.current)
+    progress.value = withTiming(
+      0,
+      { duration: 320, easing: Easing.in(Easing.cubic) },
+      (finished) => {
+        if (finished) {
+          runOnJS(setMounted)(false)
+          if (onDismiss) runOnJS(onDismiss)()
+        }
+      },
+    )
+  }, [dismissible, onDismiss, progress])
+
+  useEffect(() => {
+    if (!dismissible || !mounted) return
+    progress.value = withTiming(1, { duration: 420, easing: Easing.out(Easing.cubic) })
+    autoDismissRef.current = setTimeout(dismiss, autoDismissMs)
+    return () => {
+      if (autoDismissRef.current) clearTimeout(autoDismissRef.current)
+    }
+  }, [autoDismissMs, dismiss, dismissible, mounted, progress])
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: dismissible ? progress.value : 1,
+    transform: dismissible
+      ? [
+          { translateY: (1 - progress.value) * -10 },
+          { scale: 0.98 + progress.value * 0.02 },
+        ]
+      : [],
+  }))
+
+  if (!mounted) return null
+
+  const body = (
     <View
       style={{
         flexDirection: "row",
@@ -616,8 +671,33 @@ export function FacultySheetNotice({
       <Text style={{ flex: 1, fontSize: 14, fontWeight: "600", lineHeight: 20, color: native.label }}>
         {message}
       </Text>
+      {dismissible ? (
+        <Pressable
+          onPress={dismiss}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Dismiss notice"
+          style={{
+            width: 28,
+            height: 28,
+            borderRadius: 8,
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: native.fill,
+            flexShrink: 0,
+          }}
+        >
+          <Ionicons name="close" size={16} color={native.secondaryLabel} />
+        </Pressable>
+      ) : null}
     </View>
   )
+
+  if (!dismissible) {
+    return body
+  }
+
+  return <Animated.View style={animatedStyle}>{body}</Animated.View>
 }
 
 export function FacultySheetSaveChip({ saving, onPress }: { saving?: boolean; onPress: () => void }) {

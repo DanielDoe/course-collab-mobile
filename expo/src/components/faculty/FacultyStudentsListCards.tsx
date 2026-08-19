@@ -95,5 +95,10 @@ export const FacultyStudentRequestCard = memo(function FacultyStudentRequestCard
 const styles = StyleSheet.create({
   initials: { fontWeight: "700", fontSize: 11 },
   trailing: { alignItems: "flex-end", gap: 6, paddingTop: 2 },
-  badgeRow: { marginTop: 2 },
+  badgeRow: {
+    marginTop: 2,
+    width: "100%",
+    flexDirection: "row",
+    justifyContent: "flex-end",
+  },
 })

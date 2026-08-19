@@ -28,7 +28,15 @@ function shouldHideSearchDock(pathname: string): boolean {
   if (pathname.startsWith("/settings")) return true
   if (pathname.startsWith("/assessment/")) return true
   if (pathname.startsWith("/(auth)/") || pathname.startsWith("/auth/")) return true
-  if (pathname === "/login" || pathname === "/signing-in" || pathname === "/appearance-setup" || pathname === "/change-password") return true
+  if (
+    pathname === "/login" ||
+    pathname === "/signing-in" ||
+    pathname === "/appearance-setup" ||
+    pathname === "/change-password" ||
+    pathname.startsWith("/onboarding-")
+  ) {
+    return true
+  }
   if (pathname.startsWith("/collaboration/")) return true
   if (pathname.startsWith("/notes/")) return true
   if (pathname.startsWith("/flashcards/")) return true

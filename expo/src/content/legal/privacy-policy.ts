@@ -1,9 +1,9 @@
 import type { LegalDocument } from "./types"
 
-/** Native privacy policy — keep aligned with v0-coursecollabv3/app/privacy/page.tsx */
+/** Native privacy policy — keep aligned with v0-coursecollabv3/lib/compliance/legal-content.ts */
 export const PRIVACY_POLICY = {
   title: "Privacy Policy",
-  updated: "August 17, 2026",
+  updated: "August 18, 2026",
   intro:
     "This policy describes the information CourseCollab processes in the web application, its APIs, and the native apps that call those APIs.",
   sections: [
@@ -41,9 +41,11 @@ export const PRIVACY_POLICY = {
     {
       title: "Cora AI",
       paragraphs: [
-        "When you use Cora, your prompt and the course context you are authorized to see may be sent to OpenAI and/or Anthropic to generate a response.",
-        "Conversations can be stored so you can resume them. Instructor sharing of Cora summaries is off unless you enable it.",
-        "See AI & Data in Settings for a focused summary of model processing.",
+        "Cora is designed with data minimization in mind. When CourseCollab uses external artificial intelligence providers to process a request, we send only the information reasonably necessary to perform that task.",
+        "For example, when generating feedback on a response, the AI service may receive the question, the response, and relevant instructional context without receiving the student's name, email address, student ID, or other unnecessary account information.",
+        "CourseCollab does not intentionally provide an AI provider with a user's identity merely to personalize an AI response.",
+        "Conversations and server-synced Cora privacy preferences are stored in CourseCollab so you can resume work and control personalization. Teaching-style memory toggles in Cora settings are stored locally on your device unless otherwise noted.",
+        "Instructor sharing of Cora summaries is off unless you enable it. See AI & Data for provider details and controls.",
       ],
     },
     {

@@ -207,7 +207,8 @@ export function NotetakerCaptureScreen() {
                   <Text style={type.bodyEmphasis}>Up to 90 min · name it when you finish</Text>
                   <Text style={[type.caption, styles.lead]}>
                     Tap start when you're ready. Live captions appear as you speak — when you're done, stop and we'll
-                    run a full AI transcript and summary.
+                    run a full AI transcript and summary on CourseCollab servers using the same data minimization
+                    principles as Cora.
                   </Text>
                 </>
               ) : null}

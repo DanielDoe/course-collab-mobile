@@ -1,6 +1,6 @@
 import { Platform, Share } from "react-native"
 import type { AssessmentAttemptResults, AssessmentResultQuestion } from "./assessment-results-api"
-import { stripHtml } from "./practice-session"
+import { questionMarkdownToPrintHtml } from "./classroom-submission"
 import { formatAssessmentType } from "../components/assessments/assessment-config"
 
 async function printToPdfFile(html: string): Promise<string> {
@@ -85,11 +85,11 @@ function buildReportHtml(data: AssessmentAttemptResults): string {
   const questions = (data.questions ?? [])
     .map((q, index) => {
       const order = q.question_order != null ? Number(q.question_order) : index + 1
-      const prompt = escapeHtml(stripHtml(q.question_text ?? `Question ${order}`))
+      const prompt = questionMarkdownToPrintHtml(q.question_text ?? `Question ${order}`)
       const status = questionStatusLabel(q)
       const earned = Number(q.points_earned ?? 0)
       const maxPts = Number(q.max_points ?? q.points ?? 1)
-      const answer = escapeHtml(stripHtml(String(q.selected_answer ?? "—")))
+      const answer = questionMarkdownToPrintHtml(String(q.selected_answer ?? "—"))
       return `
       <div class="question">
         <div class="q-head"><strong>Q${order}</strong> · ${status} · ${earned}/${maxPts} pts</div>
@@ -117,6 +117,11 @@ function buildReportHtml(data: AssessmentAttemptResults): string {
     .question { border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px; margin-bottom: 10px; page-break-inside: avoid; }
     .q-head { font-size: 12px; color: #475569; margin-bottom: 6px; }
     .q-prompt { font-size: 14px; line-height: 1.45; margin-bottom: 8px; }
+    .q-prompt p, .q-answer p { margin: 0 0 8px; }
+    .q-prompt p:last-child, .q-answer p:last-child { margin-bottom: 0; }
+    .q-prompt ul, .q-prompt ol, .q-answer ul, .q-answer ol { margin: 0 0 8px; padding-left: 20px; }
+    .q-prompt li, .q-answer li { margin: 0 0 4px; }
+    .q-prompt strong, .q-answer strong { font-weight: 700; }
     .q-answer { font-size: 13px; color: #334155; }
     .q-answer span { color: #667085; font-weight: 600; }
   </style>

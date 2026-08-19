@@ -3,7 +3,7 @@ import type { LegalDocument } from "./types"
 /** Native terms — keep aligned with v0-coursecollabv3/app/terms/page.tsx */
 export const TERMS_OF_SERVICE = {
   title: "Terms of Service",
-  updated: "August 17, 2026",
+  updated: "August 18, 2026",
   intro:
     "These terms apply to CourseCollab websites, APIs, and mobile applications. They are available without purchasing a membership.",
   sections: [
@@ -26,7 +26,7 @@ export const TERMS_OF_SERVICE = {
       title: "Cora",
       paragraphs: [
         "Cora is an AI assistant. Its output can be wrong and is not a substitute for instructor guidance, official course documents, or professional advice.",
-        "See AI & Data in Settings for how prompts and course context are processed.",
+        "See the AI & Data disclosure for how prompts and course context are processed.",
       ],
     },
     {

@@ -40,7 +40,7 @@ export const QuestionContentWebView = memo(function QuestionContentWebView({
   compact,
   chatBubble,
   textColor,
-  secure: _secure,
+  secure,
 }: {
   text: string
   embedded?: boolean
@@ -49,7 +49,7 @@ export const QuestionContentWebView = memo(function QuestionContentWebView({
   chatBubble?: boolean
   /** Foreground override when the host row has a solid status fill (report option rows). */
   textColor?: string
-  /** Accepted for call sites that mark sensitive question text; rendering is unchanged. */
+  /** Live quiz / exam — disable copy/select in the question WebView. */
   secure?: boolean
 }) {
   const tokens = useAppThemeTokens()
@@ -61,6 +61,7 @@ export const QuestionContentWebView = memo(function QuestionContentWebView({
     () =>
       buildQuestionHtml(text, {
         compact,
+        disableSelection: secure,
         theme: {
           isDark: tokens.isDark,
           text: fg,
@@ -68,7 +69,7 @@ export const QuestionContentWebView = memo(function QuestionContentWebView({
           heading: fg,
         },
       }),
-    [text, compact, tokens.isDark, fg, textColor, native.secondaryLabel],
+    [text, compact, secure, tokens.isDark, fg, textColor, native.secondaryLabel],
   )
   const maxHeight = chatBubble ? 560 : compact ? 240 : 1200
   const [height, setHeight] = useState(chatBubble ? 72 : compact ? 36 : 80)

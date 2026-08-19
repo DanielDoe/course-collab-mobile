@@ -1,4 +1,5 @@
 import { API_BASE_URL } from "../constants"
+import { buildMarkdownHtml } from "./markdown-html"
 
 export type QuestionMedia = {
   media_enabled?: boolean
@@ -358,7 +359,6 @@ export function normalizeHtmlLineBreaks(input: string): string {
     .replace(/<br\s*\/?>/gi, "\n")
     .replace(/<\/p>\s*<p[^>]*>/gi, "\n\n")
     .replace(/<\/div>\s*<div[^>]*>/gi, "\n\n")
-    .replace(/<\/li>\s*<li[^>]*>/gi, "\n")
 }
 
 function extractKatexAnnotation(html: string): string {
@@ -384,10 +384,22 @@ export function stripQuestionHtml(input: string): string {
     return latex ? `$${latex}$` : " "
   })
 
+  t = t.replace(/<(strong|b)(?:\s[^>]*)?>([\s\S]*?)<\/\1>/gi, "**$2**")
+  t = t.replace(/<(em|i)(?:\s[^>]*)?>([\s\S]*?)<\/\1>/gi, "*$2*")
+  t = t.replace(/<code(?:\s[^>]*)?>([\s\S]*?)<\/code>/gi, "`$2`")
+  t = t.replace(/<h([1-6])(?:\s[^>]*)?>([\s\S]*?)<\/h\1>/gi, (_, level: string, body: string) => {
+    return `\n${"#".repeat(Number(level))} ${String(body).trim()}\n`
+  })
+  t = t.replace(/<li(?:\s[^>]*)?>([\s\S]*?)<\/li>/gi, (_, body: string) => {
+    return `- ${String(body).replace(/\s+/g, " ").trim()}\n`
+  })
+  t = t.replace(/<\/?(?:ul|ol)[^>]*>/gi, "\n")
+  t = t.replace(/<pre(?:\s[^>]*)?>([\s\S]*?)<\/pre>/gi, (_, body: string) => {
+    return `\n\`\`\`\n${String(body).trim()}\n\`\`\`\n`
+  })
   t = t.replace(/<br\s*\/?>/gi, "\n")
   t = t.replace(/<\/p>\s*<p[^>]*>/gi, "\n\n")
   t = t.replace(/<\/div>\s*<div[^>]*>/gi, "\n\n")
-  t = t.replace(/<\/li>\s*<li[^>]*>/gi, "\n")
   t = t.replace(/<[^>]+>/g, "")
   t = decodeHtmlEntities(t)
   return t.replace(/\n{3}/g, "\n\n").trim()
@@ -397,9 +409,10 @@ export function stripQuestionHtml(input: string): string {
 export function normalizeQuestionContentForRender(text: string): string {
   const trimmed = text.trim()
   const withBreaks = normalizeHtmlLineBreaks(trimmed)
-  return wrapBareMathSymbols(
+  const normalized = wrapBareMathSymbols(
     normalizeMathDelimiters(repairLatexDamagedByJsonEscapes(stripQuestionHtml(withBreaks))),
   )
+  return normalized.replace(/^(\d+)\)\s+/gm, "$1. ")
 }
 
 /** Normalize \\[ \\] and \\( \\) delimiters to $$ and $ for parsing. */
@@ -469,13 +482,17 @@ function prepareQuestionText(text: string): string {
   return normalizeQuestionContentForRender(text)
 }
 
-/** True when copy needs KaTeX/HTML WebView — plain strings render natively for speed. */
+/** True when copy needs KaTeX/HTML/markdown WebView — plain strings render natively for speed. */
 export function needsQuestionRichRender(text: string): boolean {
   if (!text?.trim()) return false
   const t = text.trim()
   if (/<span[^>]*class=["'][^"']*katex/i.test(t)) return true
-  if (/<(?:pre|code|img|table|ul|ol|h[1-6]|br)\b/i.test(t)) return true
+  if (/<(?:pre|code|img|table|ul|ol|li|h[1-6]|br|strong|b|em|p)\b/i.test(t)) return true
   if (/```/.test(t)) return true
+  if (/^[-*+]\s/m.test(t) || /^\d+[.)]\s/m.test(t)) return true
+  if (/\*\*|__|`/.test(t)) return true
+  if (/^#{1,6}\s/m.test(t)) return true
+  if (/^\|/m.test(t) || /^\s*>\s/m.test(t)) return true
   if (/\$\$[\s\S]*?\$\$/.test(t)) return true
   if (/\\\[[\s\S]*?\\\]/.test(t)) return true
   if (/\\\([\s\S]*?\\\)/.test(t)) return true
@@ -493,7 +510,77 @@ export function needsQuestionRichRender(text: string): boolean {
 
 /** Plain-text fallback for question stems and MCQ options. */
 export function questionPlainText(text: string): string {
-  return stripQuestionHtml(normalizeHtmlLineBreaks(text.trim())).replace(/\n{3,}/g, "\n\n").trim()
+  return stripQuestionHtml(normalizeHtmlLineBreaks(text.trim()))
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/__([^_]+)__/g, "$1")
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/^[-*+]\s+/gm, "")
+    .replace(/^\d+[.)]\s+/gm, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
+}
+
+function escapePrintHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+}
+
+function formatPrintInlineMarkdown(escaped: string): string {
+  return escaped
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/__([^_]+)__/g, "<strong>$1</strong>")
+    .replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, "$1<em>$2</em>")
+}
+
+/** Lightweight markdown → HTML for printed / saved assessment reports. */
+export function questionMarkdownToPrintHtml(text: string): string {
+  const prepared = normalizeQuestionContentForRender(text)
+  if (!prepared.trim()) return ""
+
+  const html: string[] = []
+  let listItems: string[] = []
+  let listType: "ul" | "ol" | null = null
+
+  const flushList = () => {
+    if (listType && listItems.length) {
+      html.push(`<${listType}>${listItems.join("")}</${listType}>`)
+    }
+    listItems = []
+    listType = null
+  }
+
+  for (const raw of prepared.split("\n")) {
+    const line = raw.trimEnd()
+    const bullet = line.match(/^[-*+]\s+(.+)$/)
+    const ordered = line.match(/^(\d+)[.)]\s+(.+)$/)
+    if (bullet) {
+      if (listType !== "ul") flushList()
+      listType = "ul"
+      listItems.push(`<li>${formatPrintInlineMarkdown(escapePrintHtml(bullet[1]))}</li>`)
+      continue
+    }
+    if (ordered) {
+      if (listType !== "ol") flushList()
+      listType = "ol"
+      listItems.push(`<li>${formatPrintInlineMarkdown(escapePrintHtml(ordered[2]))}</li>`)
+      continue
+    }
+    flushList()
+    if (!line.trim()) continue
+    const heading = line.match(/^(#{1,6})\s+(.+)$/)
+    if (heading) {
+      const level = Math.min(Math.max(heading[1].length, 1), 6)
+      html.push(`<h${level}>${formatPrintInlineMarkdown(escapePrintHtml(heading[2]))}</h${level}>`)
+      continue
+    }
+    html.push(`<p>${formatPrintInlineMarkdown(escapePrintHtml(line))}</p>`)
+  }
+  flushList()
+  return html.join("")
 }
 
 /** Collapsed list preview — readable plain text without LaTeX delimiters. */
@@ -725,120 +812,17 @@ export function buildQuestionHtml(
   text: string,
   options?: { compact?: boolean; theme?: QuestionHtmlTheme; disableSelection?: boolean },
 ): string {
-  const compact = options?.compact === true
   const colors = resolveQuestionHtmlTheme(options?.theme)
-  const blocks = buildQuestionBlocks(text)
-  const payload = JSON.stringify(blocks)
-  const bodyFontSize = compact ? "14px" : "15px"
-  const bodyLineHeight = compact ? "1.6" : "1.68"
-  const paraMargin = compact ? "8px" : "12px"
-  const inlineMargin = compact ? "0.36em" : "0.42em"
-
-  return `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css"/>
-<style>${noSelectCss(options?.disableSelection)}
-  body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: ${bodyFontSize}; line-height: ${bodyLineHeight}; color: ${colors.text}; background: transparent; }
-  #content { display: flex; flex-direction: column; gap: 0; }
-  p.q-para { margin: 0 0 ${paraMargin}; word-wrap: break-word; overflow-wrap: anywhere; }
-  p.q-para:last-child { margin-bottom: 0; }
-  p.q-para .inline-math {
-    display: inline-block;
-    margin: 0 ${inlineMargin};
-    padding: 0 0.08em;
-    vertical-align: -0.08em;
-  }
-  p.q-para .inline-math .katex {
-    font-size: 1.05em;
-    color: ${colors.text};
-  }
-  p.q-para .inline-math .katex .mspace.thickspace {
-    min-width: 0.12em;
-  }
-  .q-display { margin: 10px 0 14px; padding: 2px 0; overflow-x: auto; text-align: center; }
-  .q-display .katex-display { margin: 0; color: ${colors.text}; }
-  .q-heading { margin: 14px 0 8px; font-weight: 800; color: ${colors.heading}; line-height: 1.35; }
-  .q-heading-1 { font-size: 1.2em; }
-  .q-heading-2 { font-size: 1.12em; }
-  .q-heading-3 { font-size: 1.05em; }
-  .q-heading-4, .q-heading-5, .q-heading-6 { font-size: 1em; }
-  strong { font-weight: 700; color: ${colors.heading}; }
-  em { font-style: italic; color: ${colors.textSecondary}; }
-  code { font-family: Menlo, monospace; font-size: 0.92em; background: ${colors.codeBg}; padding: 0.12em 0.35em; border-radius: 4px; color: ${colors.text}; }
-  pre { margin: 8px 0; padding: 10px 12px; border-radius: 8px; background: ${colors.preBg}; color: ${colors.preText}; overflow-x: auto; }
-  pre code { background: transparent; padding: 0; color: inherit; }
-  .math-fallback { font-family: Menlo, monospace; font-size: 13px; color: ${colors.textSecondary}; }
-</style>
-</head>
-<body>
-<div id="content"></div>
-<script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
-<script>
-  var blocks = ${payload};
-  var root = document.getElementById("content");
-  var html = "";
-
-  function escapeText(text) {
-    return text
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/\\*\\*([^*]+)\\*\\*/g, "<strong>$1</strong>")
-      .replace(/(^|[^*])\\*([^*\\n]+)\\*(?![*])/g, "$1<em>$2</em>")
-      .replace(/(^|[^_])_([^_\\n]+)_(?!_)/g, "$1<em>$2</em>")
-      .replace(/\\n/g, "<br/>");
-  }
-
-  function renderMath(expr, display) {
-    try {
-      return katex.renderToString(expr, {
-        displayMode: display,
-        throwOnError: false,
-        strict: "ignore",
-        trust: false});
-    } catch (e) {
-      return '<span class="math-fallback">' + expr + "</span>";
-    }
-  }
-
-  function postHeight() {
-    var root = document.getElementById("content");
-    var measured = root ? Math.max(root.scrollHeight, root.offsetHeight) : document.body.scrollHeight;
-    if (window.ReactNativeWebView) {
-      window.ReactNativeWebView.postMessage(String(measured));
-    }
-  }
-
-  for (var i = 0; i < blocks.length; i++) {
-    var block = blocks[i];
-    if (block.type === "display") {
-      html += '<div class="q-display">' + renderMath(block.v, true) + "</div>";
-      continue;
-    }
-    if (block.type === "heading") {
-      var level = Math.min(Math.max(block.level || 3, 1), 6);
-      html += '<h' + level + ' class="q-heading q-heading-' + level + '">' + escapeText(block.v) + "</h" + level + ">";
-      continue;
-    }
-    html += '<p class="q-para">';
-    for (var j = 0; j < block.parts.length; j++) {
-      var part = block.parts[j];
-      html += part.t === "text"
-        ? escapeText(part.v)
-        : '<span class="inline-math">' + renderMath(part.v, false) + "</span>";
-    }
-    html += "</p>";
-  }
-
-  root.innerHTML = html;
-  postHeight();
-  requestAnimationFrame(postHeight);
-</script>
-</body>
-</html>`
+  const prepared = normalizeQuestionContentForRender(text)
+  return buildMarkdownHtml(prepared, "default", {
+    accent: colors.heading,
+    accentSoft: colors.codeBg,
+    text: colors.text,
+    textSecondary: colors.textSecondary,
+    heading: colors.heading,
+    border: options?.theme?.isDark ? "rgba(255,255,255,0.12)" : "rgba(226, 232, 240, 0.95)",
+    isDark: options?.theme?.isDark,
+  }, { disableSelection: options?.disableSelection })
 }
 
 export type McqReportOptionHtmlItem = {
@@ -860,7 +844,7 @@ export function buildMcqReportOptionsHtml(
   const colors = resolveQuestionHtmlTheme(options?.theme)
   const rows = items.map((item) => ({
     letter: item.letter,
-    blocks: buildQuestionBlocks(item.text),
+    markdown: normalizeQuestionContentForRender(item.text),
     badge: item.badge ?? "",
     bg: item.bg,
     border: item.border,
@@ -875,6 +859,7 @@ export function buildMcqReportOptionsHtml(
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+<script src="https://cdn.jsdelivr.net/npm/marked@15.0.7/marked.min.js"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css"/>
 <style>${noSelectCss(options?.disableSelection)}
   body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: ${bodyFontSize}; line-height: ${bodyLineHeight}; color: ${colors.text}; background: transparent; }
@@ -882,13 +867,16 @@ export function buildMcqReportOptionsHtml(
   .opt-row { display: flex; align-items: flex-start; gap: 10px; padding: ${compact ? "8px 10px" : "10px 12px"}; border-radius: 12px; border: 1px solid transparent; color: ${colors.text}; }
   .opt-letter { font-weight: 700; min-width: 1.4em; color: inherit; flex-shrink: 0; padding-top: 1px; }
   .opt-body { flex: 1; min-width: 0; }
+  .opt-body > :first-child { margin-top: 0; }
+  .opt-body > :last-child { margin-bottom: 0; }
+  .opt-body p, .opt-body ul, .opt-body ol { margin: 0 0 8px; }
+  .opt-body ul, .opt-body ol { padding-left: 20px; }
+  .opt-body li { margin: 0 0 4px; }
   .opt-badge { font-size: 11px; font-weight: 600; margin-top: 6px; color: inherit; opacity: 0.82; }
   .opt-row .katex { color: inherit; }
   .opt-row strong, .opt-row em { color: inherit; }
-  p.q-para { margin: 0 0 8px; word-wrap: break-word; overflow-wrap: anywhere; }
-  p.q-para:last-child { margin-bottom: 0; }
-  p.q-para .inline-math { display: inline-block; margin: 0 0.36em; vertical-align: -0.08em; }
-  .q-display { margin: 8px 0 10px; overflow-x: auto; text-align: center; }
+  .md-display { margin: 8px 0 10px; overflow-x: auto; text-align: center; }
+  .md-inline { display: inline-block; margin: 0 0.08em; vertical-align: -0.08em; }
   .math-fallback { font-family: Menlo, monospace; font-size: 13px; color: inherit; opacity: 0.85; }
 </style>
 </head>
@@ -900,13 +888,10 @@ export function buildMcqReportOptionsHtml(
   var root = document.getElementById("content");
 
   function escapeText(text) {
-    return text
+    return String(text || "")
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/\\*\\*([^*]+)\\*\\*/g, "<strong>$1</strong>")
-      .replace(/(^|[^*])\\*([^*\\n]+)\\*(?![*])/g, "$1<em>$2</em>")
-      .replace(/\\n/g, "<br/>");
+      .replace(/>/g, "&gt;");
   }
 
   function renderMath(expr, display) {
@@ -917,28 +902,42 @@ export function buildMcqReportOptionsHtml(
     }
   }
 
-  function renderBlocks(blocks) {
-    var html = "";
-    for (var i = 0; i < blocks.length; i++) {
-      var block = blocks[i];
-      if (block.type === "display") {
-        html += '<div class="q-display">' + renderMath(block.v, true) + "</div>";
-        continue;
-      }
-      if (block.type === "heading") {
-        html += "<p class=\\"q-para\\"><strong>" + escapeText(block.v) + "</strong></p>";
-        continue;
-      }
-      html += '<p class="q-para">';
-      for (var j = 0; j < block.parts.length; j++) {
-        var part = block.parts[j];
-        html += part.t === "text"
-          ? escapeText(part.v)
-          : '<span class="inline-math">' + renderMath(part.v, false) + "</span>";
-      }
-      html += "</p>";
-    }
-    return html;
+  function applyInlineMath(html) {
+    return html.replace(/(?<!\\\\)\\$([^$\\n]+?)\\$(?!\\$)/g, function(_, expr) {
+      return '<span class="md-inline">' + renderMath(expr.trim(), false) + "</span>";
+    });
+  }
+
+  function renderMarkdown(source) {
+    var mathStore = [];
+    var out = source || "";
+    out = out.replace(/\\\\\\[([\\s\\S]+?)\\\\\\]/g, function(_, expr) {
+      var id = mathStore.length;
+      mathStore.push(renderMath(expr.trim(), true));
+      return "\\n\\nMATHBLOCK_" + id + "_\\n\\n";
+    });
+    out = out.replace(/\\\\\\(([\\s\\S]+?)\\\\\\)/g, function(_, expr) {
+      var id = mathStore.length;
+      mathStore.push(renderMath(expr.trim(), false));
+      return "MATHINLINE_" + id + "_";
+    });
+    out = out.replace(/\\$\\$([\\s\\S]+?)\\$\\$/g, function(_, expr) {
+      var id = mathStore.length;
+      mathStore.push(renderMath(expr.trim(), true));
+      return "\\n\\nMATHBLOCK_" + id + "_\\n\\n";
+    });
+    var html = (typeof marked !== "undefined" && marked.parse)
+      ? (marked.setOptions({ gfm: true, breaks: true }), marked.parse(out))
+      : escapeText(out);
+    html = html.replace(/MATHBLOCK_(\\d+)_/g, function(_, id) {
+      var rendered = mathStore[Number(id)];
+      return rendered ? '<div class="md-display">' + rendered + "</div>" : "";
+    });
+    html = html.replace(/MATHINLINE_(\\d+)_/g, function(_, id) {
+      var rendered = mathStore[Number(id)];
+      return rendered ? '<span class="md-inline">' + rendered + "</span>" : "";
+    });
+    return applyInlineMath(html);
   }
 
   function postHeight() {
@@ -952,8 +951,8 @@ export function buildMcqReportOptionsHtml(
   for (var r = 0; r < rows.length; r++) {
     var row = rows[r];
     html += '<div class="opt-row" style="background:' + row.bg + ";border-color:" + row.border + ";color:" + row.fg + '">';
-    html += '<span class="opt-letter">' + row.letter + ".</span>";
-    html += '<div class="opt-body">' + renderBlocks(row.blocks);
+    html += '<span class="opt-letter">' + escapeText(row.letter) + ".</span>";
+    html += '<div class="opt-body">' + renderMarkdown(row.markdown);
     if (row.badge) {
       html += '<div class="opt-badge">' + escapeText(row.badge) + "</div>";
     }

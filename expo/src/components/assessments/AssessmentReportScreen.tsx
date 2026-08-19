@@ -13,8 +13,7 @@ import {
 } from "../../lib/assessment-results-api"
 import { downloadAssessmentReportPdf } from "../../lib/assessment-report-pdf"
 import { reportStatusMeta, type ReportQuestionStatus } from "../../lib/assessment-report-theme"
-import { stripHtml } from "../../lib/practice-session"
-import { needsQuestionRichRender, questionCardPreviewText } from "../../lib/classroom-submission"
+import { QuestionContentWebView } from "../rewards/QuestionContent"
 import { ApiError } from "../../lib/student-api"
 import type { StudentSession } from "../../lib/session"
 import { hexToRgba } from "../../constants/app-themes"
@@ -67,14 +66,7 @@ const QuestionCard = memo(function QuestionCard({ q, index }: { q: AssessmentRes
   const meta = reportStatusMeta(status, tokens)
   const maxPts = Number(q.max_points ?? q.points ?? 1)
   const earned = Number(q.points_earned ?? 0)
-  const richPrompt = needsQuestionRichRender(q.question_text ?? "")
-  const promptPreview = useMemo(
-    () =>
-      richPrompt
-        ? questionCardPreviewText(q.question_text ?? "")
-        : stripHtml(q.question_text ?? "Question"),
-    [q.question_text, richPrompt],
-  )
+  const promptText = (q.question_text ?? "").trim()
 
   const toggle = () => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut)
@@ -92,9 +84,15 @@ const QuestionCard = memo(function QuestionCard({ q, index }: { q: AssessmentRes
         </View>
         <View style={styles.questionHead}>
           {!expanded ? (
-            <Text style={[styles.questionPrompt, { color: tokens.text }]} numberOfLines={2}>
-              {promptPreview || `Question ${index + 1}`}
-            </Text>
+            promptText ? (
+              <View style={styles.promptPreview}>
+                <QuestionContentWebView text={promptText} embedded compact />
+              </View>
+            ) : (
+              <Text style={[styles.questionPrompt, { color: tokens.text }]} numberOfLines={2}>
+                {`Question ${index + 1}`}
+              </Text>
+            )
           ) : null}
           <View style={styles.questionMetaRow}>
             <View style={[styles.chip, { backgroundColor: meta.bg }]}>
@@ -673,6 +671,7 @@ const styles = StyleSheet.create({
   },
   questionIndexText: { fontSize: 12, fontWeight: "600" },
   questionHead: { flex: 1, gap: 6, minWidth: 0 },
+  promptPreview: { maxHeight: 72, overflow: "hidden" },
   questionPrompt: { fontSize: 14, fontWeight: "700", lineHeight: 20 },
   questionMetaRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 6 },
   chip: {

@@ -34,9 +34,11 @@
   "submit": {
     "production": {
       "ios": {
-        "appleId": "REPLACE_WITH_APPLE_ID",
-        "ascAppId": "REPLACE_WITH_ASC_APP_ID",
-        "appleTeamId": "REPLACE_WITH_TEAM_ID"
+        "appleId": "danieldoe33@icloud.com",
+        "ascAppId": "6803146932",
+        "appleTeamId": "5S94RUARQ4",
+        "language": "en-US",
+        "companyName": "CourseCollab"
       }
     }
   }

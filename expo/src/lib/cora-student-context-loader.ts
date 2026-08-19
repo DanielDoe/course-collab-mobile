@@ -233,7 +233,6 @@ export async function loadCoraStudentContext(session: StudentSession): Promise<S
     ...baseContext,
     account: baseContext.account ?? {
       studentDbId: Number(session.databaseId),
-      fullName: session.name,
       section: session.section,
       courseCode: session.courseCode,
     },

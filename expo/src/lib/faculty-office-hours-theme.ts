@@ -49,15 +49,26 @@ export function facultyOfficeHoursStudentThumb(seed: string | number): SolidList
 export function facultyOfficeHoursRequestStatus(status: string): FacultyOfficeHoursStatusMeta {
   const normalized = status.toLowerCase()
   if (normalized === "pending" || normalized === "requested") {
-    return { label: status.replace(/_/g, " "), color: FACULTY_OFFICE_HOURS_COLOR.pending, icon: "time-outline" }
+    return { label: "Pending", color: FACULTY_OFFICE_HOURS_COLOR.pending, icon: "time-outline" }
   }
-  if (normalized === "approved" || normalized === "scheduled" || normalized === "completed") {
-    return { label: status.replace(/_/g, " "), color: FACULTY_OFFICE_HOURS_COLOR.approved, icon: "checkmark-circle" }
+  if (normalized === "approved" || normalized === "scheduled") {
+    return { label: "Approved", color: FACULTY_OFFICE_HOURS_COLOR.approved, icon: "checkmark-circle" }
   }
-  if (normalized === "declined" || normalized === "rejected" || normalized === "cancelled") {
-    return { label: status.replace(/_/g, " "), color: FACULTY_OFFICE_HOURS_COLOR.declined, icon: "close-circle-outline" }
+  if (normalized === "completed") {
+    return { label: "Completed", color: FACULTY_OFFICE_HOURS_COLOR.approved, icon: "checkmark-circle" }
+  }
+  if (normalized === "declined" || normalized === "rejected") {
+    return { label: "Declined", color: FACULTY_OFFICE_HOURS_COLOR.declined, icon: "close-circle-outline" }
+  }
+  if (normalized === "cancelled") {
+    return { label: "Cancelled", color: FACULTY_OFFICE_HOURS_COLOR.declined, icon: "close-circle-outline" }
   }
   return { label: status.replace(/_/g, " "), color: FACULTY_OFFICE_HOURS_COLOR.link, icon: "ellipse" }
+}
+
+export function isPendingOfficeHourStatus(status: string): boolean {
+  const normalized = status.toLowerCase()
+  return normalized === "pending" || normalized === "requested"
 }
 
 export function facultyOfficeHoursPriorityColor(priority?: string | null): string {

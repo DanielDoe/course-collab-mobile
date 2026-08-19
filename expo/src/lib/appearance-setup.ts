@@ -92,10 +92,10 @@ export async function persistAppearanceSetupComplete(session: StudentSession): P
   }
 }
 
-export async function resolveStudentPostLoginRoute(session: StudentSession): Promise<
-  "/appearance-setup" | "/dashboard"
-> {
-  const completed = await syncAppearanceSetupFromServer(session)
-  if (!completed) return "/appearance-setup"
-  return "/dashboard"
+/** @deprecated Use resolvePostLoginRoute from onboarding.ts */
+export async function resolveStudentPostLoginRoute(
+  session: StudentSession,
+): Promise<string> {
+  const { resolvePostLoginRoute } = await import("./onboarding")
+  return resolvePostLoginRoute(session)
 }

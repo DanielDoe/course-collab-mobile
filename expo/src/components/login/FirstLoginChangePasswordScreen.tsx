@@ -9,8 +9,7 @@ import {
   clearPendingLoginPassword,
   peekPendingLoginPassword,
 } from "../../lib/pending-login-password"
-import { resolveFacultyPostLoginRoute } from "../../lib/faculty-post-login"
-import { resolveStudentPostLoginRoute } from "../../lib/appearance-setup"
+import { resolvePostLoginRoute } from "../../lib/onboarding"
 import { studentApi } from "../../lib/student-api"
 import { navigatePostSignIn, replaceAuthRoute } from "../../lib/navigation-reset"
 import type { FacultySession, StudentSession } from "../../lib/session"
@@ -50,13 +49,7 @@ export function FirstLoginChangePasswordScreen() {
     const requiresPasswordChange = "requiresPasswordChange" in session && session.requiresPasswordChange === true
     if (!requiresPasswordChange) {
       void (async () => {
-        if (session.portal === "faculty") {
-          navigatePostSignIn(router, await resolveFacultyPostLoginRoute(session))
-        } else if (session.portal === "student") {
-          navigatePostSignIn(router, await resolveStudentPostLoginRoute(session))
-        } else {
-          navigatePostSignIn(router, "/dashboard")
-        }
+        navigatePostSignIn(router, await resolvePostLoginRoute(session))
       })()
       return
     }
@@ -85,11 +78,7 @@ export function FirstLoginChangePasswordScreen() {
 
   async function continueAfterChange(nextSession: FacultySession | StudentSession) {
     clearPendingLoginPassword()
-    if (nextSession.portal === "faculty") {
-      navigatePostSignIn(router, await resolveFacultyPostLoginRoute(nextSession))
-      return
-    }
-    navigatePostSignIn(router, await resolveStudentPostLoginRoute(nextSession))
+    navigatePostSignIn(router, await resolvePostLoginRoute(nextSession))
   }
 
   async function handleSubmit() {

@@ -1,5 +1,5 @@
 import { useMemo } from "react"
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native"
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { LinearGradient } from "expo-linear-gradient"
 import type { ClassroomPointsSummaryRow } from "../../lib/instructor-api"
@@ -25,17 +25,19 @@ function PodiumBlock({
   name,
   points,
   styles,
+  onPress,
 }: {
   rank: PodiumRank
   name: string
   points: string
   styles: ReturnType<typeof createLeaderboardStyles>
+  onPress?: () => void
 }) {
   const tokens = useAppThemeTokens()
   const config = podiumRankStyle(rank, tokens.isDark)
   const barHeight = PODIUM_BAR_HEIGHT[rank]
   return (
-    <View style={styles.podiumCol}>
+    <Pressable style={styles.podiumCol} onPress={onPress} accessibilityRole="button">
       {rank === 1 ? (
         <View style={styles.crownWrap}>
           <Ionicons name="trophy" size={18} color={config.crown} />
@@ -51,7 +53,7 @@ function PodiumBlock({
       <View style={[styles.podiumBar, { height: barHeight, backgroundColor: config.barWash }]}>
         <LinearGradient colors={config.barGradient} style={styles.podiumBarFill} />
       </View>
-    </View>
+    </Pressable>
   )
 }
 
@@ -59,10 +61,12 @@ export function FacultyClassroomPointsLeaderboard({
   loading,
   rows,
   search,
+  onSelectStudent,
 }: {
   loading: boolean
   rows: ClassroomPointsSummaryRow[]
   search?: string
+  onSelectStudent?: (row: ClassroomPointsSummaryRow) => void
 }) {
   const tokens = useAppThemeTokens()
   const native = useThemedNative()
@@ -128,6 +132,7 @@ export function FacultyClassroomPointsLeaderboard({
               name={podium.second.full_name}
               points={formatClassroomPoints(podium.second.total_points)}
               styles={styles}
+              onPress={() => onSelectStudent?.(podium.second!)}
             />
           ) : (
             <View style={styles.podiumSpacer} />
@@ -137,6 +142,7 @@ export function FacultyClassroomPointsLeaderboard({
             name={podium.first.full_name}
             points={formatClassroomPoints(podium.first.total_points)}
             styles={styles}
+            onPress={() => onSelectStudent?.(podium.first!)}
           />
           {podium.third ? (
             <PodiumBlock
@@ -144,6 +150,7 @@ export function FacultyClassroomPointsLeaderboard({
               name={podium.third.full_name}
               points={formatClassroomPoints(podium.third.total_points)}
               styles={styles}
+              onPress={() => onSelectStudent?.(podium.third!)}
             />
           ) : (
             <View style={styles.podiumSpacer} />
@@ -180,6 +187,7 @@ export function FacultyClassroomPointsLeaderboard({
                       : FACULTY_CLASSROOM_POINTS_COLOR.link,
                 icon: rank === 1 ? "trophy-outline" : rank <= 3 ? "medal-outline" : "ellipse",
               }}
+              onPress={onSelectStudent ? () => onSelectStudent(row) : undefined}
             />
           )
         })}
@@ -246,6 +254,6 @@ function createLeaderboardStyles(
       overflow: "hidden",
     },
     podiumBarFill: { flex: 1, width: "100%" },
-    list: { gap: 10 },
+    list: { gap: 12 },
   })
 }

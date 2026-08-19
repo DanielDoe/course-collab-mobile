@@ -46,9 +46,14 @@
     "audit:appstore": "node scripts/audit-appstore.mjs",
     "release:audit": "node scripts/release-audit.mjs",
     "release:audit:mobile": "node scripts/release-audit.mjs",
+    "prepare:appstore": "node scripts/prepare-appstore-submit.mjs",
+    "build:ios": "eas build --platform ios --profile production --non-interactive",
+    "build:ios:setup": "eas build --platform ios --profile production",
+    "build:ios:preview": "eas build --platform ios --profile preview --non-interactive",
+    "submit:ios": "eas submit --platform ios --profile production --latest --non-interactive",
     "eas-build-pre-install": "node scripts/audit-production.mjs && node scripts/audit-ios.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "node --test scripts/audit-production.test.mjs && npx tsx --test src/content/legal/fallback.test.ts src/lib/cora/models/models.test.ts src/lib/faculty-academic-term-utils.test.ts src/lib/faculty-announcement-utils.test.ts src/lib/faculty-summer-camp-utils.test.ts src/lib/syllabus/section-prepare.test.ts src/lib/trusted-origins.test.ts src/lib/session-expiry.test.ts src/lib/grade-trend-logic.test.ts src/lib/student-session-proof.test.ts src/lib/student-dashboard-auth.contract.test.ts src/lib/student-dashboard-build.test.ts src/lib/student-lecture-auth.contract.test.ts src/lib/assessment-quiz/assessment-quiz-auth.contract.test.ts src/lib/assessment-issues-auth.contract.test.ts src/lib/assessment-results-auth.contract.test.ts src/lib/rewards-auth.contract.test.ts src/lib/trade-center-auth.contract.test.ts src/lib/calendar-auth.contract.test.ts src/lib/grades-api-weights.test.ts src/lib/assessment-history-map.test.ts src/lib/quiz-history-auth.contract.test.ts src/lib/cora/confirm-action.contract.test.ts src/lib/codebench-progress.test.ts src/lib/codebench-auth.contract.test.ts src/lib/schedule-adjustment-auth.contract.test.ts src/lib/recommendations-auth.contract.test.ts src/components/assessments/assessment-list-logic.test.ts src/components/assessments/assessment-list-logic.contract.test.ts src/lib/cora-student-context-loader.contract.test.ts src/components/assessments/assessment-detail-logic.test.ts src/lib/office-hours-auth.contract.test.ts"
+    "test": "node --test scripts/audit-production.test.mjs && npx tsx --test src/content/legal/fallback.test.ts src/lib/cora/models/models.test.ts src/lib/faculty-academic-term-utils.test.ts src/lib/faculty-announcement-utils.test.ts src/lib/faculty-summer-camp-utils.test.ts src/lib/syllabus/section-prepare.test.ts src/lib/trusted-origins.test.ts src/lib/session-expiry.test.ts src/lib/grade-trend-logic.test.ts src/lib/student-session-proof.test.ts src/lib/student-dashboard-auth.contract.test.ts src/lib/student-dashboard-build.test.ts src/lib/student-lecture-auth.contract.test.ts src/lib/assessment-quiz/assessment-quiz-auth.contract.test.ts src/lib/assessment-issues-auth.contract.test.ts src/lib/assessment-results-auth.contract.test.ts src/lib/rewards-auth.contract.test.ts src/lib/trade-center-auth.contract.test.ts src/lib/calendar-auth.contract.test.ts src/lib/grades-api-weights.test.ts src/lib/assessment-history-map.test.ts src/lib/quiz-history-auth.contract.test.ts src/lib/cora/confirm-action.contract.test.ts src/lib/codebench-progress.test.ts src/lib/codebench-auth.contract.test.ts src/lib/schedule-adjustment-auth.contract.test.ts src/lib/course-exchange-auth.contract.test.ts src/lib/recommendations-auth.contract.test.ts src/components/assessments/assessment-list-logic.test.ts src/components/assessments/assessment-list-logic.contract.test.ts src/lib/cora-student-context-loader.contract.test.ts src/lib/cora-privacy-minimization.test.ts src/lib/cora-learning-memory.test.ts src/components/assessments/assessment-detail-logic.test.ts src/lib/office-hours-auth.contract.test.ts"
   },
   "dependencies": {
     "@expo/ui": "^0.2.0-beta.9",
@@ -96,6 +101,7 @@
   },
   "devDependencies": {
     "@types/react": "~19.1.10",
+    "eas-cli": "^16.28.0",
     "typescript": "~5.9.2"
   }
 }

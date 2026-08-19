@@ -353,7 +353,7 @@ function StepInteraction({
   if (interaction.type === "reflect") {
     return (
       <View style={[styles.interactionCard, { borderColor, backgroundColor: fillColor }]}>
-        <Text style={[type.bodyEmphasis, { color: nativeLabel }]}>{interaction.prompt}</Text>
+        <QuestionContentWebView text={interaction.prompt} embedded />
         <TextInput
           value={reflection}
           onChangeText={onReflectionChange}
@@ -371,7 +371,7 @@ function StepInteraction({
     const selectedOptionId = checkpointSelections[checkpoint.id]
     return (
       <View style={[styles.interactionCard, { borderColor, backgroundColor: fillColor }]}>
-        <Text style={[type.bodyEmphasis, { color: nativeLabel }]}>{checkpoint.prompt}</Text>
+        <QuestionContentWebView text={checkpoint.prompt} embedded />
         <View style={styles.checkpointStack}>
           {checkpoint.options.map((option) => {
             const isSelected = selectedOptionId === option.id
@@ -388,16 +388,16 @@ function StepInteraction({
                 ]}
                 onPress={() => onCheckpoint(checkpoint.id, option.id)}
               >
-                <Text style={[type.body, { color: nativeLabel }]}>{option.label}</Text>
+                <QuestionContentWebView text={option.label} embedded compact />
                 {isSelected && option.feedback ? (
-                  <Text style={[type.caption, { color: secondaryLabel }]}>{option.feedback}</Text>
+                  <QuestionContentWebView text={option.feedback} embedded compact />
                 ) : null}
               </Pressable>
             )
           })}
         </View>
         {checkpoint.misconception ? (
-          <Text style={[type.caption, { color: secondaryLabel }]}>{checkpoint.misconception}</Text>
+          <QuestionContentWebView text={checkpoint.misconception} embedded compact />
         ) : null}
       </View>
     )
@@ -413,7 +413,7 @@ function StepInteraction({
       ]
     return (
       <View style={[styles.interactionCard, { borderColor, backgroundColor: fillColor }]}>
-        <Text style={[type.bodyEmphasis, { color: nativeLabel }]}>{interaction.prompt}</Text>
+        <QuestionContentWebView text={interaction.prompt} embedded />
         <View style={styles.confidenceRow}>
           {options.map((option, index) => {
             const value = index + 1

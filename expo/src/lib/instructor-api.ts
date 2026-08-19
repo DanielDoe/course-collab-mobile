@@ -17,6 +17,7 @@ import { assertProductionHttpsUrl, createApiAbortSignal, noteApiFailure } from "
 import { mfaTrustRequestHeadersForInstructor } from "./mfa-device-trust"
 import { getStoredSession } from "./session"
 import { mergeCookieHeaders, persistHttpCookiesFromResponse, studentHttpCookieHeader } from "./student-http-cookies"
+import { assessmentResultSectionHints, evaluationRowBelongsToCourse } from "./course-sections"
 import { headersHaveStudentSessionProof, STUDENT_REFRESH_HEADER } from "./student-session-proof"
 
 export type InstructorCourse = {
@@ -30,6 +31,7 @@ export type InstructorCourse = {
   term_label?: string | null
   academic_term_id?: number | null
   description?: string | null
+  exchange_provenance?: Record<string, unknown> | null
 }
 
 export type InstructorProfile = {
@@ -1120,9 +1122,24 @@ export type InstructorAccountRequest = {
   status: string
   created_at: string
   request_kind?: string
+  account_type?: string | null
   guest_purpose?: string | null
   guest_purpose_detail?: string | null
   organization?: string | null
+  school_affiliation?: string | null
+  university_id?: number | null
+  course_id?: number | null
+  session_id?: number | null
+  camp_id?: number | null
+  camp_name?: string | null
+  sponsoring_faculty_id?: number | null
+  invitation_id?: number | null
+  email_verified_at?: string | null
+  approval_source?: string | null
+  metadata?: Record<string, unknown> | null
+  approved_at?: string | null
+  rejected_at?: string | null
+  rejection_reason?: string | null
 }
 
 export type RecommendationGuestAccountRequest = {
@@ -1483,14 +1500,14 @@ function refreshTokenFromCookieHeader(cookie: string | undefined): string | unde
 /** Same session-proof headers as instructorRequest, without fetching. */
 export async function instructorAuthenticatedHeaders(
   scope: { instructorId: number; courseId?: number },
-  init?: { requireAuthHeader?: boolean; headers?: Record<string, string> },
+  init?: { requireAuthHeader?: boolean; omitCourseId?: boolean; headers?: Record<string, string> },
 ): Promise<Record<string, string>> {
   const headers: Record<string, string> = {
     Accept: "application/json",
     "Content-Type": "application/json",
     "x-instructor-id": String(scope.instructorId),
     ...(init?.headers)}
-  if (scope.courseId != null) {
+  if (scope.courseId != null && !init?.omitCourseId) {
     headers["x-course-id"] = String(scope.courseId)
   }
   if (init?.requireAuthHeader) {
@@ -1514,16 +1531,17 @@ export async function instructorAuthenticatedHeaders(
 async function instructorRequest<T>(
   path: string,
   scope: Scope,
-  init?: RequestInit & { requireAuthHeader?: boolean },
+  init?: RequestInit & { requireAuthHeader?: boolean; omitCourseId?: boolean },
 ): Promise<T> {
   const url = `${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`
   assertProductionHttpsUrl(url)
   const headers = await instructorAuthenticatedHeaders(scope, {
     requireAuthHeader: init?.requireAuthHeader,
+    omitCourseId: init?.omitCourseId,
     headers: init?.headers as Record<string, string> | undefined,
   })
 
-  const { requireAuthHeader: _, ...fetchInit } = init ?? {}
+  const { requireAuthHeader: _, omitCourseId: __, ...fetchInit } = init ?? {}
   const response = await fetch(url, {
     ...fetchInit,
     credentials: "include",
@@ -1589,6 +1607,104 @@ async function playgroundSessionAction(
     scope,
     { method: "POST", body: JSON.stringify({ action, ...payload }) },
   )
+}
+
+const RESULTS_TYPE_ROUTES = [
+  { api: "quiz", display: "quiz" },
+  { api: "homework", display: "homework" },
+  { api: "midsem", display: "mid_semester" },
+  { api: "final", display: "final" },
+] as const
+
+function mapTypedResults(
+  rows: InstructorAssessmentResult[] | undefined,
+  displayType: string,
+): InstructorAssessmentResult[] {
+  return (rows ?? []).map((row) => ({
+    ...row,
+    quiz_title: row.quiz_title ?? row.assessment_title,
+    assessment_type: row.assessment_type || displayType,
+  }))
+}
+
+/** Production still ANDs quiz.course_id when x-course-id is set; section-only fetch recovers ECE 2202. */
+async function fetchResultsBySectionHint(
+  scope: Scope,
+  section: string,
+): Promise<InstructorAssessmentResult[]> {
+  const q = new URLSearchParams({ showRetakes: "true", section })
+  const batches = await Promise.all(
+    RESULTS_TYPE_ROUTES.map(({ api, display }) =>
+      instructorRequest<{ results?: InstructorAssessmentResult[] }>(
+        `/api/${api}/results?${q}`,
+        scope,
+        { omitCourseId: true },
+      )
+        .then((body) => mapTypedResults(body.results, display))
+        .catch(() => [] as InstructorAssessmentResult[]),
+    ),
+  )
+  return batches.flat()
+}
+
+async function fetchAssessmentResultsForCourse(
+  scope: Scope,
+  params?: {
+    sessionCode?: string
+    assessmentType?: string
+    courseCode?: string | null
+    sessionCodes?: string[]
+    limit?: number
+  },
+): Promise<InstructorAssessmentResult[]> {
+  const q = new URLSearchParams({ showRetakes: "true" })
+  if (params?.sessionCode) q.set("section", params.sessionCode)
+  if (params?.assessmentType) q.set("assessment_type", params.assessmentType)
+  if (params?.limit != null) q.set("limit", String(params.limit))
+
+  const scoped = await instructorRequest<{ results?: InstructorAssessmentResult[] }>(
+    `/api/instructor/results?${q}`,
+    scope,
+  ).then((body) => body.results ?? [])
+  if (scoped.length > 0) return scoped
+
+  let courseCode = params?.courseCode ?? null
+  let sessionCodes = params?.sessionCodes ?? []
+  if (!courseCode || sessionCodes.length === 0) {
+    try {
+      const sessionRes = await instructorRequest<{
+        sessions?: InstructorSession[]
+        course?: InstructorCourse
+      }>("/api/instructor/sessions", scope)
+      courseCode = courseCode || sessionRes.course?.course_code || null
+      if (sessionCodes.length === 0) {
+        sessionCodes = (sessionRes.sessions ?? []).map((row) => row.code).filter(Boolean)
+      }
+    } catch {
+      // Keep whatever hints the caller already provided.
+    }
+  }
+
+  const hints = assessmentResultSectionHints({
+    sessionCode: params?.sessionCode,
+    courseCode,
+    sessionCodes,
+  })
+  if (hints.length === 0) return []
+
+  const seen = new Set<number>()
+  const recovered: InstructorAssessmentResult[] = []
+  for (const hint of hints) {
+    const rows = await fetchResultsBySectionHint(scope, hint)
+    for (const row of rows) {
+      if (!evaluationRowBelongsToCourse(row, courseCode, sessionCodes)) continue
+      if (seen.has(row.attempt_id)) continue
+      seen.add(row.attempt_id)
+      recovered.push(row)
+    }
+    if (recovered.length > 0) break
+  }
+  return recovered
 }
 
 export const instructorApi = {
@@ -1911,11 +2027,12 @@ export const instructorApi = {
 
   getClassroomPoints: (
     scope: Scope,
-    params?: { status?: string; session?: string; limit?: number },
+    params?: { status?: string; session?: string; limit?: number; studentId?: number | string },
   ) => {
     const q = new URLSearchParams()
     if (params?.status) q.set("status", params.status)
     if (params?.session) q.set("session", params.session)
+    if (params?.studentId != null) q.set("studentId", String(params.studentId))
     q.set("limit", String(params?.limit ?? 100))
     const qs = q.toString()
     return instructorRequest<{ points: ClassroomPointRow[]; count?: number }>(
@@ -2336,6 +2453,7 @@ export const instructorApi = {
       school: string
       password: string
       programRole?: "summer_camper" | "summer_student"
+      campId?: number
     },
   ) =>
     instructorRequest<{ success: boolean; autoApproved?: boolean; message?: string }>(
@@ -2350,6 +2468,7 @@ export const instructorApi = {
           school: payload.school,
           password: payload.password,
           programRole: payload.programRole ?? "summer_camper",
+          campId: payload.campId,
         }),
       },
     ),
@@ -3218,18 +3337,14 @@ export const instructorApi = {
 
   getAssessmentResults: (
     scope: Scope,
-    params?: { sessionCode?: string; assessmentType?: string; limit?: number },
-  ) => {
-    const q = new URLSearchParams()
-    if (params?.sessionCode) q.set("sessionCode", params.sessionCode)
-    if (params?.assessmentType) q.set("assessmentType", params.assessmentType)
-    if (params?.limit != null) q.set("limit", String(params.limit))
-    const suffix = q.toString() ? `?${q}` : ""
-    return instructorRequest<{ results: InstructorAssessmentResult[] }>(
-      `/api/instructor/results${suffix}`,
-      scope,
-    ).then((r) => r.results ?? [])
-  },
+    params?: {
+      sessionCode?: string
+      assessmentType?: string
+      courseCode?: string | null
+      sessionCodes?: string[]
+      limit?: number
+    },
+  ) => fetchAssessmentResultsForCourse(scope, params),
 
   getAssessmentResultSummary: (scope: Scope, attemptId: number) =>
     instructorRequest<{ result: InstructorAssessmentResultSummary }>(
@@ -3386,6 +3501,43 @@ export const instructorApi = {
       "/api/instructor/recommendation-guest-account-requests",
       scope,
     ).then((r) => r.requests ?? []),
+
+  createAccessInvitation: (
+    scope: Scope,
+    payload: {
+      allowedAccountType?: "student" | "career_member"
+      scopeType?: "course" | "section" | "program"
+      sessionId?: number
+      campId?: number
+      approvalBehavior?: "auto_approve_verified_invite" | "require_faculty_approval"
+      expiresInHours?: number
+      maxUses?: number
+    },
+  ) =>
+    instructorRequest<{ success: boolean; invitationId: number; token: string }>(
+      "/api/instructor/access-invitations",
+      scope,
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      },
+    ),
+
+  revokeAccessInvitation: (scope: Scope, invitationId: number) =>
+    instructorRequest<{ success: boolean }>(
+      `/api/instructor/access-invitations?id=${invitationId}`,
+      scope,
+      { method: "DELETE" },
+    ),
+
+  validateAccessInvitation: (token: string) =>
+    fetch(`${API_BASE_URL}/api/access/invitations/validate?token=${encodeURIComponent(token)}`, {
+      headers: { Accept: "application/json" },
+    }).then(async (res) => {
+      const body = await res.json()
+      if (!res.ok) throw new Error(body.error ?? "Invalid invitation")
+      return body as { ok: true; invitation: Record<string, unknown> }
+    }),
 
   getRecommendations: (scope: Scope, status?: string) => {
     const q = status ? `?status=${encodeURIComponent(status)}` : ""
@@ -4056,6 +4208,203 @@ export const instructorApi = {
           shouldSavePaymentMethod: options.shouldSavePaymentMethod,
         }),
       },
+    ),
+
+  getCourseExchangeSummary: (scope: Scope) =>
+    instructorRequest<{
+      receivedPending?: number
+      pending?: number
+      sentActive?: number
+      sentActionable?: number
+    }>("/api/instructor/course-exchange/summary", scope, { omitCourseId: true }),
+
+  getCourseExchangeDiscover: (scope: Scope) =>
+    instructorRequest<{ courses: import("./course-exchange-shared").DiscoverableCourse[] }>(
+      "/api/instructor/course-exchange/discover",
+      scope,
+      { omitCourseId: true },
+    ).then((r) => r.courses ?? []),
+
+  getCourseExchangeRequests: (scope: Scope, direction: "received" | "sent") =>
+    instructorRequest<{ requests: import("./course-exchange-shared").ExchangeRequestDetail[] }>(
+      `/api/instructor/course-exchange/requests?direction=${direction}`,
+      scope,
+      { omitCourseId: true },
+    ).then((r) => r.requests ?? []),
+
+  createCourseExchangeRequest: (
+    scope: Scope,
+    payload: {
+      sourceCourseId: number
+      purpose: string
+      requestedModules: import("./course-exchange-shared").CourseExchangeModule[]
+      destinationCourseId: number
+    },
+  ) =>
+    instructorRequest<{
+      request?: import("./course-exchange-shared").ExchangeRequestDetail & {
+        imported?: boolean
+        autoApproved?: boolean
+      }
+      error?: string
+    }>("/api/instructor/course-exchange/requests", scope, {
+      method: "POST",
+      omitCourseId: true,
+      body: JSON.stringify({
+        sourceCourseId: payload.sourceCourseId,
+        purpose: payload.purpose,
+        requestedModules: payload.requestedModules,
+        destinationCourseId: payload.destinationCourseId,
+      }),
+    }),
+
+  approveCourseExchangeRequest: (
+    scope: Scope,
+    requestId: number,
+    approvedModules: import("./course-exchange-shared").CourseExchangeModule[],
+  ) =>
+    instructorRequest<{ imported?: boolean; error?: string }>(
+      `/api/instructor/course-exchange/requests/${requestId}/approve`,
+      scope,
+      {
+        method: "POST",
+        omitCourseId: true,
+        body: JSON.stringify({ approvedModules }),
+      },
+    ),
+
+  rejectCourseExchangeRequest: (scope: Scope, requestId: number, reason?: string) =>
+    instructorRequest<{ error?: string }>(
+      `/api/instructor/course-exchange/requests/${requestId}/reject`,
+      scope,
+      {
+        method: "POST",
+        omitCourseId: true,
+        body: JSON.stringify(reason ? { reason } : {}),
+      },
+    ),
+
+  executeCourseExchangeCopy: (
+    scope: Scope,
+    requestId: number,
+    payload: { destinationCourseId: number; destinationSessionId?: number | null },
+  ) =>
+    instructorRequest<{
+      postCopyChecklist?: string[]
+      attribution?: unknown
+      cloneSummary?: Record<string, unknown> | null
+      error?: string
+    }>(`/api/instructor/course-exchange/requests/${requestId}/execute-copy`, scope, {
+      method: "POST",
+      omitCourseId: true,
+      body: JSON.stringify(payload),
+    }),
+
+  supplementCourseExchangeRequest: (
+    scope: Scope,
+    requestId: number,
+    modules: import("./course-exchange-shared").CourseExchangeModule[],
+  ) =>
+    instructorRequest<{
+      needsApproval?: boolean
+      request?: import("./course-exchange-shared").ExchangeRequestDetail
+      error?: string
+    }>(`/api/instructor/course-exchange/requests/${requestId}/supplement`, scope, {
+      method: "POST",
+      omitCourseId: true,
+      body: JSON.stringify({ modules }),
+    }),
+
+  getCourseExchangeSupplementOptions: (scope: Scope, requestId: number) =>
+    instructorRequest<import("./course-exchange-shared").ExchangeSupplementOptions>(
+      `/api/instructor/course-exchange/requests/${requestId}/supplement-options`,
+      scope,
+      { omitCourseId: true },
+    ),
+
+  getCourseExchangeTimeline: (scope: Scope, requestId: number) =>
+    instructorRequest<{ timeline: import("./course-exchange-shared").ExchangeTimelineEntry[] }>(
+      `/api/instructor/course-exchange/requests/${requestId}/timeline`,
+      scope,
+      { omitCourseId: true },
+    ).then((r) => r.timeline ?? []),
+
+  getCourseExchangeSharedWithMe: (scope: Scope) =>
+    instructorRequest<{ copies: import("./course-exchange-shared").ExchangeCopyRow[] }>(
+      "/api/instructor/course-exchange/shared-with-me",
+      scope,
+      { omitCourseId: true },
+    ).then((r) => r.copies ?? []),
+
+  getCourseExchangeMyShared: (scope: Scope) =>
+    instructorRequest<{ copies: import("./course-exchange-shared").ExchangeCopyRow[] }>(
+      "/api/instructor/course-exchange/my-shared",
+      scope,
+      { omitCourseId: true },
+    ).then((r) => r.copies ?? []),
+
+  getCourseExchangeSharingSettings: (scope: Scope) =>
+    instructorRequest<{ courses: import("./course-exchange-shared").MyCourseSharing[] }>(
+      "/api/instructor/course-exchange/sharing-settings",
+      scope,
+      { omitCourseId: true },
+    ).then((r) => r.courses ?? []),
+
+  saveCourseExchangeSharingSettings: (
+    scope: Scope,
+    payload: {
+      courseId: number
+      sharingMode: import("./course-exchange-shared").CourseExchangeSharingMode
+      discoverableTitle?: string | null
+      shareableModules: import("./course-exchange-shared").CourseExchangeModule[]
+      autoApprove: boolean
+    },
+  ) =>
+    instructorRequest<{ error?: string }>("/api/instructor/course-exchange/sharing-settings", scope, {
+      method: "PUT",
+      omitCourseId: true,
+      body: JSON.stringify(payload),
+    }),
+
+  getCourseExchangeAccessLog: (scope: Scope) =>
+    instructorRequest<{ events: import("./course-exchange-shared").AccessLogRow[] }>(
+      "/api/instructor/course-exchange/access-log",
+      scope,
+      { omitCourseId: true },
+    ).then((r) => r.events ?? []),
+
+  getCourseExchangeUpdateCounts: (scope: Scope) =>
+    instructorRequest<{
+      counts: Record<number, { changeCount: number; hasUpdates: boolean }>
+    }>("/api/instructor/course-exchange/copies/update-counts", scope, { omitCourseId: true }),
+
+  getCourseExchangeCopySync: (scope: Scope, copyId: number, force = false) =>
+    instructorRequest<{ diff?: import("./course-exchange-shared").ExchangeSyncDiff }>(
+      `/api/instructor/course-exchange/copies/${copyId}/sync${force ? "?force=1" : ""}`,
+      scope,
+      { omitCourseId: true },
+    ),
+
+  applyCourseExchangeCopySync: (scope: Scope, copyId: number, changeIds: string[]) =>
+    instructorRequest<{ result?: { applied?: number }; error?: string }>(
+      `/api/instructor/course-exchange/copies/${copyId}/sync`,
+      scope,
+      {
+        method: "POST",
+        omitCourseId: true,
+        body: JSON.stringify({ changeIds }),
+      },
+    ),
+
+  getAllInstructorSessions: (scope: Scope) =>
+    instructorRequest<{ sessions: Array<InstructorSession & { course_id?: number }> }>(
+      "/api/instructor/sessions",
+      scope,
+    ).then((r) =>
+      (r.sessions ?? []).map((s) => ({
+        ...s,
+        course_id: Number(s.course_id ?? scope.courseId ?? 0),
+      })),
     ),
 }
 

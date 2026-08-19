@@ -31,9 +31,11 @@ import { FacultyStudentProgressScreen } from "../components/faculty/FacultyStude
 import { FacultyRecommendationsScreen } from "../components/faculty/FacultyRecommendationsScreen"
 import { FacultyResultsScreen } from "../components/faculty/FacultyResultsScreen"
 import { FacultyStudentsScreen } from "../components/faculty/FacultyStudentsScreen"
+import { FacultyAccessRequestsScreen } from "../components/faculty/FacultyAccessRequestsScreen"
 import { FacultySummerCampScreen } from "../components/faculty/FacultySummerCampScreen"
 import { FacultySyllabusScreen } from "../components/faculty/FacultySyllabusScreen"
 import { FacultyTradeCenterScreen } from "../components/faculty/FacultyTradeCenterScreen"
+import { FacultyCourseExchangeScreen } from "../components/faculty/FacultyCourseExchangeScreen"
 import { FacultyCourseSettingsScreen } from "../components/faculty/admin/FacultyCourseSettingsScreen"
 import { FacultyScheduleAdjustmentScreen } from "../components/faculty/admin/FacultyScheduleAdjustmentScreen"
 import { FacultyAssessmentGovernanceScreen } from "../components/faculty/admin/FacultyAssessmentGovernanceScreen"
@@ -101,6 +103,7 @@ export const FACULTY_MODULE_RENDERERS: Record<string, ModuleRenderer> = {
   syllabus: FacultySyllabusScreen,
   lectures: FacultyLecturesScreen,
   "course-notes": FacultyCourseNotesScreen,
+  "course-exchange": FacultyCourseExchangeScreen,
   flashcards: FacultyFlashcardsScreen,
   practice: FacultyPracticeScreen,
   playground: FacultyPlaygroundScreen,
@@ -125,6 +128,7 @@ export const FACULTY_MODULE_RENDERERS: Record<string, ModuleRenderer> = {
   campers: FacultyCampersScreen,
   recommendations: FacultyRecommendationsScreen,
   students: FacultyStudentsScreen,
+  "access-requests": FacultyAccessRequestsScreen,
   "trade-center": FacultyTradeCenterScreen,
   "office-hours": FacultyOfficeHoursScreen,
 

@@ -27,6 +27,7 @@ import {
   FACULTY_NAV_GROUPS,
   FACULTY_PROFILE_SETTINGS_LINK,
   getFacultyNavGroupIdForPath,
+  isFacultyNavItemVisible,
   type FacultyNavGroup,
   type FacultyNavItem} from "../../constants/faculty-nav"
 import { MODERN } from "../../constants/faculty-native-theme"
@@ -185,6 +186,7 @@ export function FacultyDrawerAccordion({ session }: Props) {
     if (item.badgeKey === "pendingPoints") return badges.pendingPoints || null
     if (item.badgeKey === "pendingIssues") return badges.pendingIssues || null
     if (item.badgeKey === "officeHours") return badges.officeHours || null
+    if (item.badgeKey === "courseExchange") return badges.courseExchange || null
     if (item.badgeKey === "notifications") return notificationCount || null
     return null
   }
@@ -281,6 +283,7 @@ export function FacultyDrawerAccordion({ session }: Props) {
                 badgeFor={badgeFor}
                 onToggle={() => toggleGroup(group.id)}
                 onPress={navigate}
+                selectedCourse={selectedCourse}
               />
             ))}
 
@@ -306,17 +309,23 @@ function NavGroupSection({
   pathname,
   badgeFor,
   onToggle,
-  onPress}: {
+  onPress,
+  selectedCourse,
+}: {
   group: FacultyNavGroup
   expanded: boolean
   pathname: string
   badgeFor: (item: FacultyNavItem) => number | null
   onToggle: () => void
   onPress: (item: FacultyNavItem) => void
+  selectedCourse: import("../../lib/instructor-api").InstructorCourse | null
 }) {
   const theme = useDrawerNavTheme()
   const tokens = useAppThemeTokens()
-  const hasActive = group.items.some(
+  const visibleItems = group.items.filter((item) => isFacultyNavItemVisible(item, selectedCourse))
+  if (!visibleItems.length) return null
+
+  const hasActive = visibleItems.some(
     (item) => pathname === item.route || pathname.startsWith(`${item.route}/`),
   )
   const chipEmphasized = expanded || hasActive
@@ -366,7 +375,7 @@ function NavGroupSection({
           <View style={[styles.groupLiveDot, { backgroundColor: theme.primary, shadowColor: theme.primary }]} />
         ) : (
           <View style={[styles.groupCount, { backgroundColor: theme.iconWellBg }]}>
-            <Text style={[styles.groupCountText, { color: theme.secondaryLabel }]}>{group.items.length}</Text>
+            <Text style={[styles.groupCountText, { color: theme.secondaryLabel }]}>{visibleItems.length}</Text>
           </View>
         )}
         <Animated.View style={[styles.groupChevron, { backgroundColor: theme.iconWellBg }, chevronStyle]}>
@@ -378,7 +387,7 @@ function NavGroupSection({
         <Animated.View entering={FadeIn.duration(180)} exiting={FadeOut.duration(120)} style={styles.groupBody}>
           <View style={[styles.groupRail, { backgroundColor: theme.softBorder }]} />
           <View style={styles.groupItems}>
-            {group.items.map((item, index) => (
+            {visibleItems.map((item, index) => (
               <Animated.View key={item.id} entering={FadeIn.delay(index * 35).duration(220)}>
                 <NavRow
                   item={item}

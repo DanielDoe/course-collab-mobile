@@ -23,6 +23,7 @@ import { SHEET_SECTION } from "./faculty-sheet-semantics"
 type Props = {
   visible: boolean
   scope: { instructorId: number; courseId?: number } | null
+  campId?: number | null
   onClose: () => void
   onCreated: () => void
 }
@@ -36,7 +37,7 @@ function generatePassword(): string {
   return out
 }
 
-export function FacultyAddCamperModal({ visible, scope, onClose, onCreated }: Props) {
+export function FacultyAddCamperModal({ visible, scope, campId, onClose, onCreated }: Props) {
   const collabSheetStyles = useCollabSheetStyles()
   const { native, tokens, type } = useModuleTheme()
   const insets = useSafeAreaInsets()
@@ -107,6 +108,7 @@ export function FacultyAddCamperModal({ visible, scope, onClose, onCreated }: Pr
         school: org,
         password: pass,
         programRole,
+        campId: campId ?? undefined,
       })
       AppAlert.alert(
         res.autoApproved ? "Camper approved" : "Camper request submitted",

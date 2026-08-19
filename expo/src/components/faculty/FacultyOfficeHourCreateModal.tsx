@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
-import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { AppAlert } from '../../lib/app-alert'
+import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native"
+import { AppAlert } from "../../lib/app-alert"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { ApiError } from "../../lib/api"
 import { instructorApi, type InstructorStudent } from "../../lib/instructor-api"
@@ -13,12 +13,15 @@ import {
   FacultySheetChrome,
   FacultySheetField,
   FacultySheetNotice,
-  FacultySheetSection
+  FacultySheetSection,
+  FacultySheetSubmitButton,
+  useSheetPlaceholderColor,
 } from "./faculty-collab-sheet-ui"
 import { SHEET_SECTION } from "./faculty-sheet-semantics"
 import { FacultySummerCampDatePicker } from "./FacultySummerCampDatePicker"
 
 type Scope = { instructorId: number; courseId: number }
+type Step = "student" | "details"
 
 const PRIORITIES = [
   { id: "low", label: "Low" },
@@ -36,8 +39,10 @@ type Props = {
 
 export function FacultyOfficeHourCreateModal({ visible, scope, onClose, onCreated }: Props) {
   const collabSheetStyles = useCollabSheetStyles()
+  const sheetPlaceholder = useSheetPlaceholderColor()
   const { native, tokens, type } = useModuleTheme()
   const insets = useSafeAreaInsets()
+  const [step, setStep] = useState<Step>("student")
   const [students, setStudents] = useState<InstructorStudent[]>([])
   const [loadingStudents, setLoadingStudents] = useState(false)
   const [studentSearch, setStudentSearch] = useState("")
@@ -61,6 +66,7 @@ export function FacultyOfficeHourCreateModal({ visible, scope, onClose, onCreate
 
   useEffect(() => {
     if (!visible) {
+      setStep("student")
       setStudentSearch("")
       setSelectedId(null)
       setTopic("")
@@ -74,19 +80,30 @@ export function FacultyOfficeHourCreateModal({ visible, scope, onClose, onCreate
 
   const filtered = useMemo(() => {
     const q = studentSearch.trim().toLowerCase()
-    const list = q
-      ? students.filter((s) =>
-          [s.full_name, s.student_id, s.email, s.section].filter(Boolean).join(" ").toLowerCase().includes(q),
-        )
-      : students
-    return list.slice(0, 30)
+    if (!q) return students
+    return students.filter((s) =>
+      [s.full_name, s.student_id, s.email, s.section].filter(Boolean).join(" ").toLowerCase().includes(q),
+    )
   }, [students, studentSearch])
 
-  const selected = students.find((s) => s.id === selectedId)
+  const selected = students.find((s) => s.id === selectedId) ?? null
+
+  function chooseStudent(student: InstructorStudent) {
+    setSelectedId(student.id)
+    setStudentSearch("")
+    setError("")
+    setStep("details")
+  }
+
+  function changeStudent() {
+    setStep("student")
+    setError("")
+  }
 
   async function submit() {
     if (!scope || !selectedId) {
       setError("Select a student.")
+      setStep("student")
       return
     }
     if (!topic.trim()) {
@@ -102,7 +119,8 @@ export function FacultyOfficeHourCreateModal({ visible, scope, onClose, onCreate
         areaOfConcern: area.trim() || undefined,
         description: description.trim() || undefined,
         priority,
-        preferredDates: preferredDate.trim() ? [preferredDate.trim()] : undefined})
+        preferredDates: preferredDate.trim() ? [preferredDate.trim()] : undefined,
+      })
       AppAlert.alert("Request created", `Office hours request added for ${selected?.full_name ?? "student"}.`)
       onCreated()
       onClose()
@@ -118,38 +136,142 @@ export function FacultyOfficeHourCreateModal({ visible, scope, onClose, onCreate
       <FacultySheetContainer>
         <FacultySheetChrome
           topInset={insets.top}
-          title="New office hours request"
+          title={step === "student" ? "Choose student" : "Request details"}
+          subtitle={step === "details" && selected ? selected.full_name : undefined}
           onClose={onClose}
           accentColor={FACULTY_OFFICE_HOURS_COLOR.link}
         />
 
-        <ScrollView
-          contentContainerStyle={[collabSheetStyles.scroll, { paddingBottom: insets.bottom + 24 }]}
-          keyboardShouldPersistTaps="handled"
-        >
-          <FacultySheetNotice
-            tone="warning"
-            message="Create a request on behalf of a student. They will see it in Course Info → Office Hours."
-          />
-
-          <FacultySheetSection label="Student" tone={SHEET_SECTION.roster}>
-            <TextInput
-              style={collabSheetStyles.fieldInput}
-              value={studentSearch}
-              onChangeText={setStudentSearch}
-              placeholder="Search roster…"
+        {step === "student" ? (
+          <ScrollView
+            contentContainerStyle={[
+              collabSheetStyles.scroll,
+              { paddingTop: 8, gap: 12, paddingBottom: insets.bottom + 24 },
+            ]}
+            keyboardShouldPersistTaps="handled"
+          >
+            <FacultySheetNotice
+              tone="warning"
+              message="Search the roster first. After you pick a student you can add the request details."
             />
-            {loadingStudents ? (
-              <ActivityIndicator color={FACULTY_OFFICE_HOURS_COLOR.link} style={{ marginVertical: 12 }} />
-            ) : (
-              <View style={localStyles.studentList}>
-                {filtered.map((student) => {
-                  const active = student.id === selectedId
+            <FacultySheetSection label="Roster" tone={SHEET_SECTION.roster}>
+              <TextInput
+                style={collabSheetStyles.fieldInput}
+                value={studentSearch}
+                onChangeText={setStudentSearch}
+                placeholder="Search by name or student ID…"
+                placeholderTextColor={sheetPlaceholder}
+                autoCorrect={false}
+                autoFocus
+              />
+              {loadingStudents ? (
+                <ActivityIndicator color={FACULTY_OFFICE_HOURS_COLOR.link} style={{ marginVertical: 16 }} />
+              ) : filtered.length === 0 ? (
+                <Text style={[type.caption, { color: native.secondaryLabel, fontWeight: "600" }]}>
+                  {students.length === 0 ? "No students in this course." : "No matching students."}
+                </Text>
+              ) : (
+                <View style={localStyles.studentList}>
+                  {filtered.map((student) => {
+                    const active = student.id === selectedId
+                    return (
+                      <Pressable
+                        key={student.id}
+                        style={[
+                          localStyles.studentRow,
+                          {
+                            borderColor: active ? FACULTY_OFFICE_HOURS_COLOR.action : native.separator,
+                            backgroundColor: active
+                              ? hexToRgba(FACULTY_OFFICE_HOURS_COLOR.action, tokens.isDark ? 0.18 : 0.1)
+                              : native.fill,
+                          },
+                        ]}
+                        onPress={() => chooseStudent(student)}
+                      >
+                        <Text style={[type.bodyEmphasis, { color: native.label }]}>{student.full_name}</Text>
+                        <Text style={[type.caption, { color: native.secondaryLabel, fontWeight: "600" }]}>
+                          {student.student_id}
+                          {student.section ? ` · ${student.section}` : ""}
+                        </Text>
+                      </Pressable>
+                    )
+                  })}
+                </View>
+              )}
+            </FacultySheetSection>
+          </ScrollView>
+        ) : (
+          <ScrollView
+            contentContainerStyle={[
+              collabSheetStyles.scroll,
+              { paddingTop: 8, gap: 14, paddingBottom: insets.bottom + 24 },
+            ]}
+            keyboardShouldPersistTaps="handled"
+          >
+            {selected ? (
+              <Pressable
+                style={[
+                  localStyles.studentRow,
+                  {
+                    borderColor: FACULTY_OFFICE_HOURS_COLOR.action,
+                    backgroundColor: hexToRgba(FACULTY_OFFICE_HOURS_COLOR.action, tokens.isDark ? 0.18 : 0.1),
+                  },
+                ]}
+                onPress={changeStudent}
+              >
+                <Text style={[type.bodyEmphasis, { color: native.label }]}>{selected.full_name}</Text>
+                <Text style={[type.caption, { color: native.secondaryLabel, fontWeight: "600" }]}>
+                  {[selected.student_id, selected.section].filter(Boolean).join(" · ")}
+                  {" · "}
+                  <Text style={{ color: FACULTY_OFFICE_HOURS_COLOR.link }}>Change student</Text>
+                </Text>
+              </Pressable>
+            ) : null}
+
+            <FacultySheetSection label="Request details" tone={SHEET_SECTION.edit}>
+              <FacultySheetField label="Topic">
+                <TextInput
+                  style={collabSheetStyles.fieldInput}
+                  value={topic}
+                  onChangeText={setTopic}
+                  placeholder="What would they like to discuss?"
+                  placeholderTextColor={sheetPlaceholder}
+                />
+              </FacultySheetField>
+              <FacultySheetField label="Area of concern">
+                <TextInput
+                  style={collabSheetStyles.fieldInput}
+                  value={area}
+                  onChangeText={setArea}
+                  placeholder="Optional"
+                  placeholderTextColor={sheetPlaceholder}
+                />
+              </FacultySheetField>
+              <FacultySheetField label="Description">
+                <TextInput
+                  style={[collabSheetStyles.fieldInput, collabSheetStyles.textArea]}
+                  value={description}
+                  onChangeText={setDescription}
+                  multiline
+                  placeholder="Additional context for you"
+                  placeholderTextColor={sheetPlaceholder}
+                />
+              </FacultySheetField>
+              <FacultySheetField label="Preferred date">
+                <FacultySummerCampDatePicker
+                  value={preferredDate}
+                  onChange={setPreferredDate}
+                  accessibilityLabel="Preferred date"
+                />
+              </FacultySheetField>
+              <View style={localStyles.priorityRow}>
+                {PRIORITIES.map((p) => {
+                  const active = priority === p.id
                   return (
                     <Pressable
-                      key={student.id}
+                      key={p.id}
                       style={[
-                        localStyles.studentRow,
+                        localStyles.priorityChip,
                         {
                           borderColor: active ? FACULTY_OFFICE_HOURS_COLOR.action : native.separator,
                           backgroundColor: active
@@ -157,106 +279,40 @@ export function FacultyOfficeHourCreateModal({ visible, scope, onClose, onCreate
                             : native.fill,
                         },
                       ]}
-                      onPress={() => setSelectedId(student.id)}
+                      onPress={() => setPriority(p.id)}
                     >
-                      <Text style={[type.bodyEmphasis, { color: native.label }]}>{student.full_name}</Text>
-                      <Text style={[type.caption, { color: native.secondaryLabel, fontWeight: "600" }]}>
-                        {student.student_id}
-                        {student.section ? ` · ${student.section}` : ""}
+                      <Text
+                        style={[
+                          type.caption,
+                          { color: native.secondaryLabel, fontWeight: "700" },
+                          active && { color: FACULTY_OFFICE_HOURS_COLOR.action },
+                        ]}
+                      >
+                        {p.label}
                       </Text>
                     </Pressable>
                   )
                 })}
               </View>
-            )}
-          </FacultySheetSection>
+            </FacultySheetSection>
 
-          <FacultySheetSection label="Request details" tone={SHEET_SECTION.edit}>
-            <FacultySheetField label="Topic">
-              <TextInput
-                style={collabSheetStyles.fieldInput}
-                value={topic}
-                onChangeText={setTopic}
-                placeholder="What would they like to discuss?"
-              />
-            </FacultySheetField>
-            <FacultySheetField label="Area of concern">
-              <TextInput
-                style={collabSheetStyles.fieldInput}
-                value={area}
-                onChangeText={setArea}
-                placeholder="Optional"
-              />
-            </FacultySheetField>
-            <FacultySheetField label="Description">
-              <TextInput
-                style={[collabSheetStyles.fieldInput, collabSheetStyles.textArea]}
-                value={description}
-                onChangeText={setDescription}
-                multiline
-                placeholder="Additional context for you"
-              />
-            </FacultySheetField>
-            <FacultySheetField label="Preferred date">
-              <FacultySummerCampDatePicker
-                value={preferredDate}
-                onChange={setPreferredDate}
-                accessibilityLabel="Preferred date"
-              />
-            </FacultySheetField>
-            <View style={localStyles.priorityRow}>
-              {PRIORITIES.map((p) => {
-                const active = priority === p.id
-                return (
-                  <Pressable
-                    key={p.id}
-                    style={[
-                      localStyles.priorityChip,
-                      {
-                        borderColor: active ? FACULTY_OFFICE_HOURS_COLOR.action : native.separator,
-                        backgroundColor: active
-                          ? hexToRgba(FACULTY_OFFICE_HOURS_COLOR.action, tokens.isDark ? 0.18 : 0.1)
-                          : native.fill,
-                      },
-                    ]}
-                    onPress={() => setPriority(p.id)}
-                  >
-                    <Text
-                      style={[
-                        type.caption,
-                        { color: native.secondaryLabel, fontWeight: "700" },
-                        active && { color: FACULTY_OFFICE_HOURS_COLOR.action },
-                      ]}
-                    >
-                      {p.label}
-                    </Text>
-                  </Pressable>
-                )
-              })}
-            </View>
-          </FacultySheetSection>
+            {error ? <Text style={collabSheetStyles.errorText}>{error}</Text> : null}
 
-          {error ? <Text style={collabSheetStyles.errorText}>{error}</Text> : null}
-
-          <Pressable
-            style={[localStyles.submitBtn, { backgroundColor: FACULTY_OFFICE_HOURS_COLOR.action }]}
-            disabled={submitting}
-            onPress={() => void submit()}
-          >
-            {submitting ? (
-              <ActivityIndicator color={FACULTY_OFFICE_HOURS_COLOR.actionInk} />
-            ) : (
-              <Text style={localStyles.submitText}>Create request</Text>
-            )}
-          </Pressable>
-        </ScrollView>
+            <FacultySheetSubmitButton
+              label={submitting ? "Creating…" : "Create request"}
+              onPress={() => void submit()}
+              disabled={submitting}
+              loading={submitting}
+            />
+          </ScrollView>
+        )}
       </FacultySheetContainer>
     </Modal>
   )
 }
 
 const localStyles = StyleSheet.create({
-  studentList: { gap: 8, maxHeight: 200 },
+  studentList: { gap: 8 },
   studentRow: {
     padding: 12,
     borderRadius: 12,
@@ -269,10 +325,4 @@ const localStyles = StyleSheet.create({
     borderRadius: 999,
     borderWidth: StyleSheet.hairlineWidth,
   },
-  submitBtn: {
-    borderRadius: 999,
-    paddingVertical: 14,
-    alignItems: "center",
-  },
-  submitText: { color: "#FFFFFF", fontWeight: "600", fontSize: 16 },
 })

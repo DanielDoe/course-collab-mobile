@@ -11,6 +11,8 @@ describe("schedule adjustment client auth contract", () => {
     const source = readFileSync(join(here, "instructor-schedule-adjustment-api.ts"), "utf8")
     assert.match(source, /instructorAuthenticatedRequest/)
     assert.match(source, /from ["']\.\/instructor-api["']/)
+    assert.match(source, /getAggregate/)
+    assert.match(source, /includeArchived/)
     assert.doesNotMatch(source, /async function instructorRequest/)
     assert.doesNotMatch(source, /"x-instructor-id":\s*String\(scope\.instructorId\)/)
   })

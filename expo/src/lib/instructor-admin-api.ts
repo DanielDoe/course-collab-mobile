@@ -1,5 +1,5 @@
-import { API_BASE_URL } from "../constants"
 import { ApiError } from "./api"
+import { instructorAuthenticatedRequest } from "./instructor-api"
 import type { AssessmentPolicy } from "./assessment-policy-settings"
 import type { AssessmentPrivilegeSource } from "./assessment-governance"
 import type {
@@ -227,81 +227,20 @@ export type CreateCoursePayload = {
   academic_term_id?: number | null
 }
 
-async function instructorRequest<T>(
+function instructorRequest<T>(
   path: string,
   scope: AdminScope,
   init?: RequestInit,
 ): Promise<T> {
-  const url = `${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`
-  const headers: Record<string, string> = {
-    Accept: "application/json",
-    "Content-Type": "application/json",
-    "x-instructor-id": String(scope.instructorId),
-    "x-course-id": String(scope.courseId),
-    ...(init?.headers as Record<string, string> | undefined),
-  }
-
-  const response = await fetch(url, { ...init, headers })
-  let body: unknown = null
-  const text = await response.text()
-  if (text) {
-    try {
-      body = JSON.parse(text)
-    } catch {
-      body = { error: text }
-    }
-  }
-
-  if (!response.ok) {
-    const message =
-      typeof body === "object" &&
-      body !== null &&
-      "error" in body &&
-      typeof (body as { error: unknown }).error === "string"
-        ? (body as { error: string }).error
-        : `Request failed (${response.status})`
-    throw new ApiError(message, response.status, body)
-  }
-
-  return body as T
+  return instructorAuthenticatedRequest<T>(path, scope, init)
 }
 
-async function instructorRequestWithoutCourse<T>(
+function instructorRequestWithoutCourse<T>(
   path: string,
   instructorId: number,
   init?: RequestInit,
 ): Promise<T> {
-  const url = `${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`
-  const headers: Record<string, string> = {
-    Accept: "application/json",
-    "Content-Type": "application/json",
-    "x-instructor-id": String(instructorId),
-    ...(init?.headers as Record<string, string> | undefined),
-  }
-
-  const response = await fetch(url, { ...init, headers })
-  let body: unknown = null
-  const text = await response.text()
-  if (text) {
-    try {
-      body = JSON.parse(text)
-    } catch {
-      body = { error: text }
-    }
-  }
-
-  if (!response.ok) {
-    const message =
-      typeof body === "object" &&
-      body !== null &&
-      "error" in body &&
-      typeof (body as { error: unknown }).error === "string"
-        ? (body as { error: string }).error
-        : `Request failed (${response.status})`
-    throw new ApiError(message, response.status, body)
-  }
-
-  return body as T
+  return instructorAuthenticatedRequest<T>(path, { instructorId }, init)
 }
 
 export const instructorAdminApi = {
@@ -387,11 +326,20 @@ export const instructorAdminApi = {
       scope,
     ).then((response) => response.sessions ?? []),
 
-  getAiTutorSettings: (scope: AdminScope) =>
-    instructorRequest<{ settings: AiTutorSettings }>(
-      "/api/instructor/ai-tutor/settings",
-      scope,
-    ).then((response) => response.settings),
+  getAiTutorSettings: async (scope: AdminScope) => {
+    try {
+      const response = await instructorRequest<{ settings?: AiTutorSettings }>(
+        "/api/instructor/ai-tutor/settings",
+        scope,
+      )
+      return response.settings ?? {}
+    } catch (error) {
+      if (error instanceof ApiError && (error.status === 500 || error.status === 404)) {
+        return {}
+      }
+      throw error
+    }
+  },
 
   saveAiTutorSettings: (scope: AdminScope, settings: AiTutorSettings) =>
     instructorRequest<{ success: boolean; message?: string }>(

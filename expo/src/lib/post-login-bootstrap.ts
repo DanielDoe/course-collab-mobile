@@ -1,6 +1,7 @@
 import { type Announcement } from "./api"
 import { studentApi } from "./student-api"
 import { instructorApi, type InstructorCourse } from "./instructor-api"
+import { courseExchangeDrawerBadgeCount } from "./course-exchange-shared"
 import {
   fetchNotificationCount,
   fetchStudentDashboardBundle,
@@ -89,7 +90,7 @@ async function bootstrapFacultyForCourse(
   courses: InstructorCourse[],
 ) {
   const scope = { instructorId: session.id, courseId: course.id }
-  const [stats, charts, activity, notifications, pendingPoints, issues, officeHours, tier] =
+  const [stats, charts, activity, notifications, pendingPoints, issues, officeHours, exchangeSummary, tier] =
     await Promise.all([
       instructorApi.getDashboardStats(scope),
       instructorApi.getDashboardCharts(scope),
@@ -98,6 +99,7 @@ async function bootstrapFacultyForCourse(
       instructorApi.getPendingClassroomPoints(scope).catch(() => []),
       instructorApi.getIssues(scope, "open").catch(() => []),
       instructorApi.getOfficeHours(scope).catch(() => []),
+      instructorApi.getCourseExchangeSummary(scope).catch(() => ({})),
       fetchEffectiveFacultyMembershipTier(session),
     ])
 
@@ -118,6 +120,7 @@ async function bootstrapFacultyForCourse(
       pendingPoints: pendingPoints.length,
       pendingIssues: issues.length,
       officeHours: pendingOfficeHours,
+      courseExchange: courseExchangeDrawerBadgeCount(exchangeSummary),
     },
   })
 

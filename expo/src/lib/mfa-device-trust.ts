@@ -75,10 +75,10 @@ export function resolveStudentMfaLoginKey(
 }
 
 export function resolveStudentMfaLoginKeys(
-  session: Pick<StudentSession, "universityId" | "id" | "authIdentifier" | "email">,
+  session: Pick<StudentSession, "universityId" | "authIdentifier" | "email"> & { id?: string },
 ): string[] {
   if (session.universityId == null) return []
-  const authId = (session.authIdentifier ?? session.email ?? session.id).trim()
+  const authId = (session.authIdentifier ?? session.email ?? session.id ?? "").trim()
   if (!authId) return []
   return studentMfaAliasKeys(session.universityId, authId, {
     student_id: session.id,
@@ -284,7 +284,7 @@ export async function mfaTrustRequestHeadersForInstructor(
 
 /** Trust cookie for authenticated student API calls — checks all aliased login keys. */
 export async function mfaTrustRequestHeadersForStudent(
-  session: Pick<StudentSession, "universityId" | "id" | "authIdentifier" | "email">,
+  session: Pick<StudentSession, "universityId" | "authIdentifier" | "email"> & { id?: string },
 ): Promise<Record<string, string>> {
   const keys = resolveStudentMfaLoginKeys(session)
   let trust = keys.length > 0 ? await findActiveMfaTrust(keys) : null

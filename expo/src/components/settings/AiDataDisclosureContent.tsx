@@ -29,9 +29,12 @@ export function AiDataDisclosureContent() {
         </Text>
       </View>
 
+      <DisclosureBlock title="Data minimization" body={AI_DATA_DISCLOSURE.dataMinimization} />
+      <DisclosureBlock title="Identity & personalization" body={AI_DATA_DISCLOSURE.identityNote} />
       <DisclosureBlock title="What Cora processes" body={AI_DATA_DISCLOSURE.thirdPartyDescription} />
+      <DisclosureBlock title="Your controls" body={AI_DATA_DISCLOSURE.userControls} />
       <DisclosureBlock title="Conversation storage" body={AI_DATA_DISCLOSURE.conversationStorage} />
-      <DisclosureBlock title="Device preferences" body={AI_DATA_DISCLOSURE.localPreferences} />
+      <DisclosureBlock title="Device vs server" body={AI_DATA_DISCLOSURE.localPreferences} />
       <DisclosureBlock title="Course context" body={AI_DATA_DISCLOSURE.courseContext} />
       <DisclosureBlock title="Membership" body={AI_DATA_DISCLOSURE.studentMembershipNote} />
       <DisclosureBlock title="Accuracy" body={AI_DATA_DISCLOSURE.accuracyNote} />

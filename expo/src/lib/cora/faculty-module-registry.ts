@@ -49,6 +49,7 @@ export type FacultyCoraModuleId =
   | "syllabus"
   | "lectures"
   | "course-notes"
+  | "course-exchange"
   | "flashcards"
   | "practice"
   | "playground"
@@ -209,6 +210,22 @@ export const FACULTY_CORA_MODULE_REGISTRY: Record<FacultyCoraModuleId, FacultyCo
     serviceHint: "instructor course-notes API",
     route: "/module/course-notes",
     denied: ["edit_student_personal_notes"],
+  },
+  "course-exchange": {
+    module: "course-exchange",
+    version: 1,
+    label: "Course Exchange",
+    capabilities: [
+      "courseExchange.discover",
+      "courseExchange.request",
+      "courseExchange.approve",
+      "courseExchange.import",
+      "courseExchange.shareSettings",
+    ],
+    risk: { ...READ, approve: "confirm", configure: "confirm" },
+    serviceHint: "instructor course-exchange API",
+    route: "/module/course-exchange",
+    denied: ["share_student_results"],
   },
   flashcards: {
     module: "flashcards",
@@ -714,7 +731,7 @@ export const FACULTY_CORA_MODULE_REGISTRY: Record<FacultyCoraModuleId, FacultyCo
   "ai-assistant-settings": {
     module: "ai-assistant-settings",
     version: 1,
-    label: "AI Assistant Settings",
+    label: "Cora Assistant Settings",
     capabilities: ["coraPolicy.read", "coraPolicy.update"],
     risk: { ...READ, update: "confirm" },
     serviceHint: "ai-assistant-settings / course Cora policies",

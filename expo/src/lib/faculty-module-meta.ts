@@ -27,6 +27,13 @@ export const FACULTY_MODULE_META: Record<string, FacultyModuleMeta> = {
     summary: "Publish typed course notes for students by topic and section.",
     icon: "reader-outline",
     features: ["All notes", "Topic availability", "Soft delete & restore"]},
+  "course-exchange": {
+    id: "course-exchange",
+    title: "Course Exchange",
+    summary: "Discover, request, import, and share teaching modules across courses.",
+    icon: "repeat-outline",
+    features: ["Discover courses", "Request & approve", "Import copies", "Share settings"],
+  },
   "academic-terms": {
     id: "academic-terms",
     title: "Academic Terms",
@@ -230,8 +237,8 @@ export const FACULTY_MODULE_META: Record<string, FacultyModuleMeta> = {
     features: ["Session defaults", "Topic pools", "Leaderboard rules"]},
   "ai-assistant-settings": {
     id: "ai-assistant-settings",
-    title: "AI Assistant Settings",
-    summary: "Configure AI tutor, grading models, and assistant behavior.",
+    title: "Cora Assistant Settings",
+    summary: "Course policy for student Cora Assistant — access, teaching style, and routing.",
     icon: "hardware-chip-outline",
     features: ["Model selection", "Tutor access", "Safety filters"]},
   "team-project-policies": {
@@ -258,6 +265,13 @@ export const FACULTY_MODULE_META: Record<string, FacultyModuleMeta> = {
     summary: "Course roster, password-reset inbox, and account requests.",
     icon: "people-outline",
     features: ["Roster list", "Add student", "Password resets", "Account requests"],
+  },
+  "access-requests": {
+    id: "access-requests",
+    title: "Access Requests",
+    summary: "Review pending student, Career Member, and summer program access within your authority.",
+    icon: "shield-checkmark-outline",
+    features: ["Students", "Career Members", "Summer Students", "Scoped approval"],
   },
   campers: {
     id: "campers",

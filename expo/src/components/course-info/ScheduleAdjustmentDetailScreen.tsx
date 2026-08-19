@@ -16,6 +16,8 @@ import type { StudentSession } from "../../lib/session"
 import {
   scheduleAdjustmentApi,
   type ScheduleAdjustmentDetail,
+  type SlotHeatmapCell,
+  type TopMeetingWindow,
 } from "../../lib/schedule-adjustment-api"
 import {
   formatPollColumnLabel,
@@ -25,6 +27,7 @@ import {
 import { ScheduleAdjustmentStepper } from "../schedule-adjustment/ScheduleAdjustmentStepper"
 import { ScheduleAdjustmentNoticeBanner } from "../schedule-adjustment/ScheduleAdjustmentNoticeBanner"
 import { MobileAvailabilityPicker } from "../schedule-adjustment/MobileAvailabilityPicker"
+import { StudentScheduleChangeCard } from "../schedule-adjustment/StudentScheduleChangeCard"
 import { InfoSectionCard, useCourseInfoTheme } from "./course-info-shared"
 import { useThemedNative } from "../../context/AppearanceProvider"
 import { useNativeType } from "../../lib/themed-module-theme"
@@ -47,6 +50,10 @@ export function ScheduleAdjustmentDetailScreen({ requestId }: { requestId: numbe
   const [gridDays, setGridDays] = useState<string[]>([])
   const [gridTimes, setGridTimes] = useState<string[]>([])
   const [gridMode, setGridMode] = useState<"binary" | "ternary">("binary")
+  const [meetingDurationMinutes, setMeetingDurationMinutes] = useState(60)
+  const [slotHeatmap, setSlotHeatmap] = useState<Record<string, SlotHeatmapCell> | null>(null)
+  const [topWindows, setTopWindows] = useState<TopMeetingWindow[] | null>(null)
+  const [enrolledTotal, setEnrolledTotal] = useState(0)
   const [slots, setSlots] = useState<Record<string, AvailabilitySlotState>>({})
   const [signatureName, setSignatureName] = useState("")
   const [acknowledged, setAcknowledged] = useState(false)
@@ -67,6 +74,10 @@ export function ScheduleAdjustmentDetailScreen({ requestId }: { requestId: numbe
       setGridDays(g.candidateDays ?? [])
       setGridTimes(g.timeSlots ?? [])
       setGridMode(g.availabilityMode ?? "binary")
+      setMeetingDurationMinutes(g.meetingDurationMinutes ?? 60)
+      setSlotHeatmap(g.slotHeatmap ?? null)
+      setTopWindows(g.topWindows ?? null)
+      setEnrolledTotal(Number(g.pollStats?.enrolled ?? d.pollStats?.enrolled ?? 0))
       const existing = d.myAvailability?.availability_data?.slots
       if (existing) setSlots(existing)
     } catch (err) {
@@ -139,6 +150,7 @@ export function ScheduleAdjustmentDetailScreen({ requestId }: { requestId: numbe
   const request = detail.request
   const status = request.status
   const pollStats = detail.pollStats
+  const topWindow = topWindows?.[0]
 
   return (
     <ScrollView
@@ -153,6 +165,8 @@ export function ScheduleAdjustmentDetailScreen({ requestId }: { requestId: numbe
       <Text style={[type.sheetTitle, styles.title]}>{request.reason}</Text>
       <ScheduleAdjustmentStepper status={status} />
 
+      <StudentScheduleChangeCard request={request as Record<string, unknown>} consentStatus={detail.myConsent?.status} />
+
       {status === "COLLECTING_AVAILABILITY" ? (
         <InfoSectionCard title="Your availability" icon="time-outline">
           <Text style={[type.caption, { marginBottom: 8 }]}>
@@ -160,15 +174,32 @@ export function ScheduleAdjustmentDetailScreen({ requestId }: { requestId: numbe
               ? `Makeup poll for the missed class on ${request.missed_class_date ?? ""}.`
               : "Mark your weekly availability on the selected days."}
           </Text>
-          <Text style={type.caption}>
-            {pollStats?.responded ?? 0} of {pollStats?.enrolled ?? 0} students responded
+          <Text style={[type.caption, { marginBottom: 8 }]}>
+            {pollStats?.responded ?? 0} of {pollStats?.enrolled ?? enrolledTotal} students responded
           </Text>
+          {topWindow ? (
+            <View style={[styles.likelyCard, { backgroundColor: "rgba(124,58,237,0.1)", borderColor: native.separator }]}>
+              <Text style={type.bodyEmphasis}>Likely proposed schedule</Text>
+              <Text style={type.secondary}>
+                {formatPollColumnLabel(topWindow.dayOfWeek)} {formatTime12h(topWindow.startTime)} –{" "}
+                {formatTime12h(topWindow.endTime)}
+              </Text>
+              <Text style={type.caption}>
+                {topWindow.availableCount} of {enrolledTotal || pollStats?.enrolled || 0} available (
+                {topWindow.agreementPercentage}%)
+              </Text>
+            </View>
+          ) : null}
           <MobileAvailabilityPicker
             candidateDays={gridDays}
             timeSlots={gridTimes}
             mode={gridMode}
             value={slots}
             onChange={setSlots}
+            slotHeatmap={slotHeatmap}
+            totalEnrolled={enrolledTotal || pollStats?.enrolled || 0}
+            topWindows={topWindows}
+            meetingDurationMinutes={meetingDurationMinutes}
           />
           <Pressable
             disabled={saving}
@@ -184,24 +215,6 @@ export function ScheduleAdjustmentDetailScreen({ requestId }: { requestId: numbe
 
       {status === "COLLECTING_CONSENT" ? (
         <InfoSectionCard title="Schedule change consent" icon="document-text-outline">
-          <View style={styles.compare}>
-            <View style={styles.compareCol}>
-              <Text style={type.caption}>Current</Text>
-              <Text style={type.secondary}>
-                {(request.original_schedules as { lecture?: { scheduleText?: string } })?.lecture?.scheduleText ??
-                  "See syllabus"}
-              </Text>
-            </View>
-            <View style={styles.compareCol}>
-              <Text style={type.caption}>Proposed</Text>
-              <Text style={type.secondary}>
-                {formatPollColumnLabel(String(request.proposed_day ?? request.proposed_date ?? ""))}{" "}
-                {request.proposed_start_time ? formatTime12h(request.proposed_start_time) : ""} –{" "}
-                {request.proposed_end_time ? formatTime12h(request.proposed_end_time) : ""}
-              </Text>
-              <Text style={type.caption}>Effective: {request.effective_date ?? ""}</Text>
-            </View>
-          </View>
           <Text style={[type.secondary, styles.consentText]}>{detail.consentStatement}</Text>
           {detail.conflictDisclaimer ? (
             <Text style={[type.caption, { color: native.secondaryLabel }]}>{detail.conflictDisclaimer}</Text>
@@ -261,8 +274,13 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
   content: { padding: 16, gap: 16 },
   title: { marginTop: 8 },
-  compare: { flexDirection: "row", gap: 12 },
-  compareCol: { flex: 1, gap: 6 },
+  likelyCard: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 12,
+    padding: 12,
+    gap: 4,
+    marginBottom: 8,
+  },
   consentText: { marginVertical: 8, lineHeight: 20 },
   checkRow: { flexDirection: "row", alignItems: "flex-start", gap: 10, marginVertical: 8 },
   checkbox: {

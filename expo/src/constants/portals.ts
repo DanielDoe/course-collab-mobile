@@ -56,7 +56,7 @@ export const MOBILE_LOGIN_PORTALS: PortalMeta[] = [
     icon: "sunny-outline",
     accent: "#eaaa00",
     headline: "Summer Camp",
-    description: "Coming soon — training tracks, projects, and camp sign-in.",
+    description: "Sign in with your camp email or request a new camper account.",
   },
   {
     id: "faculty",

@@ -849,7 +849,9 @@ export function AssessmentQuizScreen({ quizId, assessmentType, takeAction }: Pro
                 size={20}
                 color={isCorrect ? "#15803d" : "#b45309"}
               />
-              <Text style={styles.feedbackText}>{feedbackText}</Text>
+              <View style={styles.feedbackCopy}>
+                <QuestionContentWebView text={feedbackText} embedded compact />
+              </View>
             </View>
           ) : null}
         </View>
@@ -1127,6 +1129,7 @@ const styles = StyleSheet.create({
   },
   feedbackCorrect: { backgroundColor: "#dcfce7" },
   feedbackWrong: { backgroundColor: "#fef3c7" },
+  feedbackCopy: { flex: 1, minWidth: 0 },
   feedbackText: { flex: 1, fontSize: 13, lineHeight: 18, color: "#0f172a" },
   footer: {
     paddingHorizontal: 16,

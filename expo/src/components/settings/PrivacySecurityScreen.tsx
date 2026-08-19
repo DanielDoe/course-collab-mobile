@@ -5,7 +5,9 @@ import { useRouter } from "expo-router"
 import { ModuleScreen } from "../modules/ModuleScreen"
 import { NotetakerScreenHeader } from "../notetaker/NotetakerScreenHeader"
 import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
+import { useSession } from "../../context/SessionProvider"
 import { NATIVE } from "../../constants/faculty-native-theme"
+import { isLearnerPortal } from "../../lib/session"
 import { useNativeType } from "../../lib/themed-module-theme"
 import { settingsRowThumb } from "../../lib/support-color-theme"
 import { SolidListThumbTile } from "../theme/SolidListThumbTile"
@@ -85,6 +87,9 @@ function SettingsRow({
 export function PrivacySecurityScreen() {
   const router = useRouter()
   const native = useThemedNative()
+  const { session } = useSession()
+  const hideCoraSettings = session != null && !isLearnerPortal(session.portal)
+  const showCoraSettings = !hideCoraSettings
 
   useEffect(() => {
     void prefetchLegalContentCatalog()
@@ -109,15 +114,24 @@ export function PrivacySecurityScreen() {
           />
         </SettingsGroup>
 
-        <SectionHeader title="AI & Data" />
-        <SettingsGroup>
-          <SettingsRow
-            icon="sparkles-outline"
-            label="How Cora uses your data"
-            onPress={() => router.push("/settings/ai-data" as never)}
-            isLast
-          />
-        </SettingsGroup>
+        {showCoraSettings ? (
+          <>
+            <SectionHeader title="Cora" />
+            <SettingsGroup>
+              <SettingsRow
+                icon="sparkles-outline"
+                label="Cora privacy & personalization"
+                onPress={() => router.push("/settings/cora-privacy" as never)}
+              />
+              <SettingsRow
+                icon="analytics-outline"
+                label="How Cora uses your data"
+                onPress={() => router.push("/settings/ai-data" as never)}
+                isLast
+              />
+            </SettingsGroup>
+          </>
+        ) : null}
 
         <SectionHeader title="Your data" />
         <SettingsGroup>

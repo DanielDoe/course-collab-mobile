@@ -50,7 +50,6 @@ import { SHEET_SECTION } from "./faculty-sheet-semantics"
 import { NativeSelect } from "../NativeSelect"
 import { QUESTION_COUNT_OPTIONS, secondsSelectOptions } from "./FacultyNativePickers"
 import { useModuleTheme } from "../../lib/themed-module-shell"
-import { useRouter } from "expo-router"
 
 const FILTER_SHEET_OPTIONS: FacultyFilterOption[] = [
   { value: "all", label: "All sessions" },
@@ -71,7 +70,6 @@ export function FacultyPlaygroundScreen() {
   const styles = useFacultyModuleStyles()
   const type = useNativeType()
   const { scope, ready } = useFacultyScope()
-  const router = useRouter()
 
   const [screenTab, setScreenTab] = useState<ScreenTab>("sessions")
   const [sessions, setSessions] = useState<PlaygroundSession[]>([])
@@ -233,17 +231,6 @@ export function FacultyPlaygroundScreen() {
             { id: "questions", label: "Question bank" },
           ]}
         />
-        <Pressable
-          onPress={() => router.push("/module/playground-rules" as never)}
-          accessibilityRole="button"
-          accessibilityLabel="Open Playground Rules"
-          hitSlop={8}
-          style={localStyles.rulesLink}
-        >
-          <Text style={[type.caption, { color: FACULTY_PLAYGROUND_COLOR.link, fontWeight: "600" }]}>
-            Playground Rules
-          </Text>
-        </Pressable>
       </FacultyModuleStickyHeader>
 
       {screenTab === "questions" && scope ? (
@@ -416,5 +403,4 @@ const localStyles = StyleSheet.create({
   list: { gap: 12 },
   topicRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   topicEmpty: { fontStyle: "italic" },
-  rulesLink: { alignSelf: "flex-end", paddingHorizontal: 4, paddingBottom: 4 },
 })

@@ -451,12 +451,6 @@ export function SettingsScreen() {
               label="Membership"
               detail={membershipLabel}
               onPress={() => router.push("/membership" as never)}
-            />
-            <SettingsRow
-              icon="time-outline"
-              label="Cora usage"
-              detail="Logs"
-              onPress={() => router.push("/settings/cora-usage" as never)}
               isLast
             />
           </>
@@ -470,6 +464,31 @@ export function SettingsScreen() {
           />
         )}
       </SettingsGroup>
+
+      {!isSummer ? (
+        <>
+          <SettingsSectionHeader title="Cora" />
+          <SettingsGroup>
+            <SettingsRow
+              icon="sparkles-outline"
+              label="Cora privacy & personalization"
+              onPress={() => router.push("/settings/cora-privacy" as never)}
+            />
+            <SettingsRow
+              icon="analytics-outline"
+              label="How Cora uses your data"
+              onPress={() => router.push("/settings/ai-data" as never)}
+            />
+            <SettingsRow
+              icon="time-outline"
+              label="Cora usage"
+              detail="Logs"
+              onPress={() => router.push("/settings/cora-usage" as never)}
+              isLast
+            />
+          </SettingsGroup>
+        </>
+      ) : null}
 
       <SettingsSectionHeader title="Preferences" />
       <SettingsGroup>

@@ -21,6 +21,7 @@ import {
   type ThemeId,
 } from "../../constants/app-themes"
 import { persistAppearanceSetupComplete } from "../../lib/appearance-setup"
+import { onboardingStepMeta } from "../../lib/onboarding"
 import { useThemeGridCardWidth } from "../../lib/responsive-layout"
 import { LoginButton } from "./LoginButton"
 import { useLoginTheme } from "./login-theme"
@@ -147,6 +148,12 @@ export function AppearanceSetupScreen() {
   const { LOGIN, loginType } = useLoginTheme()
   const themeCardWidth = useThemeGridCardWidth(CONTENT_PAD, THEME_GRID_GAP)
   const [saving, setSaving] = useState(false)
+  const progressMeta = useMemo(() => {
+    if (!session || session.portal !== "student") {
+      return { stepIndex: 0, totalSteps: 1, progress: 1 }
+    }
+    return onboardingStepMeta(session, "appearance")
+  }, [session])
 
   const firstName = useMemo(() => {
     if (!session || session.portal !== "student") return null
@@ -187,11 +194,24 @@ export function AppearanceSetupScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: tokens.native.groupedBackground }]}>
+      <View style={[styles.progressTrack, { paddingTop: insets.top + 8 }]}>
+        <View style={[styles.progressBar, { backgroundColor: LOGIN.separator }]}>
+          <View
+            style={[
+              styles.progressFill,
+              { width: `${Math.round(progressMeta.progress * 100)}%`, backgroundColor: LOGIN.purple },
+            ]}
+          />
+        </View>
+        <Text style={[styles.progressLabel, { color: LOGIN.secondaryLabel }]}>
+          Step {progressMeta.stepIndex + 1} of {progressMeta.totalSteps}
+        </Text>
+      </View>
       <ScrollView
         contentContainerStyle={[
           styles.scroll,
           {
-            paddingTop: insets.top + 20,
+            paddingTop: 12,
             paddingBottom: insets.bottom + 28,
           },
         ]}
@@ -284,6 +304,27 @@ export function AppearanceSetupScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
+  progressTrack: {
+    paddingHorizontal: CONTENT_PAD,
+    paddingBottom: 10,
+    gap: 6,
+    maxWidth: 520,
+    width: "100%",
+    alignSelf: "center",
+  },
+  progressBar: {
+    height: 4,
+    borderRadius: 999,
+    overflow: "hidden",
+  },
+  progressFill: {
+    height: "100%",
+    borderRadius: 999,
+  },
+  progressLabel: {
+    fontSize: 12,
+    fontWeight: Platform.OS === "ios" ? "500" : "600",
+  },
   scroll: {
     paddingHorizontal: CONTENT_PAD,
     gap: 14,

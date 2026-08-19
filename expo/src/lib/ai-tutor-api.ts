@@ -4,11 +4,14 @@ import { ApiError } from "./student-api"
 import { mfaTrustRequestHeadersForStudent } from "./mfa-device-trust"
 import { mergeCookieHeaders, persistHttpCookiesFromResponse, studentHttpCookieHeader } from "./student-http-cookies"
 import type { CoraImportedProblem } from "./cora-api"
-import type { CoraLearningMemory } from "./cora-preferences-storage"
+import type { CoraPreferences } from "./cora-preferences-storage"
+import { learningMemoryForApi } from "./cora-learning-memory"
 import type { StudentContextPayload } from "./student-context-api"
 import type { CoraChatFlow } from "./cora-study-plan-flows"
 import type { CoraProgressDetailed } from "./cora-insights-types"
 import type { CoraAccessEnvelope } from "./cora-rbac"
+import type { ExternalAiStudentContext } from "./cora-privacy-minimization"
+import { createPseudonymousAiSessionId, resolveExternalAiContextLevel, sanitizeMessagesForExternalAi } from "./cora-privacy-minimization"
 import { filterStudentContextForCora } from "./cora-rbac/context-policy"
 import { recordCoraError, recordCoraSuccess } from "./cora-rbac/prepare-request"
 import type { PreparedCoraRequest } from "./cora-rbac/prepare-request"
@@ -312,10 +315,10 @@ export const aiTutorApi = {
     },
     options?: {
       problemContext?: CoraImportedProblem | null
-      studentContext?: StudentContextPayload | null
+      studentContext?: StudentContextPayload | ExternalAiStudentContext | null
       platformContextBlock?: string
       useAgent?: boolean
-      learningMemory?: CoraLearningMemory
+      learningMemory?: CoraPreferences
       chatConfig?: { learningGoal?: string; flow?: CoraChatFlow }
       coraAccess?: CoraAccessEnvelope
       prepared?: PreparedCoraRequest
@@ -334,18 +337,27 @@ export const aiTutorApi = {
         handlers.onAborted?.()
         return
       }
-      const learningMemory = options?.learningMemory
+      const coraPreferences = options?.learningMemory
       const useAgent = options?.useAgent !== false
       const platformBlock = !useAgent ? options?.platformContextBlock?.trim() : undefined
       const apiMessage = platformBlock
         ? `${platformBlock}\n\n---\n\nStudent message:\n${message}`
         : message
 
-      const scopedContext = filterStudentContextForCora(options?.studentContext ?? null)
-      const historyPayload = conversationHistory.map((entry) => ({
-        role: normalizeHistoryRole(entry.role),
-        content: entry.content,
-      }))
+      const contextLevel = coraPreferences
+        ? resolveExternalAiContextLevel(coraPreferences)
+        : "learning"
+      const scopedContext = filterStudentContextForCora(
+        options?.studentContext ?? null,
+        contextLevel,
+        coraPreferences,
+      )
+      const historyPayload = sanitizeMessagesForExternalAi(
+        conversationHistory.map((entry) => ({
+          role: normalizeHistoryRole(entry.role),
+          content: entry.content,
+        })),
+      )
       const response = await fetch(`${API_BASE_URL}/api/ai-tutor`, {
         method: "POST",
         credentials: "include",
@@ -355,19 +367,13 @@ export const aiTutorApi = {
           message: apiMessage,
           studentId: session.databaseId,
           useAgent,
+          aiSessionId: createPseudonymousAiSessionId(),
           context: { topic: "auto-detect" },
           conversationHistory: historyPayload,
           ...(options?.threadId ? { threadId: options.threadId } : {}),
           ...(options?.problemContext ? { problemContext: options.problemContext } : {}),
           ...(scopedContext ? { studentContext: scopedContext } : {}),
-          ...(learningMemory
-            ? {
-                learningMemory: {
-                  "remember-gaps": learningMemory.rememberGaps,
-                  "detect-confusion": learningMemory.detectConfusion,
-                },
-              }
-            : {}),
+          ...(coraPreferences ? { learningMemory: learningMemoryForApi(coraPreferences) } : {}),
           ...(options?.chatConfig ? { chatConfig: options.chatConfig } : {}),
           ...(options?.coraAccess ? { coraAccess: options.coraAccess } : {}),
           ...(prepared ? prepared.accessBody : {}),

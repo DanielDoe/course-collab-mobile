@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react"
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from "react"
 import { usePathname } from "expo-router"
 
 export type FacultyModuleNestedHeader = {
@@ -56,7 +56,7 @@ export function useFacultyModuleNestedHeader({
 }) {
   const { setNestedHeader } = useFacultyModuleHeader()
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!active) {
       setNestedHeader(null)
       return

@@ -8,7 +8,7 @@ import {
   useState,
   type ReactNode,
 } from "react"
-import { Keyboard, Platform } from "react-native"
+import { Keyboard } from "react-native"
 import { AppAlertModal, type AppAlertTone } from "../components/errors/AppAlertModal"
 import { logAppError } from "../lib/log-app-error"
 
@@ -109,8 +109,8 @@ function useAppAlertRenderContext() {
 }
 
 /**
- * Mount inside pageSheet / bottom-sheet modals on Android so confirms appear above sheet content.
- * iOS uses FullWindowOverlay from the root provider and does not need this host.
+ * Mount inside pageSheet / bottom-sheet modals so confirms appear above sheet content.
+ * When this host is active, the root overlay is suppressed.
  */
 export function AppAlertHost({ enabled = true }: { enabled?: boolean }) {
   const { registerInlineHost, inlineHostCount, current, tone, handleBackdropPress, handleButtonPress } =
@@ -121,7 +121,7 @@ export function AppAlertHost({ enabled = true }: { enabled?: boolean }) {
     return registerInlineHost()
   }, [enabled, registerInlineHost])
 
-  if (!enabled || Platform.OS !== "android" || inlineHostCount === 0 || !current) return null
+  if (!enabled || inlineHostCount === 0 || !current) return null
 
   return (
     <AppAlertModal
@@ -235,7 +235,7 @@ export function AppAlertProvider({ children }: { children: ReactNode }) {
 
   alertHandler = alert
 
-  const showRootAlert = Boolean(current) && (Platform.OS === "ios" || inlineHostCount === 0)
+  const showRootAlert = Boolean(current) && inlineHostCount === 0
 
   return (
     <AppAlertContext.Provider value={alertValue}>

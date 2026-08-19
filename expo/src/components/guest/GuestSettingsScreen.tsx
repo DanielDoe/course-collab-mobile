@@ -225,6 +225,21 @@ export function GuestSettingsScreen() {
           />
         </GuestSettingsGroup>
 
+        <GuestSettingsSectionHeader title="Cora" />
+        <GuestSettingsGroup>
+          <GuestSettingsRow
+            icon="sparkles-outline"
+            label="Cora privacy & personalization"
+            onPress={() => router.push("/settings/cora-privacy" as never)}
+          />
+          <GuestSettingsRow
+            icon="analytics-outline"
+            label="How Cora uses your data"
+            onPress={() => router.push("/settings/ai-data" as never)}
+            isLast
+          />
+        </GuestSettingsGroup>
+
         <GuestSettingsSectionHeader title="Appearance" />
         <View style={styles.appearanceSection}>
           <AppearanceSettingsContent compact />

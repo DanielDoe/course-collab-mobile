@@ -49,6 +49,7 @@ export default function RootLayout() {
                     <Stack.Screen name="dev-student-login" />
                     <Stack.Screen name="dev-faculty-login" />
                     <Stack.Screen name="dev-cora-cleanup" />
+                    <Stack.Screen name="dev-onboarding-preview" />
                   </Stack>
                 </SystemErrorBoundary>
               </NotificationProvider>

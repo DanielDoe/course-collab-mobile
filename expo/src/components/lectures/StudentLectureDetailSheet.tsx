@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
 import { nativeType } from "../../constants/faculty-native-theme"
 import type { LectureItem } from "../../lib/student-api"
+import { MarkdownContentWebView } from "../course-info/MarkdownContentWebView"
 
 type Props = {
   visible: boolean
@@ -68,7 +69,7 @@ export function StudentLectureDetailSheet({ visible, lecture, onClose, onViewSli
             showsVerticalScrollIndicator={false}
           >
             <Text style={[styles.sectionLabel, { color: native.secondaryLabel }]}>ABOUT THIS LECTURE</Text>
-            <Text style={[styles.description, { color: native.label }]}>{description}</Text>
+            <MarkdownContentWebView markdown={description} embedded />
           </ScrollView>
 
           <View style={styles.actions}>

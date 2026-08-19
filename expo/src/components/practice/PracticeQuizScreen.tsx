@@ -676,7 +676,9 @@ export function PracticeQuizScreen() {
                 size={20}
                 color={isCorrect ? tokens.success : tokens.danger}
               />
-              <Text style={[styles.feedbackText, { color: tokens.text }]}>{feedbackText}</Text>
+              <View style={styles.feedbackCopy}>
+                <QuestionContentWebView text={feedbackText} embedded compact />
+              </View>
             </View>
           ) : null}
         </View>
@@ -817,6 +819,7 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 10,
   },
+  feedbackCopy: { flex: 1, minWidth: 0 },
   feedbackText: { flex: 1, fontSize: 13, lineHeight: 18 },
   footer: { paddingHorizontal: 16, paddingTop: 8 },
   primaryBtn: {

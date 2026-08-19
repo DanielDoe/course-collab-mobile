@@ -1,6 +1,8 @@
 # CourseCollab Privacy Data Inventory
 
-Internal inventory for Apple App Privacy questionnaire and GDPR-style disclosures. Values reflect the **Expo mobile client + production API** (`https://coursecollab.vercel.app`) as audited on 2026-08-17.
+Internal inventory for Apple App Privacy questionnaire and GDPR-style disclosures. Values reflect the **Expo mobile client + production API** (`https://coursecollab.vercel.app`) as audited on 2026-08-18.
+
+See also: [`docs/audits/cora-privacy-data-flow.md`](./audits/cora-privacy-data-flow.md)
 
 ## Architecture scope
 
@@ -24,7 +26,7 @@ Internal inventory for Apple App Privacy questionnaire and GDPR-style disclosure
 | Attendance | Yes | Course operations | Postgres | Term policy | Student, faculty | No | Yes | May be retained institutionally |
 | Uploaded documents | Yes | Coursework, notes | Blob storage | Course / account policy | Authorized roles only | Storage provider | Yes | Deletable when user owns resource |
 | AI conversations (Cora) | Yes | AI tutor / faculty copilot | Postgres (server) | Server retention policy | User + authorized admins | **OpenAI / Anthropic via server** | Yes | Requires server deletion workflow |
-| AI prompts / tool context | Yes | Cora responses | Server logs + provider | Provider + server policy | RBAC-scoped | **AI providers** | Yes | Server-side |
+| AI prompts / tool context | Yes | Cora responses | Server logs + provider | Provider + server policy | RBAC-scoped | **AI providers** | Yes | Client minimizes PII; server deletion workflow required |
 | Push notification tokens | Yes | Alerts | Postgres | Until logout/delete | User devices | Apple/Google push infra | Yes | Removed on logout/delete (client + server) |
 | Device identifiers | Limited | Push (Expo token), MFA trust | SecureStore (local) + server | Session / trust window | User device | Expo push service | Yes | Cleared on logout |
 | Analytics / crash | Limited | Diagnostics | Server logs if enabled | Ops policy | Admins | Possible monitoring vendor | Maybe | Per server policy |
@@ -43,6 +45,8 @@ Internal inventory for Apple App Privacy questionnaire and GDPR-style disclosure
 | Cora credits (guest) | Stripe + server ledger | Purchase metadata | Credit balance | Server | Guest |
 
 Client RBAC guard: `expo/src/lib/cora-rbac/` — tool access filtered before requests; **server must enforce authorization before model context**.
+
+Client privacy minimization: `expo/src/lib/cora-privacy-minimization.ts` — strips names, IDs, emails from `studentContext` before API send.
 
 ## Deletion policy (intended)
 

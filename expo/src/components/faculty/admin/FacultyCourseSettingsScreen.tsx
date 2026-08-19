@@ -1,6 +1,13 @@
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
+import { Text, View } from "react-native"
 import { instructorAdminApi } from "../../../lib/instructor-admin-api"
+import { instructorApi } from "../../../lib/instructor-api"
 import type { CourseModuleSettings } from "../../../lib/course-module-settings"
+import {
+  formatExchangeCopiedAt,
+  formatExchangeSourceLine,
+  parseExchangeProvenance,
+} from "../../../lib/course-exchange-shared"
 import { useFacultyScope } from "../../../hooks/useFacultyScope"
 import {
   FacultyAdminCourseGate,
@@ -9,6 +16,7 @@ import {
   FacultyAdminToggleRow,
   useAdminSaveState,
 } from "../faculty-admin-ui"
+import { FacultySheetNotice } from "../faculty-collab-sheet-ui"
 
 type ModuleToggleKey = keyof CourseModuleSettings
 
@@ -37,13 +45,27 @@ function FacultyCourseSettingsContent() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [settings, setSettings] = useState<CourseModuleSettings | null>(null)
+  const [exchangeProvenance, setExchangeProvenance] = useState<ReturnType<typeof parseExchangeProvenance>>(null)
+
+  const provenanceLine = useMemo(() => {
+    if (!exchangeProvenance) return null
+    const source = formatExchangeSourceLine(exchangeProvenance)
+    const copied = formatExchangeCopiedAt(exchangeProvenance.copiedAt)
+    return copied ? `${source} · copied ${copied}` : source
+  }, [exchangeProvenance])
 
   const load = useCallback(async () => {
     if (!scope) return
     clearError()
     try {
-      const data = await instructorAdminApi.getModuleSettings(scope)
+      const [data, coursesRes] = await Promise.all([
+        instructorAdminApi.getModuleSettings(scope),
+        instructorApi.getCourses(scope.instructorId).catch(() => ({ courses: [], offerings: [] })),
+      ])
       setSettings(data)
+      const offerings = coursesRes.offerings ?? coursesRes.courses ?? []
+      const current = offerings.find((c) => Number(c.course_id ?? c.id) === scope.courseId)
+      setExchangeProvenance(parseExchangeProvenance(current?.exchange_provenance ?? null))
       resetDirty()
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load module settings.")
@@ -90,6 +112,15 @@ function FacultyCourseSettingsContent() {
       onSave={handleSave}
       onRefresh={onRefresh}
     >
+      {provenanceLine ? (
+        <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
+          <FacultySheetNotice
+            tone="warning"
+            message={`Imported via Course Exchange from ${provenanceLine}. Edits here stay independent of the source course.`}
+          />
+        </View>
+      ) : null}
+
       <FacultyAdminSection
         title="Enabled Modules"
         footer="Disabled modules are hidden from students and teaching assistants for this course."

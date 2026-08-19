@@ -83,7 +83,8 @@ export function ClassroomPointsTaskScreen() {
   }, [session, load])
 
   const questionConfig = assignment?.question_config
-  const questionText = questionConfig?.question_text?.trim() || ""
+  const questionText =
+    questionConfig?.question_text?.trim() || assignment?.description?.trim() || ""
   const uploadConfig = questionConfig?.solution_upload_config
   const instructions = uploadConfig?.submission_instructions?.trim()
   const isSolution = assignment ? isSolutionAssignment(assignment) : false
@@ -103,7 +104,10 @@ export function ClassroomPointsTaskScreen() {
   const prepareTexts = useMemo(
     () =>
       assignment
-        ? extractAssignmentQuestionTexts(questionConfig?.question_text, instructions)
+        ? extractAssignmentQuestionTexts(
+            questionConfig?.question_text || assignment.description || undefined,
+            instructions,
+          )
         : null,
     [assignment, questionConfig?.question_text, instructions],
   )
@@ -181,9 +185,9 @@ export function ClassroomPointsTaskScreen() {
               ]}
             >
               <Ionicons name="chatbubble-ellipses-outline" size={16} color={tokens.warning} />
-              <Text style={[styles.feedbackText, { color: native.label }]}>
-                {assignment.classroomPoint.instructorFeedback}
-              </Text>
+              <View style={styles.feedbackCopy}>
+                <QuestionContentWebView text={assignment.classroomPoint.instructorFeedback} embedded compact />
+              </View>
             </View>
           ) : null}
 
@@ -269,6 +273,7 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 14,
     borderWidth: 1},
+  feedbackCopy: { flex: 1, minWidth: 0 },
   feedbackText: { flex: 1, fontSize: 13, lineHeight: 18 },
   questionBody: { paddingHorizontal: 14, paddingVertical: 10 },
   instructionsCallout: {

@@ -640,6 +640,7 @@ export function FacultySummerCampScreen({ initialTab = "programs", visibleTabs }
       <FacultyAddCamperModal
         visible={addCamperOpen}
         scope={scope}
+        campId={selectedCamp?.id ?? ownedCamps[0]?.id ?? null}
         onClose={() => setAddCamperOpen(false)}
         onCreated={() => void handleRefresh()}
       />

@@ -1,0 +1,23 @@
+appId: com.coursecollab.app
+---
+- tapOn: "Open navigation menu"
+- scrollUntilVisible:
+    element: "Course Exchange"
+    direction: DOWN
+    timeout: 12000
+- tapOn: "Course Exchange"
+- extendedWaitUntil:
+    visible: "Discover|Course Exchange unavailable"
+    timeout: 30000
+- tapOn:
+    text: "Sent"
+    optional: true
+- tapOn:
+    text: "Discover"
+    optional: true
+- tapOn:
+    text: "Search discoverable courses…"
+    optional: true
+- swipe:
+    direction: UP
+- takeScreenshot: fac-course-exchange

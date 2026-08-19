@@ -11,6 +11,7 @@ import {
 } from "../lib/faculty-shell-refresh-types"
 import { useFacultyShell } from "../context/FacultyShellContext"
 import { instructorApi, type InstructorCourse } from "../lib/instructor-api"
+import { courseExchangeDrawerBadgeCount } from "../lib/course-exchange-shared"
 import { getStoredFacultyCourseId, setStoredFacultyCourseId } from "../lib/faculty-course-storage"
 import {
   facultyNeedsCourseSelection,
@@ -85,11 +86,12 @@ export function useFacultyShellRefresh(session: FacultySession) {
         }
 
         const scope = { instructorId: session.id, courseId: course.id }
-        const [notifications, pendingPoints, issues, officeHours] = await Promise.all([
+        const [notifications, pendingPoints, issues, officeHours, exchangeSummary] = await Promise.all([
           instructorApi.getNotifications(session.id).catch(() => ({ unread_count: 0 })),
           instructorApi.getPendingClassroomPoints(scope).catch(() => []),
           instructorApi.getIssues(scope, "open").catch(() => []),
           instructorApi.getOfficeHours(scope).catch(() => []),
+          instructorApi.getCourseExchangeSummary(scope).catch(() => ({})),
         ])
 
         setNotificationCount(notifications.unread_count ?? 0)
@@ -103,6 +105,7 @@ export function useFacultyShellRefresh(session: FacultySession) {
           pendingPoints: pendingPoints.length,
           pendingIssues: issues.length,
           officeHours: pendingOfficeHours,
+          courseExchange: courseExchangeDrawerBadgeCount(exchangeSummary),
         })
         lastRefreshAtRef.current = Date.now()
       } catch (err) {

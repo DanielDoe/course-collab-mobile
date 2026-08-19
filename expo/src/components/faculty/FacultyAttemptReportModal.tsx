@@ -160,9 +160,10 @@ function QuestionCard({ q, index }: { q: AssessmentResultQuestion; index: number
             <QuestionContentWebView text={q.question_text ?? ""} embedded compact />
           ) : null}
           {!expanded && studentAnswer ? (
-            <Text style={[type.caption, { color: native.secondaryLabel, fontWeight: "600", lineHeight: 18 }]} numberOfLines={2}>
-              Student: {studentAnswer}
-            </Text>
+            <View style={styles.answerPreview}>
+              <Text style={[type.caption, { color: native.secondaryLabel, fontWeight: "600" }]}>Student</Text>
+              <QuestionContentWebView text={studentAnswer} embedded compact />
+            </View>
           ) : null}
           <View style={styles.questionMetaRow}>
             <View style={[styles.chip, { backgroundColor: meta.bg }]}>
@@ -769,6 +770,7 @@ const styles = StyleSheet.create({
   questionIndexText: { fontSize: 12, fontWeight: "600" },
   questionHead: { flex: 1, gap: 6, minWidth: 0 },
   promptPreview: { maxHeight: 72, overflow: "hidden" },
+  answerPreview: { gap: 2, maxHeight: 72, overflow: "hidden" },
   questionMetaRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 6 },
   chip: {
     flexDirection: "row",

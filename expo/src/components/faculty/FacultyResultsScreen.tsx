@@ -56,7 +56,7 @@ function FacultyResultsContent() {
   const { styles: moduleStyles, native, tokens, type } = useModuleTheme()
   const insets = useSafeAreaInsets()
   const { listScrollPad } = useFacultyStickyHeaderScrollLayout()
-  const { scope, ready } = useFacultyScope()
+  const { scope, ready, course } = useFacultyScope()
 
   const [tab, setTab] = useState<ResultsTab>("all")
   const [results, setResults] = useState<InstructorAssessmentResult[]>([])
@@ -76,9 +76,18 @@ function FacultyResultsContent() {
     const nextSessions = sessionRes.sessions ?? []
     setSessions(nextSessions)
     const sessionCode = resolveSessionFilterCode(nextSessions, sessionFilter)
-    const rows = await instructorApi.getAssessmentResults(scope, { sessionCode, limit: 200 })
+    const rows = await instructorApi.getAssessmentResults(scope, {
+      sessionCode,
+      courseCode: course?.course_code,
+      sessionCodes: nextSessions.map((row) => row.code).filter(Boolean),
+      limit: 200,
+    })
     setResults(rows)
-  }, [scope, sessionFilter])
+  }, [scope, sessionFilter, course?.course_code])
+
+  useEffect(() => {
+    setSessionFilter("ALL")
+  }, [scope?.courseId])
 
   useEffect(() => {
     if (!ready) {
@@ -172,7 +181,9 @@ function FacultyResultsContent() {
             title={results.length === 0 ? "No results yet" : "No matches"}
             body={
               results.length === 0
-                ? "Student assessment submissions will appear here."
+                ? course?.course_code
+                  ? `No assessment submissions for ${course.course_title || course.course_code} yet.`
+                  : "Student assessment submissions will appear here."
                 : "Try another filter or search term."
             }
           />

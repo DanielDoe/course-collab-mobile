@@ -1,7 +1,14 @@
 import { router as rootRouter, type Router } from "expo-router"
+import { ONBOARDING_AUTH_ROUTES } from "./onboarding"
 import type { AppSession } from "./session"
 
-const AUTH_ROUTES = new Set(["/login", "/signing-in", "/appearance-setup", "/change-password"])
+const AUTH_ROUTES = new Set([
+  "/login",
+  "/signing-in",
+  "/appearance-setup",
+  "/change-password",
+  ...ONBOARDING_AUTH_ROUTES,
+])
 
 /** Review / first-login accounts must use the native change-password screen — not web. */
 export function sessionNeedsPasswordChange(session: AppSession | null | undefined): boolean {

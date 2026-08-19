@@ -434,11 +434,25 @@ const VARIANT_STYLES: Record<MarkdownHtmlVariant, string> = {
   .md-content td { color: __TEXT__; }`,
 }
 
+function noSelectCss(disableSelection?: boolean): string {
+  if (!disableSelection) return ""
+  return `
+  html, body, #content, #content * {
+    -webkit-user-select: none !important;
+    user-select: none !important;
+    -webkit-touch-callout: none !important;
+    -webkit-user-drag: none !important;
+  }
+  img { pointer-events: none !important; }
+`
+}
+
 /** WebView HTML for syllabus / policy / AI narrative markdown (headings, lists, links, KaTeX). */
 export function buildMarkdownHtml(
   markdown: string,
   variant: MarkdownHtmlVariant = "default",
   theme?: MarkdownHtmlTheme,
+  options?: { disableSelection?: boolean },
 ): string {
   const payload = JSON.stringify(markdown)
   const css = applyMarkdownTheme(`${VARIANT_STYLES[variant]}${BASE_MATH_AND_SCRIPT}`, theme)
@@ -450,7 +464,7 @@ export function buildMarkdownHtml(
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
 <script src="https://cdn.jsdelivr.net/npm/marked@15.0.7/marked.min.js"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css"/>
-<style>${css}</style>
+<style>${noSelectCss(options?.disableSelection)}${css}</style>
 </head>
 <body>
 <div id="content" class="md-content"></div>

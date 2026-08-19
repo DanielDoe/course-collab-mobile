@@ -47,6 +47,7 @@ import { FacultyClassroomPointDetailModal } from "./FacultyClassroomPointDetailM
 import { FacultyClassroomPointAssignmentCreateModal } from "./FacultyClassroomPointAssignmentCreateModal"
 import { FacultyClassroomPointAssignmentDetailModal } from "./FacultyClassroomPointAssignmentDetailModal"
 import { FacultyClassroomPointsLeaderboard } from "./FacultyClassroomPointsLeaderboard"
+import { FacultyClassroomStudentHistorySheet } from "./FacultyClassroomStudentHistorySheet"
 import { FacultyManualAwardModal } from "./FacultyManualAwardModal"
 
 const TABS: Array<{
@@ -82,6 +83,7 @@ export function FacultyClassroomPointsScreen() {
 
   const [selected, setSelected] = useState<ClassroomPointRow | null>(null)
   const [selectedVariant, setSelectedVariant] = useState<"review" | "award">("review")
+  const [selectedStudent, setSelectedStudent] = useState<ClassroomPointsSummaryRow | null>(null)
   const [selectedAssignment, setSelectedAssignment] = useState<ClassroomPointAssignment | null>(null)
   const [awardOpen, setAwardOpen] = useState(false)
   const [createAssignmentOpen, setCreateAssignmentOpen] = useState(false)
@@ -91,6 +93,15 @@ export function FacultyClassroomPointsScreen() {
     setSelectedVariant(variant)
     setSelected(point)
   }
+
+  const selectedStudentLive = useMemo(() => {
+    if (!selectedStudent) return null
+    return (
+      summary.find(
+        (row) => row.student_id === selectedStudent.student_id && row.session === selectedStudent.session,
+      ) ?? selectedStudent
+    )
+  }, [selectedStudent, summary])
 
   const load = useCallback(async () => {
     if (!scope) return
@@ -288,6 +299,7 @@ export function FacultyClassroomPointsScreen() {
                 onGoAssignments={() => setTab("assignments")}
                 onGoLeaderboard={() => setTab("leaderboard")}
                 onGoAwards={() => setTab("awards")}
+                onSelectStudent={setSelectedStudent}
               />
             ) : null}
 
@@ -391,7 +403,12 @@ export function FacultyClassroomPointsScreen() {
             ) : null}
 
             {tab === "leaderboard" ? (
-              <FacultyClassroomPointsLeaderboard loading={false} rows={summary} search={search} />
+              <FacultyClassroomPointsLeaderboard
+                loading={false}
+                rows={summary}
+                search={search}
+                onSelectStudent={setSelectedStudent}
+              />
             ) : null}
 
             {tab === "awards" ? (
@@ -438,6 +455,13 @@ export function FacultyClassroomPointsScreen() {
           </>
         )}
       </ScrollView>
+
+      <FacultyClassroomStudentHistorySheet
+        student={selectedStudentLive}
+        scope={scope}
+        onClose={() => setSelectedStudent(null)}
+        onSelectPoint={openPointDetail}
+      />
 
       <FacultyClassroomPointDetailModal
         point={selected}
@@ -612,6 +636,7 @@ function OverviewPanel({
   onGoAssignments,
   onGoLeaderboard,
   onGoAwards,
+  onSelectStudent,
 }: {
   stats: ReturnType<typeof computeOverviewStats>
   pending: ClassroomPointRow[]
@@ -626,6 +651,7 @@ function OverviewPanel({
   onGoAssignments: () => void
   onGoLeaderboard: () => void
   onGoAwards: () => void
+  onSelectStudent: (row: ClassroomPointsSummaryRow) => void
 }) {
   const { native, tokens, type } = useModuleTheme()
   const topPending = pending.filter((p) => !p.isDuplicate).slice(0, 3)
@@ -765,7 +791,7 @@ function OverviewPanel({
                 color: index === 0 ? FACULTY_CLASSROOM_POINTS_COLOR.points : FACULTY_CLASSROOM_POINTS_COLOR.leaderboard,
                 icon: index === 0 ? "trophy-outline" : "ellipse",
               }}
-              onPress={onGoLeaderboard}
+              onPress={() => onSelectStudent(row)}
             />
           ))}
         </View>

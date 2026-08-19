@@ -1,208 +1,322 @@
-import { StyleSheet, Text, View } from "react-native"
-import Animated, { Easing, FadeIn, FadeInDown, ZoomIn, useReducedMotion } from "react-native-reanimated"
-import { Ionicons, type IoniconName } from "@/components/icons/AppIcon"
-import { LOGIN_PORTAL_THUMBS } from "../../lib/login-color-theme"
-import { SolidListThumbTile } from "../theme/SolidListThumbTile"
-import { LoginBrandHeader } from "./LoginBrandHeader"
-import { LoginBackLink, LoginPortalStack } from "./login-chrome"
+import { useState } from "react"
+import { Pressable, StyleSheet, Text, View } from "react-native"
+import { ApiError, api } from "../../lib/api"
+import { parseAccessLifecyclePayload } from "../../lib/access-governance"
+import { useSession } from "../../context/SessionProvider"
+import { parseMfaCompletePayload, parseMfaLoginResponse, type MfaLoginState } from "../../lib/mfa-types"
+import { persistMfaDeviceTrustFromLogin, studentMfaLoginKey } from "../../lib/mfa-device-trust"
+import { MfaLoginStep } from "../auth/MfaLoginStep"
+import { AccessRequestStatusScreen } from "../auth/AccessRequestStatusScreen"
+import { ErrorBanner, InfoBanner, LoginFieldGroup } from "./LoginCard"
+import { LoginButton, LoginField, LoginPasswordToggle } from "./LoginButton"
+import { LoginBackLink, LoginPortalHeader, LoginPortalStack } from "./login-chrome"
 import { useLoginTheme } from "./login-theme"
 
 type Props = {
   onBack?: () => void
 }
 
-const MOTION = {
-  step: 55,
-  fade: 380,
-  badgeSpring: { damping: 22, stiffness: 120, mass: 0.9 },
-} as const
-
-function summerEnter(index: number, reduceMotion: boolean | null) {
-  if (reduceMotion) {
-    return FadeIn.delay(index * 40).duration(220)
-  }
-  return FadeInDown.delay(index * MOTION.step)
-    .duration(MOTION.fade)
-    .easing(Easing.out(Easing.cubic))
-}
-
-function summerBadgeEnter(reduceMotion: boolean | null) {
-  if (reduceMotion) {
-    return FadeIn.duration(220)
-  }
-  return ZoomIn.delay(MOTION.step)
-    .springify()
-    .damping(MOTION.badgeSpring.damping)
-    .stiffness(MOTION.badgeSpring.stiffness)
-    .mass(MOTION.badgeSpring.mass)
-}
-
-const EXPECTATIONS: Array<{ icon: IoniconName; title: string; body: string }> = [
-  {
-    icon: "school-outline",
-    title: "Training Tracks",
-    body: "Browse camp trainings, follow a learning roadmap, and submit checkpoints.",
-  },
-  {
-    icon: "folder-open-outline",
-    title: "Projects & Gallery",
-    body: "Build camp projects and share work in the project gallery.",
-  },
-  {
-    icon: "chatbubbles-outline",
-    title: "Help & Messages",
-    body: "Ask questions in discussions and message instructors from camp.",
-  },
-  {
-    icon: "ribbon-outline",
-    title: "Certificates & Graduation",
-    body: "Earn achievements, climb the leaderboard, and finish with camp graduation.",
-  },
-]
+type AuthTab = "login" | "register"
 
 export function SummerLoginPanel({ onBack }: Props) {
+  const { signIn } = useSession()
   const { LOGIN, loginType } = useLoginTheme()
-  const thumb = LOGIN_PORTAL_THUMBS.summer
-  const reduceMotion = useReducedMotion()
-  const nextBoxIndex = 4 + EXPECTATIONS.length
+
+  const [tab, setTab] = useState<AuthTab>("login")
+  const [email, setEmail] = useState("")
+  const [fullName, setFullName] = useState("")
+  const [school, setSchool] = useState("")
+  const [password, setPassword] = useState("")
+  const [confirmPassword, setConfirmPassword] = useState("")
+  const [showPassword, setShowPassword] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState("")
+  const [success, setSuccess] = useState("")
+  const [mfaState, setMfaState] = useState<MfaLoginState | null>(null)
+  const [accessStatus, setAccessStatus] = useState<ReturnType<typeof parseAccessLifecyclePayload>>(null)
+
+  async function finishSummerLogin(data: Record<string, unknown>) {
+    const normalized = parseMfaCompletePayload(data) ?? data
+    const student = normalized.student as
+      | {
+          id: number
+          student_id: string
+          full_name: string
+          email?: string
+          student_program_role?: string
+        }
+      | undefined
+    if (!student) throw new ApiError("Login failed", 500)
+
+    const authId = email.trim().toLowerCase()
+    await persistMfaDeviceTrustFromLogin({
+      userType: "student",
+      loginKey: studentMfaLoginKey(0, authId),
+      payload: normalized,
+    })
+
+    await signIn({
+      portal: "summer",
+      id: String(student.student_id),
+      name: String(student.full_name),
+      databaseId: String(student.id),
+      email: authId,
+      studentProgramRole: String(student.student_program_role ?? "summer_student"),
+    })
+  }
+
+  async function handleLogin() {
+    setError("")
+    setSuccess("")
+    if (!email.trim().includes("@")) {
+      setError("Enter a valid camp email.")
+      return
+    }
+    if (!password) {
+      setError("Enter your password.")
+      return
+    }
+
+    setSubmitting(true)
+    try {
+      const data = (await api.summerLogin(email, password)) as Record<string, unknown>
+      const mfa = parseMfaLoginResponse(data)
+      if (mfa) {
+        setMfaState(mfa)
+        return
+      }
+      await finishSummerLogin(data)
+    } catch (err) {
+      if (err instanceof ApiError) {
+        const lifecycle = parseAccessLifecyclePayload(err.details)
+        if (lifecycle && lifecycle.lifecycle !== "active" && lifecycle.lifecycle !== "not_found") {
+          setAccessStatus(lifecycle)
+          return
+        }
+        setError(err.message)
+      } else {
+        setError("Sign in failed. Please try again.")
+      }
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function handleRegister() {
+    setError("")
+    setSuccess("")
+    if (!fullName.trim() || !email.trim().includes("@") || !school.trim()) {
+      setError("Enter your name, school, and a valid email.")
+      return
+    }
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters.")
+      return
+    }
+    if (password !== confirmPassword) {
+      setError("Passwords do not match.")
+      return
+    }
+
+    setSubmitting(true)
+    try {
+      const result = await api.requestSummerAccount({
+        fullName: fullName.trim(),
+        email: email.trim(),
+        school: school.trim(),
+        password,
+        confirmPassword,
+      })
+
+      if (result.autoApproved) {
+        const loginData = (await api.summerLogin(email, password)) as Record<string, unknown>
+        const mfa = parseMfaLoginResponse(loginData)
+        if (mfa) {
+          setMfaState(mfa)
+          return
+        }
+        await finishSummerLogin(loginData)
+        return
+      }
+
+      setAccessStatus({
+        lifecycle: "pending_email_verification",
+        accountType: "summer_student",
+        request: {
+          fullName: fullName.trim(),
+          email: email.trim(),
+          organization: school.trim(),
+        },
+      })
+      setSuccess(result.message ?? "Request submitted.")
+      setTab("login")
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not submit camp account request.")
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  if (accessStatus) {
+    return (
+      <AccessRequestStatusScreen
+        payload={accessStatus}
+        portalLabel="Summer Camp"
+        onBack={() => setAccessStatus(null)}
+      />
+    )
+  }
+
+  if (mfaState) {
+    return (
+      <MfaLoginStep
+        state={mfaState}
+        portalLabel="Summer Camp"
+        backLabel="Back to Summer Camp sign in"
+        onComplete={(payload) => finishSummerLogin(payload)}
+        onBack={() => setMfaState(null)}
+      />
+    )
+  }
 
   return (
     <LoginPortalStack>
-      <Animated.View entering={summerEnter(0, reduceMotion)}>
-        <LoginBrandHeader
-          title="Summer Camp"
-          subtitle="Camper sign-in opens when camp starts."
-        />
-      </Animated.View>
+      <LoginPortalHeader portal="summer" />
 
-      <Animated.View entering={summerBadgeEnter(reduceMotion)} style={styles.badgeWrap}>
-        <View
-          style={[
-            styles.badge,
-            {
-              backgroundColor: LOGIN.gold,
-              borderColor: LOGIN.isDark ? `${LOGIN.goldInk}44` : `${LOGIN.goldInk}22`,
-            },
-          ]}
-          accessibilityRole="text"
-          accessibilityLabel="Coming soon"
+      <View style={styles.tabRow}>
+        <Pressable
+          style={[styles.tabBtn, tab === "login" && { backgroundColor: LOGIN.gold, borderColor: LOGIN.gold }]}
+          onPress={() => {
+            setTab("login")
+            setError("")
+            setSuccess("")
+          }}
         >
-          <Ionicons name="time-outline" size={16} color={LOGIN.goldInk} />
-          <Text style={[styles.badgeLabel, { color: LOGIN.goldInk }]}>Coming Soon</Text>
-        </View>
-      </Animated.View>
-
-      <Animated.View entering={summerEnter(2, reduceMotion)}>
-        <Text style={[loginType.panelDescription, styles.intro, { color: LOGIN.secondaryLabel }]}>
-          Summer Camp sign-in is not open in this release. When camp starts, campers will sign in
-          with the welcome email and password from their instructor.
-        </Text>
-      </Animated.View>
-
-      <Animated.View entering={summerEnter(3, reduceMotion)} style={styles.section}>
-        <Text style={[loginType.stepLabel, { color: LOGIN.label }]}>What To Expect</Text>
-        <View
-          style={[
-            styles.list,
-            {
-              backgroundColor: LOGIN.grouped,
-              borderColor: LOGIN.separator,
-              borderRadius: LOGIN.sectionRadius,
-            },
-          ]}
+          <Text style={[styles.tabText, tab === "login" && { color: LOGIN.purpleDark }]}>Sign in</Text>
+        </Pressable>
+        <Pressable
+          style={[styles.tabBtn, tab === "register" && { backgroundColor: LOGIN.gold, borderColor: LOGIN.gold }]}
+          onPress={() => {
+            setTab("register")
+            setError("")
+            setSuccess("")
+          }}
         >
-          {EXPECTATIONS.map((item, index) => (
-            <Animated.View
-              key={item.title}
-              entering={summerEnter(4 + index, reduceMotion)}
-              style={[
-                styles.row,
-                index < EXPECTATIONS.length - 1 && {
-                  borderBottomWidth: StyleSheet.hairlineWidth,
-                  borderBottomColor: LOGIN.separator,
-                },
-              ]}
-            >
-              <SolidListThumbTile thumb={thumb} icon={item.icon} size="compact" />
-              <View style={styles.rowCopy}>
-                <Text style={[loginType.body, styles.rowTitle, { color: LOGIN.label }]}>
-                  {item.title}
-                </Text>
-                <Text style={[loginType.info, { color: LOGIN.secondaryLabel }]}>{item.body}</Text>
-              </View>
-            </Animated.View>
-          ))}
-        </View>
-      </Animated.View>
+          <Text style={[styles.tabText, tab === "register" && { color: LOGIN.purpleDark }]}>Request account</Text>
+        </Pressable>
+      </View>
 
-      <Animated.View entering={summerEnter(nextBoxIndex, reduceMotion)}>
-        <View
-          style={[
-            styles.nextBox,
-            {
-              backgroundColor: LOGIN.accentSoft,
-              borderColor: LOGIN.softBorder,
-              borderRadius: LOGIN.sectionRadius,
-            },
-          ]}
-        >
-          <Text style={[loginType.stepLabel, styles.nextTitle, { color: LOGIN.label }]}>
-            What You Can Do Now
-          </Text>
-          <Text style={[loginType.info, { color: LOGIN.secondaryLabel }]}>
-            Watch for a camp welcome email when enrollment opens. If you already have a university
-            course this term, use Student sign-in instead.
-          </Text>
-        </View>
-      </Animated.View>
+      {tab === "login" ? (
+        <>
+          <InfoBanner>
+            Sign in with the camp email and password from your welcome message.
+          </InfoBanner>
+          <LoginFieldGroup>
+            <LoginField
+              label="Email"
+              value={email}
+              onChangeText={setEmail}
+              placeholder="camper@school.edu"
+              autoCapitalize="none"
+              keyboardType="email-address"
+              grouped
+            />
+            <LoginField
+              label="Password"
+              value={password}
+              onChangeText={setPassword}
+              placeholder="Enter your password"
+              secureTextEntry={!showPassword}
+              grouped
+              last
+              trailing={<LoginPasswordToggle visible={showPassword} onToggle={() => setShowPassword((v) => !v)} />}
+            />
+          </LoginFieldGroup>
+        </>
+      ) : (
+        <>
+          <InfoBanner>
+            New campers can request access here. Verify your email, then wait for camp faculty approval if required.
+          </InfoBanner>
+          <LoginFieldGroup>
+            <LoginField
+              label="Full name"
+              value={fullName}
+              onChangeText={setFullName}
+              placeholder="First Last"
+              grouped
+            />
+            <LoginField
+              label="Email"
+              value={email}
+              onChangeText={setEmail}
+              placeholder="camper@school.edu"
+              autoCapitalize="none"
+              keyboardType="email-address"
+              grouped
+            />
+            <LoginField
+              label="School"
+              value={school}
+              onChangeText={setSchool}
+              placeholder="Your school or organization"
+              grouped
+            />
+            <LoginField
+              label="Password"
+              value={password}
+              onChangeText={setPassword}
+              placeholder="At least 8 characters"
+              secureTextEntry={!showPassword}
+              grouped
+              trailing={<LoginPasswordToggle visible={showPassword} onToggle={() => setShowPassword((v) => !v)} />}
+            />
+            <LoginField
+              label="Confirm password"
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              placeholder="Re-enter password"
+              secureTextEntry={!showPassword}
+              grouped
+              last
+            />
+          </LoginFieldGroup>
+        </>
+      )}
 
-      {onBack ? (
-        <Animated.View entering={summerEnter(nextBoxIndex + 1, reduceMotion)}>
-          <LoginBackLink label="Other sign-in options" onPress={onBack} />
-        </Animated.View>
+      {error ? <ErrorBanner message={error} /> : null}
+      {success ? (
+        <Text style={[loginType.info, { color: LOGIN.secondaryLabel, textAlign: "center" }]}>{success}</Text>
       ) : null}
+
+      <LoginButton
+        label={tab === "login" ? "Sign in" : "Submit request"}
+        onPress={() => void (tab === "login" ? handleLogin() : handleRegister())}
+        loading={submitting}
+      />
+
+      {onBack ? <LoginBackLink label="Other sign-in options" onPress={onBack} /> : null}
     </LoginPortalStack>
   )
 }
 
 const styles = StyleSheet.create({
-  badgeWrap: { alignSelf: "center" },
-  badge: {
+  tabRow: {
     flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    gap: 8,
+  },
+  tabBtn: {
+    flex: 1,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(88, 44, 131, 0.18)",
     borderRadius: 999,
-    borderWidth: StyleSheet.hairlineWidth,
+    paddingVertical: 10,
+    alignItems: "center",
+    backgroundColor: "#ffffff",
   },
-  badgeLabel: {
-    fontSize: 13,
-    fontWeight: "700",
+  tabText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#582c83",
   },
-  intro: {
-    textAlign: "center",
-    lineHeight: 22,
-  },
-  section: { gap: 10 },
-  list: {
-    overflow: "hidden",
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  row: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  rowCopy: { flex: 1, gap: 2 },
-  rowTitle: { fontWeight: "600" },
-  nextBox: {
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    gap: 6,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  nextTitle: { fontSize: 15 },
 })

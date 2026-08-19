@@ -152,7 +152,7 @@ export function formatDisplayAnswer(raw: string | null, q: AssessmentResultQuest
     return tokens
       .map((token) => {
         const resolved = resolveOptionFromToken(q, token)
-        return resolved.letter ? `${resolved.letter}. ${stripHtml(resolved.text)}` : stripHtml(resolved.text)
+        return resolved.letter ? `${resolved.letter}. ${resolved.text}` : resolved.text
       })
       .join("\n")
   }
@@ -160,7 +160,7 @@ export function formatDisplayAnswer(raw: string | null, q: AssessmentResultQuest
   if (hasMcqOptions(q) && !isCodeQuestionType(type)) {
     const resolved = resolveOptionFromToken(q, raw)
     if (resolved.letter) {
-      return `${resolved.letter}. ${stripHtml(resolved.text)}`
+      return `${resolved.letter}. ${resolved.text}`
     }
   }
 
@@ -168,7 +168,7 @@ export function formatDisplayAnswer(raw: string | null, q: AssessmentResultQuest
     return raw
   }
 
-  return stripHtml(raw)
+  return raw
 }
 
 export function formatCorrectAnswer(q: AssessmentResultQuestion): string | null {
@@ -181,19 +181,19 @@ export function formatCorrectAnswer(q: AssessmentResultQuestion): string | null 
     return tokens
       .map((token) => {
         const resolved = resolveOptionFromToken(q, token)
-        return resolved.letter ? `${resolved.letter}. ${stripHtml(resolved.text)}` : stripHtml(resolved.text)
+        return resolved.letter ? `${resolved.letter}. ${resolved.text}` : resolved.text
       })
       .join("\n")
   }
 
   if (hasMcqOptions(q)) {
     const resolved = resolveOptionFromToken(q, String(raw))
-    if (resolved.letter) return `${resolved.letter}. ${stripHtml(resolved.text)}`
+    if (resolved.letter) return `${resolved.letter}. ${resolved.text}`
   }
 
   if (isCodeQuestionType(type)) return String(raw)
 
-  return stripHtml(String(raw))
+  return String(raw)
 }
 
 export function shouldShowCorrectAnswer(q: AssessmentResultQuestion): boolean {

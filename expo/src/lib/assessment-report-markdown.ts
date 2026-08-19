@@ -1,4 +1,4 @@
-import { repairLatexDamagedByJsonEscapes } from "./classroom-submission"
+import { needsQuestionRichRender, repairLatexDamagedByJsonEscapes } from "./classroom-submission"
 
 const LATEX_COMMAND_RE =
   /\\(?:frac|tfrac|cdot|cdotp|times|mathrm|text|mathbf|mathit|Omega|mu|alpha|beta|sqrt|left|right|boxed|Rightarrow|pm|mp|leq|geq|neq|approx|sum|int|infty|partial|nabla|vec|hat|bar|dot)\b/
@@ -107,6 +107,7 @@ export function hasReportMathContent(input: string): boolean {
 export function needsMarkdownRichRender(input: string): boolean {
   const t = input.trim()
   if (!t) return false
+  if (needsQuestionRichRender(t)) return true
   if (hasReportMathContent(t)) return true
   if (/^[-*+]\s/m.test(t) || /^\d+[.)]\s/m.test(t)) return true
   if (/\*\*|__|`/.test(t)) return true

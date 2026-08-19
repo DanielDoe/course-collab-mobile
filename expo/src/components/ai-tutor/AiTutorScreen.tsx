@@ -95,12 +95,13 @@ import {
   rebuildThreadAfterVersionChange,
   saveAssistantOnActiveVersion,
 } from "../../lib/cora-message-versions"
-import { loadCoraPreferences } from "../../lib/cora-preferences-storage"
-import type { CoraLearningMemory } from "../../lib/cora-preferences-storage"
+import { loadCoraLocalPreferences, type CoraPreferences } from "../../lib/cora-preferences-storage"
+import { fetchCoraServerPrivacy } from "../../lib/cora-privacy-api"
 import type { StudentContextPayload } from "../../lib/student-context-api"
 import { loadCoraStudentContext } from "../../lib/cora-student-context-loader"
 import { enrichStudentContextForMessage } from "../../lib/student-cora-platform-lookup"
 import { formatStudentContextForPrompt } from "../../lib/format-student-context-for-prompt"
+import { minimizeStudentContextForExternalAi, resolveExternalAiContextLevel, type ExternalAiStudentContext } from "../../lib/cora-privacy-minimization"
 import {
   CALENDAR_ASSISTANT_PROMPT,
   EXAM_COUNTDOWN_PROMPT,
@@ -181,9 +182,19 @@ export function AiTutorScreen() {
   const [progressDetailed, setProgressDetailed] = useState<CoraProgressDetailed | null>(null)
   const [recommendations, setRecommendations] = useState<AiTutorRecommendation[]>([])
   const [credits, setCredits] = useState<AiTutorCredits | null>(null)
-  const [learningMemory, setLearningMemory] = useState<CoraLearningMemory>({
-    rememberGaps: true,
-    detectConfusion: true,
+  const [coraPreferences, setCoraPreferences] = useState<CoraPreferences>({
+    personalizedLearning: true,
+    useLearningContext: true,
+    shareWithInstructor: false,
+    localLearningMemory: true,
+    memory: {
+      "remember-gaps": true,
+      "detect-confusion": true,
+      "remember-strengths": true,
+      "use-course-progress": true,
+      "remember-preferences": true,
+    },
+    clearedMemoryIds: [],
   })
   const [studentContext, setStudentContext] = useState<StudentContextPayload | null>(null)
   const studentContextRef = useRef<StudentContextPayload | null>(null)
@@ -318,7 +329,7 @@ export function AiTutorScreen() {
 
   const resolveCoraPlatformContext = useCallback(async (message?: string) => {
     if (!session) {
-      return { ctx: null as StudentContextPayload | null, block: undefined as string | undefined }
+      return { ctx: null as ExternalAiStudentContext | null, block: undefined as string | undefined }
     }
     try {
       let ctx = await loadCoraStudentContext(session)
@@ -327,22 +338,27 @@ export function AiTutorScreen() {
       }
       studentContextRef.current = ctx
       setStudentContext(ctx)
-      return { ctx, block: formatStudentContextForPrompt(ctx) }
+      const level = resolveExternalAiContextLevel(coraPreferences)
+      const minimized = minimizeStudentContextForExternalAi(ctx, level, coraPreferences)
+      return { ctx: minimized, block: minimized ? formatStudentContextForPrompt(minimized) : undefined }
     } catch {
       const ctx = studentContextRef.current ?? studentContext
-      return { ctx, block: ctx ? formatStudentContextForPrompt(ctx) : undefined }
+      const level = resolveExternalAiContextLevel(coraPreferences)
+      const minimized = minimizeStudentContextForExternalAi(ctx, level, coraPreferences)
+      return { ctx: minimized, block: minimized ? formatStudentContextForPrompt(minimized) : undefined }
     }
-  }, [session, studentContext])
+  }, [session, studentContext, coraPreferences])
 
   const loadData = useCallback(async (options?: { silent?: boolean }) => {
     if (!session) return
     if (!options?.silent) setLoading(true)
     try {
-      const [statsRes, creditsRes, recsRes, prefs, contextResRaw, progressRes] = await Promise.all([
+      const [statsRes, creditsRes, recsRes, localPrefs, serverPrivacy, contextResRaw, progressRes] = await Promise.all([
         aiTutorApi.getStats(session),
         aiTutorApi.getCredits(session),
         aiTutorApi.getRecommendations(session),
-        loadCoraPreferences(session.databaseId),
+        loadCoraLocalPreferences(session.databaseId),
+        fetchCoraServerPrivacy(session),
         aiTutorApi.getStudentContext(session).catch(() => null),
         aiTutorApi.getProgressDetailed(session),
       ])
@@ -361,7 +377,7 @@ export function AiTutorScreen() {
       setProgressDetailed(progressRes)
       setCredits(creditsRes)
       setRecommendations(recsRes.recommendations ?? [])
-      setLearningMemory(prefs)
+      setCoraPreferences({ ...serverPrivacy, ...localPrefs })
       if (contextRes) {
         setStudentContext(contextRes)
         studentContextRef.current = contextRes
@@ -908,7 +924,7 @@ export function AiTutorScreen() {
           problemContext,
           studentContext: platformContext,
           useAgent: true,
-          learningMemory,
+          learningMemory: coraPreferences,
           chatConfig,
           prepared,
           signal,
@@ -1099,13 +1115,13 @@ export function AiTutorScreen() {
         problemContext,
         studentContext: platformContext,
         useAgent: true,
-        learningMemory,
+        learningMemory: coraPreferences,
         prepared,
         signal: streamController.signal,
         threadId: activeThreadId,
       },
     )
-  }, [session, streaming, messages, loadData, flushThreadSave, maxExchanges, prepareNewChat, learningMemory, resolveCoraPlatformContext, membershipTier, handleStreamAborted, activeThreadId])
+  }, [session, streaming, messages, loadData, flushThreadSave, maxExchanges, prepareNewChat, coraPreferences, resolveCoraPlatformContext, membershipTier, handleStreamAborted, activeThreadId])
 
   const editUserMessage = useCallback(
     (message: ChatMessage) => {
@@ -1599,7 +1615,7 @@ export function AiTutorScreen() {
         {
           studentContext: platformContext,
           useAgent: true,
-          learningMemory,
+          learningMemory: coraPreferences,
           prepared,
           signal: streamController.signal,
           threadId: activeThreadId,
@@ -1622,7 +1638,7 @@ export function AiTutorScreen() {
       scheduleRemoteSync,
       loadData,
       flushThreadSave,
-      learningMemory,
+      coraPreferences,
       resolveCoraPlatformContext,
       handleStreamAborted,
       activeThreadId,

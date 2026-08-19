@@ -1,4 +1,5 @@
 import type { StudentContextPayload } from "./student-context-api"
+import type { ExternalAiStudentContext } from "./cora-privacy-minimization"
 
 function num(v: unknown): number {
   const n = Number(v)
@@ -13,7 +14,7 @@ function formatDate(iso?: string | null): string {
 }
 
 /** Formats CourseCollab student snapshot for Cora prompts (mobile-side injection). */
-export function formatStudentContextForPrompt(ctx: StudentContextPayload): string {
+export function formatStudentContextForPrompt(ctx: StudentContextPayload | ExternalAiStudentContext): string {
   const lines: string[] = [
     "[CourseCollab platform data — live read-only snapshot from CourseCollab APIs. Use this data directly to answer. Do NOT ask the student to paste grade exports or assessment lists when data appears below.]",
     "",
@@ -23,7 +24,6 @@ export function formatStudentContextForPrompt(ctx: StudentContextPayload): strin
   const account = ctx.account
   if (account) {
     lines.push(
-      `- Student: ${account.fullName ?? "Unknown"} (${account.studentCode ?? account.studentDbId})`,
       `- Course: ${account.courseCode ?? "—"}${account.courseTitle ? ` — ${account.courseTitle}` : ""}`,
       `- Section: ${account.section ?? "—"}`,
     )

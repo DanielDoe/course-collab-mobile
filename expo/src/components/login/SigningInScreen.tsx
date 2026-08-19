@@ -5,20 +5,19 @@ import { useSafeAreaInsets } from "react-native-safe-area-context"
 import Animated, { FadeIn } from "react-native-reanimated"
 import { useAppThemeTokens } from "../../context/AppearanceProvider"
 import { useSession } from "../../context/SessionProvider"
-import { resolveStudentPostLoginRoute } from "../../lib/appearance-setup"
 import { bootstrapAfterLogin } from "../../lib/post-login-bootstrap"
-import { resolveFacultyPostLoginRoute } from "../../lib/faculty-post-login"
+import { resolvePostLoginRoute } from "../../lib/onboarding"
 import type { AppSession } from "../../lib/session"
 import { useLoginTheme } from "./login-theme"
 import { BrandLoadingMark } from "./BrandLoadingMark"
 import { resetToAppRoute, replaceAuthRoute, navigatePostSignIn } from "../../lib/navigation-reset"
 
 const STEPS: Record<AppSession["portal"], string[]> = {
-  student: ["Signing you in", "Loading your course data", "Preparing your dashboard"],
-  faculty: ["Signing you in", "Loading your courses", "Choose your course"],
-  guest: ["Signing you in", "Setting up your Career Member workspace"],
-  summer: ["Signing you in", "Loading camp workspace"],
-  admin: ["Signing you in", "Loading admin workspace"],
+  student: ["Signing you in", "Loading your course data", "Preparing onboarding"],
+  faculty: ["Signing you in", "Loading your courses", "Preparing onboarding"],
+  guest: ["Signing you in", "Setting up your workspace", "Preparing onboarding"],
+  summer: ["Signing you in", "Loading camp workspace", "Preparing onboarding"],
+  admin: ["Signing you in", "Loading admin workspace", "Preparing onboarding"],
 }
 
 export function SigningInScreen() {
@@ -83,25 +82,8 @@ export function SigningInScreen() {
       try {
         await bootstrapAfterLogin(session)
         if (cancelled) return
-        if (session.portal === "student") {
-          if (session.requiresPasswordChange) {
-            navigatePostSignIn(router, "/change-password")
-            return
-          }
-          const next = await resolveStudentPostLoginRoute(session)
-          navigatePostSignIn(router, next)
-          return
-        }
-        if (session.portal === "faculty") {
-          if (session.requiresPasswordChange) {
-            navigatePostSignIn(router, "/change-password")
-            return
-          }
-          const next = await resolveFacultyPostLoginRoute(session)
-          navigatePostSignIn(router, next)
-          return
-        }
-        resetToAppRoute(router, "/dashboard")
+        const next = await resolvePostLoginRoute(session)
+        navigatePostSignIn(router, next)
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : "Could not finish signing in.")

@@ -25,6 +25,12 @@ export function formatClassroomDisplayText(text: string | null | undefined): str
     .trim()
 }
 
+/** Keep markdown line breaks so assignment descriptions can render. */
+export function formatClassroomMarkdownText(text: string | null | undefined): string {
+  if (!text?.trim()) return ""
+  return text.replace(/§\s*/g, "").replace(/\r\n/g, "\n").trim()
+}
+
 export function classroomPointTitle(point: Pick<ClassroomPointRow, "submission_title" | "reason">): string {
   const raw = point.submission_title?.trim() || point.reason?.trim() || "Submission"
   return formatClassroomDisplayText(raw) || "Submission"

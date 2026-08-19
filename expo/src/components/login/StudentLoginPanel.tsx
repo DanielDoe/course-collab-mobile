@@ -37,6 +37,8 @@ import { LoginBrandHeader } from "./LoginBrandHeader"
 import { UniversityAuthLogoImage } from "./UniversityAuthLogoImage"
 import { LoginBackLink, LoginPortalStack } from "./login-chrome"
 import { useLoginTheme } from "./login-theme"
+import { parseAccessLifecyclePayload } from "../../lib/access-governance"
+import { AccessRequestStatusScreen } from "../auth/AccessRequestStatusScreen"
 import { parseMfaCompletePayload, parseMfaLoginResponse, type MfaLoginState } from "../../lib/mfa-types"
 
 type Step = "university" | "credentials" | "course" | "mfa"
@@ -94,6 +96,7 @@ export function StudentLoginPanel({ onBack }: Props) {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState("")
   const [mfaState, setMfaState] = useState<MfaLoginState | null>(null)
+  const [accessStatus, setAccessStatus] = useState<ReturnType<typeof parseAccessLifecyclePayload>>(null)
 
   useEffect(() => {
     let mounted = true
@@ -271,7 +274,16 @@ export function StudentLoginPanel({ onBack }: Props) {
 
       await finishLogin(data)
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Login failed. Please try again.")
+      if (err instanceof ApiError) {
+        const lifecycle = parseAccessLifecyclePayload(err.details)
+        if (lifecycle && lifecycle.lifecycle !== "active" && lifecycle.lifecycle !== "not_found") {
+          setAccessStatus(lifecycle)
+          return
+        }
+        setError(err.message)
+      } else {
+        setError("Login failed. Please try again.")
+      }
     } finally {
       setSubmitting(false)
     }
@@ -535,6 +547,16 @@ export function StudentLoginPanel({ onBack }: Props) {
 
         {onBack ? <LoginBackLink label="Other sign-in options" onPress={onBack} /> : null}
       </LoginPortalStack>
+    )
+  }
+
+  if (accessStatus) {
+    return (
+      <AccessRequestStatusScreen
+        payload={accessStatus}
+        portalLabel={selectedUniversity?.short_name ?? "Student"}
+        onBack={() => setAccessStatus(null)}
+      />
     )
   }
 

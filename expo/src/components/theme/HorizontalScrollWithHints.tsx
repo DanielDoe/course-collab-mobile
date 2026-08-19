@@ -1,15 +1,15 @@
-import { useCallback, useRef, useState, type ReactNode } from "react"
+import { useCallback, useRef, useState, type ReactNode, type RefObject } from "react"
 import {
   LayoutChangeEvent,
   NativeScrollEvent,
   NativeSyntheticEvent,
   Pressable,
-  ScrollView,
   StyleSheet,
   View,
   type StyleProp,
   type ViewStyle,
 } from "react-native"
+import { ScrollView } from "react-native-gesture-handler"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { NATIVE } from "../../constants/faculty-native-theme"
 import { useThemedNative } from "../../context/AppearanceProvider"
@@ -31,6 +31,10 @@ type Props = {
   edgeGutter?: number
   contentContainerStyle?: StyleProp<ViewStyle>
   style?: StyleProp<ViewStyle>
+  /** Optional ref for programmatic scroll (e.g. keep active tab visible). */
+  scrollRef?: RefObject<ScrollView | null>
+  onScroll?: (event: NativeSyntheticEvent<NativeScrollEvent>) => void
+  onLayout?: (event: LayoutChangeEvent) => void
 }
 
 /**
@@ -43,8 +47,12 @@ export function HorizontalScrollWithHints({
   edgeGutter = NATIVE.pagePadding,
   contentContainerStyle,
   style,
+  scrollRef: scrollRefProp,
+  onScroll,
+  onLayout,
 }: Props) {
-  const scrollRef = useRef<ScrollView>(null)
+  const scrollRefInternal = useRef<ScrollView>(null)
+  const scrollRef = scrollRefProp ?? scrollRefInternal
   const native = useThemedNative()
   const [metrics, setMetrics] = useState<ScrollMetrics>({
     scrollX: 0,
@@ -67,6 +75,11 @@ export function HorizontalScrollWithHints({
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={contentContainerStyle}
         keyboardShouldPersistTaps="handled"
+        nestedScrollEnabled
+        directionalLockEnabled
+        scrollEventThrottle={16}
+        onScroll={onScroll}
+        onLayout={onLayout}
       >
         {children}
       </ScrollView>
@@ -80,10 +93,19 @@ export function HorizontalScrollWithHints({
   const updateMetrics = useCallback((next: Partial<ScrollMetrics>) => {
     setMetrics((prev) => {
       const merged = { ...prev, ...next }
+      const overflowNow = merged.contentWidth > merged.layoutWidth + EDGE_EPSILON
+      const overflowWas = prev.contentWidth > prev.layoutWidth + EDGE_EPSILON
+      const leftNow = overflowNow && merged.scrollX > EDGE_EPSILON
+      const leftWas = overflowWas && prev.scrollX > EDGE_EPSILON
+      const rightNow =
+        overflowNow && merged.scrollX + merged.layoutWidth < merged.contentWidth - EDGE_EPSILON
+      const rightWas =
+        overflowWas && prev.scrollX + prev.layoutWidth < prev.contentWidth - EDGE_EPSILON
       if (
-        merged.scrollX === prev.scrollX &&
         merged.layoutWidth === prev.layoutWidth &&
-        merged.contentWidth === prev.contentWidth
+        merged.contentWidth === prev.contentWidth &&
+        leftNow === leftWas &&
+        rightNow === rightWas
       ) {
         return prev
       }
@@ -127,32 +149,34 @@ export function HorizontalScrollWithHints({
   )
 
   const renderEdgeHint = (direction: "left" | "right", visible: boolean) => {
-    if (!visible) return null
+    if (!hintsActive) return null
     return (
       <View style={[styles.edgeGutter, { width: edgeGutter }]}>
-        <Pressable
-          style={({ pressed }) => [
-            styles.arrowHit,
-            { width: edgeGutter },
-            pressed && styles.arrowPressed,
-          ]}
-          onPress={() => scrollBy(direction === "left" ? -SCROLL_STEP : SCROLL_STEP)}
-          accessibilityRole="button"
-          accessibilityLabel={direction === "left" ? "Show previous tabs" : "Show more tabs"}
-        >
-          <View
-            style={[
-              styles.arrowIcon,
-              { backgroundColor: arrowBg, borderColor: arrowBorder },
+        {visible ? (
+          <Pressable
+            style={({ pressed }) => [
+              styles.arrowHit,
+              { width: edgeGutter },
+              pressed && styles.arrowPressed,
             ]}
+            onPress={() => scrollBy(direction === "left" ? -SCROLL_STEP : SCROLL_STEP)}
+            accessibilityRole="button"
+            accessibilityLabel={direction === "left" ? "Show previous tabs" : "Show more tabs"}
           >
-            <Ionicons
-              name={direction === "left" ? "chevron-back" : "chevron-forward"}
-              size={13}
-              color={arrowColor}
-            />
-          </View>
-        </Pressable>
+            <View
+              style={[
+                styles.arrowIcon,
+                { backgroundColor: arrowBg, borderColor: arrowBorder },
+              ]}
+            >
+              <Ionicons
+                name={direction === "left" ? "chevron-back" : "chevron-forward"}
+                size={13}
+                color={arrowColor}
+              />
+            </View>
+          </Pressable>
+        ) : null}
       </View>
     )
   }
@@ -168,12 +192,20 @@ export function HorizontalScrollWithHints({
           style={styles.scroll}
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={contentContainerStyle}
-          onLayout={onScrollLayout}
+          onLayout={(event) => {
+            onScrollLayout(event)
+            onLayout?.(event)
+          }}
           onContentSizeChange={onContentSizeChange}
-          onScroll={syncScrollMetrics}
+          onScroll={(event) => {
+            syncScrollMetrics(event)
+            onScroll?.(event)
+          }}
           onMomentumScrollEnd={syncScrollMetrics}
           scrollEventThrottle={16}
           keyboardShouldPersistTaps="handled"
+          nestedScrollEnabled
+          directionalLockEnabled
         >
           {children}
         </ScrollView>

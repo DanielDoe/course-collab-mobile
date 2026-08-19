@@ -18,6 +18,8 @@ import {
   likertLabel,
 } from "../../constants/course-evaluation-survey"
 import { NATIVE, SYSTEM } from "../../constants/faculty-native-theme"
+import { evaluationRowBelongsToCourse } from "../../lib/course-sections"
+import { computeFacultyCourseEvaluationAnalytics } from "../../lib/faculty-course-evaluations-utils"
 import { useFacultyScope } from "../../hooks/useFacultyScope"
 import { useNotificationModuleRefresh } from "../../lib/notifications/notification-events"
 import { semanticSoft, useNativeType } from "../../lib/themed-module-theme"
@@ -426,7 +428,7 @@ function DetailSheet({
 export function FacultyCourseEvaluationsScreen() {
   const { styles: moduleStyles, native, tokens, type } = useModuleTheme()
   const { listScrollPad } = useFacultyStickyHeaderScrollLayout()
-  const { scope, ready } = useFacultyScope()
+  const { scope, ready, course } = useFacultyScope()
 
   const [tab, setTab] = useState<Tab>("pending")
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all")
@@ -447,18 +449,22 @@ export function FacultyCourseEvaluationsScreen() {
   const load = useCallback(async () => {
     if (!scope) return
     setError("")
-    const [pendingRows, evalRows, analyticsData] = await Promise.all([
-      instructorApi.getCourseEvaluations(scope, { status: "pending", session: "all" }),
-      instructorApi.getCourseEvaluations(scope, {
-        status: statusFilter,
-        session: "all",
-      }),
-      instructorApi.getCourseEvaluationAnalytics(scope, "all"),
+    const [allRows, sessionRes] = await Promise.all([
+      instructorApi.getCourseEvaluations(scope, { status: "all", session: "all" }),
+      instructorApi.getSessions(scope).catch(() => ({ sessions: [] as { code: string }[] })),
     ])
-    setPending(pendingRows)
-    setEvaluations(evalRows)
-    setAnalytics(analyticsData)
-  }, [scope, statusFilter])
+    const sessionCodes = (sessionRes.sessions ?? []).map((row) => row.code).filter(Boolean)
+    const scoped = allRows.filter((row) =>
+      evaluationRowBelongsToCourse(row, course?.course_code, sessionCodes),
+    )
+    setPending(scoped.filter((row) => String(row.status ?? "").toLowerCase() === "pending"))
+    setEvaluations(
+      statusFilter === "all"
+        ? scoped
+        : scoped.filter((row) => String(row.status ?? "").toLowerCase() === statusFilter),
+    )
+    setAnalytics(computeFacultyCourseEvaluationAnalytics(scoped))
+  }, [scope, statusFilter, course?.course_code])
 
   useEffect(() => {
     if (!ready) {
@@ -493,7 +499,13 @@ export function FacultyCourseEvaluationsScreen() {
       setNote("")
       setDetailLoading(true)
       try {
-        setDetail(await instructorApi.getCourseEvaluation(scope, id))
+        const row = await instructorApi.getCourseEvaluation(scope, id)
+        if (!evaluationRowBelongsToCourse(row, course?.course_code)) {
+          AppAlert.alert("Could not open", "This evaluation belongs to another course.")
+          setDetailId(null)
+          return
+        }
+        setDetail(row)
       } catch (err) {
         AppAlert.alert(
           "Could not open",
@@ -504,7 +516,7 @@ export function FacultyCourseEvaluationsScreen() {
         setDetailLoading(false)
       }
     },
-    [scope],
+    [scope, course?.course_code],
   )
 
   const closeDetail = () => {
@@ -701,6 +713,7 @@ export function FacultyCourseEvaluationsScreen() {
               <KpiTile
                 label="Returned"
                 value={String(analytics?.totals.rejected ?? 0)}
+                hint="To student"
                 accent={tokens.danger}
               />
             </View>
@@ -926,7 +939,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   kpiDotInner: { width: 8, height: 8, borderRadius: 4 },
-  kpiValue: { fontSize: 18, fontWeight: "800", letterSpacing: -0.3 },
+  kpiValue: { fontSize: 18, lineHeight: 24, fontWeight: "800", letterSpacing: -0.3 },
   card: {
     borderRadius: NATIVE.sectionRadius,
     borderWidth: StyleSheet.hairlineWidth,

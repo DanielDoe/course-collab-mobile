@@ -1,5 +1,6 @@
 import { Platform, Share } from "react-native"
 import { NATIVE } from "../constants/faculty-native-theme"
+import { questionPlainText } from "./classroom-submission"
 
 /** Report template IDs — aligned with web `app/instructor/reports/page.tsx`. */
 export type InstructorReportTemplateId =
@@ -258,7 +259,8 @@ export function formatReportCellValue(value: unknown): string {
     }
   }
   const text = String(value)
-  return text.length > 240 ? `${text.slice(0, 237)}…` : text
+  const readable = questionPlainText(text) || text
+  return readable.length > 240 ? `${readable.slice(0, 237)}…` : readable
 }
 
 export function filterReportDataRows(

@@ -49,7 +49,7 @@ export function FacultyTopBar({ session }: Props) {
         >
           <Ionicons
             name={nestedHeader ? "chevron-back" : "menu-outline"}
-            size={nestedHeader ? 26 : 24}
+            size={24}
             color={chrome.label}
           />
         </Pressable>

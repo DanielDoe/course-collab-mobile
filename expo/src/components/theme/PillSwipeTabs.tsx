@@ -86,8 +86,8 @@ export function PillSwipeTabs<T extends string>({
   const nativeScroll = Gesture.Native()
 
   const panGesture = Gesture.Pan()
-    .activeOffsetX([-14, 14])
-    .failOffsetY([-10, 10])
+    .activeOffsetX([-10, 10])
+    .failOffsetY([-16, 16])
     .simultaneousWithExternalGesture(nativeScroll)
     .onBegin(() => {
       dragStartX.value = translateX.value
@@ -138,7 +138,9 @@ export function PillSwipeTabs<T extends string>({
                   key={options[index]?.id ?? `page-${index}`}
                   style={[styles.page, { width: pageWidth, paddingHorizontal: pagePaddingHorizontal }]}
                 >
-                  {page}
+                  <GestureDetector gesture={nativeScroll}>
+                    <View style={styles.pageBody}>{page}</View>
+                  </GestureDetector>
                 </View>
               ))}
             </Animated.View>
@@ -163,6 +165,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   page: {
+    flex: 1,
+    minHeight: 0,
+  },
+  pageBody: {
     flex: 1,
     minHeight: 0,
   },

@@ -52,7 +52,7 @@
     <key>NSCameraUsageDescription</key>
     <string>CourseCollab needs camera access for assignment photos.</string>
     <key>NSFaceIDUsageDescription</key>
-    <string>Allow $(PRODUCT_NAME) to access your Face ID biometric data.</string>
+    <string>CourseCollab uses Face ID to protect your saved login session in Secure Store.</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>CourseCollab needs microphone access for lecture recording in AI Notetaker and voice dictation in Cora.</string>
     <key>NSPhotoLibraryUsageDescription</key>

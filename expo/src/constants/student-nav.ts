@@ -254,7 +254,20 @@ export function isImmersiveStudentWebPath(webPath: string): boolean {
 export function resolveStudentNativeRouteFromWebPath(webPath: string): string | null {
   if (isImmersiveStudentWebPath(webPath)) return null
 
-  const pathOnly = decodeURIComponent(webPath).split("?")[0]?.replace(/\/$/, "") ?? ""
+  const decoded = decodeURIComponent(webPath)
+  const pathOnly = decoded.split("?")[0]?.replace(/\/$/, "") ?? ""
+  if (pathOnly === "/student/login") {
+    try {
+      const invite = new URLSearchParams(decoded.split("?")[1] ?? "").get("invite")?.trim()
+      if (invite) {
+        return `/login?invite=${encodeURIComponent(invite)}`
+      }
+    } catch {
+      /* ignore malformed query */
+    }
+    return "/login"
+  }
+
   if (
     !pathOnly ||
     pathOnly === "/student/dashboard-v2" ||

@@ -27,7 +27,8 @@ import {
 import { FACULTY_CLASSROOM_POINTS_COLOR } from "../../lib/faculty-classroom-points-theme"
 import { semanticSoft } from "../../lib/themed-module-theme"
 import { useModuleTheme } from "../../lib/themed-module-shell"
-import { QuestionContentWebView, QuestionMediaView } from "../rewards/QuestionContent"
+import { QuestionMediaView } from "../rewards/QuestionContent"
+import { FacultyMarkdownEditorField } from "./faculty-markdown-editor-field"
 import { FacultyStatusPill } from "./faculty-shared"
 import {
   FacultySheetContainer,
@@ -90,12 +91,6 @@ const sheetStyles = StyleSheet.create({
   },
   tabBarWrap: { paddingBottom: 4 },
   statusRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
-  previewBox: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 12,
-    padding: 12,
-    gap: 8,
-  },
   helperText: { fontSize: 12, lineHeight: 17, fontWeight: "500" },
   deleteBtn: {
     flexDirection: "row",
@@ -347,17 +342,14 @@ export function FacultyClassroomPointAssignmentDetailModal({
                 />
               </FacultySheetField>
               <FacultySheetField label={isSolution ? "Instructor notes (optional)" : "Assignment description"}>
-                <FacultySheetTextInput
-                  style={collabSheetStyles.textArea}
+                <FacultyMarkdownEditorField
                   value={form.description}
                   onChangeText={(description) => updateForm({ description })}
                   placeholder={
                     isSolution
                       ? "Internal notes for faculty — not shown as the problem statement."
-                      : "Describe what students should implement. Used for AI validation of code submissions."
+                      : "Describe what students should implement. Markdown and LaTeX are supported."
                   }
-                  multiline
-                  textAlignVertical="top"
                 />
               </FacultySheetField>
               {isSolution ? (
@@ -370,24 +362,19 @@ export function FacultyClassroomPointAssignmentDetailModal({
 
           {editTab === "problem" && isSolution ? (
             <>
-              {problemPreview ? (
-                <FacultySheetSection label="Student preview" tone={SHEET_CLASSROOM_POINTS.review}>
-                  <View style={[sheetStyles.previewBox, { borderColor: native.separator, backgroundColor: native.secondaryGrouped }]}>
-                    <QuestionMediaView media={questionConfig.question_media} embedded />
-                    <QuestionContentWebView text={problemPreview} embedded />
-                  </View>
+              {questionConfig.question_media ? (
+                <FacultySheetSection label="Diagram" tone={SHEET_CLASSROOM_POINTS.review}>
+                  <QuestionMediaView media={questionConfig.question_media} embedded />
                 </FacultySheetSection>
               ) : null}
 
               <FacultySheetSection label="Problem content" tone={SHEET_CLASSROOM_POINTS.assignment}>
                 <FacultySheetField label="Problem statement">
-                  <FacultySheetTextInput
-                    style={collabSheetStyles.textAreaLg}
+                  <FacultyMarkdownEditorField
+                    large
                     value={questionConfig.question_text ?? ""}
                     onChangeText={(question_text) => updateQuestionConfig({ question_text })}
                     placeholder="Exercise 3-3: Apply the supernode concept…"
-                    multiline
-                    textAlignVertical="top"
                   />
                 </FacultySheetField>
                 <Text style={[sheetStyles.helperText, { color: native.secondaryLabel }]}>
@@ -395,8 +382,7 @@ export function FacultyClassroomPointAssignmentDetailModal({
                 </Text>
 
                 <FacultySheetField label="Submission instructions">
-                  <FacultySheetTextInput
-                    style={collabSheetStyles.textArea}
+                  <FacultyMarkdownEditorField
                     value={questionConfig.solution_upload_config?.submission_instructions ?? ""}
                     onChangeText={(submission_instructions) =>
                       updateQuestionConfig({
@@ -410,8 +396,6 @@ export function FacultyClassroomPointAssignmentDetailModal({
                       })
                     }
                     placeholder="Show all work. Upload a PDF or photo…"
-                    multiline
-                    textAlignVertical="top"
                   />
                 </FacultySheetField>
 

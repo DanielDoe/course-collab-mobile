@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import { Platform, StyleSheet, Switch, Text, View } from "react-native"
 import { hexToRgba } from "../../constants/app-themes"
 import { ApiError, api } from "../../lib/api"
+import { parseAccessLifecyclePayload } from "../../lib/access-governance"
 import { parseMfaCompletePayload, parseMfaLoginResponse, type MfaLoginState } from "../../lib/mfa-types"
 import { persistMfaDeviceTrustFromLogin, instructorMfaLoginKey, instructorMfaAliasKeys } from "../../lib/mfa-device-trust"
 import {
@@ -15,6 +16,7 @@ import { MfaLoginStep } from "../auth/MfaLoginStep"
 import { ErrorBanner, LoginFieldGroup } from "./LoginCard"
 import { LoginButton, LoginField, LoginPasswordToggle } from "./LoginButton"
 import { LoginBackLink, LoginPortalHeader, LoginPortalStack } from "./login-chrome"
+import { AccessRequestStatusScreen } from "../auth/AccessRequestStatusScreen"
 import { useLoginTheme } from "./login-theme"
 
 type Props = {
@@ -32,6 +34,7 @@ export function StaffLoginPanel({ onBack }: Props) {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState("")
   const [mfaState, setMfaState] = useState<MfaLoginState | null>(null)
+  const [accessStatus, setAccessStatus] = useState<ReturnType<typeof parseAccessLifecyclePayload>>(null)
 
   useEffect(() => {
     let mounted = true
@@ -112,10 +115,29 @@ export function StaffLoginPanel({ onBack }: Props) {
       }
       await finishStaffLogin(data, password)
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Login failed. Please try again.")
+      if (err instanceof ApiError) {
+        const lifecycle = parseAccessLifecyclePayload(err.details)
+        if (lifecycle && lifecycle.lifecycle !== "active" && lifecycle.lifecycle !== "not_found") {
+          setAccessStatus(lifecycle)
+          return
+        }
+        setError(err.message)
+      } else {
+        setError("Login failed. Please try again.")
+      }
     } finally {
       setSubmitting(false)
     }
+  }
+
+  if (accessStatus) {
+    return (
+      <AccessRequestStatusScreen
+        payload={accessStatus}
+        portalLabel="Faculty"
+        onBack={() => setAccessStatus(null)}
+      />
+    )
   }
 
   if (mfaState) {

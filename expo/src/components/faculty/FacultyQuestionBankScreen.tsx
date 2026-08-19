@@ -409,6 +409,7 @@ export function FacultyQuestionBankScreen() {
         keyExtractor={(item) => item.key}
         renderItem={renderBankRow}
         extraData={tab}
+        ItemSeparatorComponent={BankCardSeparator}
         contentContainerStyle={[styles.content, listScrollPad]}
         ListHeaderComponent={listHeader}
         ListEmptyComponent={
@@ -499,6 +500,10 @@ export function FacultyQuestionBankScreen() {
   )
 }
 
+function BankCardSeparator() {
+  return <View style={styles.cardGap} />
+}
+
 const QuestionCard = memo(function QuestionCard({
   question,
   deleted,
@@ -582,7 +587,8 @@ const CustomTypeCard = memo(function CustomTypeCard({
 const styles = StyleSheet.create({
   shell: { flex: 1},
   root: { flex: 1},
-  content: { padding: 16, gap: 14 },
+  content: { padding: 16 },
+  cardGap: { height: 12 },
   center: { flex: 1, justifyContent: "center", padding: 24},
   errorBox: { borderRadius: 12, padding: 12 },
   loadingBox: { paddingVertical: 48, alignItems: "center" },

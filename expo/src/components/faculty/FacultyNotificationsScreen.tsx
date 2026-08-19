@@ -4,6 +4,7 @@ import {
   RefreshControl,
   ScrollView,
   StyleSheet,
+  Text,
   View} from "react-native"
 import { useRouter } from "expo-router"
 import { useModuleScrollContentPadding } from "../../context/ChromeInsetContext"
@@ -17,12 +18,15 @@ import {
   CommSectionFooter,
   CommSectionHeader,
   CommSegmentedControl,
-  CommTintButton,
   useFacultyCommunicationTheme,
 } from "./faculty-communication-ui"
 import { FacultyNotificationDetailSheet } from "./FacultyNotificationDetailSheet"
 import { FACULTY_COMMUNICATION_COLOR } from "../../lib/faculty-communication-theme"
-import { NotificationCenterList } from "./faculty-notifications-ui"
+import {
+  NOTIFICATION_PAGE_SIZE,
+  NotificationCenterList,
+  NotificationInboxFooter,
+} from "./faculty-notifications-ui"
 import { useModuleTheme } from "../../lib/themed-module-shell"
 
 
@@ -39,6 +43,7 @@ export function FacultyNotificationsScreen() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [filter, setFilter] = useState<Filter>("all")
+  const [page, setPage] = useState(0)
   const [notifications, setNotifications] = useState<InstructorNotification[]>([])
   const [selected, setSelected] = useState<InstructorNotification | null>(null)
   const [detailOpen, setDetailOpen] = useState(false)
@@ -67,6 +72,26 @@ export function FacultyNotificationsScreen() {
     () => (filter === "unread" ? notifications.filter((n) => !n.is_read) : notifications),
     [notifications, filter],
   )
+
+  const pageCount = Math.max(1, Math.ceil(visible.length / NOTIFICATION_PAGE_SIZE))
+  const safePage = Math.min(page, pageCount - 1)
+  const paged = useMemo(
+    () =>
+      visible.slice(safePage * NOTIFICATION_PAGE_SIZE, safePage * NOTIFICATION_PAGE_SIZE + NOTIFICATION_PAGE_SIZE),
+    [visible, safePage],
+  )
+  const rangeLabel =
+    visible.length === 0
+      ? undefined
+      : `${safePage * NOTIFICATION_PAGE_SIZE + 1}–${Math.min((safePage + 1) * NOTIFICATION_PAGE_SIZE, visible.length)} of ${visible.length}`
+
+  useEffect(() => {
+    setPage(0)
+  }, [filter])
+
+  useEffect(() => {
+    if (page > pageCount - 1) setPage(pageCount - 1)
+  }, [page, pageCount])
 
   async function handleRefresh() {
     setRefreshing(true)
@@ -135,15 +160,9 @@ export function FacultyNotificationsScreen() {
           ]}
         />
 
-        {unread > 0 ? (
-          <CommTintButton
-            label="Mark All as Read"
-            icon="checkmark-done-outline"
-            onPress={() => void handleMarkAllRead()}
-          />
-        ) : null}
-
-        <CommSectionHeader title="Recent Alerts" />
+        <CommSectionHeader title="Recent Alerts" trailing={rangeLabel ? (
+          <Text style={[comm.type.caption, { color: comm.native.secondaryLabel }]}>{rangeLabel}</Text>
+        ) : undefined} />
 
         {loading ? (
           <ActivityIndicator color={FACULTY_COMMUNICATION_COLOR.link} style={{ marginTop: 28 }} />
@@ -160,8 +179,18 @@ export function FacultyNotificationsScreen() {
             />
           </View>
         ) : (
-          <NotificationCenterList items={visible} onOpen={(item) => void handleOpen(item)} />
+          <NotificationCenterList items={paged} onOpen={(item) => void handleOpen(item)} />
         )}
+
+        {visible.length > 0 ? (
+          <NotificationInboxFooter
+            page={safePage}
+            pageCount={pageCount}
+            onPageChange={setPage}
+            showMarkAllRead={unread > 0}
+            onMarkAllRead={() => void handleMarkAllRead()}
+          />
+        ) : null}
 
         <CommSectionFooter>
           Tap an alert to read the AI summary and full message. Use Open Related Screen when you are ready to jump in.

@@ -7,6 +7,7 @@ export type FacultyBadges = {
   pendingPoints: number
   pendingIssues: number
   officeHours: number
+  courseExchange: number
 }
 
 type FacultyShellContextValue = {
@@ -56,7 +57,9 @@ export function FacultyShellProvider({ children }: { children: ReactNode }) {
   const [badges, setBadgesState] = useState<FacultyBadges>({
     pendingPoints: 0,
     pendingIssues: 0,
-    officeHours: 0})
+    officeHours: 0,
+    courseExchange: 0,
+  })
   const [membershipTier, setMembershipTier] = useState<FacultyMembershipTier>("Free")
   const [membershipTierLoaded, setMembershipTierLoaded] = useState(false)
   const [refreshFacultyData, setRefreshFacultyDataState] = useState<RefreshFacultyDataFn | null>(null)

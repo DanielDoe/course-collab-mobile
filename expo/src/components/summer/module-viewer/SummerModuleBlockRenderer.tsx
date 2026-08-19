@@ -21,6 +21,7 @@ import { getBlockSubmission, isSummerBlockComplete } from "../../../lib/summer-m
 import { useAppThemeTokens, useThemedNative } from "../../../context/AppearanceProvider"
 import { useNativeType, semanticSoft } from "../../../lib/themed-module-theme"
 import { MarkdownContentWebView } from "../../course-info/MarkdownContentWebView"
+import { QuestionContentWebView } from "../../rewards/QuestionContent"
 import { SummerModuleBlockShell, SummerModulePrimaryButton } from "./summer-module-block-ui"
 
 type SaveProgress = (
@@ -264,7 +265,6 @@ function ActivityBlock({
 }) {
   const native = useThemedNative()
   const tokens = useAppThemeTokens()
-  const type = useNativeType()
   const title = asString(block.content.title) ?? "Activity"
   const prompt = asString(block.content.prompt)
   const options = asStringArray(block.content.options)
@@ -299,7 +299,7 @@ function ActivityBlock({
 
   return (
     <SummerModuleBlockShell title={title} complete={complete}>
-      {prompt ? <Text style={[type.body, { color: native.secondaryLabel, lineHeight: 22 }]}>{prompt}</Text> : null}
+      {prompt ? <QuestionContentWebView text={prompt} embedded compact /> : null}
       <View style={styles.optionList}>
         {options.map((option, index) => {
           const active = selected.includes(index)
@@ -321,7 +321,9 @@ function ActivityBlock({
                 size={18}
                 color={active ? tokens.accent : native.tertiaryLabel}
               />
-              <Text style={[type.body, { color: native.label, flex: 1 }]}>{option}</Text>
+              <View style={{ flex: 1 }}>
+                <QuestionContentWebView text={option} embedded compact />
+              </View>
             </Pressable>
           )
         })}
@@ -331,8 +333,8 @@ function ActivityBlock({
       ) : null}
       {revealed && (revealTitle || revealMessage) ? (
         <View style={[styles.revealBox, { backgroundColor: semanticSoft(tokens.success, tokens.isDark) }]}>
-          {revealTitle ? <Text style={[type.bodyEmphasis, { color: native.label }]}>{revealTitle}</Text> : null}
-          {revealMessage ? <Text style={[type.body, { color: native.label, lineHeight: 22 }]}>{revealMessage}</Text> : null}
+          {revealTitle ? <QuestionContentWebView text={revealTitle} embedded compact /> : null}
+          {revealMessage ? <QuestionContentWebView text={revealMessage} embedded compact /> : null}
         </View>
       ) : null}
     </SummerModuleBlockShell>
@@ -435,8 +437,8 @@ function ReflectionBlock({
 
   return (
     <SummerModuleBlockShell title="Reflection" complete={complete}>
-      <Text style={[type.bodyEmphasis, { color: native.label, lineHeight: 22 }]}>{prompt}</Text>
-      {hint ? <Text style={[type.caption, { color: native.secondaryLabel, lineHeight: 20 }]}>{hint}</Text> : null}
+      <QuestionContentWebView text={prompt} embedded />
+      {hint ? <QuestionContentWebView text={hint} embedded compact /> : null}
       {options.length ? (
         <View style={styles.optionList}>
           {options.map((option, index) => (
@@ -452,7 +454,7 @@ function ReflectionBlock({
               onPress={() => !complete && setSelectedIndex(index)}
               disabled={complete}
             >
-              <Text style={[type.body, { color: native.label }]}>{option}</Text>
+              <QuestionContentWebView text={option} embedded compact />
             </Pressable>
           ))}
         </View>
@@ -548,7 +550,7 @@ function QuizBlock({
 
         return (
           <View key={id} style={styles.quizQuestion}>
-            <Text style={[type.bodyEmphasis, { color: native.label, lineHeight: 22 }]}>{prompt}</Text>
+            <QuestionContentWebView text={prompt} embedded />
             <View style={styles.optionList}>
               {options.map((option, index) => {
                 const active = multiSelect
@@ -579,7 +581,7 @@ function QuizBlock({
                     }}
                     disabled={complete}
                   >
-                    <Text style={[type.body, { color: native.label }]}>{option}</Text>
+                    <QuestionContentWebView text={option} embedded compact />
                   </Pressable>
                 )
               })}

@@ -12,7 +12,6 @@ import { needsQuestionRichRender } from "../../lib/classroom-submission"
 import { AssessmentReportMarkdownContent } from "./AssessmentReportMarkdownContent"
 import { AssessmentSubmissionReviewSection } from "./AssessmentSubmissionReviewSection"
 import { AiFeedbackPanel } from "./AiFeedbackPanel"
-import { stripHtml } from "../../lib/practice-session"
 import { hexToRgba } from "../../constants/app-themes"
 import { useAssessmentTheme, useThemedStudentNative } from "../../lib/themed-module-theme"
 import {
@@ -66,7 +65,7 @@ function RichText({ text }: { text: string }) {
         seg.kind === "code" ? (
           <ReportCodeBlock key={i} value={seg.value} />
         ) : (
-          <ReportRichText key={i} text={stripHtml(seg.value)} />
+          <ReportRichText key={i} text={seg.value} />
         ),
       )}
     </View>

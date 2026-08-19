@@ -4,7 +4,8 @@ import { notifySessionExpired } from "./session-expiry"
 
 export const DEFAULT_API_TIMEOUT_MS = 30_000
 
-const SENSITIVE_KEY = /password|token|authorization|cookie|secret|api[_-]?key|credit|ssn|session/i
+const SENSITIVE_KEY =
+  /password|token|authorization|cookie|secret|api[_-]?key|credit|ssn|session|email|phone|address|full[_-]?name|student[_-]?id|student[_-]?code|user[_-]?name|prompt|message/i
 
 export function assertProductionHttpsUrl(url: string): void {
   if (!isProductionEnvironment()) return

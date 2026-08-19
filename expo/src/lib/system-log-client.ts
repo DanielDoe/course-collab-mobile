@@ -82,25 +82,23 @@ function sessionFields(session: AppSession | null | undefined) {
   if (session.portal === "student") {
     return {
       userId: session.databaseId,
-      userName: session.name,
       userRole: "student",
     }
   }
   if (session.portal === "faculty") {
     return {
       userId: String(session.id),
-      userName: session.name,
       userRole: session.role ?? "instructor",
     }
   }
   if (session.portal === "guest") {
-    return { userId: session.databaseId, userName: session.name, userRole: "guest" }
+    return { userId: session.databaseId, userRole: "guest" }
   }
   if (session.portal === "summer") {
-    return { userId: session.databaseId, userName: session.name, userRole: "summer_camper" }
+    return { userId: session.databaseId, userRole: "summer_camper" }
   }
   if (session.portal === "admin") {
-    return { userId: session.id, userName: session.name, userRole: session.platformRole ?? "admin" }
+    return { userId: session.id, userRole: session.platformRole ?? "admin" }
   }
   return {}
 }
@@ -201,7 +199,6 @@ export function reportMobileClientError(
       httpMethod: partial.httpMethod,
       httpStatusCode: partial.httpStatusCode,
       userId: partial.userId ?? ctx.userId,
-      userName: partial.userName ?? ctx.userName,
       userRole: partial.userRole ?? ctx.userRole,
       browser: partial.browser ?? ctx.browser,
       operatingSystem: partial.operatingSystem ?? ctx.operatingSystem,

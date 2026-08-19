@@ -1,13 +1,15 @@
-import { useCallback, useEffect } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { Redirect } from "expo-router"
 import * as SplashScreen from "expo-splash-screen"
 import { StyleSheet, View } from "react-native"
 import { BrandLoadingMark } from "../src/components/login/BrandLoadingMark"
 import { useSession } from "../src/context/SessionProvider"
-import { sessionNeedsPasswordChange } from "../src/lib/navigation-reset"
+import { resolvePostLoginRoute } from "../src/lib/onboarding"
+import { toAppHref, toAuthHref } from "../src/lib/navigation-reset"
 
 export default function Index() {
   const { session, isLoading } = useSession()
+  const [resolvedHref, setResolvedHref] = useState<string | null>(null)
 
   const hideNativeSplash = useCallback(() => {
     void SplashScreen.hideAsync()
@@ -17,7 +19,32 @@ export default function Index() {
     if (!isLoading) hideNativeSplash()
   }, [hideNativeSplash, isLoading])
 
-  if (isLoading) {
+  useEffect(() => {
+    if (isLoading) return
+    if (!session) {
+      setResolvedHref("/(auth)/login")
+      return
+    }
+
+    let cancelled = false
+    void resolvePostLoginRoute(session).then((route) => {
+      if (cancelled) return
+      const href =
+        route === "/dashboard" ||
+        route === "/faculty-select-course" ||
+        route.startsWith("/module") ||
+        route.startsWith("/settings")
+          ? toAppHref(route)
+          : toAuthHref(route)
+      setResolvedHref(href)
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [isLoading, session])
+
+  if (isLoading || (session && !resolvedHref)) {
     return (
       <View style={styles.loading} onLayout={hideNativeSplash}>
         <BrandLoadingMark />
@@ -25,11 +52,8 @@ export default function Index() {
     )
   }
 
-  if (session) {
-    if (sessionNeedsPasswordChange(session)) {
-      return <Redirect href="/(auth)/change-password" />
-    }
-    return <Redirect href="/(app)/dashboard" />
+  if (resolvedHref) {
+    return <Redirect href={resolvedHref as never} />
   }
 
   return <Redirect href="/(auth)/login" />

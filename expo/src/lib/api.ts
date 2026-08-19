@@ -451,6 +451,26 @@ export const api = {
     return data
   },
 
+  requestSummerAccount: (payload: {
+    fullName: string
+    email: string
+    school: string
+    password: string
+    confirmPassword: string
+    programRole?: "summer_camper" | "summer_student"
+    campId?: number
+    invitationToken?: string
+  }) =>
+    request<{
+      success: boolean
+      autoApproved?: boolean
+      message?: string
+      requiresEmailVerification?: boolean
+    }>("/api/summer-camp/request-account", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
   summerLogin: async (email: string, password: string) => {
     const authId = email.trim().toLowerCase()
     const loginKey = studentMfaLoginKey(0, authId)
