@@ -19,9 +19,16 @@ import {
 import {
   fetchCoraServerPrivacy,
   updateCoraServerPrivacy,
+  coraPrivacyStorageKey,
+  type CoraPrivacySession,
   type CoraServerPrivacySettings,
 } from "../../lib/cora-privacy-api"
 import {
+  ADMIN_CONTEXT_CATEGORIES,
+  ADMIN_MEMORY_TOGGLE_META,
+  FACULTY_CONTEXT_CATEGORIES,
+  FACULTY_MEMORY_TOGGLE_META,
+  LEARNER_CONTEXT_CATEGORIES,
   MEMORY_TOGGLE_META,
   setAllMemoryToggles,
   type CoraLearningMemory,
@@ -29,26 +36,85 @@ import {
 } from "../../lib/cora-learning-memory"
 import { fetchStudentContext } from "../../lib/student-context-api"
 import type { StudentContextPayload } from "../../lib/student-context-api"
-import type { GuestSession, StudentSession, SummerSession } from "../../lib/session"
-
-type CoraPrivacySession = StudentSession | SummerSession | GuestSession
+import type { StudentSession } from "../../lib/session"
 import { AppAlert } from "../../lib/app-alert"
 import { CoraMemoryManageSheet } from "./CoraMemoryManageSheet"
 
-const CONTEXT_CATEGORIES = [
-  "Course enrollment and section",
-  "Grades and assessment scores",
-  "Upcoming deadlines and calendar events",
-  "Topics you struggle with or excel at",
-  "Note and flashcard titles (not full content unless attached)",
-]
+const CONTEXT_COPY = {
+  learner: {
+    personalizedTitle: "Personalized learning",
+    personalizedBody: "Allow Cora to use performance summaries and topic mastery when answering",
+    contextTitle: "Use learning context",
+    contextBody: "Include course progress, calendar, notes titles, and similar authorized context in AI requests",
+    localMemoryTitle: "Local learning memory",
+    localMemoryBody: "Device-only teaching memory toggles — not the same as chat history on CourseCollab servers",
+    syncNote:
+      "Server-synced privacy preferences apply across devices. Local memory and cleared-memory choices stay on this device.",
+    contextSection: "What learning context may include",
+    contextIntro:
+      "When enabled, Cora may use the categories below. CourseCollab sends only what is needed for each request and does not attach your name, email, student ID, or other account identifiers to external AI requests for personalization alone.",
+    memorySection: "Cora memory & personalization (this device)",
+  },
+  faculty: {
+    personalizedTitle: "Personalized teaching assistance",
+    personalizedBody: "Allow Cora to use course analytics and teaching patterns when answering",
+    contextTitle: "Use course & analytics context",
+    contextBody: "Include aggregated assessment, attendance, and practice trends in AI requests — never student names",
+    localMemoryTitle: "Local teaching memory",
+    localMemoryBody: "Device-only teaching memory toggles — not the same as Cora chat history on CourseCollab servers",
+    syncNote:
+      "Server-synced Cora privacy preferences apply across devices. Local teaching memory stays on this device.",
+    contextSection: "What teaching context may include",
+    contextIntro:
+      "When enabled, Cora may use the categories below. External AI payloads stay aggregated or pseudonymized — no student names, emails, or roster exports.",
+    memorySection: "Cora teaching memory (this device)",
+  },
+  admin: {
+    personalizedTitle: "Personalized operations assistance",
+    personalizedBody: "Allow Cora to use institutional summaries when answering admin questions",
+    contextTitle: "Use institutional context",
+    contextBody: "Include authorized aggregates and pseudonymized directory matches — never bulk PII in model payloads",
+    localMemoryTitle: "Local admin memory",
+    localMemoryBody: "Device-only workflow memory toggles — separate from audit logs and chat history on servers",
+    syncNote:
+      "Server-synced Cora privacy preferences apply across devices. Local admin memory stays on this device.",
+    contextSection: "What institutional context may include",
+    contextIntro:
+      "When enabled, Cora may use the categories below. Admin Cora follows the same minimization rules: no names, emails, or internal IDs in external AI requests unless required for an authorized task.",
+    memorySection: "Cora workflow memory (this device)",
+  },
+} as const
 
 type CoraPrivacyControlsProps = {
   session: CoraPrivacySession
+  variant?: "learner" | "faculty" | "admin"
   showAiDataLink?: boolean
+  showShareWithInstructor?: boolean
 }
 
-export function CoraPrivacyControls({ session, showAiDataLink = true }: CoraPrivacyControlsProps) {
+export function CoraPrivacyControls({
+  session,
+  variant: variantProp,
+  showAiDataLink = true,
+  showShareWithInstructor = true,
+}: CoraPrivacyControlsProps) {
+  const variant =
+    variantProp ??
+    (session.portal === "faculty" ? "faculty" : session.portal === "admin" ? "admin" : "learner")
+  const copy = CONTEXT_COPY[variant]
+  const memoryMeta =
+    variant === "faculty"
+      ? FACULTY_MEMORY_TOGGLE_META
+      : variant === "admin"
+        ? ADMIN_MEMORY_TOGGLE_META
+        : MEMORY_TOGGLE_META
+  const contextCategories =
+    variant === "faculty"
+      ? FACULTY_CONTEXT_CATEGORIES
+      : variant === "admin"
+        ? ADMIN_CONTEXT_CATEGORIES
+        : LEARNER_CONTEXT_CATEGORIES
+  const storageKey = coraPrivacyStorageKey(session)
   const native = useThemedNative()
   const SN = useThemedStudentNative()
   const type = useNativeType()
@@ -77,7 +143,7 @@ export function CoraPrivacyControls({ session, showAiDataLink = true }: CoraPriv
     void (async () => {
       const [server, local, ctx] = await Promise.all([
         fetchCoraServerPrivacy(session),
-        loadCoraLocalPreferences(session.databaseId),
+        loadCoraLocalPreferences(storageKey),
         session.portal === "student"
           ? fetchStudentContext(session).catch(() => null)
           : Promise.resolve(null),
@@ -108,9 +174,9 @@ export function CoraPrivacyControls({ session, showAiDataLink = true }: CoraPriv
   const persistLocal = useCallback(
     (next: CoraLocalPrivacyStorage) => {
       setLocalPrefs(next)
-      void saveCoraLocalPreferences(session.databaseId, next)
+      void saveCoraLocalPreferences(storageKey, next)
     },
-    [session.databaseId],
+    [storageKey],
   )
 
   const updateMemoryToggle = useCallback(
@@ -144,28 +210,25 @@ export function CoraPrivacyControls({ session, showAiDataLink = true }: CoraPriv
     if (!confirmed) return
     setClearing(true)
     try {
-      const next = await clearCoraLearningMemory(session.databaseId, studentContext)
+      const next = await clearCoraLearningMemory(storageKey, studentContext)
       setLocalPrefs(next)
     } finally {
       setClearing(false)
     }
-  }, [session.databaseId, studentContext])
+  }, [storageKey, studentContext])
 
   return (
     <>
       <ModuleSection title="Privacy & Personalization">
         <View style={[styles.note, { backgroundColor: native.secondaryGrouped, borderColor: native.separator }]}>
           <Text style={[type.caption, { color: SN.secondaryLabel, lineHeight: 20 }]}>
-            Personalized learning and learning context sync to your CourseCollab account. Teaching-style memory toggles
-            below are stored on this device only.
+            {copy.syncNote}
           </Text>
         </View>
         <View style={[styles.toggleRow, { borderBottomColor: native.separator }]}>
           <View style={styles.toggleCopy}>
-            <Text style={[type.bodyEmphasis, styles.toggleTitle]}>Personalized learning</Text>
-            <Text style={[type.caption, { color: SN.secondaryLabel }]}>
-              Allow Cora to use performance summaries and topic mastery when answering
-            </Text>
+            <Text style={[type.bodyEmphasis, styles.toggleTitle]}>{copy.personalizedTitle}</Text>
+            <Text style={[type.caption, { color: SN.secondaryLabel }]}>{copy.personalizedBody}</Text>
           </View>
           <NativeSwitch
             value={serverPrivacy.personalizedLearning}
@@ -176,10 +239,8 @@ export function CoraPrivacyControls({ session, showAiDataLink = true }: CoraPriv
         </View>
         <View style={[styles.toggleRow, { borderBottomColor: native.separator }]}>
           <View style={styles.toggleCopy}>
-            <Text style={[type.bodyEmphasis, styles.toggleTitle]}>Use learning context</Text>
-            <Text style={[type.caption, { color: SN.secondaryLabel }]}>
-              Include course progress, calendar, notes titles, and similar authorized context in AI requests
-            </Text>
+            <Text style={[type.bodyEmphasis, styles.toggleTitle]}>{copy.contextTitle}</Text>
+            <Text style={[type.caption, { color: SN.secondaryLabel }]}>{copy.contextBody}</Text>
           </View>
           <NativeSwitch
             value={serverPrivacy.useLearningContext}
@@ -189,25 +250,25 @@ export function CoraPrivacyControls({ session, showAiDataLink = true }: CoraPriv
         </View>
         <View style={[styles.toggleRow, { borderBottomColor: native.separator }]}>
           <View style={styles.toggleCopy}>
-            <Text style={[type.bodyEmphasis, styles.toggleTitle]}>Local learning memory</Text>
-            <Text style={[type.caption, { color: SN.secondaryLabel }]}>
-              Device-only teaching memory toggles — not the same as chat history on CourseCollab servers
-            </Text>
+            <Text style={[type.bodyEmphasis, styles.toggleTitle]}>{copy.localMemoryTitle}</Text>
+            <Text style={[type.caption, { color: SN.secondaryLabel }]}>{copy.localMemoryBody}</Text>
           </View>
           <NativeSwitch value={localPrefs.localLearningMemory} onValueChange={setLocalLearningMemory} />
         </View>
-        <View style={[styles.toggleRow, { borderBottomColor: native.separator }]}>
-          <View style={styles.toggleCopy}>
-            <Text style={[type.bodyEmphasis, styles.toggleTitle]}>Share with instructor</Text>
-            <Text style={[type.caption, { color: SN.secondaryLabel }]}>
-              Share summarized Cora activity with your instructor — not full conversations (off by default)
-            </Text>
+        {showShareWithInstructor && variant === "learner" ? (
+          <View style={[styles.toggleRow, { borderBottomColor: native.separator }]}>
+            <View style={styles.toggleCopy}>
+              <Text style={[type.bodyEmphasis, styles.toggleTitle]}>Share with instructor</Text>
+              <Text style={[type.caption, { color: SN.secondaryLabel }]}>
+                Share summarized Cora activity with your instructor — not full conversations (off by default)
+              </Text>
+            </View>
+            <NativeSwitch
+              value={serverPrivacy.shareWithInstructor}
+              onValueChange={(v) => updateServer({ shareWithInstructor: v })}
+            />
           </View>
-          <NativeSwitch
-            value={serverPrivacy.shareWithInstructor}
-            onValueChange={(v) => updateServer({ shareWithInstructor: v })}
-          />
-        </View>
+        ) : null}
         <Pressable
           style={[styles.actionRow, { borderBottomColor: native.separator }]}
           onPress={() => void handleClearMemory()}
@@ -228,14 +289,10 @@ export function CoraPrivacyControls({ session, showAiDataLink = true }: CoraPriv
         ) : null}
       </ModuleSection>
 
-      <ModuleSection title="What learning context may include">
+      <ModuleSection title={copy.contextSection}>
         <View style={[styles.hero, { backgroundColor: native.secondaryGrouped, borderColor: native.separator }]}>
-          <Text style={[type.caption, { color: SN.secondaryLabel, lineHeight: 20 }]}>
-            When enabled, Cora may use the categories below. CourseCollab sends only what is needed for each request and
-            does not attach your name, email, student ID, or other account identifiers to external AI requests for
-            personalization alone.
-          </Text>
-          {CONTEXT_CATEGORIES.map((item) => (
+          <Text style={[type.caption, { color: SN.secondaryLabel, lineHeight: 20 }]}>{copy.contextIntro}</Text>
+          {contextCategories.map((item) => (
             <Text key={item} style={[type.caption, styles.bullet, { color: SN.secondaryLabel }]}>
               • {item}
             </Text>
@@ -243,13 +300,13 @@ export function CoraPrivacyControls({ session, showAiDataLink = true }: CoraPriv
         </View>
       </ModuleSection>
 
-      <ModuleSection title="Cora memory & personalization (this device)">
-        {MEMORY_TOGGLE_META.map((item, index) => (
+      <ModuleSection title={copy.memorySection}>
+        {memoryMeta.map((item, index) => (
           <View
             key={item.id}
             style={[
               styles.toggleRow,
-              index < MEMORY_TOGGLE_META.length - 1 ? { borderBottomColor: native.separator, borderBottomWidth: StyleSheet.hairlineWidth } : null,
+              index < memoryMeta.length - 1 ? { borderBottomColor: native.separator, borderBottomWidth: StyleSheet.hairlineWidth } : null,
             ]}
           >
             <View style={styles.toggleCopy}>
@@ -278,10 +335,7 @@ export function CoraPrivacyControls({ session, showAiDataLink = true }: CoraPriv
         </Pressable>
       </ModuleSection>
 
-      <CommSectionFooter>
-        Server-synced privacy preferences apply across devices. Local memory and cleared-memory choices stay on this
-        device.
-      </CommSectionFooter>
+      <CommSectionFooter>{copy.syncNote}</CommSectionFooter>
 
       <CoraMemoryManageSheet
         visible={memoryOpen}
@@ -289,10 +343,10 @@ export function CoraPrivacyControls({ session, showAiDataLink = true }: CoraPriv
         clearedCount={localPrefs.clearedMemoryIds.length}
         onClose={() => setMemoryOpen(false)}
         onRemoveFact={(factId) => {
-          void removeCoraMemoryFact(session.databaseId, factId, localPrefs).then(setLocalPrefs)
+          void removeCoraMemoryFact(storageKey, factId, localPrefs).then(setLocalPrefs)
         }}
         onRestoreAll={() => {
-          void restoreCoraMemoryFacts(session.databaseId).then(setLocalPrefs)
+          void restoreCoraMemoryFacts(storageKey).then(setLocalPrefs)
         }}
       />
     </>

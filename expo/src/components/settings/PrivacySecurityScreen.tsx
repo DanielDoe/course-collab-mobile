@@ -88,8 +88,11 @@ export function PrivacySecurityScreen() {
   const router = useRouter()
   const native = useThemedNative()
   const { session } = useSession()
-  const hideCoraSettings = session != null && !isLearnerPortal(session.portal)
-  const showCoraSettings = !hideCoraSettings
+  const showCoraSettings =
+    session == null ||
+    isLearnerPortal(session.portal) ||
+    session.portal === "faculty" ||
+    session.portal === "admin"
 
   useEffect(() => {
     void prefetchLegalContentCatalog()

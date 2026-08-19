@@ -33,7 +33,6 @@ import { FacultyAttemptReportModal } from "./FacultyAttemptReportModal"
 import { FacultyResultCard } from "./FacultyResultsListCards"
 import { FACULTY_RESULTS_COLOR } from "../../lib/faculty-results-theme"
 import { useModuleTheme } from "../../lib/themed-module-shell"
-import { FacultyAdminTierGate } from "./faculty-admin-ui"
 
 const RESULT_TABS: Array<{ id: ResultsTab; icon: keyof typeof Ionicons.glyphMap }> = [
   { id: "all", icon: "layers-outline" },
@@ -45,14 +44,6 @@ const RESULT_TABS: Array<{ id: ResultsTab; icon: keyof typeof Ionicons.glyphMap 
 ]
 
 export function FacultyResultsScreen() {
-  return (
-    <FacultyAdminTierGate minTier="Pro" featureLabel="Manage Results">
-      <FacultyResultsContent />
-    </FacultyAdminTierGate>
-  )
-}
-
-function FacultyResultsContent() {
   const { styles: moduleStyles, native, tokens, type } = useModuleTheme()
   const insets = useSafeAreaInsets()
   const { listScrollPad } = useFacultyStickyHeaderScrollLayout()

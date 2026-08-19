@@ -11,6 +11,7 @@ import {
   type MultiPartSubQuestion,
 } from "../../lib/lecture-sample-practice-utils"
 import { isMultiSelectType } from "../../lib/practice-session"
+import { useStudentSubmissionLayout } from "../../lib/circuit-submission-layout"
 import { QuestionContentWebView } from "../rewards/QuestionContent"
 
 export type MultiPartAnswerPayload = {
@@ -75,6 +76,7 @@ type Props = {
   value: string
   onChange: (nextJson: string) => void
   disabled?: boolean
+  textFieldHeight?: number
 }
 
 function isTextSubquestion(sq: MultiPartSubQuestion): boolean {
@@ -82,9 +84,11 @@ function isTextSubquestion(sq: MultiPartSubQuestion): boolean {
   return t === "fill_blank" || t === "fill_in_blank" || t === "short_answer" || t === "text"
 }
 
-export function MultiPartAnswerPanel({ subquestionsRaw, value, onChange, disabled }: Props) {
+export function MultiPartAnswerPanel({ subquestionsRaw, value, onChange, disabled, textFieldHeight: textFieldHeightProp }: Props) {
   const tokens = useAppThemeTokens()
   const SN = useThemedStudentNative()
+  const { multipartTextHeight } = useStudentSubmissionLayout()
+  const textFieldHeight = textFieldHeightProp ?? multipartTextHeight
   const subquestions = useMemo(() => parseSubquestions(subquestionsRaw), [subquestionsRaw])
   const gradable = useMemo(() => getGradableSubquestions(subquestionsRaw), [subquestionsRaw])
   const payload = useMemo(() => parseMultiPartAnswerJson(value, subquestionsRaw), [value, subquestionsRaw])
@@ -133,7 +137,13 @@ export function MultiPartAnswerPanel({ subquestionsRaw, value, onChange, disable
               <TextInput
                 style={[
                   styles.textInput,
-                  { borderColor: tokens.border, backgroundColor: tokens.surface, color: tokens.text },
+                  {
+                    borderColor: tokens.border,
+                    backgroundColor: tokens.surface,
+                    color: tokens.text,
+                    height: textFieldHeight,
+                    minHeight: textFieldHeight,
+                  },
                 ]}
                 value={String(partVal ?? "")}
                 onChangeText={(text) => updatePart(sq.id, text)}
@@ -212,7 +222,13 @@ export function MultiPartAnswerPanel({ subquestionsRaw, value, onChange, disable
               <TextInput
                 style={[
                   styles.textInput,
-                  { borderColor: tokens.border, backgroundColor: tokens.surface, color: tokens.text },
+                  {
+                    borderColor: tokens.border,
+                    backgroundColor: tokens.surface,
+                    color: tokens.text,
+                    height: textFieldHeight,
+                    minHeight: textFieldHeight,
+                  },
                 ]}
                 value={String(partVal ?? "")}
                 onChangeText={(text) => updatePart(sq.id, text)}

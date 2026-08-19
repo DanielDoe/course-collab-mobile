@@ -203,22 +203,15 @@ export function useGuestKpiCardStyle(): ViewStyle {
   return useKpiGridCardStyle("48%")
 }
 
-/** Theme picker grid cell width (1 or 2 columns). */
+/** Theme picker grid cell width — up to 3 columns on tablet for readable previews. */
 export function useThemeGridCardWidth(contentPad: number, gap: number): number {
-  const { width } = useWindowDimensions()
-  return useMemo(() => {
-    const canvas = dashboardContentMaxWidth(width)
-    const columns =
-      width < KPI_GRID_SINGLE_COLUMN_MAX_WIDTH
-        ? 1
-        : width >= LARGE_TABLET_MIN_WIDTH
-          ? 4
-          : width >= TABLET_MIN_WIDTH
-            ? 3
-            : 2
-    const totalGap = gap * Math.max(columns - 1, 0)
-    return (canvas - contentPad * 2 - totalGap) / columns
-  }, [width, contentPad, gap])
+  const { columnWidth } = useResponsiveGridColumns({
+    minColumnWidth: 165,
+    maxColumns: 3,
+    gap,
+    horizontalPad: contentPad * 2,
+  })
+  return columnWidth
 }
 
 export function useDashboardContentStyle(): ViewStyle {

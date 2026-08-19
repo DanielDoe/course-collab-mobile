@@ -1,6 +1,14 @@
 import { useCallback, useState } from "react"
-import { ActivityIndicator, Image, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
-import { AppAlert } from '../../lib/app-alert'
+import {
+  ActivityIndicator,
+  Image,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native"
+import { AppAlert } from "../../lib/app-alert"
 import * as DocumentPicker from "expo-document-picker"
 import * as ImagePicker from "expo-image-picker"
 import { Ionicons } from "@/components/icons/AppIcon"
@@ -8,16 +16,21 @@ import type { StudentSession } from "../../lib/session"
 import { ApiError } from "../../lib/student-api"
 import { API_BASE_URL } from "../../constants"
 import { useAppThemeTokens } from "../../context/AppearanceProvider"
-import { NATIVE } from "../../constants/faculty-native-theme"
+import { hexToRgba } from "../../constants/app-themes"
+import { useThemedStudentNative } from "../../lib/themed-module-theme"
 import {
   compactSolutionForSubmit,
   hasRequiredSolutionUpload,
   listSolutionFiles,
   parseSolutionAnswer,
   solutionPartKey,
-  type SolutionUploadsMap} from "../../lib/classroom-submission"
+  type SolutionUploadsMap,
+} from "../../lib/classroom-submission"
+import { useStudentSubmissionLayout } from "../../lib/circuit-submission-layout"
 import { rewardsApi } from "../../lib/rewards-api"
-import { useRewardsTheme } from "./rewards-shared"
+import { circuitSubmissionUi as ui } from "../assessments/circuit-submission-ui"
+
+type SubmissionMode = "upload" | "photo"
 
 type Props = {
   session: StudentSession
@@ -39,21 +52,25 @@ export function CircuitSolutionSubmitPanel({
   maxFiles = 10,
   requireUpload = true,
   disabled,
-  onSubmitted}: Props) {
-  const theme = useRewardsTheme()
+  onSubmitted,
+}: Props) {
   const tokens = useAppThemeTokens()
+  const SN = useThemedStudentNative()
+  const { notesHeight, largeUpload } = useStudentSubmissionLayout()
   const [answerJson, setAnswerJson] = useState(() =>
     JSON.stringify({
       version: 1,
       submission_status: "draft",
       submission_mode: "upload",
       solution_uploads: {},
-      written_notes: ""}),
+      written_notes: "",
+    }),
   )
   const [uploading, setUploading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
   const answer = parseSolutionAnswer(answerJson)
+  const mode: SubmissionMode = answer.submission_mode === "photo" ? "photo" : "upload"
   const files = listSolutionFiles(answer.solution_uploads)
   const atMax = files.length >= maxFiles
 
@@ -61,12 +78,11 @@ export function CircuitSolutionSubmitPanel({
     setAnswerJson(JSON.stringify(next))
   }, [])
 
-  async function uploadAsset(
-    uri: string,
-    name: string,
-    mime: string,
-    mode: "upload" | "photo",
-  ) {
+  const setMode = (nextMode: SubmissionMode) => {
+    updateAnswer({ ...parseSolutionAnswer(answerJson), submission_mode: nextMode })
+  }
+
+  async function uploadAsset(uri: string, name: string, mime: string, uploadMode: SubmissionMode) {
     if (atMax) {
       AppAlert.alert("File limit", `You can attach up to ${maxFiles} files.`)
       return
@@ -79,17 +95,20 @@ export function CircuitSolutionSubmitPanel({
         partId,
         uri,
         name,
-        mime})
+        mime,
+      })
       const uploads: SolutionUploadsMap = { ...(answer.solution_uploads ?? {}) }
       uploads[partId] = {
         url: uploaded.url,
         name: uploaded.name ?? name,
         mime: uploaded.mime ?? mime,
-        uploaded_at: uploaded.uploaded_at}
+        uploaded_at: uploaded.uploaded_at,
+      }
       updateAnswer({
         ...answer,
-        submission_mode: mode,
-        solution_uploads: uploads})
+        submission_mode: uploadMode,
+        solution_uploads: uploads,
+      })
     } catch (err) {
       AppAlert.alert("Upload failed", err instanceof ApiError ? err.message : "Could not upload file.")
     } finally {
@@ -101,7 +120,8 @@ export function CircuitSolutionSubmitPanel({
     const result = await DocumentPicker.getDocumentAsync({
       copyToCacheDirectory: true,
       multiple: false,
-      type: ["application/pdf", "image/*"]})
+      type: ["application/pdf", "image/*"],
+    })
     if (result.canceled || !result.assets?.[0]) return
     const asset = result.assets[0]
     await uploadAsset(asset.uri, asset.name ?? "solution.pdf", asset.mimeType ?? "application/pdf", "upload")
@@ -124,7 +144,11 @@ export function CircuitSolutionSubmitPanel({
 
     const result = fromCamera
       ? await ImagePicker.launchCameraAsync({ quality: 0.85, allowsEditing: false })
-      : await ImagePicker.launchImageLibraryAsync({ quality: 0.85, allowsEditing: false, mediaTypes: ["images"] })
+      : await ImagePicker.launchImageLibraryAsync({
+          quality: 0.85,
+          allowsEditing: false,
+          mediaTypes: ["images"],
+        })
 
     if (result.canceled || !result.assets?.[0]) return
     const asset = result.assets[0]
@@ -134,8 +158,7 @@ export function CircuitSolutionSubmitPanel({
 
   function removeFile(index: number) {
     const uploads = { ...(answer.solution_uploads ?? {}) }
-    const key = solutionPartKey(index)
-    delete uploads[key]
+    delete uploads[solutionPartKey(index)]
     const reindexed: SolutionUploadsMap = {}
     listSolutionFiles(uploads).forEach((file, i) => {
       reindexed[solutionPartKey(i)] = file
@@ -157,7 +180,8 @@ export function CircuitSolutionSubmitPanel({
       const compact = compactSolutionForSubmit(parsed)
       const result = await rewardsApi.submitClassroomSolution(session, {
         submissionId: assignmentId,
-        studentAnswer: compact})
+        studentAnswer: compact,
+      })
       AppAlert.alert(
         result.autoApproved ? "Submitted!" : "Submitted for review",
         result.message ??
@@ -175,56 +199,131 @@ export function CircuitSolutionSubmitPanel({
 
   return (
     <View style={styles.wrap}>
-      <View style={styles.modeRow}>
-        <Pressable style={[styles.modeBtn, { backgroundColor: theme.soft, borderColor: theme.softBorder }]} onPress={pickDocument} disabled={disabled || uploading || atMax}>
-          <Ionicons name="document-attach-outline" size={20} color={theme.primary} />
-          <Text style={[styles.modeLabel, { color: theme.primaryDark }]}>Upload file</Text>
+      <View style={[ui.modeSegment, { borderColor: tokens.border, backgroundColor: tokens.background }]}>
+        <Pressable
+          style={[
+            ui.modeSegmentBtn,
+            mode === "upload" && { backgroundColor: hexToRgba(tokens.accent, 0.1) },
+          ]}
+          onPress={() => setMode("upload")}
+          disabled={disabled || uploading}
+        >
+          <Ionicons name="document-attach-outline" size={16} color={mode === "upload" ? tokens.accent : SN.secondaryLabel} />
+          <Text style={[ui.modeLabel, { color: mode === "upload" ? tokens.accent : tokens.text }]}>Upload</Text>
         </Pressable>
-        <Pressable style={[styles.modeBtn, { backgroundColor: theme.soft, borderColor: theme.softBorder }]} onPress={() => pickPhoto(true)} disabled={disabled || uploading || atMax}>
-          <Ionicons name="camera-outline" size={20} color={theme.primary} />
-          <Text style={[styles.modeLabel, { color: theme.primaryDark }]}>Take photo</Text>
-        </Pressable>
-        <Pressable style={[styles.modeBtn, { backgroundColor: theme.soft, borderColor: theme.softBorder }]} onPress={() => pickPhoto(false)} disabled={disabled || uploading || atMax}>
-          <Ionicons name="images-outline" size={20} color={theme.primary} />
-          <Text style={[styles.modeLabel, { color: theme.primaryDark }]}>Choose photo</Text>
+        <View style={[ui.modeSegmentDivider, { backgroundColor: tokens.border }]} />
+        <Pressable
+          style={[
+            ui.modeSegmentBtn,
+            mode === "photo" && { backgroundColor: hexToRgba(tokens.accent, 0.1) },
+          ]}
+          onPress={() => setMode("photo")}
+          disabled={disabled || uploading}
+        >
+          <Ionicons name="camera-outline" size={16} color={mode === "photo" ? tokens.accent : SN.secondaryLabel} />
+          <Text style={[ui.modeLabel, { color: mode === "photo" ? tokens.accent : tokens.text }]}>Photo</Text>
         </Pressable>
       </View>
 
+      {mode === "upload" ? (
+        <Pressable
+          style={[
+            ui.actionBtn,
+            largeUpload ? ui.uploadDropZone : ui.actionBtnPrimary,
+            { borderColor: tokens.border, backgroundColor: tokens.background },
+          ]}
+          onPress={pickDocument}
+          disabled={disabled || uploading || atMax}
+        >
+          <Ionicons name="cloud-upload-outline" size={largeUpload ? 28 : 18} color={tokens.accent} />
+          <Text style={[styles.actionLabel, largeUpload && styles.actionLabelLarge, { color: tokens.text }]}>
+            Choose PDF or image
+          </Text>
+          {largeUpload ? (
+            <Text style={[styles.uploadHint, { color: SN.secondaryLabel }]}>Tap to open Files or Photos</Text>
+          ) : null}
+        </Pressable>
+      ) : null}
+
+      {mode === "photo" ? (
+        <View style={ui.photoRow}>
+          <Pressable
+            style={[
+              ui.actionBtn,
+              largeUpload ? ui.uploadDropZone : ui.actionBtnPrimary,
+              ui.actionBtnHalf,
+              { borderColor: tokens.border, backgroundColor: tokens.background },
+            ]}
+            onPress={() => pickPhoto(true)}
+            disabled={disabled || uploading || atMax}
+          >
+            <Ionicons name="camera-outline" size={largeUpload ? 26 : 18} color={tokens.accent} />
+            <Text style={[styles.actionLabel, largeUpload && styles.actionLabelLarge, { color: tokens.text }]}>
+              Take photo
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[
+              ui.actionBtn,
+              largeUpload ? ui.uploadDropZone : ui.actionBtnPrimary,
+              ui.actionBtnHalf,
+              { borderColor: tokens.border, backgroundColor: tokens.background },
+            ]}
+            onPress={() => pickPhoto(false)}
+            disabled={disabled || uploading || atMax}
+          >
+            <Ionicons name="images-outline" size={largeUpload ? 26 : 18} color={tokens.accent} />
+            <Text style={[styles.actionLabel, largeUpload && styles.actionLabelLarge, { color: tokens.text }]}>
+              Choose photo
+            </Text>
+          </Pressable>
+        </View>
+      ) : null}
+
       {uploading ? (
         <View style={styles.uploadingRow}>
-          <ActivityIndicator color={theme.primary} />
-          <Text style={styles.uploadingText}>Uploading…</Text>
+          <ActivityIndicator color={tokens.accent} />
+          <Text style={[styles.uploadingText, { color: SN.secondaryLabel }]}>Uploading…</Text>
         </View>
       ) : null}
 
       {files.map((file, index) => (
-        <View key={`${file.url}-${index}`} style={[styles.fileRow, { backgroundColor: tokens.surface }]}>
+        <View key={`${file.url}-${index}`} style={[styles.fileRow, { backgroundColor: tokens.background, borderColor: tokens.border }]}>
           {file.mime.startsWith("image/") ? (
             <Image source={{ uri: resolveFilePreviewUrl(file.url) }} style={styles.thumb} />
           ) : (
-            <View style={[styles.fileIcon, { backgroundColor: theme.soft }]}>
-              <Ionicons name="document-text-outline" size={22} color={theme.primary} />
+            <View style={[styles.fileIcon, { backgroundColor: hexToRgba(tokens.accent, 0.1) }]}>
+              <Ionicons name="document-text-outline" size={22} color={tokens.accent} />
             </View>
           )}
           <View style={styles.fileBody}>
-            <Text style={styles.fileName} numberOfLines={1}>
+            <Text style={[styles.fileName, { color: tokens.text }]} numberOfLines={1}>
               {file.name}
             </Text>
-            <Text style={styles.fileMeta}>{file.mime}</Text>
+            <Text style={[styles.fileMeta, { color: SN.secondaryLabel }]}>{file.mime}</Text>
           </View>
           <Pressable onPress={() => removeFile(index)} hitSlop={8} disabled={disabled || submitting}>
-            <Ionicons name="trash-outline" size={18} color="#dc2626" />
+            <Ionicons name="trash-outline" size={18} color={tokens.danger} />
           </Pressable>
         </View>
       ))}
 
-      <Text style={styles.fieldLabel}>Notes (optional)</Text>
+      <Text style={[styles.fieldLabel, { color: SN.secondaryLabel }]}>Notes (optional)</Text>
       <TextInput
-        style={styles.notesInput}
+        style={[
+          styles.notesInput,
+          {
+            borderColor: tokens.border,
+            backgroundColor: tokens.background,
+            color: tokens.text,
+            height: notesHeight,
+            minHeight: notesHeight,
+          },
+        ]}
         value={answer.written_notes ?? ""}
         onChangeText={(written_notes) => updateAnswer({ ...answer, written_notes })}
         placeholder="Type steps, calculations, or notes here…"
-        placeholderTextColor="#94a3b8"
+        placeholderTextColor={SN.secondaryLabel}
         multiline
         textAlignVertical="top"
         editable={!disabled && !submitting}
@@ -233,7 +332,7 @@ export function CircuitSolutionSubmitPanel({
       <Pressable
         style={[
           styles.submitBtn,
-          { backgroundColor: theme.primary },
+          { backgroundColor: tokens.accent },
           (disabled || submitting || uploading) && styles.submitBtnDisabled,
         ]}
         onPress={handleSubmit}
@@ -247,53 +346,45 @@ export function CircuitSolutionSubmitPanel({
 
 const styles = StyleSheet.create({
   wrap: { gap: 12 },
-  fieldLabel: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: NATIVE.secondaryLabel},
-  modeRow: { flexDirection: "row", gap: 8 },
-  modeBtn: {
-    flex: 1,
-    alignItems: "center",
-    gap: 6,
-    paddingVertical: 12,
-    borderRadius: 999,
-    borderWidth: 1},
-  modeLabel: { fontSize: 11, fontWeight: "700", textAlign: "center" },
+  fieldLabel: { fontSize: 12, fontWeight: "700" },
+  actionLabel: { fontSize: 13, fontWeight: "600" },
+  actionLabelLarge: { fontSize: 15 },
+  uploadHint: { fontSize: 12, lineHeight: 16, textAlign: "center" },
   uploadingRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  uploadingText: { fontSize: 13, color: NATIVE.secondaryLabel },
+  uploadingText: { fontSize: 13 },
   fileRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
     padding: 10,
     borderRadius: 12,
-    borderWidth: 1,
-    borderColor: NATIVE.separator},
-  thumb: { width: 48, height: 48, borderRadius: 8, backgroundColor: "#f1f5f9" },
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  thumb: { width: 44, height: 44, borderRadius: 8, backgroundColor: "#f1f5f9" },
   fileIcon: {
-    width: 48,
-    height: 48,
+    width: 44,
+    height: 44,
     borderRadius: 8,
     alignItems: "center",
-    justifyContent: "center"},
+    justifyContent: "center",
+  },
   fileBody: { flex: 1, gap: 2 },
-  fileName: { fontSize: 13, fontWeight: "700", color: "#0f172a" },
-  fileMeta: { fontSize: 11, color: NATIVE.secondaryLabel },
+  fileName: { fontSize: 13, fontWeight: "700" },
+  fileMeta: { fontSize: 11 },
   notesInput: {
-    minHeight: 120,
-    borderWidth: 1,
-    borderColor: NATIVE.separator,
-    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 12,
     padding: 12,
     fontSize: 14,
-    color: "#0f172a",
-    backgroundColor: "#f8fafc",
-    lineHeight: 20},
+    lineHeight: 20,
+  },
   submitBtn: {
-    borderRadius: 999,
+    borderRadius: 12,
+    minHeight: 48,
     paddingVertical: 14,
     alignItems: "center",
-    marginTop: 4},
+    marginTop: 4,
+  },
   submitBtnDisabled: { opacity: 0.5 },
-  submitText: { fontSize: 15, fontWeight: "600", color: "#ffffff" }})
+  submitText: { fontSize: 15, fontWeight: "600", color: "#ffffff" },
+})

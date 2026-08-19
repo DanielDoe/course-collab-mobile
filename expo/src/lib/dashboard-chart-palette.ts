@@ -1,15 +1,11 @@
 /**
- * Student dashboard chart palette — follows the active appearance theme.
+ * Student dashboard chart palette — faculty-quality Color Hunt series with a
+ * theme accent tie-in for the primary "You / Overall" metric.
  *
- * Overall / You  → theme accent (chartPalette[0])
- * Homework       → first distinct companion (often gold / warning)
- * Quiz           → first remaining distinct slot (often success / cool)
- * Class average  → vivid steel, lightly tinted by the accent so it stays
- *                  a "neutral" reference without going muddy grey
- *
- * Dark themes lift the same hues toward white so bars and lines stay bright
- * on Graphite-class surfaces. Do not hardcode a third Color Hunt set here —
- * switching Ocean / PVAMU Gold / Crimson must change the chart.
+ * Overall / You  → theme accent when vivid, else faculty cyan
+ * Homework       → warm amber (distinct from 80% target gold band)
+ * Quiz           → cool indigo
+ * Class average  → muted steel, lightly tinted by accent
  */
 
 import {
@@ -17,6 +13,9 @@ import {
   hexToRgba,
   type AppThemeTokens,
 } from "../constants/app-themes"
+import { COLOR_HUNT_COOL } from "./codebench-badge-theme"
+import { COLOR_HUNT } from "./flashcard-difficulty-theme"
+import { FACULTY_CHART_COLORS } from "./faculty-dashboard-theme"
 
 export type ChartSeriesId = "overall" | "homework" | "quiz"
 
@@ -25,8 +24,12 @@ export type ChartSeriesPalette = Record<ChartSeriesId, string>
 export type DashboardChartPalette = {
   series: ChartSeriesPalette
   seriesTop: ChartSeriesPalette
+  seriesDark: ChartSeriesPalette
   comparisonTop: { you: string; classAvg: string }
   comparison: { you: string; classAvg: string }
+  /** Per comparison group — Quiz, Homework, Attendance (solid bar fills) */
+  comparisonGroups: [string, string, string]
+  comparisonGroupsStroke: [string, string, string]
   grid: string
   gridFaint: string
   axis: string
@@ -34,7 +37,8 @@ export type DashboardChartPalette = {
   targetLabel: string
   targetZone: string
   barTrack: string
-  barHighlight: string
+  comparisonClassFill: string
+  comparisonClassStroke: string
 }
 
 type Rgb = { r: number; g: number; b: number }
@@ -58,16 +62,6 @@ function parseHex(hex: string): Rgb | null {
   }
 }
 
-function rgbDist(a: string, b: string): number {
-  const left = parseHex(a)
-  const right = parseHex(b)
-  if (!left || !right) return 999
-  const dr = left.r - right.r
-  const dg = left.g - right.g
-  const db = left.b - right.b
-  return Math.sqrt(dr * dr + dg * dg + db * db)
-}
-
 function luminance(hex: string): number {
   const rgb = parseHex(hex)
   if (!rgb) return 0.5
@@ -84,39 +78,27 @@ function mixHex(a: string, b: string, bWeight: number): string {
   return `#${toHex(mix(left.r, right.r))}${toHex(mix(left.g, right.g))}${toHex(mix(left.b, right.b))}`
 }
 
-/** Lift dark / inky swatches so chart marks read as vivid, not recessed. */
 function vivid(hex: string, isDark: boolean): string {
   const lum = luminance(hex)
-  if (isDark) return blendHexTowardWhite(hex, lum < 0.42 ? 0.3 : 0.14)
-  return lum < 0.2 ? blendHexTowardWhite(hex, 0.18) : hex
+  if (isDark) return blendHexTowardWhite(hex, lum < 0.42 ? 0.28 : 0.12)
+  return lum < 0.22 ? blendHexTowardWhite(hex, 0.16) : hex
 }
 
 function vividTop(hex: string, isDark: boolean): string {
-  return blendHexTowardWhite(hex, isDark ? 0.4 : 0.26)
+  return blendHexTowardWhite(hex, isDark ? 0.38 : 0.22)
 }
 
-const DISTINCT = 72
-
-function pickDistinct(candidates: string[], used: string[]): string {
-  const hit = candidates.find((c) => used.every((u) => rgbDist(c, u) >= DISTINCT))
-  return hit ?? candidates[0] ?? used[0] ?? "#6366F1"
+function vividDark(hex: string, isDark: boolean): string {
+  return isDark ? blendHexTowardWhite(hex, 0.08) : mixHex(hex, "#1e293b", 0.22)
 }
 
 export function dashboardChartPalette(tokens: AppThemeTokens): DashboardChartPalette {
-  const { isDark, accent, warning, success, chartPalette } = tokens
-  const slots = [
-    chartPalette[0] ?? accent,
-    chartPalette[1] ?? warning,
-    chartPalette[2] ?? success,
-    chartPalette[3] ?? warning,
-    chartPalette[4] ?? accent,
-  ]
+  const { isDark, accent, warning, chartPalette } = tokens
+  const accentPrimary = chartPalette[0] ?? accent ?? FACULTY_CHART_COLORS.primary
 
-  const overallRaw = slots[0]
-  // Keep warning/gold off the series — that hue is reserved for the 80% target
-  // so a flat homework line never fuses with the goal into one glowing bar.
-  const homeworkRaw = pickDistinct([slots[1], slots[2], slots[4], success], [overallRaw, warning])
-  const quizRaw = pickDistinct([slots[2], success, slots[1], slots[4]], [overallRaw, homeworkRaw, warning])
+  const overallRaw = mixHex(accentPrimary, FACULTY_CHART_COLORS.primary, 0.35)
+  const homeworkRaw = COLOR_HUNT.amber
+  const quizRaw = COLOR_HUNT_COOL.indigo
 
   const series: ChartSeriesPalette = {
     overall: vivid(overallRaw, isDark),
@@ -128,24 +110,46 @@ export function dashboardChartPalette(tokens: AppThemeTokens): DashboardChartPal
     homework: vividTop(series.homework, isDark),
     quiz: vividTop(series.quiz, isDark),
   }
+  const seriesDark: ChartSeriesPalette = {
+    overall: vividDark(series.overall, isDark),
+    homework: vividDark(series.homework, isDark),
+    quiz: vividDark(series.quiz, isDark),
+  }
 
-  const steel = isDark ? "#C5D3E6" : "#6F87A6"
-  const classAvg = mixHex(steel, series.overall, 0.2)
-  const classAvgTop = blendHexTowardWhite(classAvg, isDark ? 0.28 : 0.18)
+  const steel = isDark ? "#94A3B8" : "#64748B"
+  const classAvg = mixHex(steel, series.overall, 0.15)
+  const classAvgTop = blendHexTowardWhite(classAvg, isDark ? 0.22 : 0.14)
+
+  const comparisonGroups: [string, string, string] = [
+    isDark ? blendHexTowardWhite(COLOR_HUNT_COOL.cyan, 0.06) : COLOR_HUNT_COOL.cyan,
+    isDark ? blendHexTowardWhite(COLOR_HUNT.amber, 0.06) : COLOR_HUNT.amber,
+    isDark ? blendHexTowardWhite(COLOR_HUNT_COOL.indigo, 0.06) : COLOR_HUNT_COOL.indigo,
+  ]
+  const comparisonGroupsStroke: [string, string, string] = [
+    mixHex(COLOR_HUNT_COOL.cyan, "#0F172A", isDark ? 0.18 : 0.32),
+    mixHex(COLOR_HUNT.amber, "#451A03", isDark ? 0.18 : 0.34),
+    mixHex(COLOR_HUNT_COOL.indigo, "#0F172A", isDark ? 0.18 : 0.32),
+  ]
+  const comparisonClassFill = isDark ? "#64748B" : "#94A3B8"
+  const comparisonClassStroke = isDark ? "#CBD5E1" : "#475569"
 
   return {
     series,
     seriesTop,
+    seriesDark,
     comparison: { you: series.overall, classAvg },
     comparisonTop: { you: seriesTop.overall, classAvg: classAvgTop },
-    grid: isDark ? "rgba(235,235,245,0.10)" : "rgba(60,60,67,0.10)",
-    gridFaint: isDark ? "rgba(235,235,245,0.05)" : "rgba(60,60,67,0.055)",
-    axis: isDark ? "rgba(235,235,245,0.20)" : "rgba(60,60,67,0.18)",
-    target: isDark ? hexToRgba(warning, 0.8) : warning,
-    targetLabel: isDark ? blendHexTowardWhite(warning, 0.2) : warning,
-    targetZone: hexToRgba(warning, isDark ? 0.1 : 0.07),
-    barTrack: hexToRgba(series.overall, isDark ? 0.22 : 0.12),
-    barHighlight: isDark ? "rgba(255,255,255,0.42)" : "rgba(255,255,255,0.55)",
+    comparisonGroups,
+    comparisonGroupsStroke,
+    comparisonClassFill,
+    comparisonClassStroke,
+    grid: FACULTY_CHART_COLORS.grid,
+    gridFaint: isDark ? "rgba(148,163,184,0.12)" : "rgba(148,163,184,0.14)",
+    axis: isDark ? "rgba(148,163,184,0.35)" : "rgba(100,116,139,0.35)",
+    target: isDark ? hexToRgba(warning, 0.75) : hexToRgba(COLOR_HUNT.amber, 0.65),
+    targetLabel: isDark ? blendHexTowardWhite(COLOR_HUNT.amber, 0.15) : "#B45309",
+    targetZone: hexToRgba(COLOR_HUNT.amber, isDark ? 0.08 : 0.06),
+    barTrack: isDark ? "rgba(148,163,184,0.10)" : "rgba(148,163,184,0.08)",
   }
 }
 

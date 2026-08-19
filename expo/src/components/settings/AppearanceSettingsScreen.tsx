@@ -11,7 +11,11 @@ import {
   type AppThemeTokens,
   type ThemeId,
 } from "../../constants/app-themes"
-import { useThemeGridCardWidth } from "../../lib/responsive-layout"
+import {
+  useIsTabletLayout,
+  useModuleContentStyle,
+  useThemeGridCardWidth,
+} from "../../lib/responsive-layout"
 import { NotetakerScreenHeader } from "../notetaker/NotetakerScreenHeader"
 
 const APPEARANCE_MODES: Array<{ id: AppearanceMode; label: string; icon: keyof typeof Ionicons.glyphMap }> = [
@@ -30,6 +34,7 @@ function ThemePreviewCard({
   cardWidth,
   appearanceMode,
   systemScheme,
+  tablet,
 }: {
   themeId: ThemeId
   selected: boolean
@@ -37,6 +42,7 @@ function ThemePreviewCard({
   cardWidth: number
   appearanceMode: AppearanceMode
   systemScheme: "light" | "dark" | null
+  tablet?: boolean
 }) {
   const def = THEME_DEFINITIONS.find((t) => t.id === themeId)!
   const previewTokens = useMemo(
@@ -64,6 +70,7 @@ function ThemePreviewCard({
       <View
         style={[
           previewStyles.previewBg,
+          tablet && previewStyles.previewBgTablet,
           {
             backgroundColor: previewTokens.backgroundGradient?.[0] ?? previewTokens.background,
           },
@@ -127,7 +134,9 @@ function ThemePreviewCard({
 export function AppearanceSettingsContent({ compact = false }: { compact?: boolean }) {
   const systemScheme = useColorScheme()
   const { prefs, tokens, applying, setAppearanceMode, setThemeId } = useAppearance()
-  const themeCardWidth = useThemeGridCardWidth(CONTENT_PAD, THEME_GRID_GAP)
+  const tablet = useIsTabletLayout()
+  const contentPad = tablet ? 20 : CONTENT_PAD
+  const themeCardWidth = useThemeGridCardWidth(contentPad, THEME_GRID_GAP)
 
   return (
     <>
@@ -141,14 +150,25 @@ export function AppearanceSettingsContent({ compact = false }: { compact?: boole
       <Text style={[styles.sectionLabel, { color: tokens.textSecondary }]}>
         {compact ? "Theme mode" : "APPEARANCE"}
       </Text>
-      <View style={[styles.groupCard, { backgroundColor: tokens.surface, borderColor: tokens.border }, tokens.cardShadow]}>
-        <View style={styles.modeRow}>
+      <View
+        style={[
+          styles.groupCard,
+          tablet && styles.groupCardTablet,
+          { backgroundColor: tokens.surface, borderColor: tokens.border },
+          tokens.cardShadow,
+        ]}
+      >
+        <View style={[styles.modeRow, tablet && styles.modeRowTablet]}>
           {APPEARANCE_MODES.map((mode) => {
             const active = prefs.appearanceMode === mode.id
             return (
               <Pressable
                 key={mode.id}
-                style={[styles.modeBtn, active && { backgroundColor: tokens.accentSoftStrong }]}
+                style={[
+                  styles.modeBtn,
+                  tablet && styles.modeBtnTablet,
+                  active && { backgroundColor: tokens.accentSoftStrong },
+                ]}
                 onPress={() => setAppearanceMode(mode.id)}
                 disabled={applying}
               >
@@ -176,11 +196,12 @@ export function AppearanceSettingsContent({ compact = false }: { compact?: boole
             cardWidth={themeCardWidth}
             appearanceMode={prefs.appearanceMode}
             systemScheme={systemScheme ?? null}
+            tablet={tablet}
           />
         ))}
       </View>
 
-      <LivePreview tokens={tokens} />
+      <LivePreview tokens={tokens} tablet={tablet} />
     </>
   )
 }
@@ -188,13 +209,20 @@ export function AppearanceSettingsContent({ compact = false }: { compact?: boole
 export function AppearanceSettingsScreen() {
   const insets = useSafeAreaInsets()
   const { tokens, applying } = useAppearance()
+  const moduleContentStyle = useModuleContentStyle()
+  const tablet = useIsTabletLayout()
 
   return (
     <View style={[styles.root, { backgroundColor: tokens.native.groupedBackground }]}>
       <NotetakerScreenHeader title="Appearance" fallbackHref="/dashboard" />
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}
+        contentContainerStyle={[
+          styles.content,
+          moduleContentStyle,
+          tablet && styles.contentTablet,
+          { paddingBottom: insets.bottom + 24 },
+        ]}
         showsVerticalScrollIndicator={false}
         scrollEnabled={!applying}
         directionalLockEnabled={Platform.OS === "ios"}
@@ -206,14 +234,23 @@ export function AppearanceSettingsScreen() {
   )
 }
 
-function LivePreview({ tokens }: { tokens: AppThemeTokens }) {
+function LivePreview({ tokens, tablet }: { tokens: AppThemeTokens; tablet?: boolean }) {
   return (
-    <View style={[styles.livePreview, { backgroundColor: tokens.surface, borderColor: tokens.border }, tokens.cardShadow]}>
-      <Text style={[styles.liveTitle, { color: tokens.text }]}>Live preview</Text>
-      <Text style={[styles.liveSub, { color: tokens.textSecondary }]}>
-        {tokens.name} · {tokens.isDark ? "Dark" : "Light"} surfaces
-      </Text>
-      <View style={styles.liveRow}>
+    <View
+      style={[
+        styles.livePreview,
+        tablet && styles.livePreviewTablet,
+        { backgroundColor: tokens.surface, borderColor: tokens.border },
+        tokens.cardShadow,
+      ]}
+    >
+      <View style={tablet ? styles.liveHeaderTablet : undefined}>
+        <Text style={[styles.liveTitle, { color: tokens.text }]}>Live preview</Text>
+        <Text style={[styles.liveSub, { color: tokens.textSecondary }]}>
+          {tokens.name} · {tokens.isDark ? "Dark" : "Light"} surfaces
+        </Text>
+      </View>
+      <View style={[styles.liveRow, tablet && styles.liveRowTablet]}>
         <View style={[styles.chip, { backgroundColor: tokens.accentSoftStrong }]}>
           <Text style={[styles.chipText, { color: tokens.accent }]}>Selected chip</Text>
         </View>
@@ -221,7 +258,11 @@ function LivePreview({ tokens }: { tokens: AppThemeTokens }) {
           <Text style={[styles.chipText, { color: tokens.textSecondary }]}>Default chip</Text>
         </View>
       </View>
-      <View style={styles.liveActions} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+      <View
+        style={[styles.liveActions, tablet && styles.liveActionsTablet]}
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+      >
         <View style={[styles.livePrimary, { backgroundColor: tokens.accent }]}>
           <Text style={styles.livePrimaryText}>Primary</Text>
         </View>
@@ -255,6 +296,11 @@ const previewStyles = StyleSheet.create({
     padding: 10,
     gap: 8,
     minHeight: 148,
+  },
+  previewBgTablet: {
+    padding: 12,
+    gap: 10,
+    minHeight: 172,
   },
   glassBar: {
     flexDirection: "row",
@@ -333,6 +379,7 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   scroll: { flex: 1 },
   content: { paddingHorizontal: CONTENT_PAD, paddingTop: 12, gap: 0 },
+  contentTablet: { paddingHorizontal: 20, paddingTop: 16 },
   lead: { fontSize: 14, lineHeight: 20, marginBottom: 20, marginTop: 4 },
   sectionLabel: {
     fontSize: 12,
@@ -348,9 +395,16 @@ const styles = StyleSheet.create({
     padding: 4,
     marginBottom: 8,
   },
+  groupCardTablet: {
+    padding: 6,
+    marginBottom: 12,
+  },
   modeRow: {
     flexDirection: "row",
     gap: 4,
+  },
+  modeRowTablet: {
+    gap: 8,
   },
   modeBtn: {
     flex: 1,
@@ -361,6 +415,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     borderRadius: 999,
     minWidth: 0,
+  },
+  modeBtnTablet: {
+    paddingVertical: 14,
+    gap: 6,
   },
   modeLabel: { fontSize: 12, fontWeight: "600" },
   themeGrid: {
@@ -375,6 +433,20 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: 16,
     gap: 10,
+  },
+  livePreviewTablet: {
+    marginTop: 20,
+    padding: 20,
+    gap: 14,
+  },
+  liveHeaderTablet: {
+    gap: 4,
+  },
+  liveRowTablet: {
+    marginTop: 2,
+  },
+  liveActionsTablet: {
+    marginTop: 4,
   },
   liveTitle: { fontSize: 16, fontWeight: "600" },
   liveSub: { fontSize: 13 },

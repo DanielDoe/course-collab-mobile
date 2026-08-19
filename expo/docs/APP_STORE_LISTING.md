@@ -36,47 +36,58 @@ Processing usually takes 5–30 minutes after EAS submission leaves the queue. Y
 ### Notes (copy/paste)
 
 ```
-CourseCollab is a university course companion for students, faculty, and institutional guests.
+Apple Review Student
 
-SANDBOX: All review accounts use isolated demo courses. No live student rosters.
+Name: Alex Rivera
+University: University of Houston
+Email: alex.rivera@coursecollab.demo
+Student ID: 910000001
+Password: Review26!
+MFA / 2FA: Not required
+Password Change: Not required
 
-── PRIMARY STUDENT (recommended path) ──
-1. Open app → Student sign-in
-2. University: University of Houston
-3. Student ID: 910000001
-4. Password: Review26!
-5. If prompted for first-login password change, set any new password (demo allows this).
-6. Explore: Dashboard, Lectures, Quizzes, Cora AI tutor, Classroom Points, Calendar.
+Sign In: Select Student, choose University of Houston, then sign in using either the email address or Student ID above with the provided password.
 
-── FACULTY ──
-1. Faculty sign-in tab
-2. Username: mchen
-3. Password: Review26!
-4. Same first-login password change if prompted.
-5. Explore: Students, Question Bank, Announcements, Office Hours, Cora copilot.
+Apple Review Instructor
 
-── GUEST (optional) ──
-Other sign-in → Guest
+Name: Maya Chen
+Email: maya.chen@coursecollab.demo
+Username / Instructor ID: mchen
+Password: Review26!
+MFA / 2FA: Not required
+Password Change: Not required
+
+Sign In: Select Instructor, then sign in using either the email address or username above with the provided password.
+
+Apple Review Career Member
+
+Name: Test User
 Email: danieldoe33@gmail.com
+Career Member ID: GUEST-dbac7af614bb47dd
 Password: ELEG2026!
-(First-login password change required.)
+MFA / 2FA: Not required
+Password Change: Not required
+
+Sign In: Select Other Sign In Options → Career Member, then sign in using either the email address or Career Member ID above with the provided password.
 
 ── NOT IN SCOPE FOR REVIEW ──
 Summer Camp sign-in shows “Coming soon” — intentional for this release.
 
 ── AI (Cora) ──
-Student/faculty AI features call our production API; demo accounts have sandbox course context only.
-Privacy controls: Settings → Privacy & Security → Cora privacy.
+Student/faculty/career AI features call our production API; demo accounts have sandbox context only.
+Privacy: Settings → Privacy & Security → Cora privacy.
 
 ── PAYMENTS ──
-Membership upgrades use Stripe Payment Sheet for digital subscriptions/credits.
-No Apple IAP — institutional SaaS + optional paid tiers (Guideline 3.1.3(b) multiplatform).
+Membership upgrades use Stripe Payment Sheet. No Apple IAP (Guideline 3.1.3(b) multiplatform).
 
 ── ACCOUNT DELETION ──
 Settings → Privacy & Security → Delete account (in-app flow).
 
 Contact: danieldoe33@icloud.com for review questions.
 ```
+
+**Suggested username field (primary):** `910000001` or `alex.rivera@coursecollab.demo` (Student · University of Houston)  
+**Password:** `Review26!`
 
 Full credential matrix: `expo/docs/APP_STORE_REVIEW_CREDENTIALS.md`
 

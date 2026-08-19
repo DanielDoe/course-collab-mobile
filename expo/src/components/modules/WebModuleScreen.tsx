@@ -152,15 +152,17 @@ export function WebModuleScreen({
     )
   }
 
-  const applyTopInset = insetTop ?? immersive
+  const applyTopInset = insetTop ?? (immersive && !immersiveLecture)
 
   return (
     <View
       style={[
         styles.root,
-        { backgroundColor: native.groupedBackground },
+        immersiveLecture
+          ? { backgroundColor: tokens.surface }
+          : { backgroundColor: native.groupedBackground },
         applyTopInset ? { paddingTop: chromeTop > 0 ? moduleTopPad : insets.top } : null,
-        { paddingBottom: insets.bottom },
+        immersiveLecture ? null : { paddingBottom: insets.bottom },
       ]}
     >
       {loading ? (
@@ -293,6 +295,8 @@ export function WebModuleScreen({
         }}
         style={styles.webview}
         setSupportMultipleWindows={false}
+        contentInsetAdjustmentBehavior={immersiveLecture ? "never" : "automatic"}
+        automaticallyAdjustContentInsets={!immersiveLecture}
       />
     </View>
   )

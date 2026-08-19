@@ -4,85 +4,146 @@
 > These accounts **do not** see live ELEG 1304 / ECE 2202 student rosters.
 > Course content (assessments, lectures, flashcards, notes, question bank) is cloned into demo courses owned by the review instructor.
 
-**Last provisioned:** 2026-08-14T18:07:38.032Z
+**Last updated:** 2026-08-19
 
-## Shared password (faculty + all students)
+---
 
-```
-Review26!
-```
-
-- MFA / 2FA: **disabled** (`mfa_bypass=true`)
-- First login: **password change required** (`has_changed_password=false`), then continue to dashboard
-- Membership: **Free** (faculty) / **Scholar** (students) — use Membership & Plans to test Stripe upgrades
-
-## University
-
-- **University of Houston** (id `2`)
-- Use this university on student login (web + mobile)
-
-## Faculty (instructor)
+## Apple Review Student
 
 | Field | Value |
 |-------|-------|
-| Name | Maya Chen |
-| Username | `mchen` |
-| Email | `maya.chen@coursecollab.demo` |
-| Password | `Review26!` |
-| Instructor id | `15` |
-| Web login | https://course-collab.com/faculty/login |
+| **Name** | Alex Rivera |
+| **University** | University of Houston |
+| **Email** | `alex.rivera@coursecollab.demo` |
+| **Student ID** | `910000001` |
+| **Password** | `Review26!` |
+| **MFA / 2FA** | Not required |
+| **Password change** | Not required |
 
-Demo courses owned by this instructor:
+**Sign in:** Select **Student**, choose **University of Houston**, then sign in using either the email address or Student ID above with the provided password.
+
+---
+
+## Apple Review Instructor
+
+| Field | Value |
+|-------|-------|
+| **Name** | Maya Chen |
+| **Email** | `maya.chen@coursecollab.demo` |
+| **Username / Instructor ID** | `mchen` |
+| **Password** | `Review26!` |
+| **Membership** | **Instructor Pro** (Manage Results, Student Progress, analytics unlocked) |
+| **MFA / 2FA** | Not required |
+| **Password change** | Not required |
+
+**Sign in:** Select **Instructor**, then sign in using either the email address or username above with the provided password.
+
+---
+
+## Apple Review Career Member
+
+| Field | Value |
+|-------|-------|
+| **Name** | Test User |
+| **Email** | `danieldoe33@gmail.com` |
+| **Career Member ID** | `GUEST-dbac7af614bb47dd` |
+| **Password** | `ELEG2026!` |
+| **MFA / 2FA** | Not required |
+| **Password change** | Not required |
+
+**Sign in:** Select **Other Sign In Options → Career Member**, then sign in using either the email address or Career Member ID above with the provided password.
+
+---
+
+## Copy/paste block (App Store Connect → App Review Information)
+
+```
+Apple Review Student
+
+Name: Alex Rivera
+University: University of Houston
+Email: alex.rivera@coursecollab.demo
+Student ID: 910000001
+Password: Review26!
+MFA / 2FA: Not required
+Password Change: Not required
+
+Sign In: Select Student, choose University of Houston, then sign in using either the email address or Student ID above with the provided password.
+
+Apple Review Instructor
+
+Name: Maya Chen
+Email: maya.chen@coursecollab.demo
+Username / Instructor ID: mchen
+Password: Review26!
+MFA / 2FA: Not required
+Password Change: Not required
+
+Sign In: Select Instructor, then sign in using either the email address or username above with the provided password.
+
+Apple Review Career Member
+
+Name: Test User
+Email: danieldoe33@gmail.com
+Career Member ID: GUEST-dbac7af614bb47dd
+Password: ELEG2026!
+MFA / 2FA: Not required
+Password Change: Not required
+
+Sign In: Select Other Sign In Options → Career Member, then sign in using either the email address or Career Member ID above with the provided password.
+
+── NOT IN SCOPE FOR REVIEW ──
+Summer Camp sign-in shows “Coming soon” — intentional for this release.
+
+── AI (Cora) ──
+Student/faculty/career AI features call our production API; demo accounts have sandbox context only.
+Privacy: Settings → Privacy & Security → Cora privacy.
+
+── PAYMENTS ──
+Membership upgrades use Stripe Payment Sheet. No Apple IAP (Guideline 3.1.3(b) multiplatform).
+
+── ACCOUNT DELETION ──
+Settings → Privacy & Security → Delete account (in-app flow).
+```
+
+**Suggested username field (primary account):** `910000001` or `alex.rivera@coursecollab.demo` (Student · University of Houston)
+
+---
+
+## Supplementary reference
+
+### University
+
+- **University of Houston** (id `2`)
+
+### Instructor demo courses
 
 | Code | Title | Course id | Session | Session id |
 |------|-------|-----------|---------|------------|
 | ELEG1304 | ELEG 1304 (Review Demo) | `15` | `ELEG1304P01` | `496` |
 | ECE2202 | ECE 2202 (Review Demo) | `16` | `ECE2202` | `497` |
 
-## Primary student (give this to Apple)
+Prefer **ECE 2202** for the richest student demo (quizzes, lectures, flashcards, notes).
 
-Prefer **ECE 2202** for the richest demo (quizzes, lectures, flashcards, notes).
+### Alternate student ID (same person, ELEG enrollment)
 
 | Field | Value |
 |-------|-------|
-| Full name | Alex Rivera |
-| Student ID (ECE 2202) | `910000001` |
 | Student ID (ELEG 1304) | `910100001` |
 | Password | `Review26!` |
-| Email | `alex.rivera@coursecollab.demo` |
-| Web login | https://course-collab.com/auth/student |
 
-> Platform requires a unique `student_id` per enrollment, so ECE and ELEG use paired IDs for the same fictional person.
-
-## Guest (platform guest)
+### Summer Camp (not in scope for mobile review)
 
 | Field | Value |
 |-------|-------|
-| Display name | Test User |
-| Email | `danieldoe33@gmail.com` |
-| Student ID | `GUEST-dbac7af614bb47dd` |
-| Password | `ELEG2026!` |
-| First login | **password change required** (`has_changed_password=false`) |
-| Web login | https://course-collab.com/student/login/guest |
-| Mobile | Other sign-in options → Guest → email + password above |
-
-## Summer Camp
-
-| Field | Value |
-|-------|-------|
-| Name | Daniel Doe |
 | Email | `danieldoe33@gmail.com` |
 | Student ID | `CAMP-A1C75A3981A7` |
 | Password | `CAMP2026!` |
-| First login | **password change required** (`has_changed_password=false`) |
-| Web | Summer Camp login (or student summer portal) with email + password above |
-| Mobile | Coming soon — Summer Camp sign-in is gated on the app until camp opens |
+| Mobile | Coming soon — gated until camp opens |
 
-> Guest and summer camp bcrypt hashes are verified against the passwords above. Same email is intentional — portals are separate accounts.
+### Classmates (dummy students on demo courses)
 
-## Classmates (10 dummy students on each demo course)
-
-Same password for all. Visible to the review instructor on demo courses only.
+Same password `Review26!` for all. Visible to the review instructor only.
 
 | Name | Student IDs | Password |
 |------|-------------|----------|
@@ -97,16 +158,15 @@ Same password for all. Visible to the review instructor on demo courses only.
 | Jamie Ortiz | `910000010` (ECE) / `910100010` (ELEG) | `Review26!` |
 | Drew Hanson | `910000011` (ECE) / `910100011` (ELEG) | `Review26!` |
 
-## Mobile app
+### Web login URLs
 
-1. Point the Expo app at production (or staging) API as usual.
-2. Student: University of Houston → Student ID `910000001` → password `Review26!`.
-3. Faculty: username `mchen` → password `Review26!`.
-4. Guest: Other sign-in → Guest → `danieldoe33@gmail.com` / `ELEG2026!`.
-5. Summer Camp: Other sign-in → Summer shows a Coming Soon screen (camper login is not open in this release).
-6. Guest accounts require a first-login password change before the dashboard.
+| Portal | URL |
+|--------|-----|
+| Student | https://course-collab.com/auth/student |
+| Faculty | https://course-collab.com/faculty/login |
+| Career Member | https://course-collab.com/student/login/guest |
 
-## Re-provision
+### Re-provision
 
 From the web app repo (`v0-coursecollabv3`):
 
@@ -117,4 +177,5 @@ npx tsx scripts/seed-app-store-review-sandbox.ts --force-reclone
 ```
 
 Canonical constants: `lib/app-store-review-accounts.ts`
-This file is mirrored in the mobile repo at `docs/APP_STORE_REVIEW_CREDENTIALS.md` and `expo/docs/APP_STORE_REVIEW_CREDENTIALS.md`.
+
+This file is mirrored at `docs/APP_STORE_REVIEW_CREDENTIALS.md`.

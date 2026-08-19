@@ -1,8 +1,18 @@
 import { ActivityIndicator, View } from "react-native"
+import { Redirect } from "expo-router"
 import { CoraPrivacySettingsScreen } from "../../../src/components/settings/CoraPrivacySettingsScreen"
 import { useSession } from "../../../src/context/SessionProvider"
-import { isLearnerPortal, type GuestSession, type StudentSession, type SummerSession } from "../../../src/lib/session"
-import { Redirect } from "expo-router"
+import type { CoraPrivacySession } from "../../../src/lib/cora-privacy-api"
+
+function supportsCoraPrivacy(session: NonNullable<ReturnType<typeof useSession>["session"]>): session is CoraPrivacySession {
+  return (
+    session.portal === "student" ||
+    session.portal === "guest" ||
+    session.portal === "summer" ||
+    session.portal === "faculty" ||
+    session.portal === "admin"
+  )
+}
 
 export default function CoraPrivacyRoute() {
   const { session, isLoading } = useSession()
@@ -15,12 +25,8 @@ export default function CoraPrivacyRoute() {
     )
   }
 
-  if (session && isLearnerPortal(session.portal)) {
-    return (
-      <CoraPrivacySettingsScreen
-        session={session as StudentSession | GuestSession | SummerSession}
-      />
-    )
+  if (session && supportsCoraPrivacy(session)) {
+    return <CoraPrivacySettingsScreen session={session} />
   }
 
   return <Redirect href="/settings/privacy-security" />

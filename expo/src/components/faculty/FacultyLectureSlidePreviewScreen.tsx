@@ -1,66 +1,47 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
-import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from "react-native"
-import { Ionicons } from "@/components/icons/AppIcon"
+import { useEffect, useMemo, useState } from "react"
+import { ActivityIndicator, StyleSheet, View } from "react-native"
 import { useRouter } from "expo-router"
-import { WebView } from "react-native-webview"
 import { ApiError } from "../../lib/api"
-import { instructorApi, type InstructorLecture } from "../../lib/instructor-api"
-import { mergeLectureDeckFromContent } from "../../lib/lecture-deck-url"
-import { getAllowedWebViewOriginPrefixes } from "../../lib/trusted-origins"
-import { buildFacultyDeckRequest, useResolvedLectureDeckSource } from "../../lib/use-lecture-deck-source"
+import { instructorApi } from "../../lib/instructor-api"
+import { buildInstructorLectureViewerPath } from "../../constants/module-web-paths"
 import { useFacultyScope } from "../../hooks/useFacultyScope"
-import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
+import { useThemedNative } from "../../context/AppearanceProvider"
+import { WebModuleScreen } from "../modules/WebModuleScreen"
 import { LectureSlidePreviewToolbar } from "../lectures/LectureSlidePreviewToolbar"
+import { lectureViewerRootStyle, lectureViewerWebHostStyle } from "../lectures/lecture-viewer-layout"
 import { FacultyEmptyState } from "./faculty-shared"
 
 type Props = {
   lectureId: number
 }
 
-function lectureDeckUrl(lecture: InstructorLecture | null): string | null {
-  if (!lecture) return null
-  return lecture.pdf_url || lecture.document_url || null
-}
-
-/** Native instructor slide preview — PDF deck only, no embedded web dashboard. */
+/** Instructor lecture preview — production web viewer with workspace & sample practice. */
 export function FacultyLectureSlidePreviewScreen({ lectureId }: Props) {
   const router = useRouter()
-  const tokens = useAppThemeTokens()
   const native = useThemedNative()
-  const { scope, ready } = useFacultyScope()
-
-  const [lecture, setLecture] = useState<InstructorLecture | null>(null)
+  const { scope, course, ready } = useFacultyScope()
+  const [title, setTitle] = useState("Lecture preview")
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
 
-  const load = useCallback(async () => {
-    if (!scope || !Number.isFinite(lectureId)) return
-    setError("")
-    try {
-      const lectures = await instructorApi.getLectures(scope)
-      const match = lectures.find((item) => item.id === lectureId) ?? null
-      if (!match) {
-        setError("This lecture could not be found.")
-        setLecture(null)
-        return
-      }
-      try {
-        const content = await instructorApi.getLectureContent(scope, lectureId)
-        setLecture(mergeLectureDeckFromContent(match, content))
-      } catch {
-        setLecture(match)
-      }
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not load lecture.")
-      setLecture(null)
-    }
-  }, [scope, lectureId])
+  const webPath = useMemo(() => buildInstructorLectureViewerPath(lectureId), [lectureId])
+
+  const facultyCourse = useMemo(
+    () =>
+      course
+        ? {
+            id: course.id,
+            course_code: course.course_code,
+            course_title: course.course_title,
+          }
+        : null,
+    [course],
+  )
 
   useEffect(() => {
-    if (!Number.isFinite(lectureId) || lectureId <= 0) {
+    if (!scope || !Number.isFinite(lectureId) || lectureId <= 0) {
       setLoading(false)
-      setError("Invalid lecture.")
-      setLecture(null)
+      if (!Number.isFinite(lectureId) || lectureId <= 0) setError("Invalid lecture.")
       return
     }
     if (!ready) {
@@ -68,84 +49,43 @@ export function FacultyLectureSlidePreviewScreen({ lectureId }: Props) {
       return
     }
     setLoading(true)
-    load().finally(() => setLoading(false))
-  }, [ready, load, lectureId])
-
-  const deckUrl = lectureDeckUrl(lecture)
-  const deckRequest = useMemo(
-    () => buildFacultyDeckRequest(deckUrl, scope ? { instructorId: scope.instructorId, courseId: scope.courseId } : undefined),
-    [deckUrl, scope],
-  )
-  const { source: deckSource, loading: deckLoading, error: deckError } = useResolvedLectureDeckSource({
-    deckUrl: deckRequest?.uri ?? null,
-    headers: deckRequest?.headers,
-    cacheKey: lectureId ? `faculty-lecture-${lectureId}` : undefined,
-    enabled: Boolean(deckRequest?.uri),
-  })
-
-  const openExternally = () => {
-    if (!deckSource?.uri) return
-    void Linking.openURL(deckSource.uri)
-  }
+    setError("")
+    void instructorApi
+      .getLectures(scope)
+      .then((lectures) => {
+        const match = lectures.find((item) => item.id === lectureId)
+        if (match) {
+          setTitle(match.title?.trim() || "Lecture preview")
+        } else {
+          setError("This lecture could not be found.")
+        }
+      })
+      .catch((err) => {
+        setError(err instanceof ApiError ? err.message : "Could not load lecture.")
+      })
+      .finally(() => setLoading(false))
+  }, [scope, ready, lectureId])
 
   return (
-    <View style={[styles.root, { backgroundColor: native.groupedBackground }]}>
-      <LectureSlidePreviewToolbar
-        title="Slide preview"
-        onBack={() => router.back()}
-        trailing={
-          deckSource ? (
-            <Pressable
-              style={[styles.iconBtn, { backgroundColor: tokens.accentSoftStrong }]}
-              onPress={openExternally}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel="Open slide deck externally"
-            >
-              <Ionicons name="open-outline" size={18} color={tokens.accent} />
-            </Pressable>
-          ) : (
-            <View style={styles.iconBtnSpacer} />
-          )
-        }
-      />
+    <View style={[lectureViewerRootStyle, { backgroundColor: native.groupedBackground }]}>
+      <LectureSlidePreviewToolbar title={title} onBack={() => router.back()} />
 
       {loading ? (
         <View style={styles.center}>
-          <ActivityIndicator size="large" color={tokens.accent} />
+          <ActivityIndicator size="large" color={native.label} />
         </View>
       ) : error ? (
         <View style={styles.center}>
           <FacultyEmptyState icon="alert-circle-outline" title="Could not load" body={error} />
         </View>
-      ) : !deckRequest ? (
-        <View style={styles.center}>
-          <FacultyEmptyState
-            icon="document-outline"
-            title="No slide deck"
-            body="Upload a PDF or PPT deck from Manage lecture → Slide deck & settings."
-          />
-        </View>
-      ) : deckLoading ? (
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={tokens.accent} />
-        </View>
-      ) : deckError ? (
-        <View style={styles.center}>
-          <FacultyEmptyState icon="alert-circle-outline" title="Could not load slides" body={deckError} />
-        </View>
-      ) : deckSource ? (
-        <View style={[styles.viewer, { backgroundColor: tokens.surface }]}>
-          <WebView
-            source={deckSource}
-            style={styles.webview}
-            originWhitelist={getAllowedWebViewOriginPrefixes({ lectureDeck: true })}
-            startInLoadingState
-            renderLoading={() => (
-              <View style={[styles.loading, { backgroundColor: tokens.surface }]}>
-                <ActivityIndicator size="large" color={tokens.accent} />
-              </View>
-            )}
+      ) : scope ? (
+        <View style={lectureViewerWebHostStyle}>
+          <WebModuleScreen
+            webPath={webPath}
+            facultyCourse={facultyCourse}
+            immersive
+            immersiveLecture
+            insetTop={false}
           />
         </View>
       ) : null}
@@ -154,17 +94,5 @@ export function FacultyLectureSlidePreviewScreen({ lectureId }: Props) {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1 },
   center: { flex: 1, justifyContent: "center", padding: 24 },
-  viewer: { flex: 1, minHeight: 0 },
-  webview: { flex: 1 },
-  loading: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center" },
-  iconBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  iconBtnSpacer: { width: 36, height: 36 },
 })

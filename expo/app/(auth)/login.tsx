@@ -36,6 +36,7 @@ import {
 } from "../../src/lib/remembered-login-portal"
 import { StudentInviteSignupPanel } from "../../src/components/login/StudentInviteSignupPanel"
 import { portalMeta } from "../../src/constants/portals"
+import { useAuthFlowContentStyle } from "../../src/lib/responsive-layout"
 
 function normalizeInviteParam(value: string | string[] | undefined): string {
   if (Array.isArray(value)) return value[0]?.trim() ?? ""
@@ -50,6 +51,7 @@ export default function LoginScreen() {
   const insets = useSafeAreaInsets()
   const router = useRouter()
   const { height: windowHeight } = useWindowDimensions()
+  const shellStyle = useAuthFlowContentStyle(440)
   const { invite } = useLocalSearchParams<{ invite?: string | string[] }>()
   const inviteToken = normalizeInviteParam(invite)
   const { session, isLoading: sessionLoading } = useSession()
@@ -159,7 +161,7 @@ export default function LoginScreen() {
         automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.shell}>
+        <View style={[styles.shell, shellStyle]}>
           {inviteToken ? (
             <Animated.View
               key="invite-signup"
@@ -241,22 +243,6 @@ export default function LoginScreen() {
                   )
                 })}
               </View>
-
-              {__DEV__ ? (
-                <Pressable
-                  onPress={() => router.push("/dev-onboarding-preview" as never)}
-                  style={({ pressed }) => [
-                    styles.devPreviewLink,
-                    { borderColor: themeLogin.separator, opacity: pressed ? 0.85 : 1 },
-                  ]}
-                  accessibilityRole="button"
-                >
-                  <Ionicons name="images-outline" size={16} color={themeLogin.purple} />
-                  <Text style={[themeType.link, { color: themeLogin.purple }]}>
-                    Preview onboarding screens (dev)
-                  </Text>
-                </Pressable>
-              ) : null}
             </Animated.View>
           ) : (
             <Animated.View
@@ -300,7 +286,7 @@ const styles = StyleSheet.create({
   scrollPortalCentered: {
     justifyContent: "center",
   },
-  shell: { width: "100%", maxWidth: 440, alignSelf: "center" },
+  shell: { width: "100%" },
   portalBleed: { alignSelf: "stretch", paddingHorizontal: 4 },
   welcome: { gap: 14, alignItems: "stretch" },
   logoTile: { alignSelf: "center", marginBottom: 4 },
@@ -342,14 +328,5 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   secondaryText: { flex: 1, gap: 2, minWidth: 0 },
-  devPreviewLink: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    marginTop: 8,
-    paddingVertical: 12,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
   pressed: { opacity: 0.86 },
 })

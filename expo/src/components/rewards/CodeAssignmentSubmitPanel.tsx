@@ -1,13 +1,15 @@
 import { useState } from "react"
-import { Image, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
-import { AppAlert } from '../../lib/app-alert'
+import { Image, Pressable, StyleSheet, Text, TextInput, View } from "react-native"
+import { AppAlert } from "../../lib/app-alert"
 import * as ImagePicker from "expo-image-picker"
 import { Ionicons } from "@/components/icons/AppIcon"
 import type { StudentSession } from "../../lib/session"
 import { ApiError } from "../../lib/student-api"
-import { NATIVE } from "../../constants/faculty-native-theme"
+import { useAppThemeTokens } from "../../context/AppearanceProvider"
+import { useThemedStudentNative } from "../../lib/themed-module-theme"
+import { useStudentSubmissionLayout } from "../../lib/circuit-submission-layout"
 import { rewardsApi } from "../../lib/rewards-api"
-import { useRewardsTheme } from "./rewards-shared"
+import { circuitSubmissionUi as ui } from "../assessments/circuit-submission-ui"
 
 type Props = {
   session: StudentSession
@@ -22,8 +24,11 @@ export function CodeAssignmentSubmitPanel({
   assignmentId,
   title,
   disabled,
-  onSubmitted}: Props) {
-  const theme = useRewardsTheme()
+  onSubmitted,
+}: Props) {
+  const tokens = useAppThemeTokens()
+  const SN = useThemedStudentNative()
+  const { codeFieldHeight, largeUpload, plotPreviewHeight } = useStudentSubmissionLayout()
   const [code, setCode] = useState("")
   const [plotUri, setPlotUri] = useState<string | null>(null)
   const [plotBase64, setPlotBase64] = useState<string | null>(null)
@@ -49,7 +54,8 @@ export function CodeAssignmentSubmitPanel({
       : await ImagePicker.launchImageLibraryAsync({
           quality: 0.75,
           base64: true,
-          mediaTypes: ["images"]})
+          mediaTypes: ["images"],
+        })
 
     if (result.canceled || !result.assets?.[0]) return
     const asset = result.assets[0]
@@ -71,7 +77,8 @@ export function CodeAssignmentSubmitPanel({
         submissionId: assignmentId,
         code: code.trim(),
         description: title,
-        plotImage: plotBase64 ?? undefined})
+        plotImage: plotBase64 ?? undefined,
+      })
       AppAlert.alert(
         "Submitted",
         result.message ??
@@ -89,13 +96,22 @@ export function CodeAssignmentSubmitPanel({
 
   return (
     <View style={styles.wrap}>
-      <Text style={styles.fieldLabel}>Code</Text>
+      <Text style={[styles.fieldLabel, { color: SN.secondaryLabel }]}>Code</Text>
       <TextInput
-        style={styles.codeInput}
+        style={[
+          styles.codeInput,
+          {
+            borderColor: tokens.border,
+            backgroundColor: tokens.background,
+            color: tokens.text,
+            height: codeFieldHeight,
+            minHeight: codeFieldHeight,
+          },
+        ]}
         value={code}
         onChangeText={setCode}
         placeholder="// Paste or type your C++ solution"
-        placeholderTextColor="#94a3b8"
+        placeholderTextColor={SN.secondaryLabel}
         multiline
         autoCapitalize="none"
         autoCorrect={false}
@@ -103,22 +119,49 @@ export function CodeAssignmentSubmitPanel({
         editable={!disabled && !submitting}
       />
 
-      <Text style={styles.fieldLabel}>Plot / output (optional)</Text>
-      <View style={styles.modeRow}>
-        <Pressable style={[styles.modeBtn, { backgroundColor: theme.soft, borderColor: theme.softBorder }]} onPress={() => pickPlot(true)} disabled={disabled || submitting}>
-          <Ionicons name="camera-outline" size={20} color={theme.primary} />
-          <Text style={[styles.modeLabel, { color: theme.primaryDark }]}>Take photo</Text>
+      <Text style={[styles.fieldLabel, { color: SN.secondaryLabel }]}>Plot / output (optional)</Text>
+      <View style={ui.photoRow}>
+        <Pressable
+          style={[
+            ui.actionBtn,
+            largeUpload ? ui.uploadDropZone : ui.actionBtnPrimary,
+            ui.actionBtnHalf,
+            { borderColor: tokens.border, backgroundColor: tokens.background },
+          ]}
+          onPress={() => pickPlot(true)}
+          disabled={disabled || submitting}
+        >
+          <Ionicons name="camera-outline" size={largeUpload ? 26 : 18} color={tokens.accent} />
+          <Text style={[styles.actionLabel, largeUpload && styles.actionLabelLarge, { color: tokens.text }]}>
+            Take photo
+          </Text>
         </Pressable>
-        <Pressable style={[styles.modeBtn, { backgroundColor: theme.soft, borderColor: theme.softBorder }]} onPress={() => pickPlot(false)} disabled={disabled || submitting}>
-          <Ionicons name="images-outline" size={20} color={theme.primary} />
-          <Text style={[styles.modeLabel, { color: theme.primaryDark }]}>Upload image</Text>
+        <Pressable
+          style={[
+            ui.actionBtn,
+            largeUpload ? ui.uploadDropZone : ui.actionBtnPrimary,
+            ui.actionBtnHalf,
+            { borderColor: tokens.border, backgroundColor: tokens.background },
+          ]}
+          onPress={() => pickPlot(false)}
+          disabled={disabled || submitting}
+        >
+          <Ionicons name="images-outline" size={largeUpload ? 26 : 18} color={tokens.accent} />
+          <Text style={[styles.actionLabel, largeUpload && styles.actionLabelLarge, { color: tokens.text }]}>
+            Upload image
+          </Text>
         </Pressable>
       </View>
+
       {plotUri ? (
         <View style={styles.plotWrap}>
-          <Image source={{ uri: plotUri }} style={styles.plotImage} resizeMode="contain" />
+          <Image
+            source={{ uri: plotUri }}
+            style={[styles.plotImage, { height: plotPreviewHeight }]}
+            resizeMode="contain"
+          />
           <Pressable onPress={() => { setPlotUri(null); setPlotBase64(null) }}>
-            <Text style={styles.removePlot}>Remove plot</Text>
+            <Text style={[styles.removePlot, { color: tokens.danger }]}>Remove plot</Text>
           </Pressable>
         </View>
       ) : null}
@@ -126,7 +169,7 @@ export function CodeAssignmentSubmitPanel({
       <Pressable
         style={[
           styles.submitBtn,
-          { backgroundColor: theme.primary },
+          { backgroundColor: tokens.accent },
           (disabled || submitting || !code.trim()) && styles.submitBtnDisabled,
         ]}
         onPress={handleSubmit}
@@ -140,35 +183,26 @@ export function CodeAssignmentSubmitPanel({
 
 const styles = StyleSheet.create({
   wrap: { gap: 12 },
-  fieldLabel: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: NATIVE.secondaryLabel},
+  fieldLabel: { fontSize: 12, fontWeight: "700" },
+  actionLabel: { fontSize: 13, fontWeight: "600" },
+  actionLabelLarge: { fontSize: 15 },
   codeInput: {
-    minHeight: 200,
-    borderWidth: 1,
-    borderColor: NATIVE.separator,
-    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 12,
     padding: 12,
     fontSize: 13,
     fontFamily: "Menlo",
-    color: "#0f172a",
-    backgroundColor: "#f8fafc"},
-  modeRow: { flexDirection: "row", gap: 8 },
-  modeBtn: {
-    flex: 1,
-    alignItems: "center",
-    gap: 6,
-    paddingVertical: 12,
-    borderRadius: 999,
-    borderWidth: 1},
-  modeLabel: { fontSize: 11, fontWeight: "700" },
+    lineHeight: 20,
+  },
   plotWrap: { gap: 6 },
-  plotImage: { width: "100%", height: 180, borderRadius: 999, backgroundColor: "#f1f5f9" },
-  removePlot: { fontSize: 13, fontWeight: "700", color: "#dc2626" },
+  plotImage: { width: "100%", borderRadius: 12, backgroundColor: "#f1f5f9" },
+  removePlot: { fontSize: 13, fontWeight: "700" },
   submitBtn: {
-    borderRadius: 999,
+    borderRadius: 12,
+    minHeight: 48,
     paddingVertical: 14,
-    alignItems: "center"},
+    alignItems: "center",
+  },
   submitBtnDisabled: { opacity: 0.5 },
-  submitText: { fontSize: 15, fontWeight: "600", color: "#ffffff" }})
+  submitText: { fontSize: 15, fontWeight: "600", color: "#ffffff" },
+})

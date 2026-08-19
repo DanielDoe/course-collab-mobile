@@ -50,6 +50,7 @@
     "build:ios": "eas build --platform ios --profile production --non-interactive",
     "build:ios:setup": "eas build --platform ios --profile production",
     "build:ios:preview": "eas build --platform ios --profile preview --non-interactive",
+    "build:ios:preview:setup": "eas build --platform ios --profile preview",
     "submit:ios": "eas submit --platform ios --profile production --latest --non-interactive",
     "eas-build-pre-install": "node scripts/audit-production.mjs && node scripts/audit-ios.mjs",
     "typecheck": "tsc --noEmit",

@@ -120,8 +120,8 @@ export const FACULTY_NAV_GROUPS: FacultyNavGroup[] = [
     label: "Analytics",
     icon: "bar-chart-outline",
     items: [
-      { id: "results", label: "Manage Results", route: "/module/results", icon: "bar-chart-outline", locked: true, minTier: "Pro" },
-      { id: "student-progress", label: "Student Progress", route: "/module/student-progress", icon: "analytics-outline", locked: true, minTier: "Pro" },
+      { id: "results", label: "Manage Results", route: "/module/results", icon: "bar-chart-outline" },
+      { id: "student-progress", label: "Student Progress", route: "/module/student-progress", icon: "analytics-outline" },
       { id: "reports", label: "Manage Reports", route: "/module/reports", icon: "document-attach-outline", locked: true, minTier: "Pro" },
       { id: "progress-reviews", label: "Progress Reviews", route: "/module/progress-reviews", icon: "trending-up-outline", locked: true, minTier: "Pro" },
       { id: "recent-activity", label: "Recent Activity", route: "/module/recent-activity", icon: "pulse-outline" },

@@ -24,6 +24,22 @@ function resolveStudentNativeBackground(theme?: AppThemeTokens): NativeWebThemeP
   return theme ? nativeWebThemePayload(theme) : null
 }
 
+/** CSS injected for native lecture embed — web keeps sample practice; native owns title/back. */
+function studentLectureImmersiveLayoutCssRules(): string[] {
+  return [
+    "body.cc-student-lecture-immersive [data-lecture-viewer-nav]{border-bottom:0!important;background:transparent!important;backdrop-filter:none!important}",
+    "body.cc-student-lecture-immersive [data-lecture-viewer-nav]>div{padding:0 12px 0!important}",
+    "body.cc-student-lecture-immersive [data-lecture-viewer-nav] h1,body.cc-student-lecture-immersive [data-lecture-viewer-nav] [data-lecture-native-back]{display:none!important}",
+    "body.cc-student-lecture-immersive [data-lecture-viewer-nav] .grid{display:flex!important;justify-content:flex-end!important;align-items:center!important;min-height:0!important;height:auto!important;gap:0!important}",
+    "body.cc-student-lecture-immersive [data-lecture-viewer-nav]:not(:has(button)){display:none!important}",
+    "body.cc-student-lecture-immersive [data-lecture-viewer-nav]+div{padding:0!important;margin:0!important;min-height:0!important;flex:1!important;display:flex!important;flex-direction:column!important}",
+    "body.cc-student-lecture-immersive main[data-tour=\"main-content\"]>div{padding:0!important;margin:0!important;height:100%!important;min-height:0!important}",
+    "body.cc-student-lecture-immersive .relative.flex.h-0.min-h-0.flex-1.flex-col{padding:0!important;margin:0!important;gap:0!important}",
+    "body.cc-student-lecture-immersive .flex.h-0.min-h-0.flex-1.flex-col.px-1{padding:0!important}",
+    "body.cc-student-lecture-immersive .flex.w-full.min-w-0.flex-col.overflow-hidden.rounded-xl,body.cc-student-lecture-immersive .flex.w-full.min-w-0.flex-col.overflow-hidden.rounded-2xl{border-radius:0!important;border-left:none!important;border-right:none!important;box-shadow:none!important}",
+  ]
+}
+
 export function buildWebSessionInjectScript(
   session: StudentSession,
   options?: StudentWebInjectOptions,
@@ -150,6 +166,7 @@ export function buildWebSessionInjectScript(
             'body.cc-student-lecture-immersive .dashboard-v2-premium > div,body.cc-student-lecture-immersive .dashboard-v2-shell > div{height:100%!important;max-height:100%!important;min-height:0!important}',
             'body.cc-student-lecture-immersive [data-dashboard-topbar],body.cc-student-lecture-immersive aside[data-tour="sidebar"]{display:none!important}',
             'body.cc-student-lecture-immersive main[data-tour="main-content"]{margin-left:0!important;padding:0!important;min-height:0!important;height:100%!important}',
+            ...studentLectureImmersiveLayoutCssRules(),
           );
         }
         style.textContent = rules.join('');
@@ -298,6 +315,14 @@ export function buildFacultyWebSessionInjectScript(
             'body.cc-faculty-lecture-immersive .instructor-dashboard-v2 main{margin-left:0!important;padding:0!important;min-height:0!important;flex:1!important}',
             'body.cc-faculty-lecture-immersive .instructor-dashboard-v2 .fixed.pointer-events-none{display:none!important}',
             'body.cc-faculty-lecture-immersive .instructor-dashboard-v2 .flex.min-h-0.flex-1{min-height:0!important;height:100%!important}',
+            'body.cc-faculty-lecture-immersive [data-lecture-viewer-nav]{border-bottom:0!important;background:transparent!important}',
+            'body.cc-faculty-lecture-immersive [data-lecture-viewer-nav]>div{padding:0 12px 0!important}',
+            'body.cc-faculty-lecture-immersive [data-lecture-viewer-nav] h1,body.cc-faculty-lecture-immersive [data-lecture-viewer-nav] [data-lecture-native-back]{display:none!important}',
+            'body.cc-faculty-lecture-immersive [data-lecture-viewer-nav] .grid{display:flex!important;justify-content:flex-end!important;align-items:center!important;min-height:0!important;height:auto!important}',
+            'body.cc-faculty-lecture-immersive [data-lecture-viewer-nav]:not(:has(button)){display:none!important}',
+            'body.cc-faculty-lecture-immersive [data-lecture-viewer-nav]+div{padding:0!important;margin:0!important;min-height:0!important;flex:1!important}',
+            'body.cc-faculty-lecture-immersive .relative.flex.h-0.min-h-0.flex-1.flex-col{padding:0!important;gap:0!important}',
+            'body.cc-faculty-lecture-immersive .flex.w-full.min-w-0.flex-col.overflow-hidden.rounded-xl,body.cc-faculty-lecture-immersive .flex.w-full.min-w-0.flex-col.overflow-hidden.rounded-2xl{border-radius:0!important;border-left:none!important;border-right:none!important}',
           );
         }
         var style = document.createElement('style');
@@ -428,6 +453,34 @@ export function buildLectureToolPanelInjectScript(panel: LectureWebToolPanel): s
       var attempts = 0;
       var timer = setInterval(function () {
         if (tryOpen() || ++attempts > 48) clearInterval(timer);
+      }, 250);
+      true;
+    })();
+  `
+}
+
+/** Tighten lecture shell spacing after React hydrates the PDF viewer (mobile native chrome owns the header). */
+export function buildStudentLectureImmersiveLayoutInjectScript(): string {
+  return `
+    (function () {
+      var styleId = 'cc-student-lecture-immersive-layout';
+      function applyLayout() {
+        try {
+          document.body.classList.add('cc-student-lecture-immersive');
+          var style = document.getElementById(styleId);
+          if (!style) {
+            style = document.createElement('style');
+            style.id = styleId;
+            (document.head || document.documentElement).appendChild(style);
+          }
+          style.textContent = ${JSON.stringify(studentLectureImmersiveLayoutCssRules().join(""))};
+        } catch (e) {}
+      }
+      applyLayout();
+      var ticks = 0;
+      var timer = setInterval(function () {
+        applyLayout();
+        if (++ticks > 40) clearInterval(timer);
       }, 250);
       true;
     })();

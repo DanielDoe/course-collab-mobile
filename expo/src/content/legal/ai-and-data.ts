@@ -43,8 +43,10 @@ export const AI_AND_DATA = {
     {
       title: "Your Controls",
       bullets: [
-        "Settings → Cora → Privacy & personalization: Personalized learning, Use learning context, Local learning memory, Clear Cora learning memory.",
-        "Share Cora summaries with instructor (off by default).",
+        "Settings → Privacy & legal → Cora privacy & data use: Personalized learning/context (students), teaching context (faculty), or institutional context (admin).",
+        "Local Cora memory toggles and Clear Cora learning memory (device-only).",
+        "Students only: Share Cora summaries with instructor (off by default).",
+        "How Cora uses your data: full AI & Data disclosure.",
         "Delete account from Settings → Privacy & legal to remove Cora conversations tied to your profile (subject to institutional record retention).",
       ],
     },

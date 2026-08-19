@@ -37,12 +37,14 @@ describe("student lecture client auth contract", () => {
     assert.doesNotMatch(viewerFn, /Promise\.all/)
   })
 
-  it("does not allow every WebView origin on the student lecture viewer", () => {
+  it("embeds the lecture viewer through WebModuleScreen with scoped origins", () => {
     const viewer = readFileSync(
       join(here, "../components/lectures/StudentLectureViewerScreen.tsx"),
       "utf8",
     )
-    assert.match(viewer, /getAllowedWebViewOriginPrefixes/)
-    assert.doesNotMatch(viewer, /originWhitelist=\{\["\*"\]\}/)
+    const webModule = readFileSync(join(here, "../components/modules/WebModuleScreen.tsx"), "utf8")
+    assert.match(viewer, /WebModuleScreen/)
+    assert.match(webModule, /getAllowedWebViewOriginPrefixes/)
+    assert.doesNotMatch(webModule, /originWhitelist=\{\["\*"\]\}/)
   })
 })

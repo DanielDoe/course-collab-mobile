@@ -6,6 +6,7 @@ import type {
   StudentDashboardStats,
 } from "../types/dashboard"
 import { clampGradebookEngagementCredits } from "./engagement-credits"
+import type { QuizListRolloverPolicy } from "./student-api"
 import {
   buildGradeTrendSeries,
   buildPerformanceComparison,
@@ -57,6 +58,7 @@ export type DashboardRawData = {
   finalsTaken: boolean | null
   classroomPoints: number | null
   unavailable: Partial<Record<DashboardStatSource, true>>
+  rolloverPolicy?: QuizListRolloverPolicy | null
 }
 
 const SOURCE_LABEL: Record<DashboardStatSource, string> = {
@@ -211,6 +213,9 @@ export function buildStudentDashboardFromRaw(raw: DashboardRawData): {
     trend: buildGradeTrendSeries(unavailable.grade ? 0 : overallGrade, quizHistory, homeworkHistory, {
       quiz: quizYou,
       homework: hwYou,
+    }, {
+      termLabel: raw.rolloverPolicy?.academic_term_label,
+      semesterEndIso: raw.rolloverPolicy?.semester_end_iso,
     }),
     comparison: buildPerformanceComparison(
       quizYou,

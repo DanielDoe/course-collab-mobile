@@ -51,8 +51,9 @@ function AppShellFrameInner({
   overlays,
 }: Props) {
   const insets = useSafeAreaInsets()
+  const glassChromeActive = useGlassChromeActive()
   const showTopBar = !immersive
-  const floatChrome = showTopBar && useGlassChromeActive()
+  const floatChrome = showTopBar && glassChromeActive
   const topInset = floatChrome ? insets.top + NATIVE_HEADER_BAR_HEIGHT : 0
   const searchDockInset = useSearchDockBottomInset()
   const floatSearchDock = searchDockInset > 0

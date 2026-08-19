@@ -1,4 +1,9 @@
 import type { GradeTrendPoint, PerformanceComparison, PerformanceInsight } from "../types/dashboard"
+import {
+  buildSemesterWeeks,
+  resolveSemesterBounds,
+  type SemesterBounds,
+} from "./semester-week-bounds"
 
 type QuizHistoryItem = {
   attempts?: { percentage?: number; completed_at?: string }[]
@@ -58,7 +63,27 @@ function applyFlatTrend(
   })
 }
 
-/** Mirrors web GradeTrendChart week aggregation. */
+function earliestAttemptDate(
+  quizHistory: QuizHistoryItem[],
+  homeworkHistory: HomeworkHistoryItem[],
+): Date | null {
+  let earliest: Date | null = null
+  const consider = (iso?: string) => {
+    if (!iso) return
+    const d = new Date(iso)
+    if (Number.isNaN(d.getTime())) return
+    if (!earliest || d.getTime() < earliest.getTime()) earliest = d
+  }
+  for (const q of quizHistory) {
+    for (const a of q.attempts ?? []) consider(a.completed_at)
+  }
+  for (const h of homeworkHistory) {
+    for (const a of h.attempts ?? []) consider(a.completed_at)
+  }
+  return earliest
+}
+
+/** Mirrors web GradeTrendChart — full semester timeline, not a rolling 6-week window. */
 export function buildGradeTrendSeries(
   gradeTotal: number,
   quizHistory: QuizHistoryItem[],
@@ -70,32 +95,32 @@ export function buildGradeTrendSeries(
    * surfaces disagreeing is what students were reporting.
    */
   fallbackAverages?: { quiz?: number; homework?: number },
+  semester?: {
+    termLabel?: string | null
+    semesterEndIso?: string | null
+    now?: Date
+  },
 ): GradeTrendPoint[] {
-  const weeks: GradeTrendPoint[] = []
-  const now = new Date()
-
-  for (let i = 5; i >= 0; i--) {
-    const d = new Date(now)
-    d.setDate(d.getDate() - i * 7)
-    const weekStart = new Date(d)
-    weekStart.setDate(weekStart.getDate() - weekStart.getDay())
-    // Production labels the bucket with the week's start date ("Sep 7").
-    // The previous `W${epochWeeks % 52}` produced values like "W36" that are
-    // an epoch-week index, not an academic week number — meaningless to a
-    // student and not what the web dashboard shows.
-    const label = weekStart.toLocaleDateString("en-US", { month: "short", day: "numeric" })
-    weeks.push({ label, overall: undefined, quiz: 0, homework: 0 })
-  }
+  const now = semester?.now ?? new Date()
+  const bounds: SemesterBounds = resolveSemesterBounds({
+    termLabel: semester?.termLabel,
+    semesterEndIso: semester?.semesterEndIso,
+    earliestActivity: earliestAttemptDate(quizHistory, homeworkHistory),
+    now,
+  })
+  const semesterWeeks = buildSemesterWeeks(bounds, now)
+  const weeks: GradeTrendPoint[] = semesterWeeks.map((w) => ({
+    label: w.label,
+    overall: undefined,
+    quiz: 0,
+    homework: 0,
+  }))
 
   weeks.forEach((week, index) => {
     week.overall = index === weeks.length - 1 ? gradeTotal : undefined
   })
 
-  const weekNums = weeks.map((_, i) => {
-    const d = new Date(now)
-    d.setDate(d.getDate() - (5 - i) * 7)
-    return Math.floor(d.getTime() / (7 * 24 * 60 * 60 * 1000))
-  })
+  const weekNums = semesterWeeks.map((w) => w.weekNum)
 
   const quizByWeek = new Map<number, number[]>()
   for (const q of quizHistory) {
@@ -116,10 +141,6 @@ export function buildGradeTrendSeries(
         : weeks[i - 1]?.quiz ?? 0
   })
 
-  if (weeks[0].quiz === 0 && weeks.some((w) => w.quiz > 0)) {
-    const firstNonZero = weeks.findIndex((w) => w.quiz > 0)
-    for (let i = 0; i < firstNonZero; i++) weeks[i].quiz = weeks[firstNonZero].quiz
-  }
   if (!weeks.some((w) => w.quiz > 0)) {
     applyFlatTrend(weeks, "quiz", asPercent(lifetimeQuizAverage(quizHistory) || fallbackAverages?.quiz || 0))
   }

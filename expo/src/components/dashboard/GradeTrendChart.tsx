@@ -29,26 +29,25 @@ import {
   type ChartSeriesId,
 } from "../../lib/dashboard-chart-palette"
 import { useChartContentWidth } from "../../lib/responsive-layout"
-import { areaRibbon, makeScale, nearestIndex, smoothPath, type Pt } from "./charts/chart-geometry"
+import { areaFromLine, makeScale, nearestIndex, smoothPath, type Pt } from "./charts/chart-geometry"
 
-const CHART_HEIGHT = 216
+const CHART_HEIGHT = 232
 const TARGET = 80
 const GRID_TICKS = [0, 25, 50, 75, 100]
 const LABEL_TICKS = [0, 50, 100]
 const SERIES_ORDER: ChartSeriesId[] = ["overall", "homework", "quiz"]
+const AREA_SERIES: ChartSeriesId[] = ["quiz", "homework"]
 
-/**
- * Returns null for "no reading this week" rather than 0.
- *
- * `buildGradeTrendSeries` only ever populates `overall` on the final week and
- * leaves the earlier five `undefined`. Coercing those to 0 drew a line saying
- * the student sat at 0% for five weeks and then leapt to their real grade —
- * a fabricated trend. A gap is plotted as a gap.
- */
 function valueFor(point: GradeTrendPoint, id: ChartSeriesId): number | null {
   if (id === "overall") return point.overall ?? null
   if (id === "quiz") return point.quiz
   return point.homework
+}
+
+function labelStep(count: number): number {
+  if (count <= 8) return 1
+  const maxLabels = 6
+  return Math.max(1, Math.ceil(count / maxLabels))
 }
 
 export function GradeTrendChart({ data, loading }: { data: GradeTrendPoint[]; loading: boolean }) {
@@ -64,7 +63,14 @@ export function GradeTrendChart({ data, loading }: { data: GradeTrendPoint[]; lo
   const [activeIndex, setActiveIndex] = useState<number | null>(null)
 
   const scale = useMemo(
-    () => makeScale({ width: chartWidth, height: CHART_HEIGHT, count: data.length }),
+    () =>
+      makeScale({
+        width: chartWidth,
+        height: CHART_HEIGHT,
+        count: data.length,
+        padLeft: 36,
+        padBottom: 28,
+      }),
     [chartWidth, data.length],
   )
   const scaleRef = useRef(scale)
@@ -95,14 +101,13 @@ export function GradeTrendChart({ data, loading }: { data: GradeTrendPoint[]; lo
     data.forEach((d, i) => {
       for (const id of SERIES_ORDER) {
         const v = valueFor(d, id)
-        if (v == null) continue
+        if (v == null || v <= 0) continue
         out[id].push({ x: scale.xAt(i), y: scale.yAt(v), i })
       }
     })
     return out
   }, [data, scale])
 
-  /** A series with a single reading gets a marker, not a line to nowhere. */
   const seriesState = useMemo(() => {
     const out = {} as Record<ChartSeriesId, "line" | "point" | "none">
     for (const id of SERIES_ORDER) {
@@ -113,10 +118,11 @@ export function GradeTrendChart({ data, loading }: { data: GradeTrendPoint[]; lo
   }, [points])
 
   const hasData = data.some((w) => w.quiz > 0 || w.homework > 0 || (w.overall ?? 0) > 0)
+  const xLabelStep = labelStep(data.length)
 
   if (loading) {
     return (
-      <DashboardCard title="Grade trend" subtitle="Your averages week over week">
+      <DashboardCard title="Grade trend" subtitle="Semester progress — drag to inspect a week">
         <View style={styles.state}>
           <ActivityIndicator color={tokens.accent} />
         </View>
@@ -126,7 +132,7 @@ export function GradeTrendChart({ data, loading }: { data: GradeTrendPoint[]; lo
 
   if (!hasData || data.length === 0) {
     return (
-      <DashboardCard title="Grade trend" subtitle="Your averages week over week">
+      <DashboardCard title="Grade trend" subtitle="Semester progress — drag to inspect a week">
         <View style={[styles.state, styles.empty, { backgroundColor: native.fill }]}>
           <Text style={[styles.emptyText, { color: native.secondaryLabel }]}>
             No grade data yet. Complete quizzes and homework to see your trend.
@@ -137,10 +143,9 @@ export function GradeTrendChart({ data, loading }: { data: GradeTrendPoint[]; lo
   }
 
   const active = activeIndex != null ? data[activeIndex] : null
-  const labelStep = Math.max(1, Math.ceil(data.length / 6))
 
   return (
-    <DashboardCard title="Grade trend" subtitle="Your averages week over week">
+    <DashboardCard title="Grade trend" subtitle="Semester progress — drag to inspect a week">
       <View {...responder.panHandlers}>
         <Svg width={chartWidth} height={CHART_HEIGHT}>
           <Defs>
@@ -156,25 +161,15 @@ export function GradeTrendChart({ data, loading }: { data: GradeTrendPoint[]; lo
 
             {SERIES_ORDER.map((id) => (
               <LinearGradient key={`area-${id}`} id={`area-${id}`} x1="0" y1="0" x2="0" y2="1">
-                <Stop
-                  offset="0%"
-                  stopColor={palette.seriesTop[id]}
-                  stopOpacity={id === "overall" ? 0.42 : 0.3}
-                />
-                <Stop offset="70%" stopColor={palette.series[id]} stopOpacity={0.06} />
+                <Stop offset="0%" stopColor={palette.seriesTop[id]} stopOpacity={id === "overall" ? 0.38 : 0.24} />
                 <Stop offset="100%" stopColor={palette.series[id]} stopOpacity={0} />
               </LinearGradient>
             ))}
 
-            <LinearGradient id="goalBand" x1="0" y1="0" x2="0" y2="1">
-              <Stop offset="0%" stopColor={palette.targetZone} stopOpacity={0} />
-              <Stop offset="100%" stopColor={palette.targetZone} stopOpacity={1} />
-            </LinearGradient>
-
             {SERIES_ORDER.map((id) => (
-              <LinearGradient key={`grad-${id}`} id={`stroke-${id}`} x1="0" y1="0" x2="0" y2="1">
-                <Stop offset="0%" stopColor={palette.seriesTop[id]} stopOpacity={1} />
-                <Stop offset="100%" stopColor={palette.series[id]} stopOpacity={1} />
+              <LinearGradient key={`stroke-${id}`} id={`stroke-${id}`} x1="0" y1="0" x2="1" y2="0">
+                <Stop offset="0%" stopColor={palette.seriesDark[id]} />
+                <Stop offset="100%" stopColor={palette.seriesTop[id]} />
               </LinearGradient>
             ))}
           </Defs>
@@ -194,15 +189,15 @@ export function GradeTrendChart({ data, loading }: { data: GradeTrendPoint[]; lo
           ))}
 
           {data.map((d, i) =>
-            i % labelStep === 0 || i === data.length - 1 ? (
+            i % xLabelStep === 0 || i === data.length - 1 ? (
               <SvgText
                 key={`x-${i}`}
                 x={scale.xAt(i)}
-                y={CHART_HEIGHT - 8}
+                y={CHART_HEIGHT - 6}
                 fill={native.tertiaryLabel}
                 fontSize={10}
                 fontWeight="500"
-                textAnchor="middle"
+                textAnchor={i === 0 ? "start" : i === data.length - 1 ? "end" : "middle"}
               >
                 {d.label}
               </SvgText>
@@ -210,14 +205,6 @@ export function GradeTrendChart({ data, loading }: { data: GradeTrendPoint[]; lo
           )}
 
           <G clipPath="url(#gradePlot)">
-            <Rect
-              x={scale.padLeft}
-              y={scale.yAt(100)}
-              width={chartWidth - scale.padLeft - scale.padRight}
-              height={scale.yAt(TARGET) - scale.yAt(100)}
-              fill="url(#goalBand)"
-            />
-
             {GRID_TICKS.map((tick) => (
               <Line
                 key={`grid-${tick}`}
@@ -227,6 +214,7 @@ export function GradeTrendChart({ data, loading }: { data: GradeTrendPoint[]; lo
                 y2={scale.yAt(tick)}
                 stroke={tick % 50 === 0 ? palette.grid : palette.gridFaint}
                 strokeWidth={1}
+                strokeDasharray={tick % 50 === 0 ? "3 3" : undefined}
               />
             ))}
 
@@ -236,20 +224,24 @@ export function GradeTrendChart({ data, loading }: { data: GradeTrendPoint[]; lo
               x2={chartWidth - scale.padRight}
               y2={scale.yAt(TARGET)}
               stroke={palette.target}
-              strokeWidth={1.25}
-              strokeDasharray="3 5"
+              strokeWidth={1.5}
+              strokeDasharray="6 4"
             />
 
-            {(["homework", "quiz", "overall"] as const)
-              .filter((id) => seriesState[id] === "line")
-              .slice(0, 1)
-              .map((id) => (
-                <Path
-                  key={`area-${id}`}
-                  d={areaRibbon(points[id], 28, scale.baselineY)}
-                  fill={`url(#area-${id})`}
-                />
-              ))}
+            {AREA_SERIES.filter((id) => seriesState[id] === "line").map((id) => (
+              <Path
+                key={`area-${id}`}
+                d={areaFromLine(points[id], scale.baselineY)}
+                fill={`url(#area-${id})`}
+              />
+            ))}
+
+            {seriesState.overall === "line" ? (
+              <Path
+                d={areaFromLine(points.overall, scale.baselineY)}
+                fill="url(#area-overall)"
+              />
+            ) : null}
 
             {activeIndex != null ? (
               <Rect
@@ -259,29 +251,16 @@ export function GradeTrendChart({ data, loading }: { data: GradeTrendPoint[]; lo
                 height={scale.baselineY - scale.padTop}
                 rx={10}
                 fill={palette.axis}
-                fillOpacity={0.12}
+                fillOpacity={0.14}
               />
             ) : null}
-
-            {SERIES_ORDER.filter((id) => seriesState[id] === "line").map((id) => (
-              <Path
-                key={`glow-${id}`}
-                d={smoothPath(points[id])}
-                stroke={palette.series[id]}
-                strokeWidth={9}
-                strokeOpacity={0.16}
-                fill="none"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            ))}
 
             {SERIES_ORDER.filter((id) => seriesState[id] === "line").map((id) => (
               <Path
                 key={id}
                 d={smoothPath(points[id])}
                 stroke={`url(#stroke-${id})`}
-                strokeWidth={3}
+                strokeWidth={id === "overall" ? 2.75 : 2.25}
                 fill="none"
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -293,19 +272,19 @@ export function GradeTrendChart({ data, loading }: { data: GradeTrendPoint[]; lo
                 const last = points[id][points[id].length - 1]
                 const isEnd = last != null && p.i === last.i
                 const isActive = activeIndex === p.i
-                const r = isActive ? 4.5 : isEnd ? 4 : 2.6
+                const r = isActive ? 4.5 : isEnd ? 4 : 2.8
                 return (
                   <G key={`pt-${id}-${p.i}`}>
                     {isActive || (isEnd && activeIndex == null) ? (
-                      <Circle cx={p.x} cy={p.y} r={r + 4.5} fill={palette.series[id]} fillOpacity={0.18} />
+                      <Circle cx={p.x} cy={p.y} r={r + 4} fill={palette.series[id]} fillOpacity={0.16} />
                     ) : null}
                     <Circle
                       cx={p.x}
                       cy={p.y}
                       r={r}
-                      fill={isEnd || isActive ? palette.seriesTop[id] : palette.series[id]}
+                      fill={palette.seriesTop[id]}
                       stroke={native.secondaryGrouped}
-                      strokeWidth={isActive || isEnd ? 2 : 1.25}
+                      strokeWidth={isActive || isEnd ? 2 : 1.5}
                     />
                   </G>
                 )
@@ -321,17 +300,13 @@ export function GradeTrendChart({ data, loading }: { data: GradeTrendPoint[]; lo
             fontWeight="700"
             textAnchor="start"
           >
-            {TARGET}%
+            {TARGET}% target
           </SvgText>
         </Svg>
       </View>
 
-      {/* Tooltip / readout — replaces the hover card a WebView chart would show */}
       <View
-        style={[
-          styles.readout,
-          { backgroundColor: native.fill, opacity: active ? 1 : 0 },
-        ]}
+        style={[styles.readout, { backgroundColor: native.fill, opacity: active ? 1 : 0 }]}
         pointerEvents="none"
       >
         <Text style={[type.caption, styles.readoutLabel, { color: native.secondaryLabel }]}>
@@ -344,7 +319,7 @@ export function GradeTrendChart({ data, loading }: { data: GradeTrendPoint[]; lo
               <Text style={[type.caption, { color: native.label }]}>
                 {(() => {
                   const v = active ? valueFor(active, id) : null
-                  return v == null ? "—" : `${Math.round(v)}%`
+                  return v == null || v <= 0 ? "—" : `${Math.round(v)}%`
                 })()}
               </Text>
             </View>
@@ -357,7 +332,7 @@ export function GradeTrendChart({ data, loading }: { data: GradeTrendPoint[]; lo
           const missing = seriesState[id] === "none"
           return (
             <View key={`lg-${id}`} style={[styles.legendItem, missing && styles.legendMuted]}>
-              <View style={[styles.swatch, { backgroundColor: palette.series[id] }]} />
+              <View style={[styles.dot, { backgroundColor: palette.series[id] }]} />
               <Text style={[styles.legendText, { color: native.secondaryLabel }]}>
                 {CHART_SERIES_LABEL[id]}
                 {missing ? " · no data" : ""}
@@ -394,7 +369,6 @@ const styles = StyleSheet.create({
   legendItem: { flexDirection: "row", alignItems: "center", gap: 6 },
   legendMuted: { opacity: 0.45 },
   dot: { width: 8, height: 8, borderRadius: 4 },
-  swatch: { width: 14, height: 4, borderRadius: 2 },
   legendText: { ...nativeType.footnote, fontWeight: "500" },
   targetLegend: { flexDirection: "row", alignItems: "center", gap: 6, marginLeft: "auto" },
   targetDash: { width: 12, height: 2, borderRadius: 1 },

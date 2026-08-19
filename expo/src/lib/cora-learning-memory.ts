@@ -59,6 +59,94 @@ export const MEMORY_TOGGLE_META: Array<{
   },
 ]
 
+export const FACULTY_MEMORY_TOGGLE_META: Array<{
+  id: keyof CoraLearningMemory
+  label: string
+  description: string
+}> = [
+  {
+    id: "remember-gaps",
+    label: "Remember teaching gaps",
+    description: "Remember topics your students miss most often.",
+  },
+  {
+    id: "detect-confusion",
+    label: "Detect repeated confusion",
+    description: "Adjust explanations when Cora spots recurring misunderstandings.",
+  },
+  {
+    id: "remember-strengths",
+    label: "Remember course strengths",
+    description: "Highlight areas where your class is performing well.",
+  },
+  {
+    id: "use-course-progress",
+    label: "Use course analytics",
+    description: "Personalize using assessment trends, attendance, and practice data.",
+  },
+  {
+    id: "remember-preferences",
+    label: "Remember my teaching preferences",
+    description: "Keep grading and explanation preferences on this device.",
+  },
+]
+
+export const ADMIN_MEMORY_TOGGLE_META: Array<{
+  id: keyof CoraLearningMemory
+  label: string
+  description: string
+}> = [
+  {
+    id: "remember-gaps",
+    label: "Remember operational gaps",
+    description: "Remember recurring issues Cora surfaces across modules.",
+  },
+  {
+    id: "detect-confusion",
+    label: "Detect repeated questions",
+    description: "Adjust guidance when you ask similar admin questions again.",
+  },
+  {
+    id: "remember-strengths",
+    label: "Remember resolved patterns",
+    description: "Avoid re-explaining workflows you've already completed.",
+  },
+  {
+    id: "use-course-progress",
+    label: "Use institutional context",
+    description: "Include aggregated enrollment, revenue, and support trends when authorized.",
+  },
+  {
+    id: "remember-preferences",
+    label: "Remember my admin preferences",
+    description: "Keep reporting and workflow preferences on this device.",
+  },
+]
+
+export const LEARNER_CONTEXT_CATEGORIES = [
+  "Course enrollment and section",
+  "Grades and assessment scores",
+  "Upcoming deadlines and calendar events",
+  "Topics you struggle with or excel at",
+  "Note and flashcard titles (not full content unless attached)",
+] as const
+
+export const FACULTY_CONTEXT_CATEGORIES = [
+  "Course code and section (never student names in external AI payloads)",
+  "Assessment and quiz analytics (aggregated counts and trends)",
+  "Question bank topics and difficulty patterns",
+  "Attendance and practice hub summaries",
+  "Office hours and support queue counts",
+] as const
+
+export const ADMIN_CONTEXT_CATEGORIES = [
+  "Institution-wide enrollment and revenue aggregates",
+  "Pseudonymized directory search matches (no names or emails in model payloads)",
+  "Support ticket and submission-issue counts",
+  "System health and audit log summaries",
+  "Authorized admin module context for the task at hand",
+] as const
+
 export function allMemoryDisabled(): CoraLearningMemory {
   return {
     "remember-gaps": false,

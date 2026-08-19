@@ -507,6 +507,16 @@ export function FacultySettingsHubScreen() {
           icon="shield-outline"
           label="Privacy & legal"
           onPress={() => router.push("/settings/privacy-security" as never)}
+        />
+        <SettingsRow
+          icon="sparkles-outline"
+          label="Cora privacy & data use"
+          onPress={() => router.push("/settings/cora-privacy" as never)}
+        />
+        <SettingsRow
+          icon="analytics-outline"
+          label="How Cora uses your data"
+          onPress={() => router.push("/settings/ai-data" as never)}
           isLast
         />
       </SettingsGroup>

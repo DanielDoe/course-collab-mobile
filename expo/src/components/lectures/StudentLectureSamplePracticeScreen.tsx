@@ -77,7 +77,7 @@ export function StudentLectureSamplePracticeScreen({ lectureId, week }: Props) {
     <View style={[styles.root, { backgroundColor: native.groupedBackground }]}>
       <LectureSlidePreviewToolbar
         title={title}
-        backLabel="Slide preview"
+        backLabel="Lecture"
         onBack={() => router.back()}
       />
 

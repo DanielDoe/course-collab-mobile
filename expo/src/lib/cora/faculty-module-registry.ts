@@ -557,7 +557,6 @@ export const FACULTY_CORA_MODULE_REGISTRY: Record<FacultyCoraModuleId, FacultyCo
     risk: { ...READ, regrade: "high", update: "high" },
     serviceHint: "instructor results / grading APIs",
     route: "/module/results",
-    minTier: "Pro",
     denied: ["cross_course_results"],
     notes: "Mobile finalize, email, recalculate, and bulk re-evaluate. Per-question override edit is web-only.",
   },
@@ -573,7 +572,6 @@ export const FACULTY_CORA_MODULE_REGISTRY: Record<FacultyCoraModuleId, FacultyCo
     risk: { ...READ },
     serviceHint: "instructor student-progress analytics",
     route: "/module/student-progress",
-    minTier: "Pro",
     denied: [],
   },
   reports: {

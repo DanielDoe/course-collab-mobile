@@ -22,6 +22,8 @@ import {
   CircuitSubmissionPanel,
   prepareCircuitAnswerForSubmit,
 } from "../assessments/CircuitSubmissionPanel"
+import { useModuleContentStyle } from "../../lib/responsive-layout"
+import { useStudentSubmissionLayout } from "../../lib/circuit-submission-layout"
 import {
   clearActivePracticeSession,
   getActivePracticeSession,
@@ -70,6 +72,8 @@ export function PracticeQuizScreen() {
   const insets = useSafeAreaInsets()
   const tokens = useAppThemeTokens()
   const SN = useThemedStudentNative()
+  const submissionLayout = useStudentSubmissionLayout()
+  const moduleContent = useModuleContentStyle()
   const [hydrating, setHydrating] = useState(() => getActivePracticeSession() == null)
   const [practiceSession, setPracticeSession] = useState<PracticeSessionData | null>(() => getActivePracticeSession())
 
@@ -431,7 +435,7 @@ export function PracticeQuizScreen() {
         <View style={[styles.progressFill, { width: `${progressPct}%`, backgroundColor: tokens.accent }]} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.content, moduleContent]} showsVerticalScrollIndicator={false}>
         <View style={styles.questionNav}>
           {questions.map((q, i) => {
             const answered = answeredIds.has(q.id)
@@ -540,6 +544,7 @@ export function PracticeQuizScreen() {
               onChange={setCircuitAnswerJson}
               config={currentQuestion.solution_upload_config}
               disabled={submitted || submittingAnswer}
+              notesHeight={submissionLayout.notesHeight}
             />
           ) : isMultiPart ? (
             <MultiPartAnswerPanel
@@ -547,6 +552,7 @@ export function PracticeQuizScreen() {
               value={multiPartAnswerJson}
               onChange={setMultiPartAnswerJson}
               disabled={submitted || submittingAnswer}
+              textFieldHeight={submissionLayout.multipartTextHeight}
             />
           ) : isCode ? (
             <View style={styles.codeWrap}>
@@ -557,7 +563,13 @@ export function PracticeQuizScreen() {
               <TextInput
                 style={[
                   styles.codeInput,
-                  { borderColor: tokens.border, backgroundColor: tokens.background, color: tokens.text },
+                  {
+                    borderColor: tokens.border,
+                    backgroundColor: tokens.background,
+                    color: tokens.text,
+                    height: submissionLayout.codeFieldHeight,
+                    minHeight: submissionLayout.codeFieldHeight,
+                  },
                 ]}
                 value={textAnswer}
                 onChangeText={setTextAnswer}
@@ -580,7 +592,19 @@ export function PracticeQuizScreen() {
               style={[
                 styles.textInput,
                 qType === "fill_code" && styles.codeInput,
-                { borderColor: tokens.border, backgroundColor: tokens.background, color: tokens.text },
+                {
+                  borderColor: tokens.border,
+                  backgroundColor: tokens.background,
+                  color: tokens.text,
+                  height:
+                    qType === "fill_code"
+                      ? submissionLayout.codeFieldHeight
+                      : submissionLayout.textFieldHeight,
+                  minHeight:
+                    qType === "fill_code"
+                      ? submissionLayout.codeFieldHeight
+                      : submissionLayout.textFieldHeight,
+                },
               ]}
               value={textAnswer}
               onChangeText={setTextAnswer}

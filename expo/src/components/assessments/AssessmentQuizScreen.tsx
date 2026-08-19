@@ -47,6 +47,8 @@ import { formatAssessmentType } from "./assessment-config"
 import { exitAssessmentQuiz, openAssessmentResults } from "./assessment-navigation"
 import type { AssessmentTakeAction } from "../../constants/module-web-paths"
 import { WaterBreakDurationDialog, WaterBreakOverlay } from "../flashcards/FlashcardWaterBreak"
+import { useModuleContentStyle } from "../../lib/responsive-layout"
+import { useStudentSubmissionLayout } from "../../lib/circuit-submission-layout"
 
 function useStudentSession(): StudentSession | null {
   const { session } = useSession()
@@ -65,6 +67,8 @@ export function AssessmentQuizScreen({ quizId, assessmentType, takeAction }: Pro
   const insets = useSafeAreaInsets()
   const tokens = useAppThemeTokens()
   const SN = useThemedStudentNative()
+  const moduleContent = useModuleContentStyle()
+  const submissionLayout = useStudentSubmissionLayout()
 
   const apiType = normalizeAssessmentType(assessmentType)
 
@@ -597,6 +601,61 @@ export function AssessmentQuizScreen({ quizId, assessmentType, takeAction }: Pro
   const canGoPrevious = currentIndex > 0
   const canGoNext = currentIndex < questions.length - 1
 
+  const questionPrompt = (
+    <>
+      <View style={styles.cardHeader}>
+        <View style={[styles.badge, styles.badgeOutline, { borderColor: tokens.border }]}>
+          <Text style={[styles.badgeTextOutline, { color: SN.secondaryLabel }]}>
+            {isUnsupported
+              ? unsupportedQuestionLabel(currentQuestion.question_type)
+              : isCircuit
+                ? "Circuit submission"
+                : isMulti
+                  ? "Select all"
+                  : isTextInput
+                    ? "Short answer"
+                    : "Single choice"}
+          </Text>
+        </View>
+        {currentQuestion.points != null ? (
+          <Text style={[styles.pointsLabel, { color: SN.secondaryLabel }]}>
+            {currentQuestion.points} pt{currentQuestion.points === 1 ? "" : "s"}
+          </Text>
+        ) : null}
+      </View>
+
+      <QuestionMediaView media={parseQuestionMedia(currentQuestion.question_media)} embedded />
+
+      <QuestionContentWebView text={currentQuestion.question_text} embedded secure />
+    </>
+  )
+
+  const feedbackBlock = showFeedback ? (
+    <View style={[styles.feedbackBox, isCorrect ? styles.feedbackCorrect : styles.feedbackWrong]}>
+      <Ionicons
+        name={isCorrect ? "checkmark-circle" : "information-circle"}
+        size={20}
+        color={isCorrect ? "#15803d" : "#b45309"}
+      />
+      <View style={styles.feedbackCopy}>
+        <QuestionContentWebView text={feedbackText} embedded compact />
+      </View>
+    </View>
+  ) : null
+
+  const circuitSubmissionPanel = (
+    <CircuitSubmissionPanel
+      session={session}
+      attemptId={quizSession.attemptId}
+      questionId={currentQuestion.id}
+      value={circuitAnswerJson}
+      onChange={setCircuitAnswerJson}
+      config={currentQuestion.solution_upload_config}
+      disabled={locked || submittingAnswer}
+      notesHeight={submissionLayout.notesHeight}
+    />
+  )
+
   return (
     <QuestionPrepareGate
       fetching={false}
@@ -622,7 +681,7 @@ export function AssessmentQuizScreen({ quizId, assessmentType, takeAction }: Pro
       </View>
 
       {/* Control bar: Navigator · Water break · Continue Later · Exit */}
-      <View style={[styles.controlBar, { borderColor: tokens.border, backgroundColor: tokens.surface }]}>
+      <View style={[styles.controlBar, moduleContent, { borderColor: tokens.border, backgroundColor: tokens.surface }]}>
         <Pressable
           style={[
             styles.controlBtn,
@@ -673,14 +732,18 @@ export function AssessmentQuizScreen({ quizId, assessmentType, takeAction }: Pro
 
       {/* Collapsible question navigator */}
       {showQuestionNav ? (
-        <View style={[styles.navPanel, { backgroundColor: tokens.surface, borderColor: tokens.border }]}>
+        <View style={[styles.navPanel, moduleContent, { backgroundColor: tokens.surface, borderColor: tokens.border }]}>
           <View style={styles.navPanelHeader}>
             <Text style={[styles.navPanelTitle, { color: tokens.text }]}>Questions</Text>
             <Text style={[styles.navPanelMeta, { color: SN.secondaryLabel }]}>
               {answeredIds.size} answered · {unansweredCount} left
             </Text>
           </View>
-          <View style={styles.questionNav}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.questionNav}
+          >
             {questions.map((q, i) => {
               const answered = answeredIds.has(q.id)
               const current = i === currentIndex
@@ -713,36 +776,17 @@ export function AssessmentQuizScreen({ quizId, assessmentType, takeAction }: Pro
                 </Pressable>
               )
             })}
-          </View>
+          </ScrollView>
         </View>
       ) : null}
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={[styles.content, moduleContent]}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
         <View style={[styles.card, { backgroundColor: tokens.surface, borderColor: tokens.border }]}>
-          <View style={styles.cardHeader}>
-            <View style={[styles.badge, styles.badgeOutline, { borderColor: tokens.border }]}>
-              <Text style={[styles.badgeTextOutline, { color: SN.secondaryLabel }]}>
-                {isUnsupported
-                  ? unsupportedQuestionLabel(currentQuestion.question_type)
-                  : isCircuit
-                    ? "Circuit submission"
-                    : isMulti
-                      ? "Select all"
-                      : isTextInput
-                        ? "Short answer"
-                        : "Single choice"}
-              </Text>
-            </View>
-            {currentQuestion.points != null ? (
-              <Text style={[styles.pointsLabel, { color: SN.secondaryLabel }]}>
-                {currentQuestion.points} pt{currentQuestion.points === 1 ? "" : "s"}
-              </Text>
-            ) : null}
-          </View>
-
-          <QuestionMediaView media={parseQuestionMedia(currentQuestion.question_media)} embedded />
-
-          <QuestionContentWebView text={currentQuestion.question_text} embedded secure />
+          {questionPrompt}
 
           {isUnsupported ? (
             <View
@@ -765,20 +809,18 @@ export function AssessmentQuizScreen({ quizId, assessmentType, takeAction }: Pro
               </View>
             </View>
           ) : isCircuit ? (
-            <CircuitSubmissionPanel
-              session={session}
-              attemptId={quizSession.attemptId}
-              questionId={currentQuestion.id}
-              value={circuitAnswerJson}
-              onChange={setCircuitAnswerJson}
-              config={currentQuestion.solution_upload_config}
-              disabled={locked || submittingAnswer}
-            />
+            circuitSubmissionPanel
           ) : isTextInput ? (
             <TextInput
               style={[
                 styles.textInput,
-                { borderColor: tokens.border, backgroundColor: tokens.background, color: tokens.text },
+                {
+                  borderColor: tokens.border,
+                  backgroundColor: tokens.background,
+                  color: tokens.text,
+                  height: submissionLayout.textFieldHeight,
+                  minHeight: submissionLayout.textFieldHeight,
+                },
               ]}
               value={textAnswer}
               onChangeText={setTextAnswer}
@@ -842,23 +884,13 @@ export function AssessmentQuizScreen({ quizId, assessmentType, takeAction }: Pro
             })
           )}
 
-          {showFeedback ? (
-            <View style={[styles.feedbackBox, isCorrect ? styles.feedbackCorrect : styles.feedbackWrong]}>
-              <Ionicons
-                name={isCorrect ? "checkmark-circle" : "information-circle"}
-                size={20}
-                color={isCorrect ? "#15803d" : "#b45309"}
-              />
-              <View style={styles.feedbackCopy}>
-                <QuestionContentWebView text={feedbackText} embedded compact />
-              </View>
-            </View>
-          ) : null}
+          {feedbackBlock}
         </View>
       </ScrollView>
 
       {/* Footer: Previous · Next · Submit */}
       <View style={[styles.footer, { paddingBottom: insets.bottom + 12, backgroundColor: tokens.background, borderTopColor: tokens.border }]}>
+        <View style={[styles.footerInner, moduleContent]}>
         <View style={styles.footerNavRow}>
           <Pressable
             style={[styles.navBtn, { borderColor: tokens.border }, !canGoPrevious && styles.btnDisabled]}
@@ -910,6 +942,7 @@ export function AssessmentQuizScreen({ quizId, assessmentType, takeAction }: Pro
             )}
           </Pressable>
         ) : null}
+        </View>
       </View>
 
       {/* Continue Later modal */}
@@ -1031,51 +1064,53 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 8,
     marginHorizontal: 16,
-    marginTop: 12,
-    marginBottom: 8,
-    padding: 8,
-    borderRadius: 14,
-    borderWidth: 1,
+    marginTop: 10,
+    marginBottom: 6,
+    padding: 6,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   controlBtn: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 5,
-    paddingVertical: 10,
+    gap: 4,
+    minHeight: 36,
+    paddingVertical: 8,
     borderRadius: 10,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   controlBtnDanger: {},
-  controlBtnText: { fontSize: 12, fontWeight: "600" },
+  controlBtnText: { fontSize: 11, fontWeight: "600" },
   navPanel: {
     marginHorizontal: 16,
-    marginBottom: 8,
-    padding: 14,
-    borderRadius: 999,
-    borderWidth: 1,
+    marginBottom: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   navPanelHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 12,
+    marginBottom: 8,
   },
-  navPanelTitle: { fontSize: 15, fontWeight: "600" },
-  navPanelMeta: { fontSize: 12, fontWeight: "500" },
-  questionNav: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  navPanelTitle: { fontSize: 14, fontWeight: "600" },
+  navPanelMeta: { fontSize: 11, fontWeight: "500" },
+  questionNav: { flexDirection: "row", gap: 6, paddingRight: 4 },
   navDot: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    borderWidth: 1,
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    borderWidth: StyleSheet.hairlineWidth,
     alignItems: "center",
     justifyContent: "center",
   },
-  navDotText: { fontSize: 12, fontWeight: "700" },
+  navDotText: { fontSize: 11, fontWeight: "700" },
   content: { padding: 16, paddingTop: 4, paddingBottom: 24 },
-  card: { borderRadius: 18, padding: 16, gap: 12, borderWidth: 1 },
+  card: { borderRadius: 14, padding: 14, gap: 12, borderWidth: StyleSheet.hairlineWidth },
   cardHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   badge: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
   badgeOutline: { backgroundColor: "transparent", borderWidth: 1 },
@@ -1132,26 +1167,35 @@ const styles = StyleSheet.create({
   feedbackCopy: { flex: 1, minWidth: 0 },
   feedbackText: { flex: 1, fontSize: 13, lineHeight: 18, color: "#0f172a" },
   footer: {
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    gap: 10,
+    paddingTop: 8,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
-  footerNavRow: { flexDirection: "row", gap: 10 },
+  footerInner: {
+    paddingHorizontal: 16,
+    gap: 8,
+  },
+  footerNavRow: { flexDirection: "row", gap: 8 },
   navBtn: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 4,
-    paddingVertical: 12,
-    borderRadius: 999,
-    borderWidth: 1,
+    minHeight: 42,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
   },
-  navBtnText: { fontSize: 15, fontWeight: "600" },
-  primaryBtn: { borderRadius: 999, paddingVertical: 16, alignItems: "center" },
+  navBtnText: { fontSize: 14, fontWeight: "600" },
+  primaryBtn: {
+    borderRadius: 12,
+    minHeight: 46,
+    paddingVertical: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   btnDisabled: { opacity: 0.45 },
-  primaryBtnText: { color: "#ffffff", fontSize: 16, fontWeight: "600" },
+  primaryBtnText: { color: "#ffffff", fontSize: 15, fontWeight: "600" },
   modalBackdrop: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.45)",

@@ -1,5 +1,14 @@
 import { useCallback, useMemo, useState } from "react"
-import { ActivityIndicator, Image, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import {
+  ActivityIndicator,
+  Image,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { AppAlert } from '../../lib/app-alert'
 import * as DocumentPicker from "expo-document-picker"
 import * as ImagePicker from "expo-image-picker"
@@ -29,6 +38,13 @@ import { assessmentQuizApi } from "../../lib/assessment-quiz/assessment-quiz-api
 import type { StudentSession } from "../../lib/session"
 import { ApiError } from "../../lib/student-api"
 import { CircuitWorkspaceCanvas, CircuitWorkspaceToolbar } from "./CircuitWorkspaceCanvas"
+import { circuitSubmissionUi as ui } from "./circuit-submission-ui"
+import {
+  CIRCUIT_NOTES_HEIGHT_PHONE,
+  CIRCUIT_NOTES_HEIGHT_TABLET,
+} from "../../lib/circuit-submission-layout"
+
+export { CIRCUIT_NOTES_HEIGHT_PHONE, CIRCUIT_NOTES_HEIGHT_TABLET }
 
 type SubmissionMode = "upload" | "photo" | "workspace"
 
@@ -40,6 +56,10 @@ type Props = {
   onChange: (nextJson: string) => void
   config?: unknown
   disabled?: boolean
+  /** Explicit notes box height (quiz passes tablet vs phone). */
+  notesHeight?: number
+  /** @deprecated Prefer notesHeight */
+  expandNotes?: boolean
 }
 
 function resolveFilePreviewUrl(url: string): string {
@@ -55,6 +75,8 @@ export function CircuitSubmissionPanel({
   onChange,
   config: configRaw,
   disabled,
+  notesHeight: notesHeightProp,
+  expandNotes = false,
 }: Props) {
   const tokens = useAppThemeTokens()
   const SN = useThemedStudentNative()
@@ -177,91 +199,127 @@ export function CircuitSubmissionPanel({
   }
 
   const workspace = answer.workspace ?? createEmptyWorkspace()
+  const notesFieldHeight = useMemo(() => {
+    if (notesHeightProp != null) return notesHeightProp
+    if (!expandNotes) return 96
+    if (mode === "workspace") return 80
+    const isPad = Platform.OS === "ios" && Platform.isPad
+    return isPad ? CIRCUIT_NOTES_HEIGHT_TABLET : CIRCUIT_NOTES_HEIGHT_PHONE
+  }, [expandNotes, mode, notesHeightProp])
+
+  const largeUpload = notesHeightProp != null && notesHeightProp >= CIRCUIT_NOTES_HEIGHT_PHONE
 
   return (
-    <View style={styles.wrap}>
+    <View style={[styles.wrap, notesHeightProp != null && styles.wrapQuiz]}>
       {config.submission_instructions ? (
         <Text style={[styles.instructions, { color: SN.secondaryLabel }]}>
           {config.submission_instructions}
         </Text>
       ) : null}
 
-      <View style={styles.modeRow}>
+      <View style={[ui.modeSegment, { borderColor: tokens.border, backgroundColor: tokens.background }]}>
         <Pressable
           style={[
-            styles.modeBtn,
-            { borderColor: tokens.border, backgroundColor: tokens.background },
+            ui.modeSegmentBtn,
             mode === "upload" && {
-              borderColor: tokens.accent,
-              backgroundColor: hexToRgba(tokens.accent, 0.08),
+              backgroundColor: hexToRgba(tokens.accent, 0.1),
             },
           ]}
           onPress={() => setMode("upload")}
           disabled={disabled || uploading}
+          accessibilityRole="button"
+          accessibilityState={{ selected: mode === "upload" }}
         >
-          <Ionicons name="document-attach-outline" size={18} color={mode === "upload" ? tokens.accent : SN.secondaryLabel} />
-          <Text style={[styles.modeLabel, { color: mode === "upload" ? tokens.accent : tokens.text }]}>Upload</Text>
+          <Ionicons name="document-attach-outline" size={16} color={mode === "upload" ? tokens.accent : SN.secondaryLabel} />
+          <Text style={[ui.modeLabel, { color: mode === "upload" ? tokens.accent : tokens.text }]}>Upload</Text>
         </Pressable>
+        <View style={[ui.modeSegmentDivider, { backgroundColor: tokens.border }]} />
         <Pressable
           style={[
-            styles.modeBtn,
-            { borderColor: tokens.border, backgroundColor: tokens.background },
+            ui.modeSegmentBtn,
             mode === "photo" && {
-              borderColor: tokens.accent,
-              backgroundColor: hexToRgba(tokens.accent, 0.08),
+              backgroundColor: hexToRgba(tokens.accent, 0.1),
             },
           ]}
           onPress={() => setMode("photo")}
           disabled={disabled || uploading}
+          accessibilityRole="button"
+          accessibilityState={{ selected: mode === "photo" }}
         >
-          <Ionicons name="camera-outline" size={18} color={mode === "photo" ? tokens.accent : SN.secondaryLabel} />
-          <Text style={[styles.modeLabel, { color: mode === "photo" ? tokens.accent : tokens.text }]}>Photo</Text>
+          <Ionicons name="camera-outline" size={16} color={mode === "photo" ? tokens.accent : SN.secondaryLabel} />
+          <Text style={[ui.modeLabel, { color: mode === "photo" ? tokens.accent : tokens.text }]}>Photo</Text>
         </Pressable>
+        <View style={[ui.modeSegmentDivider, { backgroundColor: tokens.border }]} />
         <Pressable
           style={[
-            styles.modeBtn,
-            { borderColor: tokens.border, backgroundColor: tokens.background },
+            ui.modeSegmentBtn,
             mode === "workspace" && {
-              borderColor: tokens.accent,
-              backgroundColor: hexToRgba(tokens.accent, 0.08),
+              backgroundColor: hexToRgba(tokens.accent, 0.1),
             },
           ]}
           onPress={() => setMode("workspace")}
           disabled={disabled || uploading}
+          accessibilityRole="button"
+          accessibilityState={{ selected: mode === "workspace" }}
         >
-          <Ionicons name="brush-outline" size={18} color={mode === "workspace" ? tokens.accent : SN.secondaryLabel} />
-          <Text style={[styles.modeLabel, { color: mode === "workspace" ? tokens.accent : tokens.text }]}>Workspace</Text>
+          <Ionicons name="brush-outline" size={16} color={mode === "workspace" ? tokens.accent : SN.secondaryLabel} />
+          <Text style={[ui.modeLabel, { color: mode === "workspace" ? tokens.accent : tokens.text }]}>Workspace</Text>
         </Pressable>
       </View>
 
       {mode === "upload" ? (
         <Pressable
-          style={[styles.actionBtn, { borderColor: tokens.border, backgroundColor: tokens.background }]}
+          style={[
+            ui.actionBtn,
+            largeUpload ? ui.uploadDropZone : ui.actionBtnPrimary,
+            { borderColor: tokens.border, backgroundColor: tokens.background },
+          ]}
           onPress={pickDocument}
           disabled={disabled || uploading || atMax}
         >
-          <Ionicons name="cloud-upload-outline" size={20} color={tokens.accent} />
-          <Text style={[styles.actionLabel, { color: tokens.text }]}>Choose PDF or image</Text>
+          <Ionicons name="cloud-upload-outline" size={largeUpload ? 28 : 18} color={tokens.accent} />
+          <Text style={[styles.actionLabel, largeUpload && styles.actionLabelLarge, { color: tokens.text }]}>
+            Choose PDF or image
+          </Text>
+          {largeUpload ? (
+            <Text style={[styles.uploadHint, { color: SN.secondaryLabel }]}>
+              Tap to open Files or Photos
+            </Text>
+          ) : null}
         </Pressable>
       ) : null}
 
       {mode === "photo" ? (
-        <View style={styles.photoRow}>
+        <View style={ui.photoRow}>
           <Pressable
-            style={[styles.actionBtn, styles.actionBtnHalf, { borderColor: tokens.border, backgroundColor: tokens.background }]}
+            style={[
+              ui.actionBtn,
+              largeUpload ? ui.uploadDropZone : ui.actionBtnPrimary,
+              ui.actionBtnHalf,
+              { borderColor: tokens.border, backgroundColor: tokens.background },
+            ]}
             onPress={() => pickPhoto(true)}
             disabled={disabled || uploading || atMax}
           >
-            <Ionicons name="camera-outline" size={20} color={tokens.accent} />
-            <Text style={[styles.actionLabel, { color: tokens.text }]}>Take photo</Text>
+            <Ionicons name="camera-outline" size={largeUpload ? 26 : 18} color={tokens.accent} />
+            <Text style={[styles.actionLabel, largeUpload && styles.actionLabelLarge, { color: tokens.text }]}>
+              Take photo
+            </Text>
           </Pressable>
           <Pressable
-            style={[styles.actionBtn, styles.actionBtnHalf, { borderColor: tokens.border, backgroundColor: tokens.background }]}
+            style={[
+              ui.actionBtn,
+              largeUpload ? ui.uploadDropZone : ui.actionBtnPrimary,
+              ui.actionBtnHalf,
+              { borderColor: tokens.border, backgroundColor: tokens.background },
+            ]}
             onPress={() => pickPhoto(false)}
             disabled={disabled || uploading || atMax}
           >
-            <Ionicons name="images-outline" size={20} color={tokens.accent} />
-            <Text style={[styles.actionLabel, { color: tokens.text }]}>Choose photo</Text>
+            <Ionicons name="images-outline" size={largeUpload ? 26 : 18} color={tokens.accent} />
+            <Text style={[styles.actionLabel, largeUpload && styles.actionLabelLarge, { color: tokens.text }]}>
+              Choose photo
+            </Text>
           </Pressable>
         </View>
       ) : null}
@@ -317,20 +375,28 @@ export function CircuitSubmissionPanel({
         </View>
       ))}
 
-      <Text style={[styles.fieldLabel, { color: SN.secondaryLabel }]}>Notes (optional)</Text>
-      <TextInput
-        style={[
-          styles.notesInput,
-          { borderColor: tokens.border, backgroundColor: tokens.background, color: tokens.text },
-        ]}
-        value={answer.written_notes ?? ""}
-        onChangeText={(written_notes) => updateAnswer({ ...answer, written_notes })}
-        placeholder="Type steps, calculations, or notes here…"
-        placeholderTextColor={SN.secondaryLabel}
-        multiline
-        textAlignVertical="top"
-        editable={!disabled && !uploading}
-      />
+      <View style={styles.notesSection}>
+        <Text style={[styles.fieldLabel, { color: SN.secondaryLabel }]}>Notes (optional)</Text>
+        <TextInput
+          style={[
+            styles.notesInput,
+            {
+              borderColor: tokens.border,
+              backgroundColor: tokens.background,
+              color: tokens.text,
+              height: notesFieldHeight,
+              minHeight: notesFieldHeight,
+            },
+          ]}
+          value={answer.written_notes ?? ""}
+          onChangeText={(written_notes) => updateAnswer({ ...answer, written_notes })}
+          placeholder="Type steps, calculations, or notes here…"
+          placeholderTextColor={SN.secondaryLabel}
+          multiline
+          textAlignVertical="top"
+          editable={!disabled && !uploading}
+        />
+      </View>
 
       {!circuitSubmissionHasRequiredUpload(answer, config) && requireUpload ? (
         <Text style={[styles.requiredHint, { color: SN.secondaryLabel }]}>
@@ -374,29 +440,11 @@ export async function prepareCircuitAnswerForSubmit(
 
 const styles = StyleSheet.create({
   wrap: { gap: 12 },
-  instructions: { fontSize: 13, lineHeight: 18 },
-  modeRow: { flexDirection: "row", gap: 8 },
-  modeBtn: {
-    flex: 1,
-    alignItems: "center",
-    gap: 4,
-    paddingVertical: 10,
-    borderRadius: 999,
-    borderWidth: 1,
-  },
-  modeLabel: { fontSize: 11, fontWeight: "700" },
-  actionBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    paddingVertical: 14,
-    borderRadius: 999,
-    borderWidth: 1,
-  },
-  actionBtnHalf: { flex: 1 },
-  photoRow: { flexDirection: "row", gap: 8 },
-  actionLabel: { fontSize: 14, fontWeight: "600" },
+  wrapQuiz: { marginTop: 4 },
+  instructions: { fontSize: 13, lineHeight: 18, marginBottom: 10 },
+  actionLabel: { fontSize: 13, fontWeight: "600" },
+  actionLabelLarge: { fontSize: 15 },
+  uploadHint: { fontSize: 12, lineHeight: 16, textAlign: "center" },
   workspaceSection: { gap: 8 },
   workspaceHint: { fontSize: 12, lineHeight: 17 },
   uploadingRow: { flexDirection: "row", alignItems: "center", gap: 8 },
@@ -406,13 +454,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 10,
     padding: 10,
-    borderRadius: 999,
-    borderWidth: 1,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
   },
-  thumb: { width: 48, height: 48, borderRadius: 8, backgroundColor: "#f1f5f9" },
+  thumb: { width: 44, height: 44, borderRadius: 8, backgroundColor: "#f1f5f9" },
   fileIcon: {
-    width: 48,
-    height: 48,
+    width: 44,
+    height: 44,
     borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
@@ -420,10 +468,10 @@ const styles = StyleSheet.create({
   fileBody: { flex: 1, gap: 2 },
   fileName: { fontSize: 13, fontWeight: "700" },
   fileMeta: { fontSize: 11 },
+  notesSection: { gap: 6 },
   fieldLabel: { fontSize: 12, fontWeight: "700" },
   notesInput: {
-    minHeight: 80,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 12,
     padding: 12,
     fontSize: 14,

@@ -27,6 +27,7 @@ import { QuestionPrepareGate } from "../questions/QuestionPrepareGate"
 import { extractAssignmentQuestionTexts } from "../../lib/question-prepare"
 import { TaskMetaChip, TaskSectionCard, useRewardsTheme } from "./rewards-shared"
 import { NotetakerScreenHeader } from "../notetaker/NotetakerScreenHeader"
+import { useModuleContentStyle } from "../../lib/responsive-layout"
 
 function useStudentSession(): StudentSession | null {
   const { session } = useSession()
@@ -48,6 +49,7 @@ function findAssignment(
 export function ClassroomPointsTaskScreen() {
   const router = useRouter()
   const scrollPad = useModuleScrollContentPadding(24)
+  const moduleContent = useModuleContentStyle()
   const session = useStudentSession()
   const theme = useRewardsTheme()
   const tokens = useAppThemeTokens()
@@ -142,7 +144,7 @@ export function ClassroomPointsTaskScreen() {
       >
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={[styles.content, scrollPad]}
+        contentContainerStyle={[styles.content, scrollPad, moduleContent]}
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
     >

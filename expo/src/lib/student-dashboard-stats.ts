@@ -8,7 +8,7 @@ import type {
 } from "../types/dashboard"
 import { parseMembershipTier } from "./membership-tier"
 import type { StudentSession } from "./session"
-import { studentAuthenticatedRequest } from "./student-api"
+import { studentAuthenticatedRequest, type QuizListRolloverPolicy } from "./student-api"
 import {
   buildStudentDashboardFromRaw,
   type DashboardRawData,
@@ -61,7 +61,7 @@ async function fetchStudentDashboardRawData(session: StudentSession): Promise<Da
       session,
       `/api/attendance/streaks?studentId=${enc(databaseId)}`,
     ),
-    studentAuthenticatedRequest<{ quizzes?: { available_until?: string }[] }>(
+    studentAuthenticatedRequest<{ quizzes?: { available_until?: string }[]; rollover_policy?: QuizListRolloverPolicy }>(
       session,
       `/api/student/quizzes?studentDatabaseId=${enc(databaseId)}&assessmentType=quiz`,
     ),
@@ -126,6 +126,7 @@ async function fetchStudentDashboardRawData(session: StudentSession): Promise<Da
           finalsPayload.finals.some((f) => f.status === "completed"),
     classroomPoints:
       pointsPayload != null ? Number(pointsPayload.summary?.total_points ?? 0) : null,
+    rolloverPolicy: quizzesPayload?.rollover_policy ?? null,
     unavailable,
   }
 }

@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from "react"
 import { ActivityIndicator, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native"
-import Svg, { Defs, G, Line, LinearGradient, Path, Rect, Stop, Text as SvgText } from "react-native-svg"
+import Svg, { G, Line, Path, Rect, Text as SvgText } from "react-native-svg"
 import type { PerformanceComparison } from "../../types/dashboard"
 import { DashboardCard } from "./DashboardCard"
 import { nativeType } from "../../constants/faculty-native-theme"
@@ -9,18 +9,31 @@ import { useNativeType } from "../../lib/themed-module-theme"
 import { dashboardChartPalette } from "../../lib/dashboard-chart-palette"
 import { barPath, makeScale } from "./charts/chart-geometry"
 
-const CHART_HEIGHT = 208
+const CHART_HEIGHT = 216
 const Y_TICKS = [0, 50, 100]
-const BAR_GAP = 3
-const GROUP_INSET = 0.34
+const BAR_GAP = 4
+const GROUP_INSET = 0.32
+const BAR_STROKE = 1.75
 
-/** Two short lines beat one clipped line — "Homework …" told the student nothing. */
 function labelLines(label: string): string[] {
   if (label.length <= 11) return [label]
   const words = label.split(/\s+/)
   if (words.length === 1) return [label.slice(0, 11)]
   const mid = Math.ceil(words.length / 2)
   return [words.slice(0, mid).join(" "), words.slice(mid).join(" ")]
+}
+
+function solidBar(
+  x: number,
+  topY: number,
+  width: number,
+  baselineY: number,
+  fill: string,
+  stroke: string,
+): React.ReactNode {
+  const d = barPath(x, topY, width, baselineY, 8)
+  if (!d) return null
+  return <Path d={d} fill={fill} stroke={stroke} strokeWidth={BAR_STROKE} />
 }
 
 export function PerformanceComparisonChart({
@@ -48,7 +61,7 @@ export function PerformanceComparisonChart({
         width: chartWidth,
         height: CHART_HEIGHT,
         count: data.length,
-        padLeft: 30,
+        padLeft: 32,
         padBottom: 40,
         padTop: 28,
       }),
@@ -57,7 +70,7 @@ export function PerformanceComparisonChart({
 
   const slot = data.length > 0 ? scale.innerW / data.length : scale.innerW
   const groupW = slot * (1 - GROUP_INSET)
-  const barW = Math.max(6, (groupW - BAR_GAP) / 2)
+  const barW = Math.max(8, (groupW - BAR_GAP) / 2)
 
   const toggle = useCallback((i: number) => {
     setActiveIndex((prev) => (prev === i ? null : i))
@@ -91,23 +104,6 @@ export function PerformanceComparisonChart({
     <DashboardCard title="You vs class average" subtitle="Tap a group for exact scores">
       <View>
         <Svg width={chartWidth} height={CHART_HEIGHT}>
-          <Defs>
-            {/* Vertical gradient per bar: lighter step of the same hue at the
-                top, full chroma at the baseline. Lightness still increases
-                monotonically with height, so the gradient never fights the
-                magnitude the bar is encoding. */}
-            <LinearGradient id="barYou" x1="0" y1="0" x2="0" y2="1">
-              <Stop offset="0%" stopColor={palette.barHighlight} />
-              <Stop offset="12%" stopColor={palette.comparisonTop.you} />
-              <Stop offset="100%" stopColor={palette.comparison.you} />
-            </LinearGradient>
-            <LinearGradient id="barAvg" x1="0" y1="0" x2="0" y2="1">
-              <Stop offset="0%" stopColor={palette.barHighlight} />
-              <Stop offset="14%" stopColor={palette.comparisonTop.classAvg} />
-              <Stop offset="100%" stopColor={palette.comparison.classAvg} />
-            </LinearGradient>
-          </Defs>
-
           {Y_TICKS.map((tick) => {
             const y = scale.yAt(tick)
             return (
@@ -119,6 +115,7 @@ export function PerformanceComparisonChart({
                   y2={y}
                   stroke={palette.grid}
                   strokeWidth={1}
+                  strokeDasharray="3 3"
                 />
                 <SvgText
                   x={scale.padLeft - 7}
@@ -139,44 +136,43 @@ export function PerformanceComparisonChart({
             const youX = groupCenter - barW - BAR_GAP / 2
             const avgX = groupCenter + BAR_GAP / 2
             const isActive = activeIndex === i
-            const dim = activeIndex != null && !isActive ? 0.38 : 1
+            const dim = activeIndex != null && !isActive ? 0.45 : 1
             const youTop = scale.yAt(d.you)
             const avgTop = d.classAvg != null ? scale.yAt(d.classAvg) : null
             const youLabel = String(Math.round(d.you))
-            const labelW = Math.max(22, youLabel.length * 7.2 + 10)
+            const youFill = palette.comparisonGroups[i] ?? palette.comparison.you
+            const youStroke = palette.comparisonGroupsStroke[i] ?? youFill
+            const labelW = Math.max(24, youLabel.length * 7.2 + 12)
             const fitsAbove = youTop - 20 >= scale.padTop
             const pillX = youX + barW / 2 - labelW / 2
             const pillY = fitsAbove ? youTop - 20 : youTop + 5
 
             return (
               <G key={`bar-${i}`} opacity={dim}>
-                <Path
-                  d={barPath(youX, scale.padTop, barW, scale.baselineY, 8)}
-                  fill={palette.barTrack}
-                />
+                <Path d={barPath(youX, scale.padTop, barW, scale.baselineY, 8)} fill={palette.barTrack} />
                 {avgTop != null ? (
                   <>
-                    <Path
-                      d={barPath(avgX, scale.padTop, barW, scale.baselineY, 8)}
-                      fill={palette.barTrack}
-                    />
-                    <Path
-                      d={barPath(avgX, avgTop, barW, scale.baselineY, 8)}
-                      fill="url(#barAvg)"
-                    />
+                    <Path d={barPath(avgX, scale.padTop, barW, scale.baselineY, 8)} fill={palette.barTrack} />
+                    {solidBar(
+                      avgX,
+                      avgTop,
+                      barW,
+                      scale.baselineY,
+                      palette.comparisonClassFill,
+                      palette.comparisonClassStroke,
+                    )}
                   </>
                 ) : null}
-                <Path
-                  d={barPath(youX, youTop, barW, scale.baselineY, 8)}
-                  fill="url(#barYou)"
-                />
+                {solidBar(youX, youTop, barW, scale.baselineY, youFill, youStroke)}
                 <Rect
                   x={pillX}
                   y={pillY}
                   width={labelW}
                   height={16}
                   rx={8}
-                  fill={palette.comparison.you}
+                  fill={youFill}
+                  stroke={youStroke}
+                  strokeWidth={1.25}
                 />
                 <SvgText
                   x={youX + barW / 2}
@@ -215,7 +211,6 @@ export function PerformanceComparisonChart({
           />
         </Svg>
 
-        {/* Touch targets are the full group column — bigger than the marks */}
         <View style={[StyleSheet.absoluteFill, styles.hitRow, { paddingLeft: scale.padLeft, paddingRight: scale.padRight }]}>
           {data.map((d, i) => (
             <Pressable
@@ -239,13 +234,37 @@ export function PerformanceComparisonChart({
         </Text>
         <View style={styles.readoutRow}>
           <View style={styles.readoutItem}>
-            <View style={[styles.swatch, { backgroundColor: palette.comparison.you }]} />
+            <View
+              style={[
+                styles.swatch,
+                {
+                  backgroundColor:
+                    activeIndex != null
+                      ? (palette.comparisonGroups[activeIndex] ?? palette.comparison.you)
+                      : palette.comparisonGroups[0],
+                  borderColor:
+                    activeIndex != null
+                      ? (palette.comparisonGroupsStroke[activeIndex] ?? palette.comparisonGroups[0])
+                      : palette.comparisonGroupsStroke[0],
+                  borderWidth: 1,
+                },
+              ]}
+            />
             <Text style={[type.caption, { color: native.label }]}>
               {active ? `${Math.round(active.you)}%` : "—"}
             </Text>
           </View>
           <View style={styles.readoutItem}>
-            <View style={[styles.swatch, { backgroundColor: palette.comparison.classAvg }]} />
+            <View
+              style={[
+                styles.swatch,
+                {
+                  backgroundColor: palette.comparisonClassFill,
+                  borderColor: palette.comparisonClassStroke,
+                  borderWidth: 1,
+                },
+              ]}
+            />
             <Text style={[type.caption, { color: native.label }]}>
               {active?.classAvg != null ? `${Math.round(active.classAvg)}%` : "Unavailable"}
             </Text>
@@ -255,11 +274,21 @@ export function PerformanceComparisonChart({
 
       <View style={styles.legend}>
         <View style={styles.legendItem}>
-          <View style={[styles.swatch, { backgroundColor: palette.comparison.you }]} />
+          <View
+            style={[
+              styles.swatch,
+              { backgroundColor: palette.comparisonGroups[0], borderColor: palette.comparisonGroupsStroke[0], borderWidth: 1 },
+            ]}
+          />
           <Text style={[styles.legendText, { color: native.secondaryLabel }]}>You</Text>
         </View>
         <View style={styles.legendItem}>
-          <View style={[styles.swatch, { backgroundColor: palette.comparison.classAvg }]} />
+          <View
+            style={[
+              styles.swatch,
+              { backgroundColor: palette.comparisonClassFill, borderColor: palette.comparisonClassStroke, borderWidth: 1 },
+            ]}
+          />
           <Text style={[styles.legendText, { color: native.secondaryLabel }]}>Class average</Text>
         </View>
       </View>

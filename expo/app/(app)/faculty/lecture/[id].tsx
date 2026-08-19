@@ -1,7 +1,7 @@
 import { useLocalSearchParams } from "expo-router"
 import { FacultyLectureSlidePreviewScreen } from "../../../../src/components/faculty/FacultyLectureSlidePreviewScreen"
 
-/** Native instructor slide preview — PDF deck with themed chrome (no web dashboard). */
+/** Instructor lecture preview — production web viewer (slides, workspace, sample practice). */
 export default function FacultyLectureViewerScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
   const lectureId = typeof id === "string" ? Number(id) : NaN

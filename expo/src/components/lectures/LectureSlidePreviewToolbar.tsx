@@ -14,7 +14,7 @@ type Props = {
 /** Native toolbar for immersive lecture slide preview — respects appearance theme + dark mode. */
 export function LectureSlidePreviewToolbar({
   backLabel = "Lectures",
-  title = "Slide preview",
+  title = "Lecture",
   onBack,
   trailing,
 }: Props) {
@@ -27,7 +27,7 @@ export function LectureSlidePreviewToolbar({
       style={[
         styles.toolbar,
         {
-          paddingTop: insets.top + 4,
+          paddingTop: insets.top + 2,
           backgroundColor: native.secondaryGrouped,
           borderBottomColor: native.separator,
         },
@@ -56,7 +56,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 8,
-    paddingBottom: 8,
+    paddingBottom: 4,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   backBtn: {
