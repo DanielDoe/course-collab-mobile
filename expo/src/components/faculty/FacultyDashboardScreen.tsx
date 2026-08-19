@@ -7,7 +7,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  useWindowDimensions,
   View} from "react-native"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useRouter } from "expo-router"
@@ -39,7 +38,7 @@ import { consumeFacultyDashboardBootstrap } from "../../lib/app-bootstrap-cache"
 import { ensureAppBootstrap } from "../../lib/post-login-bootstrap"
 import { FACULTY_CHART_COLORS } from "../../lib/faculty-dashboard-theme"
 import { useModuleTheme } from "../../lib/themed-module-shell"
-import { useDashboardContentStyle, useKpiGridCardStyle } from "../../lib/responsive-layout"
+import { useDashboardContentStyle, useChartContentWidth, useKpiGridCardStyle } from "../../lib/responsive-layout"
 import { useChromeScrollPadding } from "../../context/ChromeInsetContext"
 import { useNotificationModuleRefresh } from "../../lib/notifications/notification-events"
 
@@ -50,8 +49,8 @@ export function FacultyDashboardScreen() {
   const { styles: moduleStyles, native, tokens, type } = useModuleTheme()
   const insets = useSafeAreaInsets()
   const scrollPad = useChromeScrollPadding(32)
-  const { width } = useWindowDimensions()
   const dashboardContentStyle = useDashboardContentStyle()
+  const chartWidth = useChartContentWidth()
   const router = useRouter()
   const { session, course, scope, ready } = useFacultyScope()
   const { badges, openCoursePicker, refreshFacultyData } = useFacultyShell()
@@ -63,8 +62,6 @@ export function FacultyDashboardScreen() {
   const [chartsLoading, setChartsLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState("")
-
-  const chartWidth = Math.max(280, width - 64)
 
   const load = useCallback(async () => {
     if (!scope || !session) return

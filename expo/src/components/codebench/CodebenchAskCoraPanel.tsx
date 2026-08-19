@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react"
-import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type ViewStyle } from "react-native";
 import { AppAlert } from '../../lib/app-alert'
 import Animated, { FadeIn, FadeOut, LinearTransition } from "react-native-reanimated"
 import { LinearGradient } from "expo-linear-gradient"
@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
 import { useNativeType, useThemedStudentNative } from "../../lib/themed-module-theme"
 import { NATIVE } from "../../constants/faculty-native-theme"
+import { useAuthFlowContentStyle } from "../../lib/responsive-layout"
 import { hexToRgba } from "../../constants/app-themes"
 import {
   formatAttachmentsForMessage,
@@ -63,6 +64,7 @@ function AskCoraComposer({
   docked,
   onFocus,
   onBlur,
+  heroContentStyle,
 }: {
   value: string
   onChangeText: (text: string) => void
@@ -73,6 +75,7 @@ function AskCoraComposer({
   docked: boolean
   onFocus: () => void
   onBlur: () => void
+  heroContentStyle?: ViewStyle
 }) {
   const tokens = useAppThemeTokens()
   const native = useThemedNative()
@@ -83,7 +86,7 @@ function AskCoraComposer({
     <View
       style={[
         styles.composerShell,
-        docked ? styles.composerShellDocked : styles.composerShellHero,
+        docked ? styles.composerShellDocked : [styles.composerShellHero, heroContentStyle],
         {
           backgroundColor: shellBg,
           borderColor: tokens.isDark ? hexToRgba("#FFFFFF", 0.12) : hexToRgba("#000000", 0.08),
@@ -150,6 +153,7 @@ export function CodebenchAskCoraPanel({
   const type = useNativeType()
   const userBubbleColors = getUserPromptBubbleColors(tokens.isDark, native)
   const assistantColors = getAssistantMessageColors(tokens.isDark, native)
+  const panelContentStyle = useAuthFlowContentStyle()
 
   const [focused, setFocused] = useState(false)
   const [attachOpen, setAttachOpen] = useState(false)
@@ -336,6 +340,7 @@ export function CodebenchAskCoraPanel({
       docked={docked}
       onFocus={() => setFocused(true)}
       onBlur={() => setFocused(false)}
+      heroContentStyle={panelContentStyle}
     />
   )
 
@@ -448,7 +453,7 @@ export function CodebenchAskCoraPanel({
           )}
           <Animated.View
             layout={LinearTransition.springify().damping(20).stiffness(180)}
-            style={[styles.heroComposerWrap, { paddingBottom: Math.max(insets.bottom, 8) }]}
+            style={[styles.heroComposerWrap, panelContentStyle, { paddingBottom: Math.max(insets.bottom, 8) }]}
           >
             {composer(false)}
           </Animated.View>
@@ -567,12 +572,10 @@ const styles = StyleSheet.create({
   },
   heroComposerWrap: {
     width: "100%",
-    maxWidth: 560,
     paddingHorizontal: 0,
   },
   attachmentStripHero: {
     width: "100%",
-    maxWidth: 560,
     paddingHorizontal: 0,
     paddingBottom: 0,
   },
@@ -645,7 +648,6 @@ const styles = StyleSheet.create({
   },
   composerShellHero: {
     width: "100%",
-    maxWidth: 560,
     alignSelf: "center",
   },
   composerShellDocked: {

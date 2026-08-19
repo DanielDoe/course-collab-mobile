@@ -22,6 +22,7 @@ import {
   type ClassSchedulePayload} from "../../lib/calendar"
 import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
 import { useModuleScrollContentPadding } from "../../context/ChromeInsetContext"
+import { useModuleContentStyle } from "../../lib/responsive-layout"
 import { NATIVE } from "../../constants/faculty-native-theme"
 import { EmptyBlock } from "../rewards/rewards-shared"
 import { MobbinPillSegmentControl } from "../theme/MobbinPillSegmentControl"
@@ -79,6 +80,7 @@ export function CalendarScreen() {
   const tokens = useAppThemeTokens()
   const type = useNativeType()
   const scrollPad = useModuleScrollContentPadding()
+  const moduleContentStyle = useModuleContentStyle()
   const [month, setMonth] = useState(() => startOfMonth(new Date()))
   const [selectedDate, setSelectedDate] = useState(() => new Date())
   const [personalEvents, setPersonalEvents] = useState<CalendarEvent[]>([])
@@ -226,6 +228,7 @@ export function CalendarScreen() {
         style={styles.scroll}
         contentContainerStyle={[
           styles.scrollContent,
+          moduleContentStyle,
           {
             paddingTop: scrollPad.paddingTop ?? NATIVE.pagePadding,
             paddingBottom: scrollPad.paddingBottom,

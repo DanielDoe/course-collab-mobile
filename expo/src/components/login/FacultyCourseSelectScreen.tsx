@@ -32,11 +32,13 @@ import { persistFacultyCourse } from "../../hooks/useFacultyShellRefresh"
 import type { InstructorCourse } from "../../lib/instructor-api"
 import { FacultyCoursePickerRow } from "../faculty/FacultyCollabListCards"
 import type { FacultySession } from "../../lib/session"
+import { useAuthFlowContentStyle } from "../../lib/responsive-layout"
 
 export function FacultyCourseSelectScreen() {
   const insets = useSafeAreaInsets()
   const { session, signOut } = useSession()
   const { LOGIN, loginType } = useLoginTheme()
+  const shellStyle = useAuthFlowContentStyle(440)
 
   const [courses, setCourses] = useState<InstructorCourse[]>(() => consumeFacultyCoursesForSelection() ?? [])
   const [suggestedCourseId, setSuggestedCourseId] = useState<number | null>(null)
@@ -151,7 +153,7 @@ export function FacultyCourseSelectScreen() {
           },
         ]}
       >
-        <View style={styles.shell}>
+        <View style={[styles.shell, shellStyle]}>
           <LoginPortalStack style={styles.portalStack}>
             <LoginBrandHeader
               title="Select a course"
@@ -231,8 +233,6 @@ const styles = StyleSheet.create({
   shell: {
     flex: 1,
     width: "100%",
-    maxWidth: 440,
-    alignSelf: "center",
   },
   portalStack: {
     flex: 1,

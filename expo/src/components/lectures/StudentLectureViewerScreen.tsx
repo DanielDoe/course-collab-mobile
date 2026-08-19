@@ -12,6 +12,7 @@ import { useRouter } from "expo-router"
 import { ApiError } from "../../lib/api"
 import { fetchStudentLectureViewerData } from "../../lib/student-lecture-api"
 import { buildStudentAuthenticatedDeckSource } from "../../lib/lecture-deck-url"
+import { loadLectureDeckForWebView } from "../../lib/lecture-deck-loader"
 import { getAllowedWebViewOriginPrefixes } from "../../lib/trusted-origins"
 import { studentApi, type StudentLectureDetail } from "../../lib/student-api"
 import { useSession } from "../../context/SessionProvider"
@@ -50,6 +51,8 @@ export function StudentLectureViewerScreen({ lectureId, week }: Props) {
   const [samplePracticeLabel, setSamplePracticeLabel] = useState("Sample Practice")
   const [workspace, setWorkspace] = useState(defaultWorkspaceConfig())
   const [toolsOpen, setToolsOpen] = useState(false)
+  const [deckLoading, setDeckLoading] = useState(false)
+  const [deckError, setDeckError] = useState("")
   const [deckSource, setDeckSource] = useState<{
     uri: string
     headers?: Record<string, string>
@@ -88,15 +91,41 @@ export function StudentLectureViewerScreen({ lectureId, week }: Props) {
     let cancelled = false
     if (!session || !deckUrl) {
       setDeckSource(null)
+      setDeckError("")
+      setDeckLoading(false)
       return
     }
-    void buildStudentAuthenticatedDeckSource(deckUrl, session).then((source) => {
-      if (!cancelled) setDeckSource(source)
-    })
+    setDeckLoading(true)
+    setDeckError("")
+    void (async () => {
+      const authSource = await buildStudentAuthenticatedDeckSource(deckUrl, session)
+      if (!authSource || cancelled) {
+        if (!cancelled) {
+          setDeckSource(null)
+          setDeckLoading(false)
+          setDeckError("Slide deck URL is unavailable.")
+        }
+        return
+      }
+      const loaded = await loadLectureDeckForWebView({
+        url: authSource.uri,
+        headers: authSource.headers,
+        cacheKey: `lecture-${lectureId}`,
+      })
+      if (cancelled) return
+      if (loaded.ok) {
+        setDeckSource(loaded.source)
+        setDeckError("")
+      } else {
+        setDeckSource(null)
+        setDeckError(loaded.message)
+      }
+      setDeckLoading(false)
+    })()
     return () => {
       cancelled = true
     }
-  }, [deckUrl, session])
+  }, [deckUrl, session, lectureId])
 
   const webViewOrigins = useMemo(
     () => getAllowedWebViewOriginPrefixes({ lectureDeck: true }),
@@ -146,6 +175,25 @@ export function StudentLectureViewerScreen({ lectureId, week }: Props) {
       ) : error ? (
         <View style={styles.center}>
           <FacultyEmptyState icon="alert-circle-outline" title="Could not load" body={error} />
+        </View>
+      ) : deckLoading ? (
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={tokens.accent} />
+          <Text style={[type.caption, { color: native.secondaryLabel }]}>Loading slide deck…</Text>
+        </View>
+      ) : deckError ? (
+        <View style={styles.center}>
+          <FacultyEmptyState
+            icon="alert-circle-outline"
+            title="Could not load slides"
+            body={deckError}
+          />
+          <Pressable
+            style={[styles.primaryBtn, { backgroundColor: tokens.accent }]}
+            onPress={() => setToolsOpen(true)}
+          >
+            <Text style={styles.primaryBtnText}>Open lecture tools</Text>
+          </Pressable>
         </View>
       ) : deckSource && !overlayOpen ? (
         <View style={[styles.viewer, { backgroundColor: tokens.surface }]}>

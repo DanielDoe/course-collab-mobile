@@ -6,7 +6,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  useWindowDimensions,
   View} from "react-native"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
@@ -54,6 +53,7 @@ import { FacultyAtRiskActionSheet } from "./FacultyAtRiskActionSheet"
 import { FacultyStudentDetailModal } from "./FacultyStudentDetailModal"
 import { useSuppressModuleSearchDock } from "../../context/ModuleSearchDockContext"
 import { useModuleTheme } from "../../lib/themed-module-shell"
+import { useChartContentWidth, useDashboardContentStyle } from "../../lib/responsive-layout"
 
 const TABS: Array<{ id: StudentProgressTab; label: string; icon: keyof typeof Ionicons.glyphMap }> = [
   { id: "overview", label: "Overview", icon: "stats-chart-outline" },
@@ -65,7 +65,8 @@ export function FacultyStudentProgressScreen() {
   const { styles: moduleStyles, native, tokens, type } = useModuleTheme()
   const insets = useSafeAreaInsets()
   const { listScrollPad } = useFacultyStickyHeaderScrollLayout()
-  const { width } = useWindowDimensions()
+  const dashboardContentStyle = useDashboardContentStyle()
+  const chartWidth = useChartContentWidth()
   const { scope, ready } = useFacultyScope()
 
   const [tab, setTab] = useState<StudentProgressTab>("overview")
@@ -83,8 +84,6 @@ export function FacultyStudentProgressScreen() {
   const [selectedStudent, setSelectedStudent] = useState<PracticeStudentProgress | null>(null)
   const [selectedAtRisk, setSelectedAtRisk] = useState<AtRiskStudentRow | null>(null)
   const [profileStudent, setProfileStudent] = useState<InstructorStudent | null>(null)
-
-  const chartWidth = Math.max(280, width - 64)
 
   const load = useCallback(async () => {
     if (!scope) return

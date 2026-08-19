@@ -12,6 +12,7 @@ import {
 import { resolvePostLoginRoute } from "../../lib/onboarding"
 import { studentApi } from "../../lib/student-api"
 import { navigatePostSignIn, replaceAuthRoute } from "../../lib/navigation-reset"
+import { useAuthFlowContentStyle } from "../../lib/responsive-layout"
 import type { FacultySession, StudentSession } from "../../lib/session"
 import { ErrorBanner, LoginFieldGroup } from "./LoginCard"
 import { LoginButton, LoginField, LoginPasswordToggle } from "./LoginButton"
@@ -32,6 +33,7 @@ export function FirstLoginChangePasswordScreen() {
   const router = useRouter()
   const { session, signIn } = useSession()
   const { LOGIN, loginType } = useLoginTheme()
+  const contentStyle = useAuthFlowContentStyle()
 
   const [currentPassword, setCurrentPassword] = useState("")
   const [newPassword, setNewPassword] = useState("")
@@ -138,7 +140,8 @@ export function FirstLoginChangePasswordScreen() {
         contentContainerStyle={{ flexGrow: 1, justifyContent: "center" }}
         showsVerticalScrollIndicator={false}
       >
-        <LoginPortalStack>
+        <View style={contentStyle}>
+          <LoginPortalStack>
           <LoginPortalHeader portal={session.portal === "faculty" ? "faculty" : "student"} />
           <Text style={styles.lead}>
             First sign-in: choose a new password, then continue to your dashboard. Two-factor
@@ -187,6 +190,7 @@ export function FirstLoginChangePasswordScreen() {
             loading={submitting}
           />
         </LoginPortalStack>
+        </View>
       </ScrollView>
     </KeyboardAvoidingView>
   )

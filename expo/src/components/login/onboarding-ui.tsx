@@ -17,6 +17,7 @@ import { Ionicons } from "@/components/icons/AppIcon"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import type { LegalDocument } from "../../content/legal/types"
 import { NATIVE } from "../../constants/faculty-native-theme"
+import { useAuthFlowContentStyle } from "../../lib/responsive-layout"
 import type { AppSession } from "../../lib/session"
 import {
   onboardingStepMeta,
@@ -52,6 +53,7 @@ export function OnboardingShell({
 }: OnboardingShellProps) {
   const insets = useSafeAreaInsets()
   const { LOGIN, loginType } = useLoginTheme()
+  const contentStyle = useAuthFlowContentStyle()
   const { stepIndex, totalSteps, progress } = onboardingStepMeta(session, stepId)
 
   const body = (
@@ -70,7 +72,7 @@ export function OnboardingShell({
 
   return (
     <View style={[styles.root, { backgroundColor: LOGIN.canvas }]}>
-      <View style={[styles.progressTrack, { paddingTop: insets.top + 8, backgroundColor: LOGIN.canvas }]}>
+      <View style={[styles.progressTrack, contentStyle, { paddingTop: insets.top + 8, backgroundColor: LOGIN.canvas }]}>
         <View style={[styles.progressBar, { backgroundColor: LOGIN.separator }]}>
           <View
             style={[
@@ -88,6 +90,7 @@ export function OnboardingShell({
         <ScrollView
           contentContainerStyle={[
             styles.scroll,
+            contentStyle,
             { paddingBottom: footer ? 12 : insets.bottom + 28 },
           ]}
           keyboardShouldPersistTaps="handled"
@@ -96,13 +99,14 @@ export function OnboardingShell({
           {body}
         </ScrollView>
       ) : (
-        <View style={[styles.scroll, { flex: 1 }]}>{body}</View>
+        <View style={[styles.scroll, contentStyle, { flex: 1 }]}>{body}</View>
       )}
 
       {footer ? (
         <View
           style={[
             styles.footer,
+            contentStyle,
             {
               paddingBottom: insets.bottom + 16,
               backgroundColor: LOGIN.canvas,
@@ -362,6 +366,7 @@ export function OnboardingLegalStepLayout({
 }) {
   const insets = useSafeAreaInsets()
   const { LOGIN, loginType } = useLoginTheme()
+  const contentStyle = useAuthFlowContentStyle()
   const { stepIndex, totalSteps, progress } = onboardingStepMeta(session, stepId)
   const [checked, setChecked] = useState(false)
   const [scrolledToEnd, setScrolledToEnd] = useState(false)
@@ -398,7 +403,7 @@ export function OnboardingLegalStepLayout({
 
   return (
     <View style={[styles.root, { backgroundColor: LOGIN.canvas }]}>
-      <View style={[styles.progressTrack, { paddingTop: insets.top + 8, backgroundColor: LOGIN.canvas }]}>
+      <View style={[styles.progressTrack, contentStyle, { paddingTop: insets.top + 8, backgroundColor: LOGIN.canvas }]}>
         <View style={[styles.progressBar, { backgroundColor: LOGIN.separator }]}>
           <View
             style={[
@@ -414,7 +419,7 @@ export function OnboardingLegalStepLayout({
 
       <ScrollView
         style={styles.legalScroll}
-        contentContainerStyle={[styles.scroll, { paddingBottom: 12 }]}
+        contentContainerStyle={[styles.scroll, contentStyle, { paddingBottom: 12 }]}
         onScroll={onScroll}
         scrollEventThrottle={16}
         onContentSizeChange={onContentSizeChange}
@@ -443,6 +448,7 @@ export function OnboardingLegalStepLayout({
       <View
         style={[
           styles.footer,
+          contentStyle,
           {
             paddingBottom: insets.bottom + 16,
             backgroundColor: LOGIN.canvas,
@@ -489,9 +495,6 @@ const styles = StyleSheet.create({
   scroll: {
     paddingHorizontal: CONTENT_PAD,
     gap: 14,
-    maxWidth: 560,
-    width: "100%",
-    alignSelf: "center",
   },
   header: { alignItems: "center", gap: 8, marginBottom: 4 },
   pill: {
@@ -543,7 +546,7 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
-  footerInner: { gap: 12, maxWidth: 560, width: "100%", alignSelf: "center" },
+  footerInner: { gap: 12, width: "100%" },
   footerHint: { textAlign: "center" },
   checkRow: {
     flexDirection: "row",

@@ -5,24 +5,32 @@ import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProv
 import { useFacultyScope } from "../../hooks/useFacultyScope"
 import { FACULTY_SHEET_COLOR } from "../../lib/faculty-sheet-theme"
 import { semanticSoft } from "../../lib/themed-module-theme"
-import { buildAuthenticatedDeckSource } from "../../lib/lecture-deck-url"
 import { getAllowedWebViewOriginPrefixes } from "../../lib/trusted-origins"
+import { buildFacultyDeckRequest, useResolvedLectureDeckSource } from "../../lib/use-lecture-deck-source"
+import { FacultyEmptyState } from "./faculty-shared"
 
 type Props = {
   pdfUrl: string
   title?: string
+  cacheKey?: string
 }
 
-export function FacultyLectureDeckPreview({ pdfUrl, title }: Props) {
+export function FacultyLectureDeckPreview({ pdfUrl, title, cacheKey }: Props) {
   const tokens = useAppThemeTokens()
   const native = useThemedNative()
   const { scope } = useFacultyScope()
-  const source = buildAuthenticatedDeckSource(
+  const request = buildFacultyDeckRequest(
     pdfUrl,
     scope ? { instructorId: scope.instructorId, courseId: scope.courseId } : undefined,
   )
+  const { source, loading, error } = useResolvedLectureDeckSource({
+    deckUrl: request?.uri ?? null,
+    headers: request?.headers,
+    cacheKey: cacheKey ?? pdfUrl,
+    enabled: Boolean(request?.uri),
+  })
 
-  if (!source) return null
+  if (!request) return null
 
   return (
     <View style={styles.wrap}>
@@ -41,24 +49,35 @@ export function FacultyLectureDeckPreview({ pdfUrl, title }: Props) {
               borderColor: tokens.border,
             },
           ]}
-          onPress={() => void Linking.openURL(source.uri)}
+          onPress={() => void Linking.openURL(source?.uri ?? request.uri)}
+          disabled={!source && !request.uri}
         >
           <Ionicons name="expand-outline" size={14} color={FACULTY_SHEET_COLOR.link} />
           <Text style={[styles.openText, { color: FACULTY_SHEET_COLOR.link }]}>Open</Text>
         </Pressable>
       </View>
       <View style={[styles.frame, { borderColor: native.separator, backgroundColor: tokens.surface }]}>
-        <WebView
-          source={source}
-          style={[styles.webview, { backgroundColor: tokens.surface }]}
-          originWhitelist={getAllowedWebViewOriginPrefixes({ lectureDeck: true })}
-          startInLoadingState
-          renderLoading={() => (
-            <View style={[styles.loading, { backgroundColor: tokens.surface }]}>
-              <ActivityIndicator color={FACULTY_SHEET_COLOR.link} />
-            </View>
-          )}
-        />
+        {loading ? (
+          <View style={[styles.loading, { backgroundColor: tokens.surface }]}>
+            <ActivityIndicator color={FACULTY_SHEET_COLOR.link} />
+          </View>
+        ) : error ? (
+          <View style={[styles.loading, { backgroundColor: tokens.surface, paddingHorizontal: 16 }]}>
+            <FacultyEmptyState icon="alert-circle-outline" title="Preview unavailable" body={error} />
+          </View>
+        ) : source ? (
+          <WebView
+            source={source}
+            style={[styles.webview, { backgroundColor: tokens.surface }]}
+            originWhitelist={getAllowedWebViewOriginPrefixes({ lectureDeck: true })}
+            startInLoadingState
+            renderLoading={() => (
+              <View style={[styles.loading, { backgroundColor: tokens.surface }]}>
+                <ActivityIndicator color={FACULTY_SHEET_COLOR.link} />
+              </View>
+            )}
+          />
+        ) : null}
       </View>
       {title ? (
         <Text style={[styles.caption, { color: tokens.textSecondary }]} numberOfLines={2}>

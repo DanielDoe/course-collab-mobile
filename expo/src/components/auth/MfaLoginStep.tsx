@@ -21,6 +21,7 @@ import { LoginButton, LoginField } from "../login/LoginButton"
 import { LoginBrandHeader } from "../login/LoginBrandHeader"
 import { useLoginTheme } from "../login/login-theme"
 import { useReliableTextInputFocus } from "../../hooks/useReliableTextInputFocus"
+import { useAuthFlowContentStyle } from "../../lib/responsive-layout"
 
 type Props = {
   state: MfaLoginState
@@ -51,6 +52,8 @@ function OtpCodeField({
   disabled?: boolean
 }) {
   const { LOGIN } = useLoginTheme()
+  const otpContentStyle = useAuthFlowContentStyle(340)
+
   const inputRef = useRef<TextInput>(null)
   const [focused, setFocused] = useState(false)
   const digits = Array.from({ length: 6 }, (_, index) => value[index] ?? "")
@@ -87,7 +90,7 @@ function OtpCodeField({
   }, [disabled, focusInput])
 
   return (
-    <View style={styles.otpWrap}>
+    <View style={[styles.otpWrap, otpContentStyle]}>
       <View style={styles.otpRow} pointerEvents="none">
         {digits.map((digit, index) => {
           const activeCell = focused && value.length === index
@@ -174,9 +177,10 @@ function MfaLayout({
 }) {
   const insets = useSafeAreaInsets()
   const { LOGIN } = useLoginTheme()
+  const contentStyle = useAuthFlowContentStyle()
 
   const inner = (
-    <View style={styles.layoutInner}>
+    <View style={[styles.layoutInner, contentStyle]}>
       <LoginBrandHeader title={title} subtitle={subtitle} university={university} />
       {children}
       <MfaBackButton label={backLabel} onPress={onBack} />
@@ -418,7 +422,6 @@ const styles = StyleSheet.create({
   otpWrap: {
     position: "relative",
     width: "100%",
-    maxWidth: 340,
     alignItems: "center",
     gap: 10,
   },

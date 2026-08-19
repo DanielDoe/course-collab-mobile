@@ -4,7 +4,6 @@ import {
   PanResponder,
   StyleSheet,
   Text,
-  useWindowDimensions,
   View,
 } from "react-native"
 import Svg, {
@@ -29,6 +28,7 @@ import {
   dashboardChartPalette,
   type ChartSeriesId,
 } from "../../lib/dashboard-chart-palette"
+import { useChartContentWidth } from "../../lib/responsive-layout"
 import { areaRibbon, makeScale, nearestIndex, smoothPath, type Pt } from "./charts/chart-geometry"
 
 const CHART_HEIGHT = 216
@@ -52,7 +52,7 @@ function valueFor(point: GradeTrendPoint, id: ChartSeriesId): number | null {
 }
 
 export function GradeTrendChart({ data, loading }: { data: GradeTrendPoint[]; loading: boolean }) {
-  const { width: screenWidth } = useWindowDimensions()
+  const chartWidth = useChartContentWidth()
   const tokens = useAppThemeTokens()
   const native = useThemedNative()
   const type = useNativeType()
@@ -61,7 +61,6 @@ export function GradeTrendChart({ data, loading }: { data: GradeTrendPoint[]; lo
     [tokens.id, tokens.isDark, tokens.accent, tokens.warning, tokens.success, tokens.chartPalette],
   )
 
-  const chartWidth = Math.max(260, Math.min(screenWidth - 64, 640))
   const [activeIndex, setActiveIndex] = useState<number | null>(null)
 
   const scale = useMemo(

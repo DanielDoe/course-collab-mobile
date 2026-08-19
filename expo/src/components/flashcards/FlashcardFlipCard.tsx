@@ -16,15 +16,14 @@ import { useAppThemeTokens } from "../../context/AppearanceProvider"
 import { hexToRgba } from "../../constants/app-themes"
 import { useNativeType } from "../../lib/themed-module-theme"
 import {
-  FLASHCARD_WABI_CARD_HEIGHT,
-  FLASHCARD_WABI_MAX_WIDTH,
   FLASHCARD_WABI_RADIUS,
-  FLASHCARD_WABI_SCREEN_GUTTER,
-  FLASHCARD_WABI_STACK_BLEED,
   FLASHCARD_WABI_SPRING,
+  flashcardWabiCardHeight,
+  flashcardWabiCardWidth,
   type FlashcardWabiFace,
   type FlashcardWabiStackLayer,
 } from "../../lib/flashcard-wabi-theme"
+import { useIsTabletLayout } from "../../lib/responsive-layout"
 import {
   normalizeFlashcardDifficulty,
   type FlashcardDifficulty,
@@ -55,27 +54,18 @@ function knownExitDirection(cardIndex: number): KnownExitDirection {
   return modes[cardIndex % modes.length] ?? "right"
 }
 
-function GlassOrb({ color }: { color: string }) {
-  return (
-    <View style={styles.orbOuter}>
-      <View style={[styles.orb, { backgroundColor: color }]}>
-        <View style={styles.orbHighlightLarge} />
-        <View style={styles.orbHighlightSmall} />
-      </View>
-    </View>
-  )
-}
-
 function WabiCardFace({
   face,
   title,
   body,
   footer,
+  large,
 }: {
   face: FlashcardWabiFace
   title: string
   body: string
   footer: string
+  large?: boolean
 }) {
   const type = useNativeType()
 
@@ -86,15 +76,36 @@ function WabiCardFace({
         { backgroundColor: face.background, borderColor: face.border },
       ]}
     >
-      <View style={styles.faceInner}>
-        <GlassOrb color={face.orb} />
+      <View style={[styles.faceInner, large && styles.faceInnerLarge]}>
+        <View style={[styles.orbOuter, large && styles.orbOuterLarge]}>
+          <View style={[styles.orb, { backgroundColor: face.orb }]}>
+            <View style={styles.orbHighlightLarge} />
+            <View style={styles.orbHighlightSmall} />
+          </View>
+        </View>
 
         <View style={styles.copyBlock}>
-          <Text style={[styles.cardTitle, type.bodyEmphasis, { color: face.title }]} selectable>
+          <Text
+            style={[
+              styles.cardTitle,
+              large && styles.cardTitleLarge,
+              type.bodyEmphasis,
+              { color: face.title },
+            ]}
+            selectable
+          >
             {title}
           </Text>
           {body.trim() ? (
-            <Text style={[styles.cardBody, type.body, { color: face.body }]} selectable>
+            <Text
+              style={[
+                styles.cardBody,
+                large && styles.cardBodyLarge,
+                type.body,
+                { color: face.body },
+              ]}
+              selectable
+            >
               {body}
             </Text>
           ) : null}
@@ -104,7 +115,9 @@ function WabiCardFace({
 
         <View style={styles.footerBlock}>
           <View style={[styles.divider, { backgroundColor: face.divider }]} />
-          <Text style={[styles.cardFooter, type.caption, { color: face.footer }]}>{footer}</Text>
+          <Text style={[styles.cardFooter, large && styles.cardFooterLarge, type.caption, { color: face.footer }]}>
+            {footer}
+          </Text>
         </View>
       </View>
     </View>
@@ -115,10 +128,12 @@ function StackLayer({
   layer,
   progress,
   index,
+  cardHeight,
 }: {
   layer: FlashcardWabiStackLayer
   progress: SharedValue<number>
   index: number
+  cardHeight: number
 }) {
   const animatedStyle = useAnimatedStyle(() => {
     const p = progress.value
@@ -141,6 +156,7 @@ function StackLayer({
         {
           backgroundColor: layer.background,
           borderColor: layer.border,
+          height: cardHeight,
         },
         animatedStyle,
       ]}
@@ -164,6 +180,7 @@ export function FlashcardFlipCard({
 }: Props) {
   const tokens = useAppThemeTokens()
   const { width } = useWindowDimensions()
+  const isTablet = useIsTabletLayout()
   const normalizedDifficulty = normalizeFlashcardDifficulty(difficulty)
   const theme = flashcardWabiThemeForDifficulty(
     normalizedDifficulty,
@@ -171,10 +188,9 @@ export function FlashcardFlipCard({
     stackDifficulties,
   )
   const exitDirection = knownExitDirection(cardIndex)
-  const cardWidth = Math.min(
-    FLASHCARD_WABI_MAX_WIDTH,
-    width - FLASHCARD_WABI_SCREEN_GUTTER * 2 - FLASHCARD_WABI_STACK_BLEED * 2,
-  )
+  const cardWidth = flashcardWabiCardWidth(width)
+  const cardHeight = flashcardWabiCardHeight(width)
+  const exitDistance = Math.round((cardWidth / 272) * 156)
 
   const flipProgress = useSharedValue(flipped ? 1 : 0)
   const enterProgress = useSharedValue(1)
@@ -231,18 +247,18 @@ export function FlashcardFlipCard({
 
     if (exit > 0) {
       if (exitDirection === "right") {
-        translateX = interpolate(exit, [0, 1], [0, 156])
+        translateX = interpolate(exit, [0, 1], [0, exitDistance])
         translateY += interpolate(exit, [0, 1], [0, 52])
         rotateZ = interpolate(exit, [0, 1], [0, 14])
         scale *= interpolate(exit, [0, 1], [1, 0.84])
       } else if (exitDirection === "left") {
-        translateX = interpolate(exit, [0, 1], [0, -156])
+        translateX = interpolate(exit, [0, 1], [0, -exitDistance])
         translateY += interpolate(exit, [0, 1], [0, 52])
         rotateZ = interpolate(exit, [0, 1], [0, -14])
         scale *= interpolate(exit, [0, 1], [1, 0.84])
       } else {
         translateX = interpolate(exit, [0, 1], [0, 18])
-        translateY += interpolate(exit, [0, 1], [0, -132])
+        translateY += interpolate(exit, [0, 1], [0, -Math.round(exitDistance * 0.85)])
         rotateZ = interpolate(exit, [0, 1], [0, -8])
         scale *= interpolate(exit, [0, 1], [1, 0.76])
       }
@@ -287,7 +303,7 @@ export function FlashcardFlipCard({
   })
 
   return (
-    <View style={[styles.container, { width: cardWidth, height: FLASHCARD_WABI_CARD_HEIGHT }, style]}>
+    <View style={[styles.container, { width: cardWidth, height: cardHeight }, style]}>
       {showStack
         ? theme.stack.map((layer, index) => (
             <StackLayer
@@ -295,6 +311,7 @@ export function FlashcardFlipCard({
               layer={layer}
               progress={stackProgress}
               index={index}
+              cardHeight={cardHeight}
             />
           ))
         : null}
@@ -303,7 +320,7 @@ export function FlashcardFlipCard({
         <Pressable
           onPress={exiting ? undefined : onFlip}
           disabled={exiting}
-          style={styles.pressable}
+          style={[styles.pressable, { height: cardHeight }]}
           accessibilityRole="button"
           accessibilityLabel={flipped ? "Show question" : "Show answer"}
         >
@@ -314,6 +331,7 @@ export function FlashcardFlipCard({
                 title={frontText}
                 body=""
                 footer="Tap to reveal the answer"
+                large={isTablet}
               />
             </Animated.View>
 
@@ -323,6 +341,7 @@ export function FlashcardFlipCard({
                 title="Answer"
                 body={backText}
                 footer="Tap to flip back"
+                large={isTablet}
               />
             </Animated.View>
           </Animated.View>
@@ -367,14 +386,12 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: FLASHCARD_WABI_CARD_HEIGHT,
     borderRadius: FLASHCARD_WABI_RADIUS,
     borderWidth: 2,
     zIndex: 0,
   },
   pressable: {
     width: "100%",
-    height: FLASHCARD_WABI_CARD_HEIGHT,
   },
   flipStage: {
     flex: 1,
@@ -398,12 +415,23 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
     alignItems: "center",
   },
+  faceInnerLarge: {
+    paddingTop: 52,
+    paddingHorizontal: 32,
+    paddingBottom: 28,
+  },
   orbOuter: {
     width: 80,
     height: 80,
     borderRadius: 40,
     overflow: "hidden",
     marginBottom: 20,
+  },
+  orbOuterLarge: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    marginBottom: 24,
   },
   orb: {
     flex: 1,
@@ -445,10 +473,18 @@ const styles = StyleSheet.create({
     textAlign: "center",
     letterSpacing: -0.3,
   },
+  cardTitleLarge: {
+    fontSize: 28,
+    lineHeight: 36,
+  },
   cardBody: {
     fontSize: 17,
     lineHeight: 25,
     textAlign: "center",
+  },
+  cardBodyLarge: {
+    fontSize: 19,
+    lineHeight: 28,
   },
   footerBlock: {
     width: "100%",
@@ -464,6 +500,10 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: 20,
     paddingHorizontal: 8,
+  },
+  cardFooterLarge: {
+    fontSize: 15,
+    lineHeight: 22,
   },
   timerTrack: {
     height: 5,

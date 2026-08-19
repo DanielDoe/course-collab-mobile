@@ -3,6 +3,7 @@ import { ActivityIndicator, KeyboardAvoidingView, Platform, RefreshControl, Styl
 import { ScrollView } from "react-native-gesture-handler"
 import { useThemedNative } from "../../context/AppearanceProvider"
 import { useModuleScrollContentPadding } from "../../context/ChromeInsetContext"
+import { useModuleContentStyle } from "../../lib/responsive-layout"
 import { NATIVE } from "../../constants/faculty-native-theme"
 import { useAppThemeTokens } from "../../context/AppearanceProvider"
 import { useNativeType } from "../../lib/themed-module-theme"
@@ -40,10 +41,12 @@ export function TabbedModuleLayout<T extends string>({
   const tokens = useAppThemeTokens()
   const type = useNativeType()
   const scrollPad = useModuleScrollContentPadding()
+  const moduleContentStyle = useModuleContentStyle()
 
   const pageScrollStyle = {
     paddingBottom: scrollPad.paddingBottom,
     flexGrow: 1 as const,
+    ...moduleContentStyle,
   }
 
   function wrapPage(content: ReactNode) {

@@ -5,6 +5,7 @@ import { CoraBrand } from "../cora/CoraBrand"
 import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
 import { useNativeType } from "../../lib/themed-module-theme"
 import { NATIVE } from "../../constants/faculty-native-theme"
+import { useAuthFlowContentStyle, useIsTabletLayout } from "../../lib/responsive-layout"
 import { STUDENT_CORA_COLOR, studentCoraCanvas } from "../../lib/student-cora-theme"
 import {
   STUDENT_CORA_SETUP_STEPS,
@@ -29,6 +30,8 @@ export function StudentCoraSetupOverlay({ visible, activeStep, courseLabel, focu
   const type = useNativeType()
   const canvas = studentCoraCanvas(tokens.isDark, native.groupedBackground)
   const activeIndex = Math.max(0, stepIndex(activeStep))
+  const isTablet = useIsTabletLayout()
+  const contentStyle = useAuthFlowContentStyle()
 
   if (!visible) return null
 
@@ -36,9 +39,14 @@ export function StudentCoraSetupOverlay({ visible, activeStep, courseLabel, focu
     <View
       style={[
         styles.root,
-        { backgroundColor: canvas, paddingTop: insets.top + 24, paddingBottom: insets.bottom + 24 },
+        {
+          backgroundColor: canvas,
+          paddingTop: insets.top + (isTablet ? 40 : 24),
+          paddingBottom: insets.bottom + (isTablet ? 40 : 24),
+        },
       ]}
     >
+      <View style={[styles.inner, contentStyle]}>
       <View style={styles.hero}>
         <CoraBrand size="md" />
         <Text style={[type.bodyEmphasis, { color: native.label, textAlign: "center", fontSize: 20 }]}>
@@ -98,6 +106,7 @@ export function StudentCoraSetupOverlay({ visible, activeStep, courseLabel, focu
           )
         })}
       </View>
+      </View>
     </View>
   )
 }
@@ -108,6 +117,9 @@ const styles = StyleSheet.create({
     zIndex: 30,
     paddingHorizontal: NATIVE.pagePadding,
     justifyContent: "center",
+  },
+  inner: {
+    width: "100%",
     gap: 24,
   },
   hero: {
@@ -119,6 +131,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     padding: 16,
     gap: 14,
+    width: "100%",
   },
   stepRow: {
     flexDirection: "row",

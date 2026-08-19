@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { LinearGradient } from "expo-linear-gradient"
 import { AppAlert } from '../../lib/app-alert'
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useLocalSearchParams, useRouter } from "expo-router"
@@ -47,7 +48,8 @@ import {
 import { FlashcardInvalidRoute } from "./FlashcardInvalidRoute"
 import { FlashcardMcqChoices, FlashcardMcqPrompt } from "./FlashcardMcqUI"
 import { WaterBreakDurationDialog, WaterBreakOverlay } from "./FlashcardWaterBreak"
-import { FLASHCARD_WABI_STAGE_HEIGHT, FLASHCARD_WABI_SPRING } from "../../lib/flashcard-wabi-theme"
+import { FLASHCARD_WABI_SPRING, flashcardStudyCanvasGradient, flashcardStudyContentMaxWidth, flashcardWabiStageHeight } from "../../lib/flashcard-wabi-theme"
+import { useIsTabletLayout } from "../../lib/responsive-layout"
 import { MobbinPillSegmentControl } from "../theme/MobbinPillSegmentControl"
 import { AppButton } from "../theme/AppButton"
 
@@ -77,6 +79,11 @@ export function FlashcardStudyScreen() {
   const tokens = useAppThemeTokens()
   const native = useThemedNative()
   const type = useNativeType()
+  const { width: windowWidth } = useWindowDimensions()
+  const isTablet = useIsTabletLayout()
+  const stageHeight = flashcardWabiStageHeight(windowWidth)
+  const studyContentWidth = flashcardStudyContentMaxWidth(windowWidth)
+  const canvasGradient = flashcardStudyCanvasGradient(tokens.isDark)
   const { membershipTierLoaded } = useStudentShell()
   const sessionIdRef = useRef(`fc-${Date.now()}-${Math.random().toString(36).slice(2)}`)
   const answeringRef = useRef(false)
@@ -638,8 +645,9 @@ export function FlashcardStudyScreen() {
   const showWaterBreak = !finished && studyPhase === "water_break"
 
   return (
-    <View style={[styles.root, { backgroundColor: native.groupedBackground }]}>
-      <View style={[styles.topBar, { paddingTop: insets.top + 8, borderBottomColor: native.separator }]}>
+    <View style={styles.root}>
+      <LinearGradient colors={[...canvasGradient]} style={StyleSheet.absoluteFill} />
+      <View style={[styles.topBar, { paddingTop: insets.top + 8, borderBottomColor: native.separator, backgroundColor: tokens.isDark ? "rgba(11,18,32,0.72)" : "rgba(255,255,255,0.82)" }]}>
         <Pressable
           onPress={() => safeRouterBack(router, FLASHCARDS_HOME)}
           hitSlop={8}
@@ -683,7 +691,7 @@ export function FlashcardStudyScreen() {
         </View>
       </View>
 
-      <View style={styles.modeTabs}>
+      <View style={[styles.modeTabs, isTablet && { maxWidth: studyContentWidth, alignSelf: "center", width: "100%" }]}>
         <MobbinPillSegmentControl
           options={modeOptions}
           value={studyMode}
@@ -787,9 +795,16 @@ export function FlashcardStudyScreen() {
             </Text>
           </ScrollView>
         ) : (
-          <View style={[styles.studyBody, { paddingBottom: insets.bottom + 16 }]}>
-            <View style={styles.cardStage}>
-              <View style={styles.cardWrap}>
+          <View
+            style={[
+              styles.studyBody,
+              isTablet && styles.studyBodyTablet,
+              { paddingBottom: insets.bottom + 16 },
+            ]}
+          >
+            <View style={[styles.studyColumn, { maxWidth: studyContentWidth, width: "100%", alignSelf: "center" }]}>
+            <View style={[styles.cardStage, { height: stageHeight }]}>
+              <View style={[styles.cardWrap, { height: stageHeight }]}>
                 <FlashcardFlipCard
                   frontText={current.frontText}
                   backText={current.backText}
@@ -861,6 +876,7 @@ export function FlashcardStudyScreen() {
                   : "Flip the card first, then rate yourself"}
               </Text>
             ) : null}
+            </View>
           </View>
         )
       ) : null}
@@ -972,16 +988,21 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     gap: 16,
   },
+  studyBodyTablet: {
+    justifyContent: "center",
+    paddingTop: 0,
+  },
+  studyColumn: {
+    gap: 16,
+  },
   cardStage: {
     width: "100%",
-    height: FLASHCARD_WABI_STAGE_HEIGHT,
     position: "relative",
     alignItems: "center",
   },
   cardWrap: {
     width: "100%",
     alignItems: "center",
-    height: FLASHCARD_WABI_STAGE_HEIGHT,
     paddingHorizontal: 8,
   },
   studyPositionLabel: {

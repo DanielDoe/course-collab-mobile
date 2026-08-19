@@ -22,7 +22,7 @@ import {
 } from "../../constants/app-themes"
 import { persistAppearanceSetupComplete } from "../../lib/appearance-setup"
 import { onboardingStepMeta } from "../../lib/onboarding"
-import { useThemeGridCardWidth } from "../../lib/responsive-layout"
+import { useThemeGridCardWidth, useAuthFlowContentStyle } from "../../lib/responsive-layout"
 import { LoginButton } from "./LoginButton"
 import { useLoginTheme } from "./login-theme"
 
@@ -147,6 +147,7 @@ export function AppearanceSetupScreen() {
   const { ready, prefs, tokens, setAppearanceMode, setThemeId } = useAppearance()
   const { LOGIN, loginType } = useLoginTheme()
   const themeCardWidth = useThemeGridCardWidth(CONTENT_PAD, THEME_GRID_GAP)
+  const contentStyle = useAuthFlowContentStyle(520)
   const [saving, setSaving] = useState(false)
   const progressMeta = useMemo(() => {
     if (!session || session.portal !== "student") {
@@ -194,7 +195,7 @@ export function AppearanceSetupScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: tokens.native.groupedBackground }]}>
-      <View style={[styles.progressTrack, { paddingTop: insets.top + 8 }]}>
+      <View style={[styles.progressTrack, contentStyle, { paddingTop: insets.top + 8 }]}>
         <View style={[styles.progressBar, { backgroundColor: LOGIN.separator }]}>
           <View
             style={[
@@ -210,6 +211,7 @@ export function AppearanceSetupScreen() {
       <ScrollView
         contentContainerStyle={[
           styles.scroll,
+          contentStyle,
           {
             paddingTop: 12,
             paddingBottom: insets.bottom + 28,
@@ -308,9 +310,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: CONTENT_PAD,
     paddingBottom: 10,
     gap: 6,
-    maxWidth: 520,
-    width: "100%",
-    alignSelf: "center",
   },
   progressBar: {
     height: 4,
@@ -328,9 +327,6 @@ const styles = StyleSheet.create({
   scroll: {
     paddingHorizontal: CONTENT_PAD,
     gap: 14,
-    maxWidth: 520,
-    width: "100%",
-    alignSelf: "center",
   },
   header: { alignItems: "center", gap: 8, marginBottom: 4 },
   pill: {

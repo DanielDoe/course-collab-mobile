@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { useThemedNative } from "../../context/AppearanceProvider"
 import { useChromeTopInset, useModuleScrollContentPadding } from "../../context/ChromeInsetContext"
 import { NATIVE } from "../../constants/faculty-native-theme"
+import { useModuleContentStyle } from "../../lib/responsive-layout"
 import { useNativeType } from "../../lib/themed-module-theme"
 import { solidListThumb, type SolidListThumb } from "../../lib/solid-list-thumb"
 import { SolidListThumbTile } from "../theme/SolidListThumbTile"
@@ -66,6 +67,7 @@ export function ModuleScreen({
   const chromeTop = useChromeTopInset()
   const scrollPad = useModuleScrollContentPadding()
   const type = useNativeType()
+  const moduleContentStyle = useModuleContentStyle()
   const { height: windowHeight } = useWindowDimensions()
   const refreshEnabled = Boolean(onRefresh)
   const showBlockingLoad = Boolean(loading && refreshEnabled)
@@ -91,6 +93,7 @@ export function ModuleScreen({
       contentContainerStyle={[
         styles.content,
         scrollPad,
+        moduleContentStyle,
         contentStyle,
         refreshEnabled
           ? {

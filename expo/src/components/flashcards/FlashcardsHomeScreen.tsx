@@ -30,6 +30,7 @@ import {
 import { useNativeType, useThemedStudentNative } from "../../lib/themed-module-theme"
 import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
 import { useModuleScrollContentPadding } from "../../context/ChromeInsetContext"
+import { useModuleContentStyle } from "../../lib/responsive-layout"
 import { useStudentShell } from "../../context/StudentShellContext"
 import { useNotificationModuleRefresh } from "../../lib/notifications/notification-events"
 import {
@@ -102,6 +103,7 @@ export function FlashcardsHomeScreen() {
   const SN = useThemedStudentNative()
   const type = useNativeType()
   const scrollPad = useModuleScrollContentPadding()
+  const moduleContentStyle = useModuleContentStyle()
   const insets = useSafeAreaInsets()
   const { membershipTier, membershipTierLoaded } = useStudentShell()
 
@@ -254,11 +256,12 @@ export function FlashcardsHomeScreen() {
 
   const pageScrollStyle = useMemo(
     () => ({
+      ...moduleContentStyle,
       paddingBottom: scrollPad.paddingBottom,
       gap: 12 as const,
       flexGrow: 1,
     }),
-    [scrollPad.paddingBottom],
+    [moduleContentStyle, scrollPad.paddingBottom],
   )
 
   function renderResultsBar(source: DeckSource) {
@@ -435,15 +438,16 @@ export function FlashcardsHomeScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: native.groupedBackground }]}>
-      <View
-        style={[
-          styles.chrome,
-          {
-            paddingTop: scrollPad.paddingTop ?? NATIVE.pagePadding,
-            paddingHorizontal: NATIVE.pagePadding,
-          },
-        ]}
-      >
+      <View style={[styles.moduleCanvas, moduleContentStyle]}>
+        <View
+          style={[
+            styles.chrome,
+            {
+              paddingTop: scrollPad.paddingTop ?? NATIVE.pagePadding,
+              paddingHorizontal: NATIVE.pagePadding,
+            },
+          ]}
+        >
         {error ? (
           <View style={[styles.errorBox, { backgroundColor: native.secondaryGrouped }]}>
             <Text style={[type.destructive, styles.errorText]}>{error}</Text>
@@ -477,6 +481,7 @@ export function FlashcardsHomeScreen() {
           renderStatsPage(),
         ]}
       />
+      </View>
     </View>
   )
 }
@@ -484,6 +489,10 @@ export function FlashcardsHomeScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
+  },
+  moduleCanvas: {
+    flex: 1,
+    width: "100%",
   },
   chrome: {
     gap: 12,

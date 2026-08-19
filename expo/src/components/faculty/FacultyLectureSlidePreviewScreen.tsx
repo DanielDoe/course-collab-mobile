@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { ActivityIndicator, Linking, Pressable, StyleSheet, View } from "react-native"
+import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from "react-native"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useRouter } from "expo-router"
 import { WebView } from "react-native-webview"
 import { ApiError } from "../../lib/api"
 import { instructorApi, type InstructorLecture } from "../../lib/instructor-api"
-import { buildAuthenticatedDeckSource, mergeLectureDeckFromContent } from "../../lib/lecture-deck-url"
+import { mergeLectureDeckFromContent } from "../../lib/lecture-deck-url"
 import { getAllowedWebViewOriginPrefixes } from "../../lib/trusted-origins"
+import { buildFacultyDeckRequest, useResolvedLectureDeckSource } from "../../lib/use-lecture-deck-source"
 import { useFacultyScope } from "../../hooks/useFacultyScope"
 import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
 import { LectureSlidePreviewToolbar } from "../lectures/LectureSlidePreviewToolbar"
@@ -71,11 +72,16 @@ export function FacultyLectureSlidePreviewScreen({ lectureId }: Props) {
   }, [ready, load, lectureId])
 
   const deckUrl = lectureDeckUrl(lecture)
-  const deckSource = useMemo(
-    () =>
-      buildAuthenticatedDeckSource(deckUrl, scope ? { instructorId: scope.instructorId, courseId: scope.courseId } : undefined),
+  const deckRequest = useMemo(
+    () => buildFacultyDeckRequest(deckUrl, scope ? { instructorId: scope.instructorId, courseId: scope.courseId } : undefined),
     [deckUrl, scope],
   )
+  const { source: deckSource, loading: deckLoading, error: deckError } = useResolvedLectureDeckSource({
+    deckUrl: deckRequest?.uri ?? null,
+    headers: deckRequest?.headers,
+    cacheKey: lectureId ? `faculty-lecture-${lectureId}` : undefined,
+    enabled: Boolean(deckRequest?.uri),
+  })
 
   const openExternally = () => {
     if (!deckSource?.uri) return
@@ -112,7 +118,7 @@ export function FacultyLectureSlidePreviewScreen({ lectureId }: Props) {
         <View style={styles.center}>
           <FacultyEmptyState icon="alert-circle-outline" title="Could not load" body={error} />
         </View>
-      ) : !deckSource ? (
+      ) : !deckRequest ? (
         <View style={styles.center}>
           <FacultyEmptyState
             icon="document-outline"
@@ -120,7 +126,15 @@ export function FacultyLectureSlidePreviewScreen({ lectureId }: Props) {
             body="Upload a PDF or PPT deck from Manage lecture → Slide deck & settings."
           />
         </View>
-      ) : (
+      ) : deckLoading ? (
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={tokens.accent} />
+        </View>
+      ) : deckError ? (
+        <View style={styles.center}>
+          <FacultyEmptyState icon="alert-circle-outline" title="Could not load slides" body={deckError} />
+        </View>
+      ) : deckSource ? (
         <View style={[styles.viewer, { backgroundColor: tokens.surface }]}>
           <WebView
             source={deckSource}
@@ -134,7 +148,7 @@ export function FacultyLectureSlidePreviewScreen({ lectureId }: Props) {
             )}
           />
         </View>
-      )}
+      ) : null}
     </View>
   )
 }

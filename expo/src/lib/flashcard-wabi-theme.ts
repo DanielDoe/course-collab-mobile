@@ -1,4 +1,5 @@
 import { hexToRgba } from "../constants/app-themes"
+import { TABLET_MIN_WIDTH } from "./responsive-layout"
 
 /** Wabi card face — solid surface, navy typography. */
 export type FlashcardWabiFace = {
@@ -220,13 +221,60 @@ export function flashcardWabiPalette(tokens: {
 
 export const FLASHCARD_WABI_RADIUS = 32
 export const FLASHCARD_WABI_MAX_WIDTH = 272
+export const FLASHCARD_WABI_TABLET_MAX_WIDTH = 480
 /** Minimum inset from screen edge for the card stack (each side). */
 export const FLASHCARD_WABI_SCREEN_GUTTER = 36
+export const FLASHCARD_WABI_TABLET_SCREEN_GUTTER = 56
 /** Extra room so rotated peek cards do not touch the screen edge. */
 export const FLASHCARD_WABI_STACK_BLEED = 18
 export const FLASHCARD_WABI_CARD_HEIGHT = 400
+export const FLASHCARD_WABI_TABLET_CARD_HEIGHT = 520
 /** Reserved vertical space for peek stack + card (keeps layout stable during flip). */
 export const FLASHCARD_WABI_STAGE_HEIGHT = 430
+export const FLASHCARD_WABI_TABLET_STAGE_HEIGHT = 560
+
+export function flashcardWabiScreenGutter(screenWidth: number): number {
+  return screenWidth >= TABLET_MIN_WIDTH
+    ? FLASHCARD_WABI_TABLET_SCREEN_GUTTER
+    : FLASHCARD_WABI_SCREEN_GUTTER
+}
+
+export function flashcardWabiCardMaxWidth(screenWidth: number): number {
+  return screenWidth >= TABLET_MIN_WIDTH
+    ? FLASHCARD_WABI_TABLET_MAX_WIDTH
+    : FLASHCARD_WABI_MAX_WIDTH
+}
+
+export function flashcardWabiCardWidth(screenWidth: number): number {
+  const gutter = flashcardWabiScreenGutter(screenWidth)
+  const max = flashcardWabiCardMaxWidth(screenWidth)
+  return Math.min(max, screenWidth - gutter * 2 - FLASHCARD_WABI_STACK_BLEED * 2)
+}
+
+export function flashcardWabiCardHeight(screenWidth: number): number {
+  return screenWidth >= TABLET_MIN_WIDTH
+    ? FLASHCARD_WABI_TABLET_CARD_HEIGHT
+    : FLASHCARD_WABI_CARD_HEIGHT
+}
+
+export function flashcardWabiStageHeight(screenWidth: number): number {
+  return screenWidth >= TABLET_MIN_WIDTH
+    ? FLASHCARD_WABI_TABLET_STAGE_HEIGHT
+    : FLASHCARD_WABI_STAGE_HEIGHT
+}
+
+/** Soft immersive wash behind the study stage (light + dark). */
+export function flashcardStudyCanvasGradient(isDark: boolean): readonly [string, string, string] {
+  if (isDark) {
+    return ["#0B1220", "#101A2E", "#141028"] as const
+  }
+  return ["#F7FAFF", "#EEF5FF", "#F5F0FF"] as const
+}
+
+export function flashcardStudyContentMaxWidth(screenWidth: number): number {
+  if (screenWidth < TABLET_MIN_WIDTH) return screenWidth
+  return Math.min(640, flashcardWabiCardWidth(screenWidth) + 80)
+}
 export const FLASHCARD_WABI_STACK = {
   cardMinHeight: FLASHCARD_WABI_CARD_HEIGHT,
   backLeftRotate: "-11deg",

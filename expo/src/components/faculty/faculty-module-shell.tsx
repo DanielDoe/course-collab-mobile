@@ -19,6 +19,7 @@ import { useModuleSearchDockRegistration,
   type ModuleSearchDockEntry,
 } from "../../context/ModuleSearchDockContext"
 import { useModuleScrollContentPadding, useChromeTopInset } from "../../context/ChromeInsetContext"
+import { useModuleContentStyle } from "../../lib/responsive-layout"
 import { useNativeType, useThemedStudentNative } from "../../lib/themed-module-theme"
 import type { InstructorSession } from "../../lib/instructor-api"
 import { NativeCountBadge } from "./faculty-shared"
@@ -68,10 +69,11 @@ export function useFacultyStickyHeaderScrollLayout(options?: {
   const { extraBottom = 24, listTopGap = 12, stickyTopGap = 10 } = options ?? {}
   const chromeTop = useChromeTopInset()
   const scrollPad = useFacultyModuleScrollPadding(extraBottom)
+  const moduleContentStyle = useModuleContentStyle()
   const chromeSpacer = chromeTop > 0 ? chromeTop + stickyTopGap : stickyTopGap + 2
   const stickyHeaderStyle = { height: chromeSpacer }
-  const listScrollPad = { ...scrollPad, paddingTop: listTopGap }
-  return { chromeTop, scrollPad, stickyHeaderStyle, listScrollPad, chromeSpacer }
+  const listScrollPad = { ...scrollPad, paddingTop: listTopGap, ...moduleContentStyle }
+  return { chromeTop, scrollPad, stickyHeaderStyle, listScrollPad, chromeSpacer, moduleContentStyle }
 }
 
 const ModuleStickyHeaderContext = createContext(false)

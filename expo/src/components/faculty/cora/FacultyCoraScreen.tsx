@@ -7,7 +7,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  useWindowDimensions,
   View,
   type ViewStyle,
 } from "react-native"
@@ -43,6 +42,7 @@ import { FacultyCoraExitDock } from "./FacultyCoraExitDock"
 import { SolidListThumbTile } from "../../theme/SolidListThumbTile"
 import { inferFacultyCoraDiscipline } from "../../../lib/faculty-cora-discipline"
 import { NATIVE } from "../../../constants/faculty-native-theme"
+import { useModuleContentStyle, useResponsiveGridColumns } from "../../../lib/responsive-layout"
 import {
   FACULTY_CORA_COLOR,
   facultyCoraActionColors,
@@ -133,13 +133,16 @@ export function FacultyCoraScreen() {
   const { scope, ready, course, session } = useFacultyScope()
   const { courses } = useFacultyShell()
   const insets = useSafeAreaInsets()
-  const { width: windowWidth } = useWindowDimensions()
+  const moduleContentStyle = useModuleContentStyle()
+  const { columnWidth: capabilityCardWidth } = useResponsiveGridColumns({
+    minColumnWidth: 168,
+    maxColumns: 4,
+    gap: CAPABILITY_GRID_GAP,
+    horizontalPad: NATIVE.pagePadding * 2,
+  })
   const { tokens, native, type } = useModuleTheme()
   const appTokens = useAppThemeTokens()
   const coraAction = useMemo(() => facultyCoraActionColors(appTokens), [appTokens])
-  const capabilityCardWidth = Math.floor(
-    (windowWidth - NATIVE.pagePadding * 2 - CAPABILITY_GRID_GAP) / 2,
-  )
   const canvas = facultyCoraCanvas(appTokens.isDark, native.groupedBackground)
   const cardBg = facultyCoraCardSurface(native.secondaryGrouped)
   const materialStyle = facultyCoraMaterialCardStyle(appTokens.isDark, native.separator)
@@ -342,6 +345,7 @@ export function FacultyCoraScreen() {
         style={localStyles.flex}
         contentContainerStyle={[
           localStyles.scroll,
+          moduleContentStyle,
           { paddingTop: insets.top + 12, paddingBottom: bottomInset + 56 },
         ]}
         refreshControl={

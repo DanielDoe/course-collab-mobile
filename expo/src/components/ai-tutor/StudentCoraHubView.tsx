@@ -10,7 +10,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  useWindowDimensions,
   View,
   type ViewStyle,
 } from "react-native"
@@ -26,6 +25,7 @@ import { CoraHubEnter } from "../cora/CoraHubEnter"
 import { CoraLoadingMark } from "../cora/CoraLoadingMark"
 import { SolidListThumbTile } from "../theme/SolidListThumbTile"
 import { NATIVE } from "../../constants/faculty-native-theme"
+import { useAuthFlowContentStyle, useModuleContentStyle, useResponsiveGridColumns } from "../../lib/responsive-layout"
 import {
   STUDENT_CORA_COLOR,
   studentCoraActionColors,
@@ -286,14 +286,17 @@ export function StudentCoraHubView({
 }: Props) {
   const router = useRouter()
   const insets = useSafeAreaInsets()
-  const { width: windowWidth } = useWindowDimensions()
+  const moduleContentStyle = useModuleContentStyle()
+  const { columnWidth: capabilityCardWidth, canvasWidth } = useResponsiveGridColumns({
+    minColumnWidth: 168,
+    maxColumns: 4,
+    gap: CAPABILITY_GRID_GAP,
+    horizontalPad: NATIVE.pagePadding * 2,
+  })
+  const todayPageWidth = canvasWidth - NATIVE.pagePadding * 2
   const { tokens, native, type } = useModuleTheme()
   const appTokens = useAppThemeTokens()
   const coraAction = useMemo(() => studentCoraActionColors(appTokens), [appTokens])
-  const capabilityCardWidth = Math.floor(
-    (windowWidth - NATIVE.pagePadding * 2 - CAPABILITY_GRID_GAP) / 2,
-  )
-  const todayPageWidth = windowWidth - NATIVE.pagePadding * 2
   const canvas = studentCoraCanvas(appTokens.isDark, native.groupedBackground)
   const cardBg = studentCoraCardSurface(native.secondaryGrouped)
   const materialStyle = studentCoraMaterialCardStyle(appTokens.isDark, native.separator)
@@ -360,6 +363,7 @@ export function StudentCoraHubView({
           style={styles.flex}
           contentContainerStyle={[
             styles.scroll,
+            moduleContentStyle,
             { paddingTop: insets.top + 12, paddingBottom: bottomInset + 56 },
           ]}
           refreshControl={
