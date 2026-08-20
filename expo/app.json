@@ -113,6 +113,14 @@
           "merchantIdentifier": "merchant.com.coursecollab.app",
           "enableGooglePay": true
         }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "buildReactNativeFromSource": true
+          }
+        }
       ]
     ],
     "owner": "danieldoe"
