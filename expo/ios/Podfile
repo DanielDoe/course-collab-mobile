@@ -59,5 +59,23 @@ target 'CourseCollab' do
       :mac_catalyst_enabled => false,
       :ccache_enabled => ccache_enabled?(podfile_properties),
     )
+
+    # Building RN from source + Release archive can strip TurboModule registrations on iOS 26
+    # (expo/expo#44356). Keep symbols/registrations when compiling RN from source for our patch.
+    if podfile_properties['ios.buildReactNativeFromSource'] == 'true'
+      installer.pods_project.targets.each do |target|
+        target.build_configurations.each do |config|
+          config.build_settings['DEAD_CODE_STRIPPING'] = 'NO'
+        end
+      end
+      installer.aggregate_targets.each do |aggregate|
+        aggregate.user_project.native_targets.each do |target|
+          target.build_configurations.each do |config|
+            config.build_settings['DEAD_CODE_STRIPPING'] = 'NO'
+          end
+        end
+        aggregate.user_project.save
+      end
+    end
   end
 end
