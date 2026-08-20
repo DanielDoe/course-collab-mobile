@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react"
 import { Pressable, StyleSheet, Text, View } from "react-native"
 import { useRouter } from "expo-router"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
-import Animated, { FadeIn } from "react-native-reanimated"
 import { useAppThemeTokens } from "../../context/AppearanceProvider"
 import { useSession } from "../../context/SessionProvider"
 import { bootstrapAfterLogin } from "../../lib/post-login-bootstrap"
@@ -102,9 +101,10 @@ export function SigningInScreen() {
       style={[styles.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}
       accessibilityLabel={status}
     >
-      <Animated.View entering={FadeIn.duration(400)} style={styles.content}>
+      <View style={styles.content}>
         <BrandLoadingMark color={LOGIN.purple} />
-      </Animated.View>
+        <Text style={{ marginTop: 16, fontSize: 16, fontWeight: "600", color: LOGIN.purple }}>{status}</Text>
+      </View>
 
       {error ? (
         <View style={styles.content}>

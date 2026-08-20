@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react"
 import { Redirect } from "expo-router"
+import Constants from "expo-constants"
 import * as SplashScreen from "expo-splash-screen"
 import { StyleSheet, Text, View } from "react-native"
 import { useSession } from "../src/context/SessionProvider"
@@ -10,6 +11,13 @@ import type { AppSession } from "../src/lib/session"
 
 const STARTUP_ROUTE_TIMEOUT_MS = 6_000
 const BOOT_BG = "#582c83"
+const BUILD_LABEL = `Build ${Constants.expoConfig?.ios?.buildNumber ?? Constants.nativeBuildVersion ?? "?"}`
+
+try {
+  void SplashScreen.preventAutoHideAsync()
+} catch {
+  /* ignore */
+}
 
 function fallbackHrefForSession(session: AppSession): string {
   if (session.portal === "faculty") return toAppHref("/faculty-select-course")
@@ -104,6 +112,7 @@ export default function Index() {
       <View style={styles.loading} onLayout={onLayout}>
         <Text style={styles.brand}>CourseCollab</Text>
         <Text style={styles.hint}>Loading…</Text>
+        <Text style={styles.build}>{BUILD_LABEL}</Text>
       </View>
     )
   }
@@ -131,5 +140,11 @@ const styles = StyleSheet.create({
   hint: {
     color: "#E9D5FF",
     fontSize: 15,
+  },
+  build: {
+    marginTop: 8,
+    color: "#C4B5FD",
+    fontSize: 13,
+    fontWeight: "600",
   },
 })

@@ -11,8 +11,8 @@ import {
   useWindowDimensions,
   View,
 } from "react-native"
-import Animated, { FadeIn, FadeInDown, FadeOut } from "react-native-reanimated"
 import { Redirect, useLocalSearchParams, useRouter } from "expo-router"
+import Constants from "expo-constants"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { type LoginPortal } from "../../src/components/login/PortalSwitcher"
@@ -21,8 +21,6 @@ import { GuestLoginPanel } from "../../src/components/login/GuestLoginPanel"
 import { SummerLoginPanel } from "../../src/components/login/SummerLoginPanel"
 import { StaffLoginPanel } from "../../src/components/login/StaffLoginPanel"
 import { LoginButton } from "../../src/components/login/LoginButton"
-import { LoginCanvasBubbles } from "../../src/components/login/LoginCanvasBubbles"
-import { LoginTypewriter } from "../../src/components/login/LoginTypewriter"
 import { BrandLogoMark } from "../../src/components/brand/BrandLogoMark"
 import { ConnectivityOverlay } from "../../src/components/ConnectivityOverlay"
 import { useSession } from "../../src/context/SessionProvider"
@@ -37,6 +35,9 @@ import {
 import { StudentInviteSignupPanel } from "../../src/components/login/StudentInviteSignupPanel"
 import { portalMeta } from "../../src/constants/portals"
 import { useAuthFlowContentStyle } from "../../src/lib/responsive-layout"
+
+/** iOS 26 + New Arch: Reanimated entering animations can stick at opacity 0 → blank login. */
+const BUILD_LABEL = `Build ${Constants.expoConfig?.ios?.buildNumber ?? Constants.nativeBuildVersion ?? "?"}`
 
 function normalizeInviteParam(value: string | string[] | undefined): string {
   if (Array.isArray(value)) return value[0]?.trim() ?? ""
@@ -130,16 +131,16 @@ export default function LoginScreen() {
 
   if (bootstrappingUniversity) {
     return (
-      <View style={[styles.root, styles.boot, { backgroundColor: themeLogin.canvas }]}>
-        <LoginCanvasBubbles />
-        <ActivityIndicator color={themeLogin.cta} />
+      <View style={[styles.root, styles.boot, { backgroundColor: "#582c83" }]}>
+        <Text style={styles.bootBrand}>CourseCollab</Text>
+        <ActivityIndicator color="#FFFFFF" />
+        <Text style={styles.bootBuild}>{BUILD_LABEL}</Text>
       </View>
     )
   }
 
   return (
     <View style={[styles.root, { backgroundColor: themeLogin.canvas }]}>
-      <LoginCanvasBubbles />
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -167,31 +168,24 @@ export default function LoginScreen() {
       >
         <View style={[styles.shell, shellStyle]}>
           {inviteToken ? (
-            <Animated.View
-              key="invite-signup"
-              entering={FadeInDown.duration(420)}
-              exiting={FadeOut.duration(220)}
-              style={styles.portalBleed}
-            >
+            <View key="invite-signup" style={styles.portalBleed}>
               <StudentInviteSignupPanel token={inviteToken} onBack={goWelcome} />
-            </Animated.View>
+            </View>
           ) : !focusedPortal ? (
-            <Animated.View
-              key="welcome"
-              entering={FadeIn.duration(380)}
-              exiting={FadeOut.duration(240)}
-              style={styles.welcome}
-            >
+            <View key="welcome" style={styles.welcome}>
               <BrandLogoMark size="login" style={styles.logoTile} />
 
               <Text style={[styles.eyebrow, { color: themeLogin.purpleLight }]}>
                 The Modern AI Learning Platform
               </Text>
-              <LoginTypewriter color={themeLogin.purple} />
+              <Text style={[themeType.heroTitle, { color: themeLogin.purple, textAlign: "center" }]}>
+                Learn. Practice. Collaborate. Succeed.
+              </Text>
               <Text style={[themeType.heroSubtitle, styles.subtitle]}>
                 Sign in through your university to access courses, assignments, and AI-powered learning
                 tools.
               </Text>
+              <Text style={styles.buildTag}>{BUILD_LABEL}</Text>
 
               <LoginButton
                 label="Continue with University"
@@ -247,14 +241,9 @@ export default function LoginScreen() {
                   )
                 })}
               </View>
-            </Animated.View>
+            </View>
           ) : (
-            <Animated.View
-              key={`panel-${focusedPortal}`}
-              entering={FadeInDown.duration(420)}
-              exiting={FadeOut.duration(220)}
-              style={styles.portalBleed}
-            >
+            <View key={`panel-${focusedPortal}`} style={styles.portalBleed}>
               {focusedPortal === "student" ? (
                 <StudentLoginPanel onBack={goWelcome} />
               ) : focusedPortal === "guest" ? (
@@ -264,7 +253,7 @@ export default function LoginScreen() {
               ) : (
                 <StaffLoginPanel onBack={goWelcome} />
               )}
-            </Animated.View>
+            </View>
           )}
         </View>
       </ScrollView>
@@ -278,7 +267,16 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   flex: { flex: 1 },
-  boot: { alignItems: "center", justifyContent: "center" },
+  boot: { alignItems: "center", justifyContent: "center", gap: 14 },
+  bootBrand: { color: "#FFFFFF", fontSize: 24, fontWeight: "700" },
+  bootBuild: { color: "#E9D5FF", fontSize: 13, fontWeight: "600" },
+  buildTag: {
+    textAlign: "center",
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#64748B",
+    marginBottom: 4,
+  },
   scroll: { paddingHorizontal: 20 },
   scrollWelcome: {
     flexGrow: 1,

@@ -59,18 +59,20 @@ function hideSplash() {
   void SplashScreen.hideAsync().catch(() => {})
 }
 
+try {
+  void SplashScreen.preventAutoHideAsync()
+} catch {
+  /* ignore */
+}
+
 export default function RootLayout() {
   useEffect(() => {
     globalThis.__CC_ROOT_LAYOUT_MOUNTED__ = true
     bootLog("RootLayout mounted")
     installEarlyStartupErrorCapture()
-    hideSplash()
-    const t1 = setTimeout(hideSplash, 400)
-    const t2 = setTimeout(hideSplash, 2000)
-    return () => {
-      clearTimeout(t1)
-      clearTimeout(t2)
-    }
+    // Keep native splash until index/login call hide — avoid flashing blank Fabric.
+    const failsafe = setTimeout(hideSplash, 8000)
+    return () => clearTimeout(failsafe)
   }, [])
 
   return (
