@@ -1,4 +1,4 @@
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native"
+import { Platform, Pressable, StyleSheet, Text, View } from "react-native"
 import { BRAND } from "../constants"
 import { startupBootDiagnosticId } from "../lib/startup-boot-id"
 
@@ -25,11 +25,11 @@ export function StartupFatalScreen({ message, onRetry }: Props) {
         {diagnosticId}
       </Text>
       {showDetails ? (
-        <ScrollView style={styles.detailsScroll} contentContainerStyle={styles.detailsContent}>
+        <View style={styles.detailsPanel}>
           <Text selectable style={styles.details}>
             {message}
           </Text>
-        </ScrollView>
+        </View>
       ) : null}
       {onRetry ? (
         <Pressable style={styles.retryBtn} onPress={onRetry}>
@@ -79,15 +79,13 @@ const styles = StyleSheet.create({
     color: BRAND.purpleDark,
     fontFamily: Platform.select({ ios: "Menlo", android: "monospace", default: undefined }),
   },
-  detailsScroll: {
+  detailsPanel: {
     flex: 1,
     marginTop: 4,
     borderRadius: 12,
     backgroundColor: "#FFFFFF",
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: BRAND.border,
-  },
-  detailsContent: {
     padding: 14,
   },
   details: {
