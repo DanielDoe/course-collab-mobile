@@ -71,7 +71,7 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#F8FAFC"
+          "backgroundColor": "#582c83"
         }
       ],
       "expo-asset",
