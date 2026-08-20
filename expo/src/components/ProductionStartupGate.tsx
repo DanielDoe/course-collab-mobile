@@ -34,9 +34,10 @@ export function ProductionStartupGate({ children }: Props) {
   }, [])
 
   useEffect(() => {
+    void SplashScreen.hideAsync().catch(() => {})
     const failsafe = setTimeout(() => {
       void SplashScreen.hideAsync().catch(() => {})
-    }, 15_000)
+    }, 2_000)
     return () => clearTimeout(failsafe)
   }, [])
 

@@ -21,7 +21,7 @@ import { clearUserLocalState } from "../lib/clear-user-local-state"
 import { subscribeSessionExpired } from "../lib/session-expiry"
 import { bootLog } from "../lib/boot-diagnostics"
 
-const SESSION_RESTORE_TIMEOUT_MS = 8_000
+const SESSION_RESTORE_TIMEOUT_MS = 3_500
 
 type SessionContextValue = {
   session: AppSession | null

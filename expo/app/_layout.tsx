@@ -1,8 +1,8 @@
 import * as SplashScreen from "expo-splash-screen"
-import { useEffect, useState } from "react"
+import { useEffect } from "react"
 import { Stack } from "expo-router"
 import { GestureHandlerRootView } from "react-native-gesture-handler"
-import { InteractionManager, StyleSheet, View } from "react-native"
+import { StyleSheet } from "react-native"
 import { SafeAreaProvider } from "react-native-safe-area-context"
 import { SessionProvider } from "../src/context/SessionProvider"
 import { AppearanceProvider } from "../src/context/AppearanceProvider"
@@ -18,48 +18,23 @@ import { bootLog } from "../src/lib/boot-diagnostics"
 
 bootLog("Root layout module evaluated")
 
-/** iOS 26 + New Arch: defer native TurboModule void calls until after first frame. */
-function useNativeBootReady() {
-  const [ready, setReady] = useState(false)
-
-  useEffect(() => {
-    let cancelled = false
-    const failsafe = setTimeout(() => {
-      if (!cancelled) setReady(true)
-    }, 1500)
-
-    const interaction = InteractionManager.runAfterInteractions(() => {
-      requestAnimationFrame(() => {
-        if (!cancelled) setReady(true)
-      })
-    })
-
-    return () => {
-      cancelled = true
-      clearTimeout(failsafe)
-      interaction.cancel()
-    }
-  }, [])
-
-  return ready
+function hideSplashSoon() {
+  void SplashScreen.hideAsync().catch(() => {
+    bootLog("SplashScreen.hideAsync failed", "warn")
+  })
 }
 
 export default function RootLayout() {
-  const nativeBootReady = useNativeBootReady()
-
   useEffect(() => {
-    if (!nativeBootReady) return
     globalThis.__CC_ROOT_LAYOUT_MOUNTED__ = true
     bootLog("RootLayout mounted")
     installEarlyStartupErrorCapture()
-    void SplashScreen.preventAutoHideAsync().catch(() => {
-      bootLog("SplashScreen.preventAutoHideAsync failed", "warn")
-    })
-  }, [nativeBootReady])
-
-  if (!nativeBootReady) {
-    return <View style={styles.bootPlaceholder} />
-  }
+    // Do not call preventAutoHideAsync here — it leaves a blank white splash on iOS 26
+    // when session/SecureStore is slow. Hide immediately and again after a short failsafe.
+    hideSplashSoon()
+    const failsafe = setTimeout(hideSplashSoon, 1200)
+    return () => clearTimeout(failsafe)
+  }, [])
 
   return (
     <ProductionStartupGate>
@@ -103,5 +78,4 @@ export default function RootLayout() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  bootPlaceholder: { flex: 1, backgroundColor: "#F8FAFC" },
 })

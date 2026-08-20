@@ -10,7 +10,7 @@
     "userInterfaceStyle": "automatic",
     "backgroundColor": "#F8FAFC",
     "splash": {
-      "backgroundColor": "#F8FAFC"
+      "backgroundColor": "#582c83"
     },
     "ios": {
       "supportsTablet": true,

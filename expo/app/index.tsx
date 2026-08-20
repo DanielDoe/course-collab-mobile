@@ -22,6 +22,7 @@ export default function Index() {
 
   useEffect(() => {
     bootLog("Index route mounted")
+    void SplashScreen.hideAsync().catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -29,7 +30,7 @@ export default function Index() {
   }, [isLoading, session])
 
   const hideNativeSplash = useCallback(() => {
-    void SplashScreen.hideAsync()
+    void SplashScreen.hideAsync().catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -92,7 +93,7 @@ export default function Index() {
   if (isLoading || (session && !resolvedHref)) {
     return (
       <View style={styles.loading} onLayout={hideNativeSplash}>
-        <BrandLoadingMark />
+        <BrandLoadingMark color="#FFFFFF" />
       </View>
     )
   }
@@ -109,6 +110,6 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#582c83",
   },
 })

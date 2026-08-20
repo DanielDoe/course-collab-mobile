@@ -5,15 +5,42 @@ export const SECURE_STORE_OPTIONS: ExpoSecureStore.SecureStoreOptions = {
   keychainService: "com.coursecollab.app",
 }
 
+const SECURE_STORE_TIMEOUT_MS = 2500
+
 function mergeOptions(options?: ExpoSecureStore.SecureStoreOptions): ExpoSecureStore.SecureStoreOptions {
   return { ...SECURE_STORE_OPTIONS, ...options }
+}
+
+function withTimeout<T>(promise: Promise<T>, fallback: T): Promise<T> {
+  return new Promise((resolve) => {
+    let settled = false
+    const timer = setTimeout(() => {
+      if (settled) return
+      settled = true
+      resolve(fallback)
+    }, SECURE_STORE_TIMEOUT_MS)
+
+    promise
+      .then((value) => {
+        if (settled) return
+        settled = true
+        clearTimeout(timer)
+        resolve(value)
+      })
+      .catch(() => {
+        if (settled) return
+        settled = true
+        clearTimeout(timer)
+        resolve(fallback)
+      })
+  })
 }
 
 export async function getItemAsync(
   key: string,
   options?: ExpoSecureStore.SecureStoreOptions,
 ): Promise<string | null> {
-  return ExpoSecureStore.getItemAsync(key, mergeOptions(options))
+  return withTimeout(ExpoSecureStore.getItemAsync(key, mergeOptions(options)), null)
 }
 
 export async function setItemAsync(
@@ -21,18 +48,18 @@ export async function setItemAsync(
   value: string,
   options?: ExpoSecureStore.SecureStoreOptions,
 ): Promise<void> {
-  await ExpoSecureStore.setItemAsync(key, value, mergeOptions(options))
+  await withTimeout(ExpoSecureStore.setItemAsync(key, value, mergeOptions(options)), undefined)
 }
 
 export async function deleteItemAsync(
   key: string,
   options?: ExpoSecureStore.SecureStoreOptions,
 ): Promise<void> {
-  await ExpoSecureStore.deleteItemAsync(key, mergeOptions(options))
+  await withTimeout(ExpoSecureStore.deleteItemAsync(key, mergeOptions(options)), undefined)
 }
 
 export async function isAvailableAsync(): Promise<boolean> {
-  return ExpoSecureStore.isAvailableAsync()
+  return withTimeout(ExpoSecureStore.isAvailableAsync(), false)
 }
 
 export const AFTER_FIRST_UNLOCK = ExpoSecureStore.AFTER_FIRST_UNLOCK

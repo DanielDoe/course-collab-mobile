@@ -82,6 +82,9 @@ export default function LoginScreen() {
       return
     }
     let mounted = true
+    const failsafe = setTimeout(() => {
+      if (mounted) setBootstrappingUniversity(false)
+    }, 3000)
     void (async () => {
       try {
         const [lastPortal, university] = await Promise.all([
@@ -100,6 +103,7 @@ export default function LoginScreen() {
     })()
     return () => {
       mounted = false
+      clearTimeout(failsafe)
     }
   }, [inviteToken])
 
