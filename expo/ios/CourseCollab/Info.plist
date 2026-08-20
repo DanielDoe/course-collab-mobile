@@ -57,6 +57,10 @@
     <string>CourseCollab needs microphone access for lecture recording in AI Notetaker and voice dictation in Cora.</string>
     <key>NSPhotoLibraryUsageDescription</key>
     <string>CourseCollab needs photo access for assignment uploads.</string>
+    <key>NSRemindersFullAccessUsageDescription</key>
+    <string>Allow $(PRODUCT_NAME) to access your reminders</string>
+    <key>NSRemindersUsageDescription</key>
+    <string>Allow $(PRODUCT_NAME) to access your reminders</string>
     <key>NSSpeechRecognitionUsageDescription</key>
     <string>CourseCollab uses speech recognition for live captions in AI Notetaker and voice dictation in Cora.</string>
     <key>NSUserActivityTypes</key>

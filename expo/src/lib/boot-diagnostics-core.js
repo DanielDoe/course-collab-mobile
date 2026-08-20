@@ -38,10 +38,15 @@ function recordStartupImportError(error) {
 
 function installEarlyStartupErrorCapture(onError) {
   if (store().__CC_BOOT_CAPTURE_INSTALLED__) return
-  store().__CC_BOOT_CAPTURE_INSTALLED__ = true
 
   try {
     const { ErrorUtils } = require("react-native")
+    if (!ErrorUtils?.getGlobalHandler) {
+      bootLog("ErrorUtils not ready yet — deferring early handler", "warn")
+      return
+    }
+    store().__CC_BOOT_CAPTURE_INSTALLED__ = true
+
     const previous = ErrorUtils.getGlobalHandler()
     ErrorUtils.setGlobalHandler((error, isFatal) => {
       const message =

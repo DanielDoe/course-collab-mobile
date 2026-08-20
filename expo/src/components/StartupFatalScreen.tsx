@@ -10,7 +10,7 @@ type Props = {
 /** Minimal fatal screen — no theme providers (may run before app boot). */
 export function StartupFatalScreen({ message, onRetry }: Props) {
   const diagnosticId = startupBootDiagnosticId(message)
-  const showDetails = typeof __DEV__ !== "undefined" && __DEV__
+  const showDetails = true
 
   return (
     <View style={styles.root}>

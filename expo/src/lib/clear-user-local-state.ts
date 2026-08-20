@@ -8,7 +8,7 @@ import { clearFacultyCoraContextMemory, clearFacultyCoraInstructorContext } from
 import { clearFacultyCoraPending } from "./faculty-cora-pending"
 import { clearCoraActivity } from "./cora/activity-store"
 import { clearPlaygroundSessionLock, clearLastPlaygroundClassroomSession } from "./playground-session-lock"
-import * as SecureStore from "expo-secure-store"
+import * as SecureStore from "./secure-store-client"
 import { clearStoredPushToken } from "./notifications/notification-service"
 import { unregisterPushTokenForSession } from "./notifications/push-registration"
 import { clearStoredFacultyCourseId, getStoredFacultyCourseId } from "./faculty-course-storage"

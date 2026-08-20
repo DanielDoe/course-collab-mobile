@@ -90,9 +90,9 @@ export function AppearanceProvider({ children }: { children: ReactNode }) {
   )
 
   useEffect(() => {
-    if (Platform.OS === "web") return
-    void SystemUI.setBackgroundColorAsync(tokens.native.groupedBackground)
-  }, [tokens.native.groupedBackground])
+    if (Platform.OS === "web" || !ready) return
+    void SystemUI.setBackgroundColorAsync(tokens.native.groupedBackground).catch(() => {})
+  }, [ready, tokens.native.groupedBackground])
 
   const value = useMemo<AppearanceContextValue>(
     () => ({

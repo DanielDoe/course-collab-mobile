@@ -1,4 +1,4 @@
-import * as SecureStore from "expo-secure-store"
+import * as SecureStore from "./secure-store-client"
 import { syncAppearanceSetupFromServer } from "./appearance-setup"
 import { resolveFacultyPostLoginRoute } from "./faculty-post-login"
 import { sessionNeedsPasswordChange } from "./navigation-reset"

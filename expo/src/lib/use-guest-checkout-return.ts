@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from "react"
 import { AppState, type AppStateStatus } from "react-native"
-import * as SecureStore from "expo-secure-store"
+import * as SecureStore from "./secure-store-client"
 import { useGuestEntitlements } from "../context/GuestEntitlementsProvider"
 import { guestApi } from "./guest-api"
 import { pollGuestEntitlementsUntilChanged } from "./guest-checkout-poll"

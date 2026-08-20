@@ -1,4 +1,4 @@
-import * as SecureStore from "expo-secure-store"
+import * as SecureStore from "./secure-store-client"
 import type { StudentSession, FacultySession } from "./session"
 import { studentHttpCookieHeader } from "./student-http-cookies"
 import type { MfaUserType } from "./mfa-types"

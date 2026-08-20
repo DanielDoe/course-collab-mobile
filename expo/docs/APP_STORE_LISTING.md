@@ -3,7 +3,7 @@
 **App:** CourseCollab Mobile  
 **ASC App ID:** `6803146932`  
 **Bundle ID:** `com.coursecollab.app`  
-**Current build:** 1.0.0 (11) — production IPA via EAS
+**Current build:** 1.0.0 (12) — production IPA via EAS
 
 Use this doc when the EAS submission finishes and the build appears in App Store Connect → **TestFlight** / **App Store** tab.
 
@@ -13,9 +13,9 @@ Use this doc when the EAS submission finishes and the build appears in App Store
 
 | Portal | Path |
 |--------|------|
-| **Expo (EAS Submit queue)** | [expo.dev → course-collab-mobile → Submissions](https://expo.dev/accounts/danieldoe/projects/course-collab-mobile/submissions) — submission `e021915a-6f0e-46f1-8bb9-ad41c51996e4` |
-| **Expo (build artifact)** | [Build 227fffcf](https://expo.dev/accounts/danieldoe/projects/course-collab-mobile/builds/227fffcf-f60b-41ca-978b-5bbce0d3eb49) |
-| **App Store Connect (after processing)** | [appstoreconnect.apple.com](https://appstoreconnect.apple.com) → **Apps** → **CourseCollab Mobile** → **TestFlight** (build 11) or **App Store** → **iOS App** → version **1.0** |
+| **Expo (EAS Submit queue)** | [expo.dev → course-collab-mobile → Submissions](https://expo.dev/accounts/danieldoe/projects/course-collab-mobile/submissions) — submission `a7970146-9894-4b0d-85e3-b7fb762cc70b` |
+| **Expo (build artifact)** | [Build 5a134379](https://expo.dev/accounts/danieldoe/projects/course-collab-mobile/builds/5a134379-44f1-46c4-894f-485fdfd62cf1) |
+| **App Store Connect (after processing)** | [appstoreconnect.apple.com](https://appstoreconnect.apple.com) → **Apps** → **CourseCollab Mobile** → **TestFlight** (build 12) or **App Store** → **iOS App** → version **1.0** |
 
 Processing usually takes 5–30 minutes after EAS submission leaves the queue. You’ll get an email when Apple finishes processing the binary.
 
@@ -152,7 +152,7 @@ https://course-collab.com
 
 ### Privacy Policy URL
 ```
-https://course-collab.com/legal/privacy
+https://course-collab.com/legal/privacy-policy
 ```
 (verify live URL matches in-app legal screen)
 

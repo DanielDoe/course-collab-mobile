@@ -1,4 +1,4 @@
-import * as SecureStore from "expo-secure-store"
+import * as SecureStore from "./secure-store-client"
 import {
   STUDENT_CORA_CONTEXT_VERSION,
   type StudentCoraContext,

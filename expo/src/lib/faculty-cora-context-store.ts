@@ -1,4 +1,4 @@
-import * as SecureStore from "expo-secure-store"
+import * as SecureStore from "./secure-store-client"
 import type { InstructorScope } from "./instructor-content-api"
 import {
   FACULTY_CORA_CONTEXT_VERSION,

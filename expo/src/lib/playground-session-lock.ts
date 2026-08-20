@@ -1,4 +1,4 @@
-import * as SecureStore from "expo-secure-store"
+import * as SecureStore from "./secure-store-client"
 
 const LOCK_KEY = "course-collab.playground-session-lock"
 const LAST_CLASSROOM_SESSION_KEY = "course-collab.playground-last-classroom-session"

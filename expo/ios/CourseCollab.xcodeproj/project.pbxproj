@@ -7,30 +7,30 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		094617F3B641E3071FA1B357 /* libPods-CourseCollab.a in Frameworks */ = {isa = PBXBuildFile; fileRef = DB45FC3DF0BD4AEA21C053E3 /* libPods-CourseCollab.a */; };
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
-		263DA59FDADB88A28C1A8E49 /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD44082BE64E09C93E453385 /* ExpoModulesProvider.swift */; };
-		3821548ABD2F456083DD034A /* noop-file.swift in Sources */ = {isa = PBXBuildFile; fileRef = D583EE6CFCDB4A9D923FA2BC /* noop-file.swift */; };
+		1EE8B5A09C251CA7F7E91F63 /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = B101199CC8EA9B0FEF053852 /* ExpoModulesProvider.swift */; };
 		3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */; };
-		7846211F08C24B11B4AEBECB /* CourseCollab.icon in Resources */ = {isa = PBXBuildFile; fileRef = 52064FDBF2CE4E68A757FDEF /* CourseCollab.icon */; };
+		60D21F2194EC4ECA8BA66772 /* CourseCollab.icon in Resources */ = {isa = PBXBuildFile; fileRef = 752CDDB0D12849C58B92B900 /* CourseCollab.icon */; };
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
-		E4FF4BB7281B26BC19FB962D /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = C38ABBE4964D44F4BDFA3502 /* PrivacyInfo.xcprivacy */; };
+		E555386239B4835061641313 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 1745A0F395E08F695BC2B397 /* PrivacyInfo.xcprivacy */; };
 		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
-		F411FBBEC3C1BF53E3E22D4C /* libPods-CourseCollab.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 26BE703D85567774045EE437 /* libPods-CourseCollab.a */; };
+		FF9B3F02D2C648ED8C3ECD79 /* noop-file.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22489762099C4F8681D0668B /* noop-file.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		13B07F961A680F5B00A75B9A /* CourseCollab.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CourseCollab.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = CourseCollab/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = CourseCollab/Info.plist; sourceTree = "<group>"; };
-		26BE703D85567774045EE437 /* libPods-CourseCollab.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-CourseCollab.a"; sourceTree = BUILT_PRODUCTS_DIR; };
-		52064FDBF2CE4E68A757FDEF /* CourseCollab.icon */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = CourseCollab.icon; path = CourseCollab/CourseCollab.icon; sourceTree = "<group>"; };
-		595672AC68CB94B77AB44A9B /* Pods-CourseCollab.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-CourseCollab.release.xcconfig"; path = "Target Support Files/Pods-CourseCollab/Pods-CourseCollab.release.xcconfig"; sourceTree = "<group>"; };
+		1745A0F395E08F695BC2B397 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = CourseCollab/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		22489762099C4F8681D0668B /* noop-file.swift */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 4; includeInIndex = 0; lastKnownFileType = sourcecode.swift; name = "noop-file.swift"; path = "CourseCollab/noop-file.swift"; sourceTree = "<group>"; };
+		6DA625222D16ED63D3212E91 /* Pods-CourseCollab.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-CourseCollab.debug.xcconfig"; path = "Target Support Files/Pods-CourseCollab/Pods-CourseCollab.debug.xcconfig"; sourceTree = "<group>"; };
+		752CDDB0D12849C58B92B900 /* CourseCollab.icon */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = CourseCollab.icon; path = CourseCollab/CourseCollab.icon; sourceTree = "<group>"; };
 		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = CourseCollab/SplashScreen.storyboard; sourceTree = "<group>"; };
+		B101199CC8EA9B0FEF053852 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-CourseCollab/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
+		B6F89278A5098E6C3E8EFD5A /* Pods-CourseCollab.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-CourseCollab.release.xcconfig"; path = "Target Support Files/Pods-CourseCollab/Pods-CourseCollab.release.xcconfig"; sourceTree = "<group>"; };
 		BB2F792C24A3F905000567C9 /* Expo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
-		C38ABBE4964D44F4BDFA3502 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = CourseCollab/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
-		D583EE6CFCDB4A9D923FA2BC /* noop-file.swift */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 4; includeInIndex = 0; lastKnownFileType = sourcecode.swift; name = "noop-file.swift"; path = "CourseCollab/noop-file.swift"; sourceTree = "<group>"; };
-		DD44082BE64E09C93E453385 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-CourseCollab/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
-		DF76BAF87BA9570B81B02114 /* Pods-CourseCollab.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-CourseCollab.debug.xcconfig"; path = "Target Support Files/Pods-CourseCollab/Pods-CourseCollab.debug.xcconfig"; sourceTree = "<group>"; };
+		DB45FC3DF0BD4AEA21C053E3 /* libPods-CourseCollab.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-CourseCollab.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = CourseCollab/AppDelegate.swift; sourceTree = "<group>"; };
 		F11748442D0722820044C1D9 /* CourseCollab-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "CourseCollab-Bridging-Header.h"; path = "CourseCollab/CourseCollab-Bridging-Header.h"; sourceTree = "<group>"; };
@@ -41,7 +41,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				F411FBBEC3C1BF53E3E22D4C /* libPods-CourseCollab.a in Frameworks */,
+				094617F3B641E3071FA1B357 /* libPods-CourseCollab.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -57,9 +57,9 @@
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */,
-				C38ABBE4964D44F4BDFA3502 /* PrivacyInfo.xcprivacy */,
-				52064FDBF2CE4E68A757FDEF /* CourseCollab.icon */,
-				D583EE6CFCDB4A9D923FA2BC /* noop-file.swift */,
+				752CDDB0D12849C58B92B900 /* CourseCollab.icon */,
+				22489762099C4F8681D0668B /* noop-file.swift */,
+				1745A0F395E08F695BC2B397 /* PrivacyInfo.xcprivacy */,
 			);
 			name = CourseCollab;
 			sourceTree = "<group>";
@@ -68,9 +68,17 @@
 			isa = PBXGroup;
 			children = (
 				ED297162215061F000B7C4FE /* JavaScriptCore.framework */,
-				26BE703D85567774045EE437 /* libPods-CourseCollab.a */,
+				DB45FC3DF0BD4AEA21C053E3 /* libPods-CourseCollab.a */,
 			);
 			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		4D5BEC7E342BB78F2D5D74F3 /* ExpoModulesProviders */ = {
+			isa = PBXGroup;
+			children = (
+				D01C8F4E0E69628C939AEB21 /* CourseCollab */,
+			);
+			name = ExpoModulesProviders;
 			sourceTree = "<group>";
 		};
 		832341AE1AAA6A7D00B99B32 /* Libraries */ = {
@@ -87,8 +95,8 @@
 				832341AE1AAA6A7D00B99B32 /* Libraries */,
 				83CBBA001A601CBA00E9B192 /* Products */,
 				2D16E6871FA4F8E400B85C8A /* Frameworks */,
-				D3BD8B4A6F3D8C49BACFE965 /* Pods */,
-				9523E6917684EF05DDDC3B1E /* ExpoModulesProviders */,
+				F656350EE2ADDD26D7CBA472 /* Pods */,
+				4D5BEC7E342BB78F2D5D74F3 /* ExpoModulesProviders */,
 			);
 			indentWidth = 2;
 			sourceTree = "<group>";
@@ -103,22 +111,6 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
-		9523E6917684EF05DDDC3B1E /* ExpoModulesProviders */ = {
-			isa = PBXGroup;
-			children = (
-				ABDE0F9ACF81D39C6541E2F3 /* CourseCollab */,
-			);
-			name = ExpoModulesProviders;
-			sourceTree = "<group>";
-		};
-		ABDE0F9ACF81D39C6541E2F3 /* CourseCollab */ = {
-			isa = PBXGroup;
-			children = (
-				DD44082BE64E09C93E453385 /* ExpoModulesProvider.swift */,
-			);
-			name = CourseCollab;
-			sourceTree = "<group>";
-		};
 		BB2F792B24A3F905000567C9 /* Supporting */ = {
 			isa = PBXGroup;
 			children = (
@@ -128,11 +120,19 @@
 			path = CourseCollab/Supporting;
 			sourceTree = "<group>";
 		};
-		D3BD8B4A6F3D8C49BACFE965 /* Pods */ = {
+		D01C8F4E0E69628C939AEB21 /* CourseCollab */ = {
 			isa = PBXGroup;
 			children = (
-				DF76BAF87BA9570B81B02114 /* Pods-CourseCollab.debug.xcconfig */,
-				595672AC68CB94B77AB44A9B /* Pods-CourseCollab.release.xcconfig */,
+				B101199CC8EA9B0FEF053852 /* ExpoModulesProvider.swift */,
+			);
+			name = CourseCollab;
+			sourceTree = "<group>";
+		};
+		F656350EE2ADDD26D7CBA472 /* Pods */ = {
+			isa = PBXGroup;
+			children = (
+				6DA625222D16ED63D3212E91 /* Pods-CourseCollab.debug.xcconfig */,
+				B6F89278A5098E6C3E8EFD5A /* Pods-CourseCollab.release.xcconfig */,
 			);
 			name = Pods;
 			path = Pods;
@@ -146,13 +146,13 @@
 			buildConfigurationList = 13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "CourseCollab" */;
 			buildPhases = (
 				08A4A3CD28434E44B6B9DE2E /* [CP] Check Pods Manifest.lock */,
-				2B90A3E0C6E6F9EF52E04895 /* [Expo] Configure project */,
+				2A4FF80960D8DBCF8256AA9F /* [Expo] Configure project */,
 				13B07F871A680F5B00A75B9A /* Sources */,
 				13B07F8C1A680F5B00A75B9A /* Frameworks */,
 				13B07F8E1A680F5B00A75B9A /* Resources */,
 				00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */,
 				800E24972A6A228C8D4807E9 /* [CP] Copy Pods Resources */,
-				75DCF76E8D3C0A2CA83DC22D /* [CP] Embed Pods Frameworks */,
+				9A18A32A36381AC647A7EAE2 /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
 			);
@@ -202,8 +202,8 @@
 				BB2F792D24A3F905000567C9 /* Expo.plist in Resources */,
 				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
 				3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */,
-				E4FF4BB7281B26BC19FB962D /* PrivacyInfo.xcprivacy in Resources */,
-				7846211F08C24B11B4AEBECB /* CourseCollab.icon in Resources */,
+				60D21F2194EC4ECA8BA66772 /* CourseCollab.icon in Resources */,
+				E555386239B4835061641313 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -249,7 +249,7 @@
 			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
 			showEnvVarsInLog = 0;
 		};
-		2B90A3E0C6E6F9EF52E04895 /* [Expo] Configure project */ = {
+		2A4FF80960D8DBCF8256AA9F /* [Expo] Configure project */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
@@ -272,28 +272,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "# This script configures Expo modules and generates the modules provider file.\nbash -l -c \"./Pods/Target\\ Support\\ Files/Pods-CourseCollab/expo-configure-project.sh\"\n";
-		};
-		75DCF76E8D3C0A2CA83DC22D /* [CP] Embed Pods Frameworks */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-CourseCollab/Pods-CourseCollab-frameworks.sh",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/React-Core-prebuilt/React.framework/React",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/ReactNativeDependencies/ReactNativeDependencies.framework/ReactNativeDependencies",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/hermes-engine/Pre-built/hermes.framework/hermes",
-			);
-			name = "[CP] Embed Pods Frameworks";
-			outputPaths = (
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/React.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/ReactNativeDependencies.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/hermes.framework",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-CourseCollab/Pods-CourseCollab-frameworks.sh\"\n";
-			showEnvVarsInLog = 0;
 		};
 		800E24972A6A228C8D4807E9 /* [CP] Copy Pods Resources */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -345,6 +323,28 @@
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-CourseCollab/Pods-CourseCollab-resources.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
+		9A18A32A36381AC647A7EAE2 /* [CP] Embed Pods Frameworks */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-CourseCollab/Pods-CourseCollab-frameworks.sh",
+				"${PODS_XCFRAMEWORKS_BUILD_DIR}/React-Core-prebuilt/React.framework/React",
+				"${PODS_XCFRAMEWORKS_BUILD_DIR}/ReactNativeDependencies/ReactNativeDependencies.framework/ReactNativeDependencies",
+				"${PODS_XCFRAMEWORKS_BUILD_DIR}/hermes-engine/Pre-built/hermes.framework/hermes",
+			);
+			name = "[CP] Embed Pods Frameworks";
+			outputPaths = (
+				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/React.framework",
+				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/ReactNativeDependencies.framework",
+				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/hermes.framework",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-CourseCollab/Pods-CourseCollab-frameworks.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -353,8 +353,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */,
-				263DA59FDADB88A28C1A8E49 /* ExpoModulesProvider.swift in Sources */,
-				3821548ABD2F456083DD034A /* noop-file.swift in Sources */,
+				FF9B3F02D2C648ED8C3ECD79 /* noop-file.swift in Sources */,
+				1EE8B5A09C251CA7F7E91F63 /* ExpoModulesProvider.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -363,7 +363,7 @@
 /* Begin XCBuildConfiguration section */
 		13B07F941A680F5B00A75B9A /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = DF76BAF87BA9570B81B02114 /* Pods-CourseCollab.debug.xcconfig */;
+			baseConfigurationReference = 6DA625222D16ED63D3212E91 /* Pods-CourseCollab.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = CourseCollab;
 				CLANG_ENABLE_MODULES = YES;
@@ -380,7 +380,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.0;
+				MARKETING_VERSION = 1.0;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-ObjC",
@@ -399,7 +399,7 @@
 		};
 		13B07F951A680F5B00A75B9A /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 595672AC68CB94B77AB44A9B /* Pods-CourseCollab.release.xcconfig */;
+			baseConfigurationReference = B6F89278A5098E6C3E8EFD5A /* Pods-CourseCollab.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = CourseCollab;
 				CLANG_ENABLE_MODULES = YES;
@@ -411,7 +411,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.0;
+				MARKETING_VERSION = 1.0;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-ObjC",

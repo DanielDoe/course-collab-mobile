@@ -1,4 +1,4 @@
-import * as SecureStore from "expo-secure-store"
+import * as SecureStore from "./secure-store-client"
 
 function storageKey(instructorId: number): string | null {
   const id = Number(instructorId)

@@ -1,6 +1,6 @@
 import { Platform } from "react-native"
 import Constants from "expo-constants"
-import * as SecureStore from "expo-secure-store"
+import * as SecureStore from "../secure-store-client"
 import * as ExpoNotifications from "expo-notifications"
 import {
   categoryForNotificationType,

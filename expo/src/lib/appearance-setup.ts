@@ -1,4 +1,4 @@
-import * as SecureStore from "expo-secure-store"
+import * as SecureStore from "./secure-store-client"
 import { getApiBaseUrl } from "../constants"
 import type { StudentSession } from "./session"
 

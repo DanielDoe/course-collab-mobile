@@ -1,4 +1,4 @@
-import * as SecureStore from "expo-secure-store"
+import * as SecureStore from "./secure-store-client"
 import { parseMembershipTier } from "./membership-tier"
 import type { MembershipTier } from "../types/dashboard"
 

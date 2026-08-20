@@ -1,4 +1,4 @@
-import * as SecureStore from "expo-secure-store"
+import * as SecureStore from "./secure-store-client"
 import { STUDENT_NAV_GROUPS, STUDENT_SUPPORT_GROUP } from "../constants/student-nav"
 
 const KEY_PREFIX = "drawerExpandedGroup."

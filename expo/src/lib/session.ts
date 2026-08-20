@@ -1,4 +1,4 @@
-import * as SecureStore from "expo-secure-store"
+import * as SecureStore from "./secure-store-client"
 import { SESSION_DURATION_MS } from "../constants"
 import type { LoginPortal } from "../constants/portals"
 import { readRememberedUniversity } from "./remembered-student-auth"

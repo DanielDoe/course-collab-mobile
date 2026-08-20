@@ -1,4 +1,4 @@
-import * as SecureStore from "expo-secure-store"
+import * as SecureStore from "./secure-store-client"
 import type { GuestCoraConversation } from "./guest-types"
 
 const STORAGE_KEY = "guest_cora_conversations_v1"

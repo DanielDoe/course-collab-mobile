@@ -1,4 +1,4 @@
-import * as SecureStore from "expo-secure-store"
+import * as SecureStore from "../secure-store-client"
 import type { CoraActivityEntry, CoraConfirmActionResult, CoraProposalTool } from "./types"
 
 const ACTIVITY_KEY = "cora_action_activity_v1"

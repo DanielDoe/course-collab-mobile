@@ -6,6 +6,7 @@
     "orientation": "portrait",
     "icon": "./assets/logo-mark.png",
     "scheme": "coursecollab",
+    "newArchEnabled": true,
     "userInterfaceStyle": "automatic",
     "backgroundColor": "#F8FAFC",
     "splash": {

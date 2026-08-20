@@ -1,4 +1,4 @@
-import * as SecureStore from "expo-secure-store"
+import * as SecureStore from "./secure-store-client"
 
 /** Honorific shown before the instructor display name (e.g. Dr Daniel Doe). */
 export type FacultyTitle = "" | "Dr" | "Prof" | "Mr" | "Ms" | "Mrs" | "Mx"

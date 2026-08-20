@@ -1,4 +1,4 @@
-import * as SecureStore from "expo-secure-store"
+import * as SecureStore from "./secure-store-client"
 import {
   DEFAULT_APPEARANCE_MODE,
   DEFAULT_THEME_ID,

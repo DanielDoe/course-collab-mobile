@@ -1,4 +1,4 @@
-import * as SecureStore from "expo-secure-store"
+import * as SecureStore from "./secure-store-client"
 import {
   CODEBENCH_LANGUAGES,
   DEFAULT_CODEBENCH_LANGUAGE_ID,

@@ -65,7 +65,10 @@ export function NotificationProvider({ children }: Props) {
   const lastRegisteredSession = useRef<string | null>(null)
 
   useEffect(() => {
-    void initializeNotificationSystem()
+    const timer = setTimeout(() => {
+      void initializeNotificationSystem()
+    }, 3000)
+    return () => clearTimeout(timer)
   }, [])
 
   useEffect(() => {
