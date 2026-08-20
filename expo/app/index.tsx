@@ -1,19 +1,28 @@
 import { useCallback, useEffect, useState } from "react"
 import { Redirect } from "expo-router"
 import * as SplashScreen from "expo-splash-screen"
-import { StyleSheet, View } from "react-native"
-import { BrandLoadingMark } from "../src/components/login/BrandLoadingMark"
+import { StyleSheet, Text, View } from "react-native"
 import { useSession } from "../src/context/SessionProvider"
 import { bootLog, markBootComplete } from "../src/lib/boot-diagnostics"
 import { resolvePostLoginRoute } from "../src/lib/onboarding"
 import { toAppHref, toAuthHref } from "../src/lib/navigation-reset"
 import type { AppSession } from "../src/lib/session"
 
-const STARTUP_ROUTE_TIMEOUT_MS = 12_000
+const STARTUP_ROUTE_TIMEOUT_MS = 6_000
+const BOOT_BG = "#582c83"
 
 function fallbackHrefForSession(session: AppSession): string {
   if (session.portal === "faculty") return toAppHref("/faculty-select-course")
   return toAppHref("/dashboard")
+}
+
+function hideSplash() {
+  try {
+    SplashScreen.hide()
+  } catch {
+    /* ignore */
+  }
+  void SplashScreen.hideAsync().catch(() => {})
 }
 
 export default function Index() {
@@ -22,20 +31,20 @@ export default function Index() {
 
   useEffect(() => {
     bootLog("Index route mounted")
-    void SplashScreen.hideAsync().catch(() => {})
+    hideSplash()
   }, [])
 
   useEffect(() => {
     bootLog(`Session loading=${isLoading} hasSession=${Boolean(session)}`)
   }, [isLoading, session])
 
-  const hideNativeSplash = useCallback(() => {
-    void SplashScreen.hideAsync().catch(() => {})
+  const onLayout = useCallback(() => {
+    hideSplash()
   }, [])
 
   useEffect(() => {
-    if (!isLoading) hideNativeSplash()
-  }, [hideNativeSplash, isLoading])
+    if (!isLoading) hideSplash()
+  }, [isLoading])
 
   useEffect(() => {
     if (isLoading) return
@@ -92,8 +101,9 @@ export default function Index() {
 
   if (isLoading || (session && !resolvedHref)) {
     return (
-      <View style={styles.loading} onLayout={hideNativeSplash}>
-        <BrandLoadingMark color="#FFFFFF" />
+      <View style={styles.loading} onLayout={onLayout}>
+        <Text style={styles.brand}>CourseCollab</Text>
+        <Text style={styles.hint}>Loading…</Text>
       </View>
     )
   }
@@ -110,6 +120,16 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#582c83",
+    backgroundColor: BOOT_BG,
+    gap: 10,
+  },
+  brand: {
+    color: "#FFFFFF",
+    fontSize: 24,
+    fontWeight: "700",
+  },
+  hint: {
+    color: "#E9D5FF",
+    fontSize: 15,
   },
 })

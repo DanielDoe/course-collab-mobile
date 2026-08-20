@@ -1,11 +1,13 @@
 import { useEffect } from "react"
-import { usePathname } from "expo-router"
 import { installMobileErrorCapture, updateMobileLogContext } from "../lib/system-log-client"
 import { useSession } from "../context/SessionProvider"
 
-/** Sync route/session into mobile log context and install global error capture once. */
+/**
+ * Sync session into mobile log context and install global error capture once.
+ * Avoid usePathname/useRouter here — this component mounts above the Stack and
+ * those hooks can leave a blank tree on Release/iOS 26 when navigation is not ready.
+ */
 export function SystemErrorCapture() {
-  const pathname = usePathname()
   const { session } = useSession()
 
   useEffect(() => {
@@ -13,8 +15,8 @@ export function SystemErrorCapture() {
   }, [])
 
   useEffect(() => {
-    updateMobileLogContext({ route: pathname, session })
-  }, [pathname, session])
+    updateMobileLogContext({ session })
+  }, [session])
 
   return null
 }

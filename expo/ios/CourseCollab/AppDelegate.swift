@@ -23,6 +23,8 @@ public class AppDelegate: ExpoAppDelegate {
 
 #if os(iOS) || os(tvOS)
     window = UIWindow(frame: UIScreen.main.bounds)
+    // Brand purple — avoids a white gap if JS paints late or splash hides early.
+    window?.backgroundColor = UIColor(red: 0.345, green: 0.173, blue: 0.514, alpha: 1)
     factory.startReactNative(
       withModuleName: "main",
       in: window,

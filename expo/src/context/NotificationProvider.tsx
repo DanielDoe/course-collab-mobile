@@ -1,6 +1,6 @@
 import { useEffect, useRef, type ReactNode } from "react"
 import { AppState, Platform, type AppStateStatus } from "react-native"
-import { useRouter } from "expo-router"
+import { router } from "expo-router"
 import { useSession } from "./SessionProvider"
 import { resolveNotificationLink } from "../lib/notification-link"
 import {
@@ -43,7 +43,6 @@ function handleNotificationResponse(
   data: Record<string, unknown> | undefined,
   action: string,
   session: ReturnType<typeof useSession>["session"],
-  router: ReturnType<typeof useRouter>,
 ) {
   if (action === "DISMISS") return
 
@@ -60,7 +59,6 @@ function handleNotificationResponse(
 }
 
 export function NotificationProvider({ children }: Props) {
-  const router = useRouter()
   const { session } = useSession()
   const lastRegisteredSession = useRef<string | null>(null)
 
@@ -91,8 +89,6 @@ export function NotificationProvider({ children }: Props) {
   useEffect(() => {
     if (!session || Platform.OS === "web") return
 
-    const sessionKey = `${session.portal}:${"databaseId" in session ? session.databaseId : session.id}`
-
     const onAppStateChange = (state: AppStateStatus) => {
       if (state !== "active") return
       void registerPushTokenForSession(session)
@@ -120,14 +116,14 @@ export function NotificationProvider({ children }: Props) {
 
     const responseSub = Notifications.addNotificationResponseReceivedListener((response) => {
       const data = response.notification.request.content.data as Record<string, unknown>
-      handleNotificationResponse(data, response.actionIdentifier, session, router)
+      handleNotificationResponse(data, response.actionIdentifier, session)
     })
 
     return () => {
       receivedSub.remove()
       responseSub.remove()
     }
-  }, [router, session])
+  }, [session])
 
   useEffect(() => {
     if (Platform.OS === "web") return
@@ -138,9 +134,9 @@ export function NotificationProvider({ children }: Props) {
     void Notifications.getLastNotificationResponseAsync().then((response) => {
       if (!response) return
       const data = response.notification.request.content.data as Record<string, unknown>
-      handleNotificationResponse(data, response.actionIdentifier, session, router)
+      handleNotificationResponse(data, response.actionIdentifier, session)
     })
-  }, [router, session])
+  }, [session])
 
   return children
 }
