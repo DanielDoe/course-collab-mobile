@@ -266,6 +266,7 @@ export function FacultyIssueDetailModal({
         <ScrollView
           contentContainerStyle={[collabSheetStyles.scroll, { paddingBottom: insets.bottom + (isOpen ? 120 : 24) }]}
           keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}
         >
           <FacultySheetHero

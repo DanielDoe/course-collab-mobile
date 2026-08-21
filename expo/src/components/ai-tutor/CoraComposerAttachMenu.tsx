@@ -135,6 +135,7 @@ export function CoraComposerAttachMenu({ visible, onClose, onAction }: Props) {
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.menuContent}
             keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
             renderItem={({ item: entry }) => {
               if (entry.kind === "divider") {
                 return <View style={[styles.divider, { backgroundColor: native.separator }]} />

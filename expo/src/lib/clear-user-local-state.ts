@@ -14,6 +14,7 @@ import { unregisterPushTokenForSession } from "./notifications/push-registration
 import { clearStoredFacultyCourseId, getStoredFacultyCourseId } from "./faculty-course-storage"
 import { setStoredDrawerExpandedGroup } from "./drawer-nav-memory"
 import { setStoredFacultyDrawerExpandedGroup } from "./faculty-drawer-memory"
+import { clearNotificationInboxPrefs } from "./notification-inbox-prefs"
 import type { AppSession } from "./session"
 
 async function settle(task: Promise<unknown>): Promise<void> {
@@ -52,12 +53,14 @@ export async function clearUserLocalState(session: AppSession | null): Promise<v
       tasks.push(clearCachedMembershipTier(session.databaseId))
       tasks.push(clearStudentCoraContext(session.databaseId))
       tasks.push(setStoredDrawerExpandedGroup(session.databaseId, null))
+      tasks.push(clearNotificationInboxPrefs("student", session.databaseId))
     } else if (session.portal === "guest" || session.portal === "summer") {
       tasks.push(clearCachedMembershipTier(session.databaseId))
       tasks.push(clearStudentCoraContext(session.databaseId))
     } else if (session.portal === "faculty") {
       tasks.push(clearCachedFacultyMembershipTier(session.id))
       tasks.push(setStoredFacultyDrawerExpandedGroup(session.id, null))
+      tasks.push(clearNotificationInboxPrefs("faculty", session.id))
       tasks.push(
         getStoredFacultyCourseId(session.id).then(async (courseId) => {
           if (courseId != null) {

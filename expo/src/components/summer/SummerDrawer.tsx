@@ -50,7 +50,8 @@ export function SummerDrawer({ session }: Props) {
   const type = useNativeType()
   const activeItemId = useMemo(() => getSummerActiveNavItemId(pathname), [pathname])
   const normalizedPathname = useMemo(() => normalizeRoutePathname(pathname), [pathname])
-  const { scrollRef, contentRef, registerRow, unregisterRow } = useDrawerScrollToActive(activeItemId, drawerOpen)
+  const { scrollRef, contentRef, registerRow, unregisterRow, onRowLayout, onScroll } =
+    useDrawerScrollToActive(activeItemId, drawerOpen)
 
   const [drawerMounted, setDrawerMounted] = useState(false)
   const [modalVisible, setModalVisible] = useState(false)
@@ -167,12 +168,15 @@ export function SummerDrawer({ session }: Props) {
             style={[styles.scroll, { backgroundColor: layout.scrollBackground }]}
             contentContainerStyle={[styles.scrollContent, layout.scrollContent]}
             showsVerticalScrollIndicator={false}
+            onScroll={onScroll}
+            scrollEventThrottle={16}
           >
             <View ref={contentRef} collapsable={false}>
               <DrawerNavAnchor
                 itemId={SUMMER_DASHBOARD_LINK.id}
                 registerRow={registerRow}
                 unregisterRow={unregisterRow}
+                onRowLayout={onRowLayout}
               >
                 <NavRow
                   item={SUMMER_DASHBOARD_LINK}
@@ -187,6 +191,7 @@ export function SummerDrawer({ session }: Props) {
                 onPress={(item) => navigate(item.route)}
                 registerRow={registerRow}
                 unregisterRow={unregisterRow}
+                onRowLayout={onRowLayout}
               />
 
               <View style={[styles.divider, { backgroundColor: drawerTheme.headerBorder }]} />
@@ -195,6 +200,7 @@ export function SummerDrawer({ session }: Props) {
                 itemId={SUMMER_SETTINGS_LINK.id}
                 registerRow={registerRow}
                 unregisterRow={unregisterRow}
+                onRowLayout={onRowLayout}
               >
                 <NavRow
                   item={SUMMER_SETTINGS_LINK}
@@ -216,12 +222,14 @@ function FlatNavSection({
   onPress,
   registerRow,
   unregisterRow,
+  onRowLayout,
 }: {
   group: SummerNavGroup
   pathname: string
   onPress: (item: SummerNavItem) => void
   registerRow: (itemId: string, ref: RefObject<View | null>) => void
   unregisterRow: (itemId: string) => void
+  onRowLayout: (itemId: string) => void
 }) {
   const theme = useDrawerNavTheme()
 
@@ -230,7 +238,7 @@ function FlatNavSection({
       <View style={[styles.divider, { backgroundColor: theme.headerBorder }]} />
       <Text style={[styles.sectionLabel, { color: theme.secondaryLabel }]}>{group.label}</Text>
       {group.items.map((item) => (
-        <DrawerNavAnchor key={item.id} itemId={item.id} registerRow={registerRow} unregisterRow={unregisterRow}>
+        <DrawerNavAnchor key={item.id} itemId={item.id} registerRow={registerRow} unregisterRow={unregisterRow} onRowLayout={onRowLayout}>
           <NavRow
             item={item}
             active={isDrawerShellRouteActive(pathname, item.route)}

@@ -46,7 +46,7 @@ export function QuestionPrepareGate({
 
   return (
     <>
-      {!showOverlay ? children : null}
+      {children}
       <QuestionPrepareLoadingOverlay
         visible={showOverlay}
         title={title}

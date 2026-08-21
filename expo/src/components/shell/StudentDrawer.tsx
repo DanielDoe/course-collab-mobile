@@ -69,13 +69,12 @@ export function StudentDrawer({ session }: Props) {
   const type = useNativeType()
   const activeItemId = useMemo(() => getStudentActiveNavItemId(pathname), [pathname])
   const normalizedPathname = useMemo(() => normalizeRoutePathname(pathname), [pathname])
-  const { scrollRef, contentRef, registerRow, unregisterRow } = useDrawerScrollToActive(activeItemId, drawerOpen)
+  const { scrollRef, contentRef, registerRow, unregisterRow, onRowLayout, onScroll } =
+    useDrawerScrollToActive(activeItemId, drawerOpen)
 
-  const [drawerMounted, setDrawerMounted] = useState(false)
   const [modalVisible, setModalVisible] = useState(false)
   const backdropOpacity = useSharedValue(0)
-  const panelOpacity = useSharedValue(0)
-  const panelScale = useSharedValue(0.97)
+  const panelTranslateX = useSharedValue(-panelWidth)
 
   const finishClose = useCallback(() => setModalVisible(false), [])
 
@@ -84,29 +83,26 @@ export function StudentDrawer({ session }: Props) {
   }, [pathname, closeDrawer])
 
   useEffect(() => {
-    if (drawerOpen) setDrawerMounted(true)
-  }, [drawerOpen])
+    panelTranslateX.value = drawerOpen ? 0 : -panelWidth
+  }, [drawerOpen, panelTranslateX, panelWidth])
 
   useEffect(() => {
     if (drawerOpen) {
       setModalVisible(true)
       backdropOpacity.value = withTiming(1, { duration: 220, easing: Easing.out(Easing.cubic) })
-      panelOpacity.value = withTiming(1, { duration: 240, easing: Easing.out(Easing.cubic) })
-      panelScale.value = withSpring(1, { damping: 19, stiffness: 240 })
+      panelTranslateX.value = withSpring(0, { damping: 22, stiffness: 260 })
       return
     }
 
     backdropOpacity.value = withTiming(0, { duration: 180 })
-    panelOpacity.value = withTiming(0, { duration: 160 })
-    panelScale.value = withTiming(0.97, { duration: 160 }, () => {
+    panelTranslateX.value = withTiming(-panelWidth, { duration: 200 }, () => {
       runOnJS(finishClose)()
     })
-  }, [drawerOpen, backdropOpacity, panelOpacity, panelScale, finishClose])
+  }, [drawerOpen, backdropOpacity, panelTranslateX, panelWidth, finishClose])
 
   const backdropStyle = useAnimatedStyle(() => ({ opacity: backdropOpacity.value }))
   const panelStyle = useAnimatedStyle(() => ({
-    opacity: panelOpacity.value,
-    transform: [{ scale: panelScale.value }],
+    transform: [{ translateX: panelTranslateX.value }],
   }))
 
   function navigate(route: string) {
@@ -134,8 +130,6 @@ export function StudentDrawer({ session }: Props) {
   const tierPlan = membershipTierLoaded ? getMembershipPlan(membershipTier) : null
   const tierBadge = membershipTierLoaded ? membershipTierSolidBadge(membershipTier) : null
   const layout = drawerShellLayout(panelWidth, insets, drawerTheme)
-
-  if (!drawerMounted) return null
 
   return (
     <Modal visible={modalVisible} transparent animationType="none" onRequestClose={closeDrawer} statusBarTranslucent>
@@ -210,9 +204,16 @@ export function StudentDrawer({ session }: Props) {
             style={[styles.scroll, { backgroundColor: layout.scrollBackground }]}
             contentContainerStyle={[styles.scrollContent, layout.scrollContent]}
             showsVerticalScrollIndicator={false}
+            onScroll={onScroll}
+            scrollEventThrottle={16}
           >
               <View ref={contentRef} collapsable={false}>
-                <DrawerNavAnchor itemId={STUDENT_DASHBOARD_LINK.id} registerRow={registerRow} unregisterRow={unregisterRow}>
+                <DrawerNavAnchor
+                  itemId={STUDENT_DASHBOARD_LINK.id}
+                  registerRow={registerRow}
+                  unregisterRow={unregisterRow}
+                  onRowLayout={onRowLayout}
+                >
                   <NavRow
                     item={STUDENT_DASHBOARD_LINK}
                     active={isDrawerShellRouteActive(normalizedPathname, STUDENT_DASHBOARD_LINK.route)}
@@ -232,12 +233,18 @@ export function StudentDrawer({ session }: Props) {
                     onPress={handleNavPress}
                     registerRow={registerRow}
                     unregisterRow={unregisterRow}
+                    onRowLayout={onRowLayout}
                   />
                 ))}
 
                 <View style={[styles.divider, { backgroundColor: drawerTheme.headerBorder }]} />
 
-                <DrawerNavAnchor itemId={STUDENT_SETTINGS_LINK.id} registerRow={registerRow} unregisterRow={unregisterRow}>
+                <DrawerNavAnchor
+                  itemId={STUDENT_SETTINGS_LINK.id}
+                  registerRow={registerRow}
+                  unregisterRow={unregisterRow}
+                  onRowLayout={onRowLayout}
+                >
                   <NavRow
                     item={STUDENT_SETTINGS_LINK}
                     active={isDrawerShellRouteActive(normalizedPathname, STUDENT_SETTINGS_LINK.route)}
@@ -255,6 +262,7 @@ export function StudentDrawer({ session }: Props) {
                   onPress={handleNavPress}
                   registerRow={registerRow}
                   unregisterRow={unregisterRow}
+                  onRowLayout={onRowLayout}
                 />
 
                 <DrawerUpgradeCard
@@ -362,6 +370,7 @@ function FlatNavSection({
   onPress,
   registerRow,
   unregisterRow,
+  onRowLayout,
 }: {
   group: StudentNavGroup
   pathname: string
@@ -370,6 +379,7 @@ function FlatNavSection({
   onPress: (item: StudentNavItem) => void
   registerRow: (itemId: string, ref: RefObject<View | null>) => void
   unregisterRow: (itemId: string) => void
+  onRowLayout: (itemId: string) => void
 }) {
   const theme = useDrawerNavTheme()
 
@@ -378,7 +388,13 @@ function FlatNavSection({
       <View style={[styles.divider, { backgroundColor: theme.headerBorder }]} />
       <Text style={[styles.sectionLabel, { color: theme.secondaryLabel }]}>{group.label}</Text>
       {group.items.map((item) => (
-        <DrawerNavAnchor key={item.id} itemId={item.id} registerRow={registerRow} unregisterRow={unregisterRow}>
+        <DrawerNavAnchor
+          key={item.id}
+          itemId={item.id}
+          registerRow={registerRow}
+          unregisterRow={unregisterRow}
+          onRowLayout={onRowLayout}
+        >
           <NavRow
             item={item}
             active={isDrawerShellRouteActive(pathname, item.route)}

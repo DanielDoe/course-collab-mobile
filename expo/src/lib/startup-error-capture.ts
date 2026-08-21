@@ -1,5 +1,9 @@
-import { ErrorUtils } from "react-native"
 import { bootLog } from "./boot-diagnostics"
+
+type RNErrorUtils = {
+  getGlobalHandler?: () => ((error: Error, isFatal?: boolean) => void) | undefined
+  setGlobalHandler?: (handler: (error: Error, isFatal?: boolean) => void) => void
+}
 
 let capturedMessage: string | null = null
 let installed = false
@@ -16,9 +20,25 @@ function readImportStartupError(): string | null {
     .__COURSECOLLAB_STARTUP_IMPORT_ERROR__ ?? null
 }
 
+function getErrorUtils(): RNErrorUtils | null {
+  try {
+    const rn = require("react-native") as { ErrorUtils?: RNErrorUtils }
+    return rn.ErrorUtils ?? (globalThis as { ErrorUtils?: RNErrorUtils }).ErrorUtils ?? null
+  } catch {
+    return (globalThis as { ErrorUtils?: RNErrorUtils }).ErrorUtils ?? null
+  }
+}
+
 /** Capture fatal JS errors before React mounts (release builds only). */
 export function installEarlyStartupErrorCapture(onError?: (message: string) => void): void {
   if (installed || (typeof __DEV__ !== "undefined" && __DEV__)) return
+
+  const ErrorUtils = getErrorUtils()
+  if (!ErrorUtils?.getGlobalHandler || !ErrorUtils?.setGlobalHandler) {
+    bootLog("ErrorUtils not available — skipping early handler", "warn")
+    return
+  }
+
   installed = true
 
   const previous = ErrorUtils.getGlobalHandler()

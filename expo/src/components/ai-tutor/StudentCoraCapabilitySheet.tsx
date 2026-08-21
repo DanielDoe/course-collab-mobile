@@ -51,6 +51,7 @@ export function StudentCoraCapabilitySheet({ visible, capabilityId, onClose, onS
           style={styles.flex}
           contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + 24 }]}
           keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         >
           <View style={[styles.heroStrip, materialStyle, { backgroundColor: cardBg }]}>
             <SolidListThumbTile thumb={thumb} icon={capability.icon} size="list" />

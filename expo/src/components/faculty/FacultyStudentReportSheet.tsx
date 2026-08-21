@@ -97,6 +97,7 @@ export function FacultyStudentReportSheet({ visible, scope, studentId, attemptSe
           contentContainerStyle={[collabSheetStyles.scroll, { paddingBottom: insets.bottom + 24 }]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         >
           {loading ? (
             <ActivityIndicator color={FACULTY_SHEET_COLOR.link} style={{ marginTop: 24 }} />

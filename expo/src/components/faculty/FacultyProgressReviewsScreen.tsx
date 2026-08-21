@@ -176,6 +176,7 @@ export function FacultyProgressReviewsScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={() => void handleRefresh()} tintColor={FACULTY_PROGRESS_REVIEWS_COLOR.link} />
         }
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.summaryRow}>

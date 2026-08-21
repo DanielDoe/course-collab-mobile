@@ -1,0 +1,13 @@
+appId: com.coursecollab.app
+---
+- openLink: coursecollab://onboarding-terms
+- extendedWaitUntil:
+    visible: "Step 2 of 6"
+    timeout: 60000
+- scrollUntilVisible:
+    element: "Contact"
+    direction: DOWN
+    timeout: 30000
+    speed: 40
+- assertNotVisible: "Scroll to the end to enable acceptance."
+- takeScreenshot: terms-scrolled-end

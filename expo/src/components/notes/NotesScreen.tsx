@@ -284,6 +284,7 @@ export function NotesScreen() {
         contentContainerStyle={pageScrollStyle}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         directionalLockEnabled
         nestedScrollEnabled
         refreshControl={
@@ -343,6 +344,7 @@ export function NotesScreen() {
         contentContainerStyle={pageScrollStyle}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         directionalLockEnabled
         nestedScrollEnabled
         refreshControl={

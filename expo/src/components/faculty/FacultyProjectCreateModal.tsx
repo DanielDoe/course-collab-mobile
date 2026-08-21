@@ -175,6 +175,7 @@ export function FacultyProjectCreateModal({ visible, scope, onClose, onCreated }
         <ScrollView
           contentContainerStyle={[collabSheetStyles.scroll, { paddingBottom: insets.bottom + 24 }]}
           keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         >
           <FacultySheetNotice message="Creates a project under an approved group where the selected student is the group leader." />
 

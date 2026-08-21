@@ -296,14 +296,23 @@ export function FacultyCoursePickerRow({
   onPress: () => void
 }) {
   const tokens = useAppThemeTokens()
-  const meta = showSemester && course.semester ? course.semester : undefined
+  const title = course.picker_display_title ?? course.course_title
+  const description = course.picker_is_section_row
+    ? course.course_title
+    : course.course_code
+  const meta =
+    course.picker_is_section_row && course.session_code
+      ? course.session_code
+      : showSemester && course.semester
+        ? course.semester
+        : undefined
 
   return (
     <SignatureListCard
       thumb={facultyAdminCourseThumb(course.id)}
       icon="school-outline"
-      title={course.course_title}
-      description={course.course_code}
+      title={title}
+      description={description}
       metaLine={meta}
       status={
         active

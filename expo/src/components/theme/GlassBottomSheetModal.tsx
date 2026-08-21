@@ -22,6 +22,8 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated"
 import { GLASS_SHEET_BACKDROP } from "./GlassActionSheetMenu"
+import { DismissKeyboardView } from "../ui/DismissKeyboardView"
+import { keyboardDismissScrollProps } from "../../lib/keyboard-dismiss-scroll-props"
 
 const HIDDEN_OFFSET = 480
 const DISMISS_DRAG = 96
@@ -144,12 +146,12 @@ export function GlassBottomSheetModal({
               showsVerticalScrollIndicator={false}
               alwaysBounceVertical={false}
               bounces
-              keyboardShouldPersistTaps="handled"
+              {...keyboardDismissScrollProps}
               refreshControl={refreshControl}
               style={styles.scrollView}
               contentContainerStyle={styles.scrollContent}
             >
-              {children}
+              <DismissKeyboardView>{children}</DismissKeyboardView>
             </Animated.ScrollView>
           </GestureDetector>
         </Animated.View>
@@ -168,7 +170,7 @@ export function GlassBottomSheetModal({
     </View>
   ) : (
     <View style={styles.sheetBody}>
-      <View style={styles.nonScrollBody}>{children}</View>
+      <DismissKeyboardView style={styles.nonScrollBody}>{children}</DismissKeyboardView>
       <GestureDetector gesture={handlePanGesture}>
         <View
           style={styles.handleDragZone}

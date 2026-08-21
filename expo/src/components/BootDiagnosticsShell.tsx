@@ -16,7 +16,6 @@ import {
   getBootLogs,
   isBootComplete,
   sendBootReportToServer,
-  shouldShowBootDiagnostics,
   subscribeBootLogs,
 } from "../lib/boot-diagnostics"
 import { startupBootDiagnosticId } from "../lib/startup-boot-id"
@@ -29,7 +28,8 @@ const WATCHDOG_MS = 6_000
 const AUTO_HIDE_AFTER_READY_MS = 1_500
 
 export function BootDiagnosticsShell({ children }: Props) {
-  const [visible, setVisible] = useState(() => shouldShowBootDiagnostics())
+  // Only surface the panel if boot stalls — normal Release boots should not cover the app.
+  const [visible, setVisible] = useState(false)
   const [logs, setLogs] = useState(getBootLogs)
   const [sending, setSending] = useState<"email" | "server" | null>(null)
   const [watchdog, setWatchdog] = useState(false)
@@ -43,16 +43,25 @@ export function BootDiagnosticsShell({ children }: Props) {
   const refreshLogs = useCallback(() => setLogs(getBootLogs()), [])
 
   useEffect(() => {
-    void SplashScreen.hideAsync().catch(() => {})
     refreshLogs()
     return subscribeBootLogs(refreshLogs)
   }, [refreshLogs])
 
+  const onPanelLayout = useCallback(() => {
+    void SplashScreen.hideAsync().catch(() => {})
+  }, [])
+
   useEffect(() => {
-    if (!visible || dismissed) return
-    const timer = setTimeout(() => setWatchdog(true), WATCHDOG_MS)
+    if (dismissed || (typeof __DEV__ !== "undefined" && __DEV__)) return
+    const timer = setTimeout(() => {
+      if (!isBootComplete()) {
+        setWatchdog(true)
+        setVisible(true)
+        void SplashScreen.hideAsync().catch(() => {})
+      }
+    }, WATCHDOG_MS)
     return () => clearTimeout(timer)
-  }, [visible, dismissed])
+  }, [dismissed])
 
   useEffect(() => {
     if (!isBootComplete() || dismissed) return
@@ -91,7 +100,7 @@ export function BootDiagnosticsShell({ children }: Props) {
 
   return (
     <View style={styles.root}>
-      <View style={styles.panel}>
+      <View style={styles.panel} onLayout={onPanelLayout}>
         <Text style={styles.brand}>CourseCollab — Boot Diagnostics</Text>
         <Text style={styles.subtitle}>
           TestFlight startup trace (build {version} / {buildNumber})

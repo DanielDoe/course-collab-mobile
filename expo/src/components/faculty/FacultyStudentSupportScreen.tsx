@@ -168,6 +168,7 @@ export function FacultyStudentSupportScreen() {
         }
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
       >
         {tab === "queues" ? (
         <>

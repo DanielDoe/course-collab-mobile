@@ -140,6 +140,7 @@ export function FacultyRecentActivityScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={() => void handleRefresh()} tintColor={FACULTY_ACTIVITY_COLOR.link} />
         }
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
       >
         <FacultyRecentActivityKpiRow

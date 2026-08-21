@@ -23,6 +23,8 @@ import { solidListThumb, type SolidListThumb } from "../../lib/solid-list-thumb"
 import { SolidListThumbTile } from "../theme/SolidListThumbTile"
 import { FacultyEmptyState } from "../faculty/faculty-shared"
 import { AppErrorScreen } from "../errors/AppErrorScreen"
+import { DismissKeyboardView } from "../ui/DismissKeyboardView"
+import { keyboardDismissScrollProps } from "../../lib/keyboard-dismiss-scroll-props"
 
 export const MODULE_PAGE_BG = NATIVE.groupedBackground
 
@@ -122,8 +124,9 @@ export function ModuleScreen({
         ) : undefined
       }
       showsVerticalScrollIndicator={false}
-      keyboardShouldPersistTaps="handled"
+      {...keyboardDismissScrollProps}
     >
+      <DismissKeyboardView>
       {error ? (
         <AppErrorScreen
           error={typeof error === "string" ? new Error(error) : error}
@@ -141,6 +144,7 @@ export function ModuleScreen({
       ) : (
         children
       )}
+      </DismissKeyboardView>
     </ScrollView>
   )
 }

@@ -83,6 +83,7 @@ export function FacultyAcademicTermFormModal({
         <ScrollView
           contentContainerStyle={[collabSheetStyles.scroll, { paddingBottom: insets.bottom + 24 }]}
           keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         >
           {error ? <FacultySheetErrorBanner message={error} /> : null}
 
@@ -204,6 +205,7 @@ export function FacultySectionFormModal({
         <ScrollView
           contentContainerStyle={[collabSheetStyles.scroll, { paddingBottom: insets.bottom + 24 }]}
           keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         >
           <FacultySheetSection label="Section details" tone={SHEET_SECTION.edit}>
             <FacultySheetField label="Section code">

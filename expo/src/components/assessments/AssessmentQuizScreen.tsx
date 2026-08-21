@@ -784,6 +784,7 @@ export function AssessmentQuizScreen({ quizId, assessmentType, takeAction }: Pro
         contentContainerStyle={[styles.content, moduleContent]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
       >
         <View style={[styles.card, { backgroundColor: tokens.surface, borderColor: tokens.border }]}>
           {questionPrompt}

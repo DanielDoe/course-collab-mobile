@@ -133,6 +133,7 @@ export function FacultyManualAwardModal({
           style={styles.scroll}
           contentContainerStyle={[collabSheetStyles.scroll, styles.scrollContent]}
           keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}
         >
           <FacultySheetSection label="Award details" tone={SHEET_CLASSROOM_POINTS.award}>
@@ -230,6 +231,7 @@ export function FacultyManualAwardModal({
                 contentContainerStyle={styles.studentListContent}
                 nestedScrollEnabled
                 keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
                 showsVerticalScrollIndicator
               >
                 {filtered.map((student) => {

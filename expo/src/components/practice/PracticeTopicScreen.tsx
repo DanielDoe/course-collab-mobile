@@ -424,6 +424,7 @@ export function PracticeTopicScreen() {
           contentContainerStyle={[styles.content, scrollPad]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         >
           <Text style={[type.bodyEmphasis, { color: native.label }]}>{topic.name}</Text>
           <Text style={[type.caption, { color: native.secondaryLabel, lineHeight: 18 }]}>

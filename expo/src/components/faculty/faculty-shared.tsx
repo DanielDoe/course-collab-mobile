@@ -319,10 +319,10 @@ const styles = StyleSheet.create({
   cardHead: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 14,
-    paddingTop: 14,
-    paddingBottom: 10,
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   cardIcon: {
@@ -335,8 +335,8 @@ const styles = StyleSheet.create({
     flex: 1,
     fontWeight: "600" as const,
   },
-  cardBody: { padding: 14, gap: 10 },
-  cardBodyFlush: { paddingHorizontal: 0, paddingTop: 0, paddingBottom: 14 },
+  cardBody: { padding: 16, gap: 12 },
+  cardBodyFlush: { paddingHorizontal: 0, paddingTop: 0, paddingBottom: 16 },
   hero: {
     borderRadius: NATIVE.sectionRadius,
     padding: 16,

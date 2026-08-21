@@ -233,6 +233,7 @@ export function AssessmentIssuesSheet({
               style={styles.body}
               contentContainerStyle={styles.bodyContent}
               keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
               showsVerticalScrollIndicator={false}
             >
               <Text style={[styles.sectionLabel, { color: tokens.accentDark }]}>Which assessment?</Text>

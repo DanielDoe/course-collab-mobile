@@ -188,6 +188,7 @@ export function FacultyGroupCreateModal({ visible, scope, onClose, onCreated }: 
         <ScrollView
           contentContainerStyle={[collabSheetStyles.scroll, { paddingBottom: insets.bottom + 24 }]}
           keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         >
           <FacultySheetNotice
             tone="warning"

@@ -528,6 +528,7 @@ export function CoraChatSideNav({
                 style={styles.panelScroll}
                 contentContainerStyle={styles.panelScrollContent}
                 keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
                 showsVerticalScrollIndicator={false}
               >
                 <Text style={[type.caption, styles.sectionLabel, { color: native.secondaryLabel }]}>Chat history</Text>

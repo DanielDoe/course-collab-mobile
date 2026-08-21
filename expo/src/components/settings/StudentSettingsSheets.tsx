@@ -189,6 +189,7 @@ export function StudentProfileSettingsSheet({
         <ScrollView
           contentContainerStyle={[sheetStyles.scroll, { paddingBottom: insets.bottom + 24 }]}
           keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}
         >
           <Text style={[sheetStyles.lead, { color: tokens.textSecondary }]}>
@@ -253,6 +254,7 @@ export function StudentSecuritySettingsSheet({
         <ScrollView
           contentContainerStyle={[sheetStyles.scroll, { paddingBottom: insets.bottom + 24 }]}
           keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}
         >
           <Text style={[sheetStyles.lead, { color: tokens.textSecondary }]}>

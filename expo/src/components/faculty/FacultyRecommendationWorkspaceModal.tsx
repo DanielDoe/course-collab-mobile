@@ -380,6 +380,7 @@ export function FacultyRecommendationWorkspaceModal({
             <ScrollView
               contentContainerStyle={[collabSheetStyles.scroll, { paddingBottom: insets.bottom + 24 }]}
               keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
               showsVerticalScrollIndicator={false}
             >
               <FacultySheetHero

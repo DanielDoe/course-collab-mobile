@@ -161,6 +161,7 @@ export function FacultyReportsScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={() => void handleRefresh()} tintColor={FACULTY_REPORTS_COLOR.link} />
         }
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
       >
         {error ? (

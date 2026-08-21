@@ -226,6 +226,7 @@ export function CoraImportCourseSheet({
               contentContainerStyle={styles.list}
               ItemSeparatorComponent={() => <View style={styles.listGap} />}
               keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
               initialNumToRender={200}
               maxToRenderPerBatch={200}
               windowSize={31}

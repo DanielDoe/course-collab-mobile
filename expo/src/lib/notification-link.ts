@@ -29,13 +29,13 @@ export function resolveNotificationLink(link: string | null | undefined): string
   if (path.startsWith("/membership") || path.includes("/membership")) {
     return "/membership"
   }
-  if (path.startsWith("/announcements")) {
-    return path
-  }
-
   const openAnnouncementId = params?.get("open")
   if (openAnnouncementId && /^\d+$/.test(openAnnouncementId)) {
     return `/announcements/${openAnnouncementId}`
+  }
+
+  if (path.startsWith("/announcements")) {
+    return path
   }
 
   const v2Prefix = "/student/dashboard-v2/"
@@ -129,9 +129,21 @@ export function resolveNotificationLink(link: string | null | undefined): string
   return null
 }
 
+/** Numeric announcement id from a resolved native route like `/announcements/123`. */
+export function announcementIdFromNotificationRoute(route: string | null | undefined): number | null {
+  if (!route) return null
+  const match = route.match(/^\/announcements\/(\d+)(?:\?|$)/)
+  if (!match) return null
+  const id = Number(match[1])
+  return Number.isFinite(id) ? id : null
+}
+
 function mapStudentDashboardSegment(segment: string, tail: string[], search: string): string | null {
   if (segment === "announcements") {
-    return tail.length ? `/announcements/${tail[0]}` : "/announcements"
+    if (tail.length && /^\d+$/.test(tail[0])) return `/announcements/${tail[0]}`
+    const openId = new URLSearchParams(search).get("open")
+    if (openId && /^\d+$/.test(openId)) return `/announcements/${openId}`
+    return "/announcements"
   }
   if (segment === "forum" && tail[0] === "thread" && tail[1]) {
     return `/collaboration/forum/thread/${tail[1]}${search ? `?${search}` : ""}`

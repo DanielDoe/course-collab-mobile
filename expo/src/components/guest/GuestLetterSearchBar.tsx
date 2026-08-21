@@ -66,6 +66,7 @@ export function GuestLetterSearchBar({
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.chipRow}
             keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
           >
             {filterOptions.map((opt) => {
               const active = opt.id === filter

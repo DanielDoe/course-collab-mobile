@@ -219,6 +219,7 @@ export function FacultyRecentActivityActionSheet({
           contentContainerStyle={[collabSheetStyles.scroll, { paddingBottom: insets.bottom + 24 }]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         >
           <FacultySheetHero
             title={item.student_name ?? "Student"}

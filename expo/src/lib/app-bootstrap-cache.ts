@@ -31,6 +31,7 @@ export type StudentShellBootstrap = {
 export type FacultyShellBootstrap = {
   courses: InstructorCourse[]
   courseId: number
+  pickerKey?: string | null
   notificationCount: number
   membershipTier: FacultyMembershipTier | null
   badges: {
@@ -46,6 +47,8 @@ export type FacultyDashboardBootstrap = {
   charts: InstructorDashboardCharts
   activity: InstructorRecentActivity[]
   courseId: number
+  academicTermId?: number | null
+  sessionCode?: string | null
 }
 
 let studentDashboardCache: StudentDashboardBootstrap | null = null

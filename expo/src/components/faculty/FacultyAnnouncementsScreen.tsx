@@ -218,6 +218,7 @@ export function FacultyAnnouncementsScreen() {
           />
         }
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
       >
         {error ? (

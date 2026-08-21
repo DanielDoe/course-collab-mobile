@@ -160,8 +160,10 @@ const styles = StyleSheet.create({
   note: {
     flexDirection: "row",
     alignItems: "flex-start",
-    gap: 10,
-    padding: 14,
+    gap: 12,
+    marginTop: 18,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
     borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
   },

@@ -20,7 +20,6 @@ import {
   FACULTY_PROFILE_SETTINGS_LINK,
   FACULTY_SUPPORT_GROUP,
   getFacultyActiveNavItemId,
-  getFacultyNavGroupIdForPath,
   hasFacultyNavAccess,
   isFacultyNavItemVisible,
   type FacultyNavGroup,
@@ -40,7 +39,15 @@ import { NativeCountBadge } from "../faculty/faculty-shared"
 import { BrandLogoMark } from "../brand/BrandLogoMark"
 import { useFacultyShell } from "../../context/FacultyShellContext"
 import type { FacultySession } from "../../lib/session"
+import type { InstructorCourse } from "../../lib/instructor-api"
 import type { FacultyMembershipTier } from "../../types/dashboard"
+
+function facultyScopeLabel(course: InstructorCourse | null | undefined): string {
+  if (!course) return "Select course"
+  if (course.picker_is_section_row && course.session_code) return course.session_code
+  if (course.picker_display_title && course.picker_is_section_row) return course.picker_display_title
+  return course.course_code
+}
 import { DrawerNavAnchor, useDrawerScrollToActive } from "../../lib/drawer-scroll-to-active"
 import { useDrawerPanelWidth } from "../../lib/responsive-layout"
 import { isFacultyDrawerRouteActive, navigateFacultyDrawerRoute } from "../../lib/faculty-drawer-navigation"
@@ -66,17 +73,13 @@ export function FacultyDrawer({ session }: Props) {
   const type = useNativeType()
   const glassChrome = useGlassChromeActive()
   const activeItemId = useMemo(() => getFacultyActiveNavItemId(pathname), [pathname])
-  const activeGroupId = useMemo(() => getFacultyNavGroupIdForPath(pathname), [pathname])
-  const scrollTargetId =
-    activeGroupId === "administration" || activeGroupId === "support" ? null : activeItemId
   const normalizedPathname = useMemo(() => normalizeRoutePathname(pathname), [pathname])
-  const { scrollRef, contentRef, registerRow, unregisterRow } = useDrawerScrollToActive(scrollTargetId, drawerOpen)
+  const { scrollRef, contentRef, registerRow, unregisterRow, onRowLayout, onScroll } =
+    useDrawerScrollToActive(activeItemId, drawerOpen)
 
-  const [drawerMounted, setDrawerMounted] = useState(false)
   const [modalVisible, setModalVisible] = useState(false)
   const backdropOpacity = useSharedValue(0)
-  const panelOpacity = useSharedValue(0)
-  const panelScale = useSharedValue(0.97)
+  const panelTranslateX = useSharedValue(-panelWidth)
 
   const finishClose = useCallback(() => setModalVisible(false), [])
 
@@ -85,29 +88,26 @@ export function FacultyDrawer({ session }: Props) {
   }, [pathname, closeDrawer])
 
   useEffect(() => {
-    if (drawerOpen) setDrawerMounted(true)
-  }, [drawerOpen])
+    panelTranslateX.value = drawerOpen ? 0 : -panelWidth
+  }, [drawerOpen, panelTranslateX, panelWidth])
 
   useEffect(() => {
     if (drawerOpen) {
       setModalVisible(true)
       backdropOpacity.value = withTiming(1, { duration: 220, easing: Easing.out(Easing.cubic) })
-      panelOpacity.value = withTiming(1, { duration: 240, easing: Easing.out(Easing.cubic) })
-      panelScale.value = withSpring(1, { damping: 19, stiffness: 240 })
+      panelTranslateX.value = withSpring(0, { damping: 22, stiffness: 260 })
       return
     }
 
     backdropOpacity.value = withTiming(0, { duration: 180 })
-    panelOpacity.value = withTiming(0, { duration: 160 })
-    panelScale.value = withTiming(0.97, { duration: 160 }, (finished) => {
-      runOnJS(finishClose)()
+    panelTranslateX.value = withTiming(-panelWidth, { duration: 200 }, (finished) => {
+      if (finished) runOnJS(finishClose)()
     })
-  }, [drawerOpen, backdropOpacity, panelOpacity, panelScale, finishClose])
+  }, [drawerOpen, backdropOpacity, panelTranslateX, panelWidth, finishClose])
 
   const backdropStyle = useAnimatedStyle(() => ({ opacity: backdropOpacity.value }))
   const panelStyle = useAnimatedStyle(() => ({
-    opacity: panelOpacity.value,
-    transform: [{ scale: panelScale.value }],
+    transform: [{ translateX: panelTranslateX.value }],
   }))
 
   function badgeFor(item: FacultyNavItem): number | null {
@@ -142,8 +142,6 @@ export function FacultyDrawer({ session }: Props) {
   const tierPlan = membershipTierLoaded ? getFacultyMembershipPlan(membershipTier) : null
   const tierBadge = membershipTierLoaded ? facultyMembershipTierSolidBadge(membershipTier) : null
   const layout = drawerShellLayout(panelWidth, insets, drawerTheme)
-
-  if (!drawerMounted) return null
 
   return (
     <Modal visible={modalVisible} transparent animationType="none" onRequestClose={closeDrawer} statusBarTranslucent>
@@ -210,7 +208,7 @@ export function FacultyDrawer({ session }: Props) {
                       style={[type.footnote, styles.courseText, { color: drawerTheme.secondaryLabel }]}
                       numberOfLines={1}
                     >
-                      {selectedCourse?.course_code ?? "Select course"}
+                      {facultyScopeLabel(selectedCourse)}
                       {session.role ? ` · ${session.role}` : ""}
                     </Text>
                   </View>
@@ -233,9 +231,16 @@ export function FacultyDrawer({ session }: Props) {
             style={[styles.scroll, { backgroundColor: layout.scrollBackground }]}
             contentContainerStyle={[styles.scrollContent, layout.scrollContent]}
             showsVerticalScrollIndicator={false}
+            onScroll={onScroll}
+            scrollEventThrottle={16}
           >
             <View ref={contentRef} collapsable={false}>
-              <DrawerNavAnchor itemId={FACULTY_DASHBOARD_LINK.id} registerRow={registerRow} unregisterRow={unregisterRow}>
+              <DrawerNavAnchor
+                itemId={FACULTY_DASHBOARD_LINK.id}
+                registerRow={registerRow}
+                unregisterRow={unregisterRow}
+                onRowLayout={onRowLayout}
+              >
                 <NavRow
                   item={FACULTY_DASHBOARD_LINK}
                   active={isFacultyDrawerRouteActive(normalizedPathname, FACULTY_DASHBOARD_LINK.route)}
@@ -246,7 +251,12 @@ export function FacultyDrawer({ session }: Props) {
                 />
               </DrawerNavAnchor>
 
-              <DrawerNavAnchor itemId={FACULTY_CORA_LINK.id} registerRow={registerRow} unregisterRow={unregisterRow}>
+              <DrawerNavAnchor
+                itemId={FACULTY_CORA_LINK.id}
+                registerRow={registerRow}
+                unregisterRow={unregisterRow}
+                onRowLayout={onRowLayout}
+              >
                 <NavRow
                   item={FACULTY_CORA_LINK}
                   active={isFacultyDrawerRouteActive(normalizedPathname, FACULTY_CORA_LINK.route)}
@@ -266,6 +276,7 @@ export function FacultyDrawer({ session }: Props) {
                   onPress={navigate}
                   registerRow={registerRow}
                   unregisterRow={unregisterRow}
+                  onRowLayout={onRowLayout}
                   tier={membershipTier}
                   tierLoaded={membershipTierLoaded}
                   selectedCourse={selectedCourse}
@@ -279,6 +290,7 @@ export function FacultyDrawer({ session }: Props) {
                 onPress={navigate}
                 registerRow={registerRow}
                 unregisterRow={unregisterRow}
+                onRowLayout={onRowLayout}
                 tier={membershipTier}
                 tierLoaded={membershipTierLoaded}
                 selectedCourse={selectedCourse}
@@ -290,6 +302,7 @@ export function FacultyDrawer({ session }: Props) {
                 itemId={FACULTY_PROFILE_SETTINGS_LINK.id}
                 registerRow={registerRow}
                 unregisterRow={unregisterRow}
+                onRowLayout={onRowLayout}
               >
                 <NavRow
                   item={FACULTY_PROFILE_SETTINGS_LINK}
@@ -362,6 +375,7 @@ function FlatNavSection({
   onPress,
   registerRow,
   unregisterRow,
+  onRowLayout,
   tier,
   tierLoaded,
   selectedCourse,
@@ -372,6 +386,7 @@ function FlatNavSection({
   onPress: (item: FacultyNavItem) => void
   registerRow: (itemId: string, ref: RefObject<View | null>) => void
   unregisterRow: (itemId: string) => void
+  onRowLayout: (itemId: string) => void
   tier: FacultyMembershipTier
   tierLoaded: boolean
   selectedCourse: import("../../lib/instructor-api").InstructorCourse | null
@@ -386,7 +401,13 @@ function FlatNavSection({
       <View style={[styles.divider, { backgroundColor: theme.headerBorder }]} />
       <Text style={[styles.sectionLabel, { color: theme.secondaryLabel }]}>{group.label}</Text>
       {visibleItems.map((item) => (
-        <DrawerNavAnchor key={item.id} itemId={item.id} registerRow={registerRow} unregisterRow={unregisterRow}>
+        <DrawerNavAnchor
+          key={item.id}
+          itemId={item.id}
+          registerRow={registerRow}
+          unregisterRow={unregisterRow}
+          onRowLayout={onRowLayout}
+        >
           <NavRow
             item={item}
             active={isFacultyDrawerRouteActive(pathname, item.route)}

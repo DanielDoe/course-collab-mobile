@@ -353,6 +353,7 @@ export function FacultyFilterSheet({
       <ScrollView
         contentContainerStyle={[shellStyles.filterSheetList, { paddingBottom: insets.bottom + 24 }]}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
       >
         <GlassMenuList>
@@ -1003,6 +1004,7 @@ export function FacultyGroupedFilterSheet({
       <ScrollView
         contentContainerStyle={[shellStyles.groupedFilterList, { paddingBottom: insets.bottom + 24 }]}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
       >
         {groups.map((group) => (

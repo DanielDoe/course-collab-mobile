@@ -38,6 +38,8 @@ import { UniversityAuthLogoImage } from "./UniversityAuthLogoImage"
 import { LoginBackLink, LoginPortalStack } from "./login-chrome"
 import { useLoginTheme } from "./login-theme"
 import { parseAccessLifecyclePayload } from "../../lib/access-governance"
+import { formatStudentLoginApiError } from "../../lib/student-login-errors"
+import { normalizeLoginIdentifier, normalizeLoginPassword } from "../../lib/login-credentials"
 import { AccessRequestStatusScreen } from "../auth/AccessRequestStatusScreen"
 import { parseMfaCompletePayload, parseMfaLoginResponse, type MfaLoginState } from "../../lib/mfa-types"
 
@@ -244,8 +246,10 @@ export function StudentLoginPanel({ onBack }: Props) {
       return
     }
 
-    const id = pendingCredentials?.identifier ?? identifier
-    const pw = pendingCredentials?.password ?? password
+    const id = normalizeLoginIdentifier(pendingCredentials?.identifier ?? identifier)
+    const pw = normalizeLoginPassword(pendingCredentials?.password ?? password)
+    if (id !== identifier) setIdentifier(id)
+    if (pw !== password) setPassword(pw)
 
     setSubmitting(true)
     setError("")
@@ -280,7 +284,7 @@ export function StudentLoginPanel({ onBack }: Props) {
           setAccessStatus(lifecycle)
           return
         }
-        setError(err.message)
+        setError(formatStudentLoginApiError(err.message, err.details))
       } else {
         setError("Login failed. Please try again.")
       }
@@ -304,10 +308,14 @@ export function StudentLoginPanel({ onBack }: Props) {
   }
 
   async function handleLogin() {
-    if (!identifier.trim() || !password) {
+    const id = normalizeLoginIdentifier(identifier)
+    const pw = normalizeLoginPassword(password)
+    if (!id || !pw) {
       setError("Enter your student ID or email and password.")
       return
     }
+    setIdentifier(id)
+    setPassword(pw)
     setPendingCredentials(null)
     await submitLogin()
   }
@@ -358,7 +366,11 @@ export function StudentLoginPanel({ onBack }: Props) {
 
       await finishLogin(data)
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Activation failed. Please try again.")
+      setError(
+        err instanceof ApiError
+          ? formatStudentLoginApiError(err.message, err.details)
+          : "Activation failed. Please try again.",
+      )
     } finally {
       setSubmitting(false)
     }

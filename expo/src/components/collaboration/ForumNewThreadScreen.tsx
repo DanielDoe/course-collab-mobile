@@ -67,6 +67,7 @@ export function ForumNewThreadScreen() {
       <ScrollView
         contentContainerStyle={[styles.content, scrollPad]}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
       >
         <CollabScreenTitle title="New thread" subtitle="Ask the class a question" />
         <Text style={[styles.label, { color: theme.primaryDark }]}>Title</Text>

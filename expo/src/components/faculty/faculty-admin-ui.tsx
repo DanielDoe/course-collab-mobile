@@ -183,6 +183,7 @@ export function FacultyAdminScreen({
         style={[moduleStyles.scroll, adminStyles.screenScroll]}
         contentContainerStyle={[adminStyles.screenContent, scrollPad]}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         refreshControl={
           onRefresh ? (
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={FACULTY_ADMIN_COLOR.link} />

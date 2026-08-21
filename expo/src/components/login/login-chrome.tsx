@@ -1,8 +1,10 @@
 import type { ReactNode } from "react"
 import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native"
 import { portalMeta, type MobileLoginPortal } from "../../constants/portals"
+import { useAuthFlowLayout } from "../../lib/responsive-layout"
 import { LoginBrandHeader } from "./LoginBrandHeader"
 import { useLoginTheme } from "./login-theme"
+export { DismissKeyboardView } from "../ui/DismissKeyboardView"
 
 type BackLinkProps = {
   label: string
@@ -37,11 +39,12 @@ export function LoginPortalStack({
   children: ReactNode
   style?: StyleProp<ViewStyle>
 }) {
-  return <View style={[styles.stack, style]}>{children}</View>
+  const { stackGap } = useAuthFlowLayout()
+  return <View style={[styles.stack, { gap: stackGap }, style]}>{children}</View>
 }
 
 const styles = StyleSheet.create({
-  stack: { gap: 20, alignSelf: "stretch" },
+  stack: { alignSelf: "stretch" },
   backLink: {
     alignItems: "center",
     justifyContent: "center",

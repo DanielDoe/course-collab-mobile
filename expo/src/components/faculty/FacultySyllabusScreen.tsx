@@ -263,6 +263,7 @@ export function FacultySyllabusScreen() {
         }
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
       >
         {loading ? (
           <ActivityIndicator color={COURSE_INFO_ACTION.fill} style={{ marginTop: 32 }} />

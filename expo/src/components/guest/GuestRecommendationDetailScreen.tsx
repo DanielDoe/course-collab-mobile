@@ -282,6 +282,7 @@ export function GuestRecommendationDetailScreen() {
         style={[collabSheetStyles.root, { backgroundColor: native.groupedBackground }]}
         contentContainerStyle={[collabSheetStyles.scroll, scrollPad]}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
         showsVerticalScrollIndicator={false}
       >

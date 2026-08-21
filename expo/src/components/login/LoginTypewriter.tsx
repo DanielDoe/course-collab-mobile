@@ -14,6 +14,7 @@ import Animated, {
   withRepeat,
   withTiming,
 } from "react-native-reanimated"
+import { useAuthFlowLayout } from "../../lib/responsive-layout"
 import { useLoginTheme } from "./login-theme"
 
 /** Rotating login headlines — opener matches auth welcome; rest inspired by web LandingHero. */
@@ -60,6 +61,7 @@ type Props = {
 
 export function LoginTypewriter({ style, color }: Props) {
   const { LOGIN, loginType } = useLoginTheme()
+  const { isCompactHeight } = useAuthFlowLayout()
   const accent = color ?? LOGIN.purple
   const [lineIndex, setLineIndex] = useState(0)
   const [charCount, setCharCount] = useState(0)
@@ -148,7 +150,11 @@ export function LoginTypewriter({ style, color }: Props) {
   }, [reduceMotion])
 
   return (
-    <View style={styles.wrap} accessibilityRole="header" accessibilityLabel={currentLine}>
+    <View
+      style={[styles.wrap, { minHeight: isCompactHeight ? 56 : 72 }]}
+      accessibilityRole="header"
+      accessibilityLabel={currentLine}
+    >
       <Text style={[loginType.heroTitle, styles.headline, { color: accent }, style]}>
         {visible}
         {!reduceMotion ? <TypewriterCaret color={accent} /> : null}
@@ -159,13 +165,10 @@ export function LoginTypewriter({ style, color }: Props) {
 
 const styles = StyleSheet.create({
   wrap: {
-    minHeight: 72,
     justifyContent: "center",
     width: "100%",
   },
   headline: {
     textAlign: "center",
-    fontSize: 28,
-    lineHeight: 34,
   },
 })

@@ -416,6 +416,7 @@ export function MessageActionSheet({
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.emojiRow}
           keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         >
           {MESSAGE_QUICK_REACTIONS.map((emoji, index) => {
             const active = Boolean(

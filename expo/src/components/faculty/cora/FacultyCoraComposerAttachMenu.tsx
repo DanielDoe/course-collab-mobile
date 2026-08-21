@@ -129,6 +129,7 @@ export function FacultyCoraComposerAttachMenu({ visible, onClose, onAttachment, 
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.menuContent}
             keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
             renderItem={({ item: entry }) => {
               if (entry.kind === "section") {
                 return <SectionHeader label={entry.label} />

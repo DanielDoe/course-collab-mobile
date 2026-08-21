@@ -358,6 +358,7 @@ export function FacultyPlaygroundSessionDetailModal({
         <ScrollView
           contentContainerStyle={[collabSheetStyles.scroll, { paddingBottom: insets.bottom + 24 }]}
           keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         >
           {loadError ? <FacultySheetErrorBanner message={loadError} /> : null}
           {tab === "leaderboard" ? (

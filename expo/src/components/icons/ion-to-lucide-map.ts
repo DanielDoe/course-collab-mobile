@@ -180,6 +180,7 @@ export const ION_TO_LUCIDE: Partial<Record<IoniconName, LucideIcon | "__brand__"
   "alert-circle": CircleAlert,
   "alert-circle-outline": CircleAlert,
   "analytics-outline": ChartPie,
+  archive: Archive,
   "archive-outline": Archive,
   "arrow-back": ArrowLeft,
   "arrow-down": ArrowDown,

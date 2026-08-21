@@ -1,6 +1,7 @@
 import { type Announcement } from "./api"
 import { studentApi } from "./student-api"
 import { instructorApi, type InstructorCourse } from "./instructor-api"
+import { fetchInstructorDashboardStats } from "./faculty-dashboard-stats"
 import { courseExchangeDrawerBadgeCount } from "./course-exchange-shared"
 import {
   fetchNotificationCount,
@@ -15,7 +16,7 @@ import {
   fetchFacultyCoursesList,
   type FacultyCourseResolution,
 } from "./faculty-post-login"
-import { setStoredFacultyCourseId } from "./faculty-course-storage"
+import { setStoredFacultyCourseId, setStoredFacultySessionCode } from "./faculty-course-storage"
 import {
   clearBootstrapCaches,
   setFacultyCoursesBootstrap,
@@ -89,12 +90,22 @@ async function bootstrapFacultyForCourse(
   course: NonNullable<FacultyCourseResolution["suggestedCourse"]>,
   courses: InstructorCourse[],
 ) {
-  const scope = { instructorId: session.id, courseId: course.id }
+  const scope = {
+    instructorId: session.id,
+    courseId: course.id,
+    sessionId: course.session_id ?? null,
+    sessionCode: course.session_code ?? null,
+    academicTermId: course.academic_term_id ?? null,
+  }
   const [stats, charts, activity, notifications, pendingPoints, issues, officeHours, exchangeSummary, tier] =
     await Promise.all([
-      instructorApi.getDashboardStats(scope),
-      instructorApi.getDashboardCharts(scope),
-      instructorApi.getRecentActivity(scope),
+      fetchInstructorDashboardStats(scope),
+      instructorApi.getDashboardCharts(scope).catch(() => ({
+        submissionsOverTime: [],
+        assessmentBreakdown: [],
+        scoreTrend: [],
+      })),
+      instructorApi.getRecentActivity(scope).catch(() => []),
       instructorApi.getNotifications(session.id).catch(() => ({ unread_count: 0 })),
       instructorApi.getPendingClassroomPoints(scope).catch(() => []),
       instructorApi.getIssues(scope, "open").catch(() => []),
@@ -114,6 +125,7 @@ async function bootstrapFacultyForCourse(
   setFacultyShellBootstrap({
     courses,
     courseId: course.id,
+    pickerKey: course.picker_key ?? null,
     notificationCount: notifications.unread_count ?? 0,
     membershipTier: tier,
     badges: {
@@ -129,6 +141,8 @@ async function bootstrapFacultyForCourse(
     charts,
     activity: activity.slice(0, 8),
     courseId: course.id,
+    academicTermId: course.academic_term_id ?? null,
+    sessionCode: course.session_code ?? null,
   })
 }
 
@@ -140,6 +154,7 @@ async function bootstrapFaculty(session: FacultySession) {
   }
   const course = courses[0]!
   await setStoredFacultyCourseId(session.id, course.id)
+  await setStoredFacultySessionCode(session.id, course.id, course.session_code)
   await bootstrapFacultyForCourse(session, course, courses)
 }
 

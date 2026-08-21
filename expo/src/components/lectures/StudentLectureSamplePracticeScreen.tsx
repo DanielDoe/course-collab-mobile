@@ -110,6 +110,7 @@ export function StudentLectureSamplePracticeScreen({ lectureId, week }: Props) {
           contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom, 16) + 16 }]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         >
           <StudentLectureSamplePracticePanel
             lectureId={lectureId}

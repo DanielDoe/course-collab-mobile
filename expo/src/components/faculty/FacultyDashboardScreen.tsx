@@ -36,6 +36,7 @@ import { FacultyEmptyState, FacultyListRow, FacultySectionCard, NativeCountBadge
 import { DashboardWelcomeCard } from "../dashboard/DashboardWelcomeCard"
 import { consumeFacultyDashboardBootstrap } from "../../lib/app-bootstrap-cache"
 import { ensureAppBootstrap } from "../../lib/post-login-bootstrap"
+import { fetchInstructorDashboardStats } from "../../lib/faculty-dashboard-stats"
 import { FACULTY_CHART_COLORS } from "../../lib/faculty-dashboard-theme"
 import { useModuleTheme } from "../../lib/themed-module-shell"
 import { useDashboardContentStyle, useChartContentWidth, useKpiGridCardStyle } from "../../lib/responsive-layout"
@@ -70,7 +71,12 @@ export function FacultyDashboardScreen() {
     await ensureAppBootstrap(session)
 
     const cached = consumeFacultyDashboardBootstrap()
-    if (cached && cached.courseId === scope.courseId) {
+    if (
+      cached &&
+      cached.courseId === scope.courseId &&
+      (cached.academicTermId ?? null) === (scope.academicTermId ?? null) &&
+      (cached.sessionCode ?? null) === (scope.sessionCode ?? null)
+    ) {
       setStats(cached.stats)
       setCharts(cached.charts)
       setActivity(cached.activity)
@@ -80,7 +86,7 @@ export function FacultyDashboardScreen() {
 
     try {
       const [nextStats, nextCharts, nextActivity] = await Promise.all([
-        instructorApi.getDashboardStats(scope),
+        fetchInstructorDashboardStats(scope),
         instructorApi.getDashboardCharts(scope),
         instructorApi.getRecentActivity(scope),
       ])
@@ -205,7 +211,11 @@ export function FacultyDashboardScreen() {
             </View>
           ) : null}
 
-          <FacultyKpiGrid stats={stats} />
+          <FacultyKpiGrid
+            stats={stats}
+            sessionCode={course?.session_code}
+            termLabel={course?.term_label ?? course?.semester ?? null}
+          />
 
           <FacultyChartCard
             title={submissionsChart?.title ?? "Submissions (Last 7 Days)"}

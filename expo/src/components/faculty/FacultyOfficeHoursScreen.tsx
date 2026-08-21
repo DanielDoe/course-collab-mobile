@@ -247,6 +247,7 @@ export function FacultyOfficeHoursScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={() => void handleRefresh()} tintColor={FACULTY_OFFICE_HOURS_COLOR.link} />
         }
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
       >
         {error ? (
@@ -344,6 +345,7 @@ export function FacultyOfficeHoursScreen() {
                 { paddingTop: 8, gap: 12, paddingBottom: insets.bottom + 20 },
               ]}
               keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
             >
               <View style={styles.sheetTopicRow}>
                 <Text style={[styles.sheetTopic, { color: native.label }]}>{selected.topic}</Text>

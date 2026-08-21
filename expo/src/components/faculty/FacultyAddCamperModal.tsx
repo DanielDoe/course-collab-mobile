@@ -137,6 +137,7 @@ export function FacultyAddCamperModal({ visible, scope, campId, onClose, onCreat
       <ScrollView
         contentContainerStyle={[collabSheetStyles.scroll, { paddingBottom: insets.bottom + 24 }]}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
       >
         <FacultySheetNotice
           tone="warning"

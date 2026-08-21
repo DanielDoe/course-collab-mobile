@@ -21,6 +21,7 @@ import {
   facultyCoursePickerSections,
   facultyCourseRowSemesterVisible,
 } from "../../lib/faculty-course-lists"
+import { facultyPickerItemMatchesSelection } from "../../lib/faculty-post-login"
 import { FacultyCoursePickerRow } from "../faculty/FacultyCollabListCards"
 
 type Props = {
@@ -61,7 +62,7 @@ export function FacultyCoursePicker({ session }: Props) {
   async function selectCourse(course: InstructorCourse) {
     if (!course.id || course.id <= 0) return
     setSelectedCourse(course)
-    await persistFacultyCourse(session.id, course.id)
+    await persistFacultyCourse(session.id, course.id, course.session_code)
     closeCoursePicker()
     try {
       await refreshFacultyData?.(course)
@@ -70,10 +71,7 @@ export function FacultyCoursePicker({ session }: Props) {
     }
   }
 
-  const uniqueCourses = useMemo(
-    () => [...new Map(courses.map((course) => [course.id, course])).values()],
-    [courses],
-  )
+  const uniqueCourses = useMemo(() => courses, [courses])
   const sections = useMemo(() => facultyCoursePickerSections(uniqueCourses), [uniqueCourses])
   const duplicateCodes = useMemo(() => {
     return new Set(
@@ -148,11 +146,11 @@ export function FacultyCoursePicker({ session }: Props) {
                   </Text>
                 ) : null}
                 {section.courses.map((course) => {
-                  const active = selectedCourse?.id === course.id
+                  const active = facultyPickerItemMatchesSelection(selectedCourse, course)
                   const showSemester = facultyCourseRowSemesterVisible(course, uniqueCourses, duplicateCodes)
                   return (
                     <FacultyCoursePickerRow
-                      key={course.id}
+                      key={course.picker_key ?? String(course.id)}
                       course={course}
                       active={active}
                       showSemester={showSemester}

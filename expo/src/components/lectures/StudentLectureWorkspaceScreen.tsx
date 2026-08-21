@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useState, type ReactNode } from "react"
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useRouter } from "expo-router"
@@ -16,8 +16,6 @@ import { FacultyEmptyState } from "../faculty/faculty-shared"
 import { LectureSlidePreviewToolbar } from "./LectureSlidePreviewToolbar"
 import { StudentLectureWorkspacePanel } from "./StudentLectureWorkspacePanel"
 import { StudentLectureWebToolModal } from "./StudentLectureWebToolModal"
-import { QuestionPrepareGate } from "../questions/QuestionPrepareGate"
-import { extractLectureWorkspaceQuestionTexts } from "../../lib/question-prepare"
 import { buildLectureWorkspaceStudentViewInjectScript } from "../../lib/web-session-inject"
 
 type Props = {
@@ -50,7 +48,7 @@ export function StudentLectureWorkspaceScreen({ lectureId, week }: Props) {
     setError("")
     try {
       const data = await fetchStudentLectureViewerData(session, lectureId)
-      const next = data.workspace
+      const next = data.workspace ?? defaultWorkspaceConfig()
       setConfig(next)
       setExpandedId(next.questions[0]?.id ?? null)
     } catch (err) {
@@ -68,10 +66,52 @@ export function StudentLectureWorkspaceScreen({ lectureId, week }: Props) {
   }, [session, load])
 
   const title = config.button_label?.trim() || config.title?.trim() || "Workspace"
-  const prepareTexts = useMemo(
-    () => (config.questions.length ? extractLectureWorkspaceQuestionTexts(config.questions) : null),
-    [config.questions],
-  )
+
+  let body: ReactNode
+  if (loading || !session) {
+    body = (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color={tokens.accent} />
+        <Text style={[type.caption, { color: native.secondaryLabel }]}>Loading workspace…</Text>
+      </View>
+    )
+  } else if (error) {
+    body = (
+      <View style={styles.center}>
+        <FacultyEmptyState icon="alert-circle-outline" title="Could not load" body={error} />
+      </View>
+    )
+  } else if (config.questions.length > 0) {
+    body = (
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom, 16) + 16 }]}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+      >
+        <StudentLectureWorkspacePanel
+          lectureId={lectureId}
+          studentDatabaseId={session.databaseId}
+          config={config}
+          expandedId={expandedId}
+          onToggle={(questionId) =>
+            setExpandedId((current) => (current === questionId ? null : questionId))
+          }
+        />
+      </ScrollView>
+    )
+  } else {
+    body = (
+      <View style={styles.center}>
+        <FacultyEmptyState
+          icon="easel-outline"
+          title="No workspace problems yet"
+          body="Your instructor has not published in-class workspace problems for this lecture."
+        />
+      </View>
+    )
+  }
 
   return (
     <View style={[styles.root, { backgroundColor: native.groupedBackground }]}>
@@ -91,56 +131,7 @@ export function StudentLectureWorkspaceScreen({ lectureId, week }: Props) {
         }
       />
 
-      {loading ? (
-        <QuestionPrepareGate
-          fetching
-          texts={null}
-          title="Preparing workspace"
-          subtitle="Loading lecture questions and solutions"
-        >
-          <View style={styles.center}>
-            <ActivityIndicator size="large" color={tokens.accent} />
-            <Text style={[type.caption, { color: native.secondaryLabel }]}>Loading workspace…</Text>
-          </View>
-        </QuestionPrepareGate>
-      ) : error ? (
-        <View style={styles.center}>
-          <FacultyEmptyState icon="alert-circle-outline" title="Could not load" body={error} />
-        </View>
-      ) : config.questions.length > 0 && session ? (
-        <QuestionPrepareGate
-          fetching={false}
-          texts={prepareTexts}
-          title="Preparing workspace"
-          subtitle="Loading lecture questions and solutions"
-          enabled={Boolean(prepareTexts?.length)}
-        >
-        <ScrollView
-          style={styles.scroll}
-          contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom, 16) + 16 }]}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        >
-          <StudentLectureWorkspacePanel
-            lectureId={lectureId}
-            studentDatabaseId={session.databaseId}
-            config={config}
-            expandedId={expandedId}
-            onToggle={(questionId) =>
-              setExpandedId((current) => (current === questionId ? null : questionId))
-            }
-          />
-        </ScrollView>
-        </QuestionPrepareGate>
-      ) : (
-        <View style={styles.center}>
-          <FacultyEmptyState
-            icon="easel-outline"
-            title="No workspace problems yet"
-            body="Your instructor has not published in-class workspace problems for this lecture."
-          />
-        </View>
-      )}
+      {body}
 
       {webOpen ? (
         <StudentLectureWebToolModal

@@ -85,6 +85,7 @@ export function FacultyCourseExchangeShareSettingsSheet({
         contentContainerStyle={[collabSheetStyles.scroll, styles.scrollContent]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
       >
         <FacultySheetHero
           title={course.courseTitle}

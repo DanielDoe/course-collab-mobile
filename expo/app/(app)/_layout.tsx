@@ -42,6 +42,8 @@ export default function AppLayout() {
         fullScreenGestureEnabled: false,
         animation: "slide_from_right",
         contentStyle: { flex: 1, backgroundColor: tokens.native.groupedBackground },
+        // Keep prior scenes from compositing through translucent Liquid Glass chrome.
+        freezeOnBlur: true,
       }}
     />
   )

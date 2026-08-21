@@ -75,6 +75,7 @@ export function HorizontalScrollWithHints({
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={contentContainerStyle}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         nestedScrollEnabled
         directionalLockEnabled
         scrollEventThrottle={16}
@@ -204,6 +205,7 @@ export function HorizontalScrollWithHints({
           onMomentumScrollEnd={syncScrollMetrics}
           scrollEventThrottle={16}
           keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
           nestedScrollEnabled
           directionalLockEnabled
         >

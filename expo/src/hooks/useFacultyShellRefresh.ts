@@ -12,9 +12,16 @@ import {
 import { useFacultyShell } from "../context/FacultyShellContext"
 import { instructorApi, type InstructorCourse } from "../lib/instructor-api"
 import { courseExchangeDrawerBadgeCount } from "../lib/course-exchange-shared"
-import { getStoredFacultyCourseId, setStoredFacultyCourseId } from "../lib/faculty-course-storage"
+import { fetchFacultyCoursePickerItems } from "../lib/faculty-course-picker"
+import {
+  getStoredFacultyCourseId,
+  getStoredFacultySessionCode,
+  setStoredFacultyCourseId,
+  setStoredFacultySessionCode,
+} from "../lib/faculty-course-storage"
 import {
   facultyNeedsCourseSelection,
+  facultyPickerItemMatchesSelection,
   stashFacultyCoursesForSelection,
 } from "../lib/faculty-post-login"
 import type { FacultySession } from "../lib/session"
@@ -41,10 +48,22 @@ export function useFacultyShellRefresh(session: FacultySession) {
       let course = courseOverride ?? selectedCourse
       if ((!course || course.id <= 0) && nextCourses.length > 0) {
         const storedId = await getStoredFacultyCourseId(session.id)
-        course = storedId != null ? nextCourses.find((c) => c.id === storedId) ?? null : null
-        if (!course) {
-          if (nextCourses.length === 1) course = nextCourses[0]!
+        const matches = storedId != null ? nextCourses.filter((c) => c.id === storedId) : []
+        if (matches.length === 1) {
+          course = matches[0]!
+        } else if (matches.length > 1) {
+          const storedSessionCode =
+            storedId != null ? await getStoredFacultySessionCode(session.id, storedId) : null
+          course =
+            (storedSessionCode
+              ? matches.find((item) => item.session_code === storedSessionCode)
+              : null) ??
+            matches[0] ??
+            null
+        } else {
+          course = null
         }
+        if (!course && nextCourses.length === 1) course = nextCourses[0]!
         if (course) setSelectedCourse(course)
       }
       return course
@@ -71,7 +90,7 @@ export function useFacultyShellRefresh(session: FacultySession) {
 
       refreshingRef.current = true
       try {
-        const { courses: nextCourses } = await instructorApi.getCourses(session.id)
+        const nextCourses = await fetchFacultyCoursePickerItems(session)
         setCourses(nextCourses)
 
         const course = await resolveCourse(nextCourses, courseOverride)
@@ -85,7 +104,13 @@ export function useFacultyShellRefresh(session: FacultySession) {
           return
         }
 
-        const scope = { instructorId: session.id, courseId: course.id }
+        const scope = {
+          instructorId: session.id,
+          courseId: course.id,
+          sessionId: course.session_id ?? null,
+          sessionCode: course.session_code ?? null,
+          academicTermId: course.academic_term_id ?? null,
+        }
         const [notifications, pendingPoints, issues, officeHours, exchangeSummary] = await Promise.all([
           instructorApi.getNotifications(session.id).catch(() => ({ unread_count: 0 })),
           instructorApi.getPendingClassroomPoints(scope).catch(() => []),
@@ -140,8 +165,13 @@ export function useFacultyShellRefresh(session: FacultySession) {
       const cachedShell = consumeFacultyShellBootstrap()
       if (cachedShell && mounted) {
         setCourses(cachedShell.courses)
-        const course = cachedShell.courses.find((c) => c.id === cachedShell.courseId) ?? null
-        if (course) setSelectedCourse(course)
+        const cachedCourse =
+          (cachedShell.pickerKey
+            ? cachedShell.courses.find((item) => item.picker_key === cachedShell.pickerKey)
+            : null) ??
+          cachedShell.courses.find((item) => item.id === cachedShell.courseId) ??
+          null
+        if (cachedCourse) setSelectedCourse(cachedCourse)
         setNotificationCount(cachedShell.notificationCount)
         setBadges(cachedShell.badges)
         if (cachedShell.membershipTier) {
@@ -167,7 +197,7 @@ export function useFacultyShellRefresh(session: FacultySession) {
         await refreshFacultyData(undefined, { force: true })
       } catch {
         try {
-          const { courses: nextCourses } = await instructorApi.getCourses(session.id)
+          const nextCourses = await fetchFacultyCoursePickerItems(session)
           setCourses(nextCourses)
           await resolveCourse(nextCourses)
           await refreshMembership()
@@ -212,7 +242,12 @@ export function useFacultyShellRefresh(session: FacultySession) {
   return { refreshFacultyData, shellLoading }
 }
 
-export async function persistFacultyCourse(instructorId: number, courseId: number) {
+export async function persistFacultyCourse(
+  instructorId: number,
+  courseId: number,
+  sessionCode?: string | null,
+) {
   if (!Number.isFinite(courseId) || courseId <= 0) return
   await setStoredFacultyCourseId(instructorId, courseId)
+  await setStoredFacultySessionCode(instructorId, courseId, sessionCode)
 }

@@ -318,6 +318,7 @@ export function SummerModuleViewerScreen() {
             { paddingTop: insets.top + 56, paddingBottom: insets.bottom + 24 },
           ]}
           keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
           automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
           refreshControl={
             <RefreshControl

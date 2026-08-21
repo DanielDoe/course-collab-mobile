@@ -209,6 +209,7 @@ export function FacultyProjectActionSheet({
             />
           }
           keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}
         >
           <FacultySheetHero

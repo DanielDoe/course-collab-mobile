@@ -4,6 +4,28 @@ import { StyleSheet, Text, View } from "react-native"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useAppThemeTokens } from "../../context/AppearanceProvider"
 import { useLoginTheme } from "./login-theme"
+import {
+  STUDENT_LOGIN_NOT_FOUND_ERROR,
+  STUDENT_LOGIN_NOT_FOUND_HINT,
+} from "../../lib/student-login-errors"
+
+function splitLoginErrorMessage(message: string): { title: string; hint?: string } {
+  const trimmed = message.trim()
+  if (!trimmed) return { title: "Something went wrong." }
+
+  if (/no account found/i.test(trimmed)) {
+    return {
+      title: STUDENT_LOGIN_NOT_FOUND_ERROR,
+      hint: STUDENT_LOGIN_NOT_FOUND_HINT,
+    }
+  }
+
+  const parts = trimmed.split(/\n\n+/).map((part) => part.trim()).filter(Boolean)
+  if (parts.length >= 2) {
+    return { title: parts[0], hint: parts.slice(1).join("\n\n") }
+  }
+  return { title: trimmed }
+}
 
 function useLoginCardStyles() {
   const { LOGIN, loginType } = useLoginTheme()
@@ -110,21 +132,37 @@ export function InfoBanner({ children }: { children: ReactNode }) {
 }
 
 export function LoginInlineError({ message }: { message: string }) {
-  const { loginType } = useLoginTheme()
+  const { LOGIN, loginType } = useLoginTheme()
   const tokens = useAppThemeTokens()
+  const { title, hint } = splitLoginErrorMessage(message)
+
   return (
     <View
       style={[
         loginInlineErrorStyles.box,
         {
-          backgroundColor: `${tokens.danger}12`,
-          borderColor: `${tokens.danger}33`,
+          backgroundColor: tokens.isDark ? `${tokens.danger}14` : "#FEF2F2",
+          borderColor: tokens.isDark ? `${tokens.danger}55` : `${tokens.danger}33`,
         },
       ]}
       accessibilityRole="alert"
     >
-      <Ionicons name="alert-circle-outline" size={16} color={tokens.danger} style={loginInlineErrorStyles.icon} />
-      <Text style={[loginType.info, loginInlineErrorStyles.text, { color: tokens.danger }]}>{message}</Text>
+      <View
+        style={[
+          loginInlineErrorStyles.iconTile,
+          { backgroundColor: tokens.isDark ? `${tokens.danger}24` : `${tokens.danger}18` },
+        ]}
+      >
+        <Ionicons name="alert-circle" size={18} color={tokens.danger} />
+      </View>
+      <View style={loginInlineErrorStyles.copy}>
+        <Text style={[loginInlineErrorStyles.title, { color: tokens.danger }]}>{title}</Text>
+        {hint ? (
+          <Text style={[loginType.info, loginInlineErrorStyles.hint, { color: LOGIN.secondaryLabel }]}>
+            {hint}
+          </Text>
+        ) : null}
+      </View>
     </View>
   )
 }
@@ -161,17 +199,30 @@ const loginInlineErrorStyles = StyleSheet.create({
   box: {
     flexDirection: "row",
     alignItems: "flex-start",
-    gap: 8,
-    borderRadius: 12,
+    gap: 12,
+    borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
   },
-  icon: {
+  iconTile: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
     marginTop: 1,
   },
-  text: {
+  copy: {
     flex: 1,
-    lineHeight: 18,
+    gap: 6,
+  },
+  title: {
+    fontSize: 14,
+    fontWeight: "600",
+    lineHeight: 20,
+  },
+  hint: {
+    lineHeight: 20,
   },
 })

@@ -441,6 +441,7 @@ export function CoraWorkspaceTab({
         contentContainerStyle={styles.hubContent}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         onScrollBeginDrag={closeOpenSwipe}
       >
         <Pressable

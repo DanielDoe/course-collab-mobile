@@ -555,6 +555,7 @@ export function PlaygroundGameScreen() {
         <ScrollView
           contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom, 16) + 16 }]}
           keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         >
         <PlaygroundProgressBar
           index={index}

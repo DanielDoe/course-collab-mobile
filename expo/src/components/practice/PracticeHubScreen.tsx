@@ -333,6 +333,7 @@ export function PracticeHubScreen() {
         contentContainerStyle={pageScrollStyle}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         directionalLockEnabled
         nestedScrollEnabled
         refreshControl={
@@ -501,6 +502,7 @@ export function PracticeHubScreen() {
         contentContainerStyle={pageScrollStyle}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         directionalLockEnabled
         nestedScrollEnabled
         refreshControl={

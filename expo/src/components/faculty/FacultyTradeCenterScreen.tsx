@@ -311,6 +311,7 @@ export function FacultyTradeCenterScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={() => void handleRefresh()} tintColor={FACULTY_TRADE_CENTER_COLOR.link} />
         }
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
       >
         {panelLoading && tab !== "config" && tab !== "activity-settings" ? (

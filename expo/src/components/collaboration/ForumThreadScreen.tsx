@@ -178,6 +178,7 @@ export function ForumThreadScreen() {
         style={styles.scroll}
         contentContainerStyle={[styles.content, scrollPad]}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
       >
         <CollabScreenTitle subtitle={thread.title} />
         {error ? <Text style={[type.destructive, styles.errorBanner]}>{error}</Text> : null}

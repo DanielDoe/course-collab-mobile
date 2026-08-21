@@ -243,6 +243,10 @@ type GlassChromeBarProps = {
 export function GlassChromeBar({ style, borderBottomColor, children }: GlassChromeBarProps) {
   const tokens = useAppThemeTokens()
   const { nativeLiquidGlass, backend } = useGlassChromeMode(tokens)
+  // Opaque plate under glass so prior stack screens (e.g. announcement detail) cannot bleed
+  // through clear Liquid Glass while the current module still scrolls beneath the bar.
+  const plate = tokens.isDark ? tokens.background : "#FFFFFF"
+  const plateTint = hexToRgba(plate, tokens.isDark ? 0.72 : 0.88)
 
   if (backend === "solid") {
     return (
@@ -264,12 +268,16 @@ export function GlassChromeBar({ style, borderBottomColor, children }: GlassChro
         styles.chromeBar,
         style,
         {
-          borderBottomColor: nativeLiquidGlass ? "transparent" : borderBottomColor,
-          backgroundColor: "transparent",
+          borderBottomColor: nativeLiquidGlass ? hexToRgba(borderBottomColor, 0.35) : borderBottomColor,
+          backgroundColor: plateTint,
         },
       ]}
     >
-      <GlassSurface style={StyleSheet.absoluteFill} glassEffectStyle="clear" />
+      <GlassSurface
+        style={StyleSheet.absoluteFill}
+        glassEffectStyle="regular"
+        overlayColor={hexToRgba(plate, tokens.isDark ? 0.2 : 0.12)}
+      />
       <View style={styles.content} pointerEvents="box-none">
         {children}
       </View>

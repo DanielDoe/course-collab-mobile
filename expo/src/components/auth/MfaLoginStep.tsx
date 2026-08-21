@@ -205,6 +205,7 @@ function MfaLayout({
             },
           ]}
           keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}
         >
           {inner}

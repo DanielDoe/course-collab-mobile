@@ -230,6 +230,7 @@ export function getStudentActiveNavItemId(pathname: string): string | null {
   }
   if (pathname === "/codebench/ide" || pathname.startsWith("/codebench/ide/")) return "codebench"
   if (pathname.startsWith("/messages/")) return "messages"
+  if (pathname.startsWith("/schedule-adjustment/")) return "schedule-adjustment"
   for (const group of [...STUDENT_NAV_GROUPS, STUDENT_SUPPORT_GROUP]) {
     for (const item of group.items) {
       if (pathname === item.route || pathname.startsWith(`${item.route}/`)) {

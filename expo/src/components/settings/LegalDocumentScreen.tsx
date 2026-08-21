@@ -24,11 +24,11 @@ export function LegalDocumentScreen({ docId, title, footerAction }: LegalDocumen
     <View style={[styles.screenRoot, { backgroundColor: native.groupedBackground }]}>
       <NotetakerScreenHeader title={title} fallbackHref="/settings/privacy-security" />
       <ModuleScreen disableTopInsetAdjustment>
-        {loading ? (
+        {loading && !document ? (
           <View style={styles.centered}>
             <ActivityIndicator color={tokens.accent} />
           </View>
-        ) : error || !document ? (
+        ) : !document ? (
           <View style={[styles.errorCard, { backgroundColor: native.secondaryGrouped, borderColor: native.separator }]}>
             <Text style={[type.body, { color: native.secondaryLabel }]}>
               {error ?? "This document could not be loaded."}

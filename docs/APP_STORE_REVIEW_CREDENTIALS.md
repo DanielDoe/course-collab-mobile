@@ -1,5 +1,7 @@
 # App Store Review — Demo Credentials
 
+> **App Store Connect does not accept `.md` files.** Paste the block below into **App Review Information → Notes**, or upload `APP_STORE_REVIEW_CREDENTIALS.pdf` (same folder).
+
 > Isolated sandbox for Apple App Review and beta testers.
 > These accounts **do not** see live ELEG 1304 / ECE 2202 student rosters.
 > Course content (assessments, lectures, flashcards, notes, question bank) is cloned into demo courses owned by the review instructor.
@@ -14,13 +16,15 @@
 |-------|-------|
 | **Name** | Alex Rivera |
 | **University** | University of Houston |
-| **Email** | `alex.rivera@coursecollab.demo` |
+| **Email** | `alex.rivera@coursecollab.demo` (do **not** use for sign-in — see note) |
 | **Student ID** | `910000001` |
 | **Password** | `Review26!` |
 | **MFA / 2FA** | Not required |
 | **Password change** | Not required |
 
-**Sign in:** Select **Student**, choose **University of Houston**, then sign in using either the email address or Student ID above with the provided password.
+**Sign in:** Select **Student**, choose **University of Houston**, then sign in with **Student ID `910000001`** and password `Review26!`.
+
+> **Email login:** Alex’s review email is shared by ECE + ELEG roster rows. Signing in with `alex.rivera@coursecollab.demo` asks you to **select a course**, then continues. Student IDs still work for a direct one-step login.
 
 ---
 
@@ -36,7 +40,7 @@
 | **MFA / 2FA** | Not required |
 | **Password change** | Not required |
 
-**Sign in:** Select **Instructor**, then sign in using either the email address or username above with the provided password.
+**Sign in:** Select **Instructor**, then sign in with username **`mchen`** (or email `maya.chen@coursecollab.demo` in the same username field) and password `Review26!`.
 
 ---
 
@@ -51,7 +55,7 @@
 | **MFA / 2FA** | Not required |
 | **Password change** | Not required |
 
-**Sign in:** Select **Other Sign In Options → Career Member**, then sign in using either the email address or Career Member ID above with the provided password.
+**Sign in:** Select **Other Sign In Options → Career Member**, then sign in with **email** `danieldoe33@gmail.com` and password `ELEG2026!` (the Career Member ID is not accepted in the email field).
 
 ---
 
@@ -62,13 +66,13 @@ Apple Review Student
 
 Name: Alex Rivera
 University: University of Houston
-Email: alex.rivera@coursecollab.demo
 Student ID: 910000001
 Password: Review26!
 MFA / 2FA: Not required
 Password Change: Not required
 
-Sign In: Select Student, choose University of Houston, then sign in using either the email address or Student ID above with the provided password.
+Sign In: Select Student → University of Houston → enter Student ID 910000001 (not email) and password Review26!.
+Note: Email login with `alex.rivera@coursecollab.demo` shows a course picker (ECE + ELEG). Student IDs sign in directly.
 
 Apple Review Instructor
 
@@ -79,7 +83,7 @@ Password: Review26!
 MFA / 2FA: Not required
 Password Change: Not required
 
-Sign In: Select Instructor, then sign in using either the email address or username above with the provided password.
+Sign In: Select Instructor → username mchen (or maya.chen@coursecollab.demo) + password Review26!.
 
 Apple Review Career Member
 
@@ -90,7 +94,7 @@ Password: ELEG2026!
 MFA / 2FA: Not required
 Password Change: Not required
 
-Sign In: Select Other Sign In Options → Career Member, then sign in using either the email address or Career Member ID above with the provided password.
+Sign In: Select Other Sign In Options → Career Member → email danieldoe33@gmail.com + password ELEG2026!.
 
 ── NOT IN SCOPE FOR REVIEW ──
 Summer Camp sign-in shows “Coming soon” — intentional for this release.
@@ -178,4 +182,4 @@ npx tsx scripts/seed-app-store-review-sandbox.ts --force-reclone
 
 Canonical constants: `lib/app-store-review-accounts.ts`
 
-This file is mirrored at `expo/docs/APP_STORE_REVIEW_CREDENTIALS.md`.
+This file is mirrored at `docs/APP_STORE_REVIEW_CREDENTIALS.md`.

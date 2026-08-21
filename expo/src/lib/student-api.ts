@@ -15,6 +15,7 @@ import { API_BASE_URL } from "../constants"
 import { extractApiErrorMessage } from "./api-error-message"
 import { reportMobileApiError } from "./system-log-client"
 import { assertProductionHttpsUrl, createApiAbortSignal, noteApiFailure, sanitizeLogValue } from "./http"
+import { parseLectureWorkspaceStudentApiResponse } from "./lecture-workspace-utils"
 
 export class ApiError extends Error {
   constructor(
@@ -149,10 +150,12 @@ async function studentRequest<T>(
   if (!response.ok) {
     noteApiFailure(path, response.status)
     const message = extractApiErrorMessage(body, response.status, path)
-    const isExpectedMobilePaymentGap =
-      (response.status === 404 || response.status === 503) &&
-      path.includes("mobile-payment")
-    if (__DEV__ && !isExpectedMobilePaymentGap) {
+    // Known soft misses — don't dump LogBox overlays in __DEV__.
+    const isExpectedClientMiss =
+      ((response.status === 404 || response.status === 503) && path.includes("mobile-payment")) ||
+      (response.status === 404 &&
+        (/^\/api\/announcements\/\d+/.test(path) || path.includes("/api/announcements/")))
+    if (__DEV__ && !isExpectedClientMiss) {
       console.error("[CourseCollab API]", {
         status: response.status,
         path,
@@ -160,7 +163,7 @@ async function studentRequest<T>(
         body: sanitizeLogValue(body),
       })
     }
-    if (!__DEV__ || response.status >= 500) {
+    if ((!__DEV__ || response.status >= 500) && !isExpectedClientMiss) {
       reportMobileApiError({
         path,
         method: init?.method ?? "GET",
@@ -488,7 +491,7 @@ export const studentApi = {
           session,
           `/api/student/lectures/${lectureId}/workspace?${params.toString()}`,
         )
-        const count = Array.isArray(result.questions) ? result.questions.length : 0
+        const count = parseLectureWorkspaceStudentApiResponse(result).questions.length
         if (count > bestCount) {
           best = result
           bestCount = count

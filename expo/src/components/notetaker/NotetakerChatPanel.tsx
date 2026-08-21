@@ -93,6 +93,7 @@ export function NotetakerChatPanel({ session, note, chatEnabled, onUpgrade }: Pr
         style={styles.messages}
         contentContainerStyle={styles.messagesContent}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
       >
         {messages.length === 0 ? (

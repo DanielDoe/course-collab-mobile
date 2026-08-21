@@ -33,7 +33,8 @@ function isImmersiveRoute(pathname: string, webPath?: string) {
   if (/^\/rewards\/classroom-point\//.test(pathname)) return true
   if (/^\/rewards\/classroom-task\//.test(pathname)) return true
   if (/^\/flashcards\//.test(pathname)) return true
-  if (/^\/announcements\/[^/]+$/.test(pathname)) return true
+  // Immersive announcement detail — match with or without trailing slash / group prefixes.
+  if (/\/announcements\/[^/]+\/?$/.test(pathname)) return true
   if (/^\/practice\//.test(pathname)) return true
   if (/^\/membership/.test(pathname)) return true
   if (pathname === "/settings" || pathname.startsWith("/settings/")) return true

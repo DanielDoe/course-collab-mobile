@@ -123,6 +123,7 @@ export function CoraStepEngineModal({ visible, problem, onClose }: Props) {
               style={styles.scroll}
               contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 96 }]}
               keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
               showsVerticalScrollIndicator={false}
             >
               {media ? <QuestionMediaView media={media} embedded /> : null}

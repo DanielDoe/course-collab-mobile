@@ -5,7 +5,7 @@ import type { SolidListThumb } from "../../lib/solid-list-thumb"
 type Props = {
   thumb: SolidListThumb
   icon?: IoniconName
-  size?: "list" | "compact"
+  size?: "list" | "compact" | "hero"
   iconSize?: number
   style?: StyleProp<ViewStyle>
   children?: React.ReactNode
@@ -14,6 +14,7 @@ type Props = {
 const SIZES = {
   list: { tile: 56, radius: 14, icon: 24 },
   compact: { tile: 30, radius: 8, icon: 16 },
+  hero: { tile: 64, radius: 18, icon: 28 },
 } as const
 
 export function SolidListThumbTile({

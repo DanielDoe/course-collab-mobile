@@ -44,6 +44,7 @@ import { useModuleTheme } from "../../lib/themed-module-shell"
 import { GlassSheetBackground, useThemedGlassSheets } from "../theme/GlassSurface"
 import { GlassSheetHandle } from "../theme/GlassActionSheetMenu"
 import { AppErrorNotice } from "../errors/AppErrorNotice"
+import { DismissKeyboardView } from "../ui/DismissKeyboardView"
 
 /** Sheet filter/type chips — subtle corners (12px), not stadium pills. */
 export const FACULTY_SHEET_CHIP_RADIUS = NATIVE.sectionRadius
@@ -151,7 +152,7 @@ export function FacultySheetModal({
     >
       {visible ? (
         <FacultySheetContainer style={containerStyle} menuSheet={menuSheet}>
-          {children}
+          <DismissKeyboardView style={sheetContainerStyles.flex}>{children}</DismissKeyboardView>
         </FacultySheetContainer>
       ) : null}
     </Modal>
@@ -1261,7 +1262,7 @@ function createCollabSheetStyles(
   /** Standard inset for all action-sheet scroll content — hero + sections share the same breathing room. */
   scroll: {
     paddingHorizontal: NATIVE.pagePadding,
-    paddingTop: 14,
+    paddingTop: 16,
     gap: NATIVE.sectionGap},
   /** Inner stack gap when a sheet nests blocks inside a padded scroll area. */
   body: { gap: 14 },
@@ -1484,7 +1485,7 @@ const heroStyles = StyleSheet.create({
 })
 
 const sectionStyles = StyleSheet.create({
-  wrap: { gap: 10 },
+  wrap: { gap: 10, paddingHorizontal: 2 },
   head: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12 },
   headCopy: { flex: 1, gap: 4 },
   labelRow: { flexDirection: "row", alignItems: "center", gap: 6 },

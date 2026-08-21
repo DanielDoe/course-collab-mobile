@@ -11,7 +11,13 @@ export function useFacultyScope() {
 
   const scope = useMemo(() => {
     if (!facultySession || !selectedCourse) return null
-    return { instructorId: facultySession.id, courseId: selectedCourse.id }
+    return {
+      instructorId: facultySession.id,
+      courseId: selectedCourse.id,
+      sessionId: selectedCourse.session_id ?? null,
+      sessionCode: selectedCourse.session_code ?? null,
+      academicTermId: selectedCourse.academic_term_id ?? null,
+    }
   }, [facultySession, selectedCourse])
 
   return {

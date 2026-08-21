@@ -53,6 +53,7 @@ export function FacultyHelpCenterScreen() {
         style={moduleStyles.scroll}
         contentContainerStyle={[styles.content, listScrollPad]}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
       >
         <Text style={screenStyles.introTitle}>Help Center</Text>

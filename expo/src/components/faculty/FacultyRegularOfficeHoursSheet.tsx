@@ -112,6 +112,7 @@ export function FacultyRegularOfficeHoursSheet({
         <ScrollView
           contentContainerStyle={[collabSheetStyles.scroll, { paddingBottom: insets.bottom + 24 }]}
           keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         >
           <FacultySheetNotice message="Set recurring weekly availability for this course. Students see these times when requesting office hours." />
 

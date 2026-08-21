@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -10,7 +11,7 @@ import {
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useRouter } from "expo-router"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
-import { resolveNotificationLink } from "../../lib/notification-link"
+import { resolveNotificationLink, announcementIdFromNotificationRoute } from "../../lib/notification-link"
 import {
   dismissNotification,
   fetchStudentNotifications,
@@ -19,11 +20,25 @@ import {
   markNotificationRead,
   type StudentNotification,
 } from "../../lib/student-notifications"
+import {
+  loadNotificationInboxPrefs,
+  saveNotificationInboxPrefs,
+  sortNotificationsWithPins,
+  withArchived,
+  withPinned,
+  withoutNotification,
+  type NotificationInboxPrefs,
+} from "../../lib/notification-inbox-prefs"
 import { onNotificationsRefresh } from "../../lib/notifications/notification-events"
-import { useAppThemeTokens, useShellChrome, useThemedNative } from "../../context/AppearanceProvider"
+import { courseInfoApi } from "../../lib/course-info-api"
+import { ApiError } from "../../lib/student-api"
+import type { StudentSession } from "../../lib/session"
+import { AppAlert } from "../../lib/app-alert"
+import { useAppThemeTokens, useShellChrome } from "../../context/AppearanceProvider"
 import { nativeType } from "../../constants/faculty-native-theme"
 import { hexToRgba } from "../../constants/app-themes"
 import { GlassBottomSheetModal } from "../theme/GlassBottomSheetModal"
+import { StudentNotificationDetailSheet } from "./StudentNotificationDetailSheet"
 import type { StudentAuthSession } from "../../lib/student-session-proof"
 
 type Props = {
@@ -33,7 +48,27 @@ type Props = {
   setNotificationCount: (count: number) => void
 }
 
-type Filter = "all" | "unread"
+type Filter = "all" | "unread" | "pinned" | "archived"
+
+const EMPTY_PREFS: NotificationInboxPrefs = {
+  pinnedIds: [],
+  archivedIds: [],
+  deletedIds: [],
+}
+
+function asStudentSession(session: StudentAuthSession): StudentSession {
+  return {
+    portal: "student",
+    databaseId: session.databaseId,
+    id: session.id ?? session.databaseId,
+    name: "",
+    section: session.section ?? "",
+    universityId: session.universityId,
+    email: session.email,
+    authIdentifier: session.authIdentifier,
+    expiresAt: Date.now() + 60_000,
+  }
+}
 
 function useNotificationTypeIcons() {
   const tokens = useAppThemeTokens()
@@ -59,11 +94,13 @@ function useNotificationTypeIcons() {
 
 function NotificationRow({
   item,
+  pinned,
   onPress,
   onDismiss,
   typeIcons,
 }: {
   item: StudentNotification
+  pinned?: boolean
   onPress: () => void
   onDismiss: () => void
   typeIcons: ReturnType<typeof useNotificationTypeIcons>
@@ -89,8 +126,9 @@ function NotificationRow({
           <Text style={[styles.rowTitle, { color: chrome.label }]} numberOfLines={2}>
             {item.title}
           </Text>
+          {pinned ? <Ionicons name="pin" size={13} color={tokens.accent} /> : null}
           {!item.is_read ? (
-            <View style={[styles.unreadDot, { backgroundColor: tokens.danger }]} />
+            <View style={[styles.unreadDot, { backgroundColor: tokens.accent }]} />
           ) : null}
         </View>
         <Text style={[styles.rowMessage, { color: chrome.secondaryLabel }]} numberOfLines={2}>
@@ -125,20 +163,40 @@ export function NotificationsSheet({
   const router = useRouter()
   const tokens = useAppThemeTokens()
   const chrome = useShellChrome()
-  const native = useThemedNative()
   const typeIcons = useNotificationTypeIcons()
   const [filter, setFilter] = useState<Filter>("all")
   const [loading, setLoading] = useState(false)
   const [notifications, setNotifications] = useState<StudentNotification[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
+  const [selected, setSelected] = useState<StudentNotification | null>(null)
+  const [detailOpen, setDetailOpen] = useState(false)
+  const [relatedAvailable, setRelatedAvailable] = useState(true)
+  const [prefs, setPrefs] = useState<NotificationInboxPrefs>(EMPTY_PREFS)
+  const [actionBusy, setActionBusy] = useState(false)
+
+  const persistPrefs = useCallback(
+    async (next: NotificationInboxPrefs) => {
+      setPrefs(next)
+      await saveNotificationInboxPrefs("student", session.databaseId, next)
+    },
+    [session.databaseId],
+  )
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const result = await fetchStudentNotifications(session)
+      const [result, nextPrefs] = await Promise.all([
+        fetchStudentNotifications(session),
+        loadNotificationInboxPrefs("student", session.databaseId),
+      ])
+      setPrefs(nextPrefs)
       setNotifications(result.notifications)
-      setUnreadCount(result.unreadCount)
-      setNotificationCount(result.unreadCount)
+      const archived = new Set(nextPrefs.archivedIds)
+      const visibleUnread = result.notifications.filter(
+        (n) => !n.is_read && !archived.has(n.id),
+      ).length
+      setUnreadCount(visibleUnread)
+      setNotificationCount(visibleUnread)
       if (result.throttled) {
         setTimeout(() => void load(), 1500)
       }
@@ -155,38 +213,134 @@ export function NotificationsSheet({
 
   useEffect(() => onNotificationsRefresh(() => void load()), [load])
 
-  const filtered = useMemo(
-    () => (filter === "unread" ? notifications.filter((n) => !n.is_read) : notifications),
-    [filter, notifications],
-  )
+  const pinnedSet = useMemo(() => new Set(prefs.pinnedIds), [prefs.pinnedIds])
+  const archivedSet = useMemo(() => new Set(prefs.archivedIds), [prefs.archivedIds])
+
+  const filtered = useMemo(() => {
+    let items = notifications
+    if (filter === "archived") {
+      items = items.filter((n) => archivedSet.has(n.id))
+    } else {
+      items = items.filter((n) => !archivedSet.has(n.id))
+      if (filter === "unread") items = items.filter((n) => !n.is_read)
+      if (filter === "pinned") items = items.filter((n) => pinnedSet.has(n.id))
+    }
+    return sortNotificationsWithPins(items, prefs.pinnedIds)
+  }, [archivedSet, filter, notifications, pinnedSet, prefs.pinnedIds])
+
+  const filterCounts = useMemo(() => {
+    const active = notifications.filter((n) => !archivedSet.has(n.id))
+    return {
+      all: active.length,
+      unread: active.filter((n) => !n.is_read).length,
+      pinned: active.filter((n) => pinnedSet.has(n.id)).length,
+      archived: notifications.filter((n) => archivedSet.has(n.id)).length,
+    }
+  }, [archivedSet, notifications, pinnedSet])
+
+  async function relatedTargetAvailable(item: StudentNotification): Promise<boolean> {
+    const route = resolveNotificationLink(item.link)
+    if (!route) return false
+    const announcementId = announcementIdFromNotificationRoute(route)
+    if (announcementId == null) return true
+    try {
+      await courseInfoApi.getAnnouncementById(asStudentSession(session), announcementId)
+      return true
+    } catch (err) {
+      if (err instanceof ApiError && (err.status === 404 || /not found/i.test(err.message))) {
+        return false
+      }
+      return true
+    }
+  }
 
   async function handleOpen(item: StudentNotification) {
+    setSelected(item)
+    setRelatedAvailable(Boolean(item.link))
+    closeNotifications()
+    setDetailOpen(true)
+
     if (!item.is_read) {
       const ok = await markNotificationRead(session, item.id)
       if (ok) {
-        setNotifications((prev) =>
-          prev.map((n) => (n.id === item.id ? { ...n, is_read: true, read_at: new Date().toISOString() } : n)),
-        )
+        const nextItem = { ...item, is_read: true, read_at: new Date().toISOString() }
+        setSelected(nextItem)
+        setNotifications((prev) => prev.map((n) => (n.id === item.id ? nextItem : n)))
         const nextUnread = Math.max(0, unreadCount - 1)
         setUnreadCount(nextUnread)
         setNotificationCount(nextUnread)
       }
     }
 
+    if (item.link) {
+      const available = await relatedTargetAvailable(item)
+      setRelatedAvailable(available)
+    }
+  }
+
+  function handleOpenRelated(item: StudentNotification) {
+    setDetailOpen(false)
     closeNotifications()
     const route = resolveNotificationLink(item.link)
-    if (route) router.push(route as never)
+    if (!route) return
+    if (!relatedAvailable && announcementIdFromNotificationRoute(route) != null) {
+      router.push("/announcements" as never)
+      return
+    }
+    router.push(route as never)
   }
 
   async function handleDismiss(item: StudentNotification) {
     const ok = await dismissNotification(session, item.id)
     if (!ok) return
     setNotifications((prev) => prev.filter((n) => n.id !== item.id))
+    await persistPrefs(withoutNotification(prefs, item.id))
     if (!item.is_read) {
       const nextUnread = Math.max(0, unreadCount - 1)
       setUnreadCount(nextUnread)
       setNotificationCount(nextUnread)
     }
+  }
+
+  async function handleTogglePin(item: StudentNotification) {
+    const nextPinned = !pinnedSet.has(item.id)
+    await persistPrefs(withPinned(prefs, item.id, nextPinned))
+  }
+
+  async function handleToggleArchive(item: StudentNotification) {
+    const nextArchived = !archivedSet.has(item.id)
+    await persistPrefs(withArchived(prefs, item.id, nextArchived))
+    if (!item.is_read) {
+      const nextUnread = Math.max(0, unreadCount + (nextArchived ? -1 : 1))
+      setUnreadCount(nextUnread)
+      setNotificationCount(nextUnread)
+    }
+    if (nextArchived && selected?.id === item.id) {
+      setDetailOpen(false)
+      setFilter("archived")
+    }
+  }
+
+  function handleDeleteFromDetail(item: StudentNotification) {
+    AppAlert.alert("Delete notification?", "This removes it from your inbox.", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: () => {
+          void (async () => {
+            setActionBusy(true)
+            try {
+              await handleDismiss(item)
+              setDetailOpen(false)
+              setSelected(null)
+            } finally {
+              setActionBusy(false)
+            }
+          })()
+        },
+      },
+    ])
   }
 
   async function handleMarkAllRead() {
@@ -199,115 +353,162 @@ export function NotificationsSheet({
     setNotificationCount(0)
   }
 
+  const filterOptions: Array<{ id: Filter; label: string }> = [
+    { id: "all", label: `All${filterCounts.all ? ` (${filterCounts.all})` : ""}` },
+    {
+      id: "unread",
+      label: `Unread${filterCounts.unread ? ` (${filterCounts.unread})` : ""}`,
+    },
+    {
+      id: "pinned",
+      label: `Pinned${filterCounts.pinned ? ` (${filterCounts.pinned})` : ""}`,
+    },
+    {
+      id: "archived",
+      label: `Archived${filterCounts.archived ? ` (${filterCounts.archived})` : ""}`,
+    },
+  ]
+
   return (
-    <GlassBottomSheetModal
-      visible={notificationsOpen}
-      onClose={closeNotifications}
-      accessibilityLabel="Close notifications"
-      maxHeight="82%"
-      sheetHostStyle={[
-        styles.sheet,
-        {
-          paddingBottom: Math.max(insets.bottom, 12),
-          backgroundColor: chrome.sheetBg,
-        },
-      ]}
-    >
-      <View style={styles.handleWrap}>
-        <View
-          style={[
-            styles.handle,
-            { backgroundColor: tokens.isDark ? "rgba(255,255,255,0.2)" : "rgba(60,60,67,0.28)" },
-          ]}
-        />
-      </View>
-
-      <View style={styles.header}>
-        <View style={styles.headerCopy}>
-          <Text style={[styles.headerTitle, { color: chrome.label }]}>Notifications</Text>
-          <Text style={[styles.headerSub, { color: chrome.secondaryLabel }]}>
-            {unreadCount > 0 ? `${unreadCount} unread` : "All caught up"}
-          </Text>
+    <>
+      <GlassBottomSheetModal
+        visible={notificationsOpen}
+        onClose={closeNotifications}
+        accessibilityLabel="Close notifications"
+        maxHeight="82%"
+        sheetHostStyle={[
+          styles.sheet,
+          {
+            paddingBottom: Math.max(insets.bottom, 12),
+            backgroundColor: chrome.sheetBg,
+          },
+        ]}
+      >
+        <View style={styles.handleWrap}>
+          <View
+            style={[
+              styles.handle,
+              { backgroundColor: tokens.textMuted, opacity: 0.35 },
+            ]}
+          />
         </View>
-        {unreadCount > 0 ? (
-          <Pressable
-            style={[styles.markAllBtn, { backgroundColor: tokens.accentSoftStrong }]}
-            onPress={() => void handleMarkAllRead()}
-          >
-            <Ionicons name="checkmark-done-outline" size={16} color={tokens.accent} />
-            <Text style={[styles.markAllText, { color: tokens.accent }]}>Mark all read</Text>
-          </Pressable>
-        ) : null}
-      </View>
 
-      <View style={styles.filterRow}>
-        {(["all", "unread"] as const).map((id) => {
-          const active = filter === id
-          return (
+        <View style={styles.header}>
+          <View style={styles.headerCopy}>
+            <Text style={[styles.headerTitle, { color: chrome.label }]}>Notifications</Text>
+            <Text style={[styles.headerSub, { color: chrome.secondaryLabel }]}>
+              {unreadCount > 0 ? `${unreadCount} unread` : "All caught up"}
+            </Text>
+          </View>
+          {unreadCount > 0 ? (
             <Pressable
-              key={id}
               style={[
-                styles.filterChip,
+                styles.markAllBtn,
                 {
-                  backgroundColor: active ? tokens.accent : chrome.groupedBg,
-                  borderColor: active ? tokens.accent : chrome.groupedBorder,
+                  backgroundColor: tokens.accentSoftStrong,
+                  borderColor: tokens.accentBorder,
                 },
               ]}
-              onPress={() => setFilter(id)}
+              onPress={() => void handleMarkAllRead()}
             >
-              <Text
-                style={[
-                  styles.filterText,
-                  { color: active ? "#FFFFFF" : chrome.secondaryLabel },
-                ]}
-              >
-                {id === "all" ? "All" : `Unread${unreadCount > 0 ? ` (${unreadCount})` : ""}`}
-              </Text>
+              <Ionicons name="checkmark-done-outline" size={16} color={tokens.accent} />
+              <Text style={[styles.markAllText, { color: tokens.accent }]}>Mark all read</Text>
             </Pressable>
-          )
-        })}
-      </View>
+          ) : null}
+        </View>
 
-      {loading && notifications.length === 0 ? (
-        <View style={styles.loadingWrap}>
-          <ActivityIndicator color={tokens.accent} />
-          <Text style={[styles.loadingText, { color: chrome.secondaryLabel }]}>
-            Loading notifications…
-          </Text>
+        <View style={styles.filterRow}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
+            {filterOptions.map((opt) => {
+              const active = filter === opt.id
+              return (
+                <Pressable
+                  key={opt.id}
+                  style={[
+                    styles.filterChip,
+                    {
+                      backgroundColor: active ? tokens.accent : chrome.groupedBg,
+                      borderColor: active ? tokens.accent : chrome.groupedBorder,
+                    },
+                  ]}
+                  onPress={() => setFilter(opt.id)}
+                >
+                  <Text
+                    style={[
+                      styles.filterText,
+                      { color: active ? "#FFFFFF" : chrome.secondaryLabel },
+                    ]}
+                  >
+                    {opt.label}
+                  </Text>
+                </Pressable>
+              )
+            })}
+          </ScrollView>
         </View>
-      ) : filtered.length === 0 ? (
-        <View style={styles.emptyWrap}>
-          <View style={[styles.emptyIcon, { backgroundColor: chrome.groupedBg }]}>
-            <Ionicons name="notifications-off-outline" size={28} color={chrome.tertiaryLabel} />
+
+        {loading && notifications.length === 0 ? (
+          <View style={styles.loadingWrap}>
+            <ActivityIndicator color={tokens.accent} />
+            <Text style={[styles.loadingText, { color: chrome.secondaryLabel }]}>
+              Loading notifications…
+            </Text>
           </View>
-          <Text style={[styles.emptyTitle, { color: chrome.label }]}>No notifications</Text>
-          <Text style={[styles.emptyBody, { color: chrome.secondaryLabel }]}>
-            {filter === "unread" ? "You're all caught up." : "New updates will appear here."}
-          </Text>
-        </View>
-      ) : (
-        <View
-          style={[
-            styles.group,
-            { backgroundColor: chrome.groupedBg, borderColor: chrome.groupedBorder },
-          ]}
-        >
-          {filtered.map((item, index) => (
-            <View key={item.id}>
-              <NotificationRow
-                item={item}
-                typeIcons={typeIcons}
-                onPress={() => void handleOpen(item)}
-                onDismiss={() => void handleDismiss(item)}
-              />
-              {index < filtered.length - 1 ? (
-                <View style={[styles.separator, { backgroundColor: chrome.separator }]} />
-              ) : null}
+        ) : filtered.length === 0 ? (
+          <View style={styles.emptyWrap}>
+            <View style={[styles.emptyIcon, { backgroundColor: chrome.groupedBg }]}>
+              <Ionicons name="notifications-off-outline" size={28} color={chrome.tertiaryLabel} />
             </View>
-          ))}
-        </View>
-      )}
-    </GlassBottomSheetModal>
+            <Text style={[styles.emptyTitle, { color: chrome.label }]}>No notifications</Text>
+            <Text style={[styles.emptyBody, { color: chrome.secondaryLabel }]}>
+              {filter === "unread"
+                ? "You're all caught up."
+                : filter === "pinned"
+                  ? "Pin important updates to keep them on top."
+                  : filter === "archived"
+                    ? "Archived notifications will show up here."
+                    : "New updates will appear here."}
+            </Text>
+          </View>
+        ) : (
+          <View
+            style={[
+              styles.group,
+              { backgroundColor: chrome.groupedBg, borderColor: chrome.groupedBorder },
+            ]}
+          >
+            {filtered.map((item, index) => (
+              <View key={item.id}>
+                <NotificationRow
+                  item={item}
+                  pinned={pinnedSet.has(item.id)}
+                  typeIcons={typeIcons}
+                  onPress={() => void handleOpen(item)}
+                  onDismiss={() => void handleDismiss(item)}
+                />
+                {index < filtered.length - 1 ? (
+                  <View style={[styles.separator, { backgroundColor: chrome.separator }]} />
+                ) : null}
+              </View>
+            ))}
+          </View>
+        )}
+      </GlassBottomSheetModal>
+
+      <StudentNotificationDetailSheet
+        visible={detailOpen}
+        notification={selected}
+        relatedAvailable={relatedAvailable}
+        pinned={selected ? pinnedSet.has(selected.id) : false}
+        archived={selected ? archivedSet.has(selected.id) : false}
+        actionBusy={actionBusy}
+        onClose={() => setDetailOpen(false)}
+        onOpenRelated={handleOpenRelated}
+        onTogglePin={(item) => void handleTogglePin(item)}
+        onToggleArchive={(item) => void handleToggleArchive(item)}
+        onDelete={handleDeleteFromDetail}
+      />
+    </>
   )
 }
 
@@ -341,9 +542,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 8,
     borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   markAllText: { fontSize: 13, fontWeight: "600" },
-  filterRow: { flexDirection: "row", gap: 8, marginBottom: 12 },
+  filterRow: { marginBottom: 12 },
+  filterScroll: { flexDirection: "row", gap: 8, paddingRight: 4 },
   filterChip: {
     paddingHorizontal: 14,
     paddingVertical: 8,

@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View } from "react-native"
+import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native"
 import type { UniversityRecord } from "../../lib/api"
 import { BrandLogoMark } from "../brand/BrandLogoMark"
 import { useLoginTheme } from "./login-theme"
@@ -10,14 +10,15 @@ type Props = {
   /** When omitted, shows the CourseCollab mark (faculty / generic auth). */
   university?: Pick<UniversityRecord, "logo" | "name" | "short_name" | "primary_color"> | null
   accent?: string
+  style?: StyleProp<ViewStyle>
 }
 
-export function LoginBrandHeader({ title, subtitle, university, accent }: Props) {
+export function LoginBrandHeader({ title, subtitle, university, accent, style }: Props) {
   const { LOGIN, loginType } = useLoginTheme()
   const schoolAccent = accent ?? university?.primary_color ?? LOGIN.purple
 
   return (
-    <View style={styles.wrap}>
+    <View style={[styles.wrap, style]}>
       {university ? (
         <UniversityAuthLogoImage university={university} variant="header" />
       ) : (

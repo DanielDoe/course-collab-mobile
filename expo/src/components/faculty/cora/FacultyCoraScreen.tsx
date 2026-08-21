@@ -352,6 +352,7 @@ export function FacultyCoraScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={FACULTY_CORA_COLOR.link} />
         }
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
       >
         <CoraHubEnter enabled={animateCards} index={nextCardEnterIndex()} reduceMotion={reduceMotion}>
           <DashboardWelcomeCard

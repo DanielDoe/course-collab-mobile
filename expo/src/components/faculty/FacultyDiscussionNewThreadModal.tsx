@@ -93,6 +93,7 @@ export function FacultyDiscussionNewThreadModal({ visible, scope, onClose, onCre
         <ScrollView
           contentContainerStyle={[collabSheetStyles.scroll, { paddingBottom: insets.bottom + 24 }]}
           keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}
         >
           {error ? <FacultySheetErrorBanner message={error} /> : null}

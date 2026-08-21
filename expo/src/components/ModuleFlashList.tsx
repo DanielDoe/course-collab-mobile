@@ -1,6 +1,7 @@
 import { FlashList, type FlashListProps, type FlashListRef } from "@shopify/flash-list"
 import { forwardRef } from "react"
 import { StyleSheet } from "react-native"
+import { keyboardDismissScrollProps } from "../lib/keyboard-dismiss-scroll-props"
 
 /** Module list defaults — flex fill, keyboard-friendly taps, moderate draw distance. */
 export const ModuleFlashList = forwardRef(function ModuleFlashList<T>(
@@ -13,7 +14,7 @@ export const ModuleFlashList = forwardRef(function ModuleFlashList<T>(
     <FlashList
       ref={ref}
       showsVerticalScrollIndicator={false}
-      keyboardShouldPersistTaps="handled"
+      {...keyboardDismissScrollProps}
       drawDistance={drawDistance}
       alwaysBounceVertical={refreshEnabled}
       overScrollMode={refreshEnabled ? "always" : undefined}

@@ -248,6 +248,7 @@ export function NativeSelect<T extends string>({
               keyExtractor={(option, index) => `${option.value}::${index}`}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
               contentContainerStyle={styles.list}
               ItemSeparatorComponent={() => <View style={styles.listGap} />}
               initialNumToRender={16}

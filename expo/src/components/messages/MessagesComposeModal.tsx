@@ -130,6 +130,7 @@ export function MessagesComposeModal({
         <ScrollView
           contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + 24 }]}
           keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         >
           <Text style={[type.caption, styles.label, { color: native.secondaryLabel }]}>To</Text>
           {selectedRecipient ? (

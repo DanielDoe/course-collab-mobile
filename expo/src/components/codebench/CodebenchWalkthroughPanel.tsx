@@ -605,6 +605,7 @@ export function CodebenchWalkthroughPanel({
                 ]}
                 showsVerticalScrollIndicator={false}
                 keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
               >
                 <View style={styles.chrome}>{chromeCard}</View>
                 <StepDetail key={`step-${index}`} step={step} sourceCode={sourceCode} phaseColor={phaseColor} />
@@ -639,6 +640,7 @@ export function CodebenchWalkthroughPanel({
         ]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
       >
         <StepDetail key={`step-${index}`} step={step} sourceCode={sourceCode} phaseColor={phaseColor} />
       </ScrollView>

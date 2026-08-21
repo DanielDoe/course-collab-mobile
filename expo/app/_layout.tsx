@@ -1,18 +1,8 @@
 import { Component, useEffect, type ErrorInfo, type ReactNode } from "react"
 import * as SplashScreen from "expo-splash-screen"
 import { Stack } from "expo-router"
-import { GestureHandlerRootView } from "react-native-gesture-handler"
 import { StyleSheet, Text, View } from "react-native"
-import { SafeAreaProvider } from "react-native-safe-area-context"
-import { SessionProvider } from "../src/context/SessionProvider"
-import { AppearanceProvider } from "../src/context/AppearanceProvider"
-import { NotificationProvider } from "../src/context/NotificationProvider"
-import { AppAlertProvider } from "../src/context/AppAlertProvider"
-import { PresenceSelfProvider } from "../src/context/PresenceSelfProvider"
-import { StripeAppProvider } from "../src/context/StripeAppProvider"
-import { SystemErrorBoundary } from "../src/components/SystemErrorBoundary"
-import { SystemErrorCapture } from "../src/components/SystemErrorCapture"
-import { installEarlyStartupErrorCapture } from "../src/lib/startup-error-capture"
+import { FullRootProviders } from "../src/components/root/FullRootProviders"
 import { bootLog } from "../src/lib/boot-diagnostics"
 
 bootLog("Root layout module evaluated")
@@ -21,7 +11,6 @@ const BOOT_BG = "#582c83"
 
 type BootErrorState = { error: Error | null }
 
-/** Catches render crashes above SystemErrorBoundary (hooks outside Stack, etc.). */
 class BootErrorBoundary extends Component<{ children: ReactNode }, BootErrorState> {
   state: BootErrorState = { error: null }
 
@@ -50,15 +39,6 @@ class BootErrorBoundary extends Component<{ children: ReactNode }, BootErrorStat
   }
 }
 
-function hideSplash() {
-  try {
-    SplashScreen.hide()
-  } catch {
-    /* older API */
-  }
-  void SplashScreen.hideAsync().catch(() => {})
-}
-
 try {
   void SplashScreen.preventAutoHideAsync()
 } catch {
@@ -69,52 +49,20 @@ export default function RootLayout() {
   useEffect(() => {
     globalThis.__CC_ROOT_LAYOUT_MOUNTED__ = true
     bootLog("RootLayout mounted")
-    installEarlyStartupErrorCapture()
-    // Keep native splash until index/login call hide — avoid flashing blank Fabric.
-    const failsafe = setTimeout(hideSplash, 8000)
-    return () => clearTimeout(failsafe)
   }, [])
 
   return (
     <View style={styles.boot}>
-      <Text style={styles.bootMark} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-        CourseCollab
-      </Text>
       <BootErrorBoundary>
-        <GestureHandlerRootView style={styles.fill}>
-          <SafeAreaProvider>
-            <SessionProvider>
-              <SystemErrorCapture />
-              <AppearanceProvider>
-                <StripeAppProvider>
-                  <AppAlertProvider>
-                    <PresenceSelfProvider>
-                      <NotificationProvider>
-                        <SystemErrorBoundary>
-                          <Stack
-                            screenOptions={{
-                              headerShown: false,
-                              animation: "none",
-                              contentStyle: { backgroundColor: BOOT_BG },
-                            }}
-                          >
-                            <Stack.Screen name="index" />
-                            <Stack.Screen name="(auth)" />
-                            <Stack.Screen name="(app)" options={{ gestureEnabled: false }} />
-                            <Stack.Screen name="dev-student-login" />
-                            <Stack.Screen name="dev-faculty-login" />
-                            <Stack.Screen name="dev-cora-cleanup" />
-                            <Stack.Screen name="dev-onboarding-preview" />
-                          </Stack>
-                        </SystemErrorBoundary>
-                      </NotificationProvider>
-                    </PresenceSelfProvider>
-                  </AppAlertProvider>
-                </StripeAppProvider>
-              </AppearanceProvider>
-            </SessionProvider>
-          </SafeAreaProvider>
-        </GestureHandlerRootView>
+        <FullRootProviders>
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              animation: "none",
+              contentStyle: { backgroundColor: BOOT_BG },
+            }}
+          />
+        </FullRootProviders>
       </BootErrorBoundary>
     </View>
   )
@@ -124,19 +72,6 @@ const styles = StyleSheet.create({
   boot: {
     flex: 1,
     backgroundColor: BOOT_BG,
-  },
-  fill: {
-    flex: 1,
-    backgroundColor: BOOT_BG,
-  },
-  bootMark: {
-    position: "absolute",
-    top: 72,
-    alignSelf: "center",
-    zIndex: 0,
-    color: "#FFFFFF",
-    fontSize: 20,
-    fontWeight: "700",
   },
   brand: {
     marginTop: 72,

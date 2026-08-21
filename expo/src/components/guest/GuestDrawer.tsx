@@ -78,7 +78,8 @@ export function GuestDrawer({ session }: Props) {
     [entitlements],
   )
   const normalizedPathname = useMemo(() => normalizeRoutePathname(pathname), [pathname])
-  const { scrollRef, contentRef, registerRow, unregisterRow } = useDrawerScrollToActive(activeItemId, drawerOpen)
+  const { scrollRef, contentRef, registerRow, unregisterRow, onRowLayout, onScroll } =
+    useDrawerScrollToActive(activeItemId, drawerOpen)
 
   const [drawerMounted, setDrawerMounted] = useState(false)
   const [modalVisible, setModalVisible] = useState(false)
@@ -196,9 +197,11 @@ export function GuestDrawer({ session }: Props) {
             style={[styles.scroll, { backgroundColor: layout.scrollBackground }]}
             contentContainerStyle={[styles.scrollContent, layout.scrollContent]}
             showsVerticalScrollIndicator={false}
+            onScroll={onScroll}
+            scrollEventThrottle={16}
           >
             <View ref={contentRef} collapsable={false}>
-              <DrawerNavAnchor itemId={GUEST_DASHBOARD_LINK.id} registerRow={registerRow} unregisterRow={unregisterRow}>
+              <DrawerNavAnchor itemId={GUEST_DASHBOARD_LINK.id} registerRow={registerRow} unregisterRow={unregisterRow} onRowLayout={onRowLayout}>
                 <NavRow
                   item={GUEST_DASHBOARD_LINK}
                   active={isDrawerShellRouteActive(normalizedPathname, GUEST_DASHBOARD_LINK.route)}
@@ -212,6 +215,7 @@ export function GuestDrawer({ session }: Props) {
                 onPress={(item) => navigate(item.route)}
                 registerRow={registerRow}
                 unregisterRow={unregisterRow}
+                onRowLayout={onRowLayout}
               />
 
               {careerToolsItems.length > 0 ? (
@@ -221,6 +225,7 @@ export function GuestDrawer({ session }: Props) {
                   onPress={(item) => navigate(item.route)}
                   registerRow={registerRow}
                   unregisterRow={unregisterRow}
+                  onRowLayout={onRowLayout}
                 />
               ) : null}
 
@@ -231,6 +236,7 @@ export function GuestDrawer({ session }: Props) {
                   onPress={(item) => navigate(item.route)}
                   registerRow={registerRow}
                   unregisterRow={unregisterRow}
+                  onRowLayout={onRowLayout}
                 />
               ) : null}
 
@@ -240,6 +246,7 @@ export function GuestDrawer({ session }: Props) {
                 onPress={(item) => navigate(item.route)}
                 registerRow={registerRow}
                 unregisterRow={unregisterRow}
+                onRowLayout={onRowLayout}
               />
 
               <FlatNavSection
@@ -248,11 +255,12 @@ export function GuestDrawer({ session }: Props) {
                 onPress={(item) => navigate(item.route)}
                 registerRow={registerRow}
                 unregisterRow={unregisterRow}
+                onRowLayout={onRowLayout}
               />
 
               <View style={[styles.divider, { backgroundColor: drawerTheme.headerBorder }]} />
 
-              <DrawerNavAnchor itemId={GUEST_SETTINGS_LINK.id} registerRow={registerRow} unregisterRow={unregisterRow}>
+              <DrawerNavAnchor itemId={GUEST_SETTINGS_LINK.id} registerRow={registerRow} unregisterRow={unregisterRow} onRowLayout={onRowLayout}>
                 <NavRow
                   item={GUEST_SETTINGS_LINK}
                   active={isDrawerShellRouteActive(normalizedPathname, GUEST_SETTINGS_LINK.route) || normalizedPathname.startsWith("/settings/")}
@@ -277,12 +285,14 @@ function FlatNavSection({
   onPress,
   registerRow,
   unregisterRow,
+  onRowLayout,
 }: {
   group: GuestNavGroup
   pathname: string
   onPress: (item: GuestNavItem) => void
   registerRow: (itemId: string, ref: RefObject<View | null>) => void
   unregisterRow: (itemId: string) => void
+  onRowLayout: (itemId: string) => void
 }) {
   const theme = useDrawerNavTheme()
 
@@ -291,7 +301,7 @@ function FlatNavSection({
       <View style={[styles.divider, { backgroundColor: theme.headerBorder }]} />
       <Text style={[styles.sectionLabel, { color: theme.secondaryLabel }]}>{group.label}</Text>
       {group.items.map((item) => (
-        <DrawerNavAnchor key={item.id} itemId={item.id} registerRow={registerRow} unregisterRow={unregisterRow}>
+        <DrawerNavAnchor key={item.id} itemId={item.id} registerRow={registerRow} unregisterRow={unregisterRow} onRowLayout={onRowLayout}>
           <NavRow
             item={item}
             active={

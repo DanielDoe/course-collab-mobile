@@ -1,4 +1,5 @@
 import { useMemo } from "react"
+import { useWindowDimensions } from "react-native"
 import { NATIVE, nativeType } from "../../constants/faculty-native-theme"
 import { useAppThemeTokens } from "../../context/AppearanceProvider"
 import type { AppThemeTokens } from "../../constants/app-themes"
@@ -8,6 +9,7 @@ import {
   loginThemeAccentSoft,
   loginThemeGoldSoft,
 } from "../../lib/login-color-theme"
+import { authFlowTypeScale } from "../../lib/responsive-layout"
 
 /**
  * Login chrome uses fixed Color Hunt palettes (not appearance accent).
@@ -215,13 +217,95 @@ function loginTypeFromTokens(_tokens: AppThemeTokens, login: LoginTheme): LoginT
   }
 }
 
+function scaleFont(size: number, scale: number): number {
+  return Math.round(size * scale)
+}
+
+function scaleLoginTypography(type: LoginTypography, scale: number): LoginTypography {
+  if (Math.abs(scale - 1) < 0.01) return type
+  const fs = (size: number) => scaleFont(size, scale)
+  const lh = (size: number) => scaleFont(size, scale)
+  return {
+    heroTitle: {
+      ...type.heroTitle,
+      fontSize: fs(type.heroTitle.fontSize),
+      lineHeight: lh(type.heroTitle.lineHeight),
+    },
+    heroTitleCompact: {
+      fontSize: fs(type.heroTitleCompact.fontSize),
+      lineHeight: lh(type.heroTitleCompact.lineHeight),
+    },
+    heroSubtitle: {
+      ...type.heroSubtitle,
+      fontSize: fs(type.heroSubtitle.fontSize),
+      lineHeight: lh(type.heroSubtitle.lineHeight),
+    },
+    panelTitle: {
+      ...type.panelTitle,
+      fontSize: fs(type.panelTitle.fontSize),
+      lineHeight: lh(type.panelTitle.lineHeight),
+    },
+    panelDescription: {
+      ...type.panelDescription,
+      fontSize: fs(type.panelDescription.fontSize),
+      lineHeight: lh(type.panelDescription.lineHeight),
+    },
+    stepLabel: {
+      ...type.stepLabel,
+      fontSize: fs(type.stepLabel.fontSize),
+      lineHeight: lh(type.stepLabel.lineHeight),
+    },
+    fieldLabel: {
+      ...type.fieldLabel,
+      fontSize: fs(type.fieldLabel.fontSize),
+    },
+    body: {
+      ...type.body,
+      fontSize: fs(type.body.fontSize),
+      lineHeight: lh(type.body.lineHeight),
+    },
+    info: {
+      ...type.info,
+      fontSize: fs(type.info.fontSize),
+      lineHeight: lh(type.info.lineHeight),
+    },
+    button: {
+      ...type.button,
+      fontSize: fs(type.button.fontSize),
+      lineHeight: lh(type.button.lineHeight),
+    },
+    link: {
+      ...type.link,
+      fontSize: fs(type.link.fontSize),
+      lineHeight: lh(type.link.lineHeight),
+    },
+    tileLabel: {
+      ...type.tileLabel,
+      fontSize: fs(type.tileLabel.fontSize),
+      lineHeight: lh(type.tileLabel.lineHeight),
+    },
+    tileLabelFocused: {
+      fontSize: fs(type.tileLabelFocused.fontSize),
+      lineHeight: lh(type.tileLabelFocused.lineHeight),
+    },
+    input: {
+      ...type.input,
+      fontSize: fs(type.input.fontSize),
+      lineHeight: lh(type.input.lineHeight),
+    },
+  } as LoginTypography
+}
+
 export function useLoginTheme(): { LOGIN: LoginTheme; loginType: LoginTypography } {
   const tokens = useAppThemeTokens()
+  const { width, height } = useWindowDimensions()
+  const typeScale = authFlowTypeScale(width, height)
   return useMemo(() => {
     const LOGIN = loginThemeFromTokens(tokens)
+    const base = loginTypeFromTokens(tokens, LOGIN)
     return {
       LOGIN,
-      loginType: loginTypeFromTokens(tokens, LOGIN),
+      loginType: scaleLoginTypography(base, typeScale),
     }
-  }, [tokens])
+  }, [tokens, typeScale])
 }

@@ -480,6 +480,7 @@ export function FacultySummerCampScreen({ initialTab = "programs", visibleTabs }
           <RefreshControl refreshing={refreshing} onRefresh={() => void handleRefresh()} tintColor={FACULTY_SUMMER_CAMP_COLOR.action} />
         }
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
       >
         {loading ? (
           <ActivityIndicator color={FACULTY_SUMMER_CAMP_COLOR.action} style={localStyles.loader} />
@@ -699,7 +700,8 @@ export function FacultySummerCampScreen({ initialTab = "programs", visibleTabs }
               setFormOpen(false)
             }}
           />
-          <ScrollView contentContainerStyle={localStyles.sheetBody} keyboardShouldPersistTaps="handled">
+          <ScrollView contentContainerStyle={localStyles.sheetBody} keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag">
             {formError ? (
               <Text style={[type.caption, { color: tokens.danger, fontWeight: "600" }]}>{formError}</Text>
             ) : null}

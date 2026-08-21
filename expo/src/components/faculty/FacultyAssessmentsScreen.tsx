@@ -238,6 +238,7 @@ export function FacultyAssessmentsScreen({assessmentType,
               <RefreshControl refreshing={refreshing} onRefresh={() => void handleRefresh()} tintColor={FACULTY_ASSESSMENT_COLOR.link} />
             }
             keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
             showsVerticalScrollIndicator={false}
           >
         <FacultySearchToolbar

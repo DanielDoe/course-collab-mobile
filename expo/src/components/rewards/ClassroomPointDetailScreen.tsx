@@ -130,6 +130,7 @@ export function ClassroomPointDetailScreen() {
         contentContainerStyle={[styles.content, scrollPad]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
       >
         {error ? (
           <View

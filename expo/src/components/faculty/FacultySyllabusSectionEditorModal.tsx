@@ -224,6 +224,7 @@ export function FacultySyllabusSectionEditorModal({ visible, section, onClose, o
         <ScrollView
           contentContainerStyle={[collabSheetStyles.scroll, { paddingBottom: insets.bottom + 24 }]}
           keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         >
           <FacultySheetSection label="Section settings" hint={displayTitle} tone={SHEET_SECTION.edit}>
             {!current.isRequired ? (

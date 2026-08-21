@@ -468,7 +468,8 @@ export function FacultyCourseNotesScreen() {
           contentContainerStyle={[moduleStyles.content, listScrollPad]}
           contentInsetAdjustmentBehavior="never"
           automaticallyAdjustContentInsets={false}
-          keyboardShouldPersistTaps="always"
+          keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -607,7 +608,8 @@ export function FacultyCourseNotesScreen() {
               <Text style={[type.bodyEmphasis, { color: tokens.accent }]}>{saving ? "…" : "Save"}</Text>
             </Pressable>
           </View>
-          <ScrollView contentContainerStyle={localStyles.editorBody} keyboardShouldPersistTaps="handled">
+          <ScrollView contentContainerStyle={localStyles.editorBody} keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag">
             {loadingEditor ? (
               <View style={localStyles.loadingBox}>
                 <ActivityIndicator color={tokens.accent} />

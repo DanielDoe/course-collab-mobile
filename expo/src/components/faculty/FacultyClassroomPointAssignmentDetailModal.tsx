@@ -304,6 +304,7 @@ export function FacultyClassroomPointAssignmentDetailModal({
             style={sheetStyles.scroll}
             contentContainerStyle={[collabSheetStyles.scroll, { paddingBottom: 16 }]}
             keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
             showsVerticalScrollIndicator
           >
             {refreshing ? (

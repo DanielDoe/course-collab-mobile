@@ -370,6 +370,7 @@ export function StudentCoraHubView({
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={STUDENT_CORA_COLOR.link} />
           }
           keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         >
           <CoraHubEnter enabled={animateCards} index={nextCardEnterIndex()} reduceMotion={reduceMotion}>
             <DashboardWelcomeCard

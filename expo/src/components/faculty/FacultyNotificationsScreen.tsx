@@ -5,7 +5,8 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  View} from "react-native"
+  View,
+} from "react-native"
 import { useRouter } from "expo-router"
 import { useModuleScrollContentPadding } from "../../context/ChromeInsetContext"
 import { facultyNativeRouteFromLink } from "../../constants/faculty-nav"
@@ -13,6 +14,16 @@ import { useFacultyScope } from "../../hooks/useFacultyScope"
 import { useFacultyShell } from "../../context/FacultyShellContext"
 import { instructorApi, type InstructorNotification } from "../../lib/instructor-api"
 import { onNotificationsRefresh } from "../../lib/notifications/notification-events"
+import {
+  loadNotificationInboxPrefs,
+  saveNotificationInboxPrefs,
+  sortNotificationsWithPins,
+  withArchived,
+  withDeleted,
+  withPinned,
+  type NotificationInboxPrefs,
+} from "../../lib/notification-inbox-prefs"
+import { AppAlert } from "../../lib/app-alert"
 import {
   CommEmptyState,
   CommSectionFooter,
@@ -29,8 +40,13 @@ import {
 } from "./faculty-notifications-ui"
 import { useModuleTheme } from "../../lib/themed-module-shell"
 
+type Filter = "all" | "unread" | "pinned" | "archived"
 
-type Filter = "all" | "unread"
+const EMPTY_PREFS: NotificationInboxPrefs = {
+  pinnedIds: [],
+  archivedIds: [],
+  deletedIds: [],
+}
 
 export function FacultyNotificationsScreen() {
   const { styles: moduleStyles } = useModuleTheme()
@@ -47,12 +63,30 @@ export function FacultyNotificationsScreen() {
   const [notifications, setNotifications] = useState<InstructorNotification[]>([])
   const [selected, setSelected] = useState<InstructorNotification | null>(null)
   const [detailOpen, setDetailOpen] = useState(false)
+  const [prefs, setPrefs] = useState<NotificationInboxPrefs>(EMPTY_PREFS)
+  const [actionBusy, setActionBusy] = useState(false)
+
+  const persistPrefs = useCallback(
+    async (next: NotificationInboxPrefs) => {
+      if (!session) return
+      setPrefs(next)
+      await saveNotificationInboxPrefs("faculty", session.id, next)
+    },
+    [session],
+  )
 
   const load = useCallback(async () => {
     if (!session) return
-    const data = await instructorApi.getNotifications(session.id)
-    setNotifications(data.notifications ?? [])
-    setNotificationCount(data.unread_count ?? 0)
+    const [data, nextPrefs] = await Promise.all([
+      instructorApi.getNotifications(session.id),
+      loadNotificationInboxPrefs("faculty", session.id),
+    ])
+    setPrefs(nextPrefs)
+    const deleted = new Set(nextPrefs.deletedIds)
+    const archived = new Set(nextPrefs.archivedIds)
+    const visible = (data.notifications ?? []).filter((n) => !deleted.has(n.id))
+    setNotifications(visible)
+    setNotificationCount(visible.filter((n) => !n.is_read && !archived.has(n.id)).length)
   }, [session, setNotificationCount])
 
   useEffect(() => {
@@ -66,18 +100,34 @@ export function FacultyNotificationsScreen() {
 
   useEffect(() => onNotificationsRefresh(() => void load()), [load])
 
-  const unread = useMemo(() => notifications.filter((n) => !n.is_read).length, [notifications])
+  const pinnedSet = useMemo(() => new Set(prefs.pinnedIds), [prefs.pinnedIds])
+  const archivedSet = useMemo(() => new Set(prefs.archivedIds), [prefs.archivedIds])
 
-  const visible = useMemo(
-    () => (filter === "unread" ? notifications.filter((n) => !n.is_read) : notifications),
-    [notifications, filter],
+  const unread = useMemo(
+    () => notifications.filter((n) => !n.is_read && !archivedSet.has(n.id)).length,
+    [archivedSet, notifications],
   )
+
+  const visible = useMemo(() => {
+    let items = notifications
+    if (filter === "archived") {
+      items = items.filter((n) => archivedSet.has(n.id))
+    } else {
+      items = items.filter((n) => !archivedSet.has(n.id))
+      if (filter === "unread") items = items.filter((n) => !n.is_read)
+      if (filter === "pinned") items = items.filter((n) => pinnedSet.has(n.id))
+    }
+    return sortNotificationsWithPins(items, prefs.pinnedIds)
+  }, [archivedSet, filter, notifications, pinnedSet, prefs.pinnedIds])
 
   const pageCount = Math.max(1, Math.ceil(visible.length / NOTIFICATION_PAGE_SIZE))
   const safePage = Math.min(page, pageCount - 1)
   const paged = useMemo(
     () =>
-      visible.slice(safePage * NOTIFICATION_PAGE_SIZE, safePage * NOTIFICATION_PAGE_SIZE + NOTIFICATION_PAGE_SIZE),
+      visible.slice(
+        safePage * NOTIFICATION_PAGE_SIZE,
+        safePage * NOTIFICATION_PAGE_SIZE + NOTIFICATION_PAGE_SIZE,
+      ),
     [visible, safePage],
   )
   const rangeLabel =
@@ -121,6 +171,47 @@ export function FacultyNotificationsScreen() {
     router.push(facultyNativeRouteFromLink(item.link ?? undefined) as never)
   }
 
+  async function handleTogglePin(item: InstructorNotification) {
+    await persistPrefs(withPinned(prefs, item.id, !pinnedSet.has(item.id)))
+  }
+
+  async function handleToggleArchive(item: InstructorNotification) {
+    const nextArchived = !archivedSet.has(item.id)
+    await persistPrefs(withArchived(prefs, item.id, nextArchived))
+    if (!item.is_read) {
+      setNotificationCount(Math.max(0, unread + (nextArchived ? -1 : 1)))
+    }
+    if (nextArchived && selected?.id === item.id) {
+      setDetailOpen(false)
+      setFilter("archived")
+    }
+  }
+
+  function handleDelete(item: InstructorNotification) {
+    AppAlert.alert("Delete notification?", "This hides it from your faculty inbox on this device.", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: () => {
+          void (async () => {
+            setActionBusy(true)
+            try {
+              const wasUnread = !item.is_read && !archivedSet.has(item.id)
+              await persistPrefs(withDeleted(prefs, item.id))
+              setNotifications((prev) => prev.filter((n) => n.id !== item.id))
+              if (wasUnread) setNotificationCount(Math.max(0, unread - 1))
+              setDetailOpen(false)
+              setSelected(null)
+            } finally {
+              setActionBusy(false)
+            }
+          })()
+        },
+      },
+    ])
+  }
+
   async function handleMarkAllRead() {
     if (!session) return
     await instructorApi.markAllNotificationsRead(session.id)
@@ -147,7 +238,11 @@ export function FacultyNotificationsScreen() {
         style={[moduleStyles.root, styles.root]}
         contentContainerStyle={[styles.content, scrollPad]}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={() => void handleRefresh()} tintColor={FACULTY_COMMUNICATION_COLOR.link} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => void handleRefresh()}
+            tintColor={FACULTY_COMMUNICATION_COLOR.link}
+          />
         }
         showsVerticalScrollIndicator={false}
       >
@@ -157,29 +252,70 @@ export function FacultyNotificationsScreen() {
           options={[
             { id: "all", label: "All" },
             { id: "unread", label: unread > 0 ? `Unread (${unread})` : "Unread" },
+            { id: "pinned", label: "Pinned" },
+            { id: "archived", label: "Archived" },
           ]}
         />
 
-        <CommSectionHeader title="Recent Alerts" trailing={rangeLabel ? (
-          <Text style={[comm.type.caption, { color: comm.native.secondaryLabel }]}>{rangeLabel}</Text>
-        ) : undefined} />
+        <CommSectionHeader
+          title="Recent Alerts"
+          trailing={
+            rangeLabel ? (
+              <Text style={[comm.type.caption, { color: comm.native.secondaryLabel }]}>
+                {rangeLabel}
+              </Text>
+            ) : undefined
+          }
+        />
 
         {loading ? (
           <ActivityIndicator color={FACULTY_COMMUNICATION_COLOR.link} style={{ marginTop: 28 }} />
         ) : visible.length === 0 ? (
-          <View style={[styles.emptyWrap, { backgroundColor: comm.native.secondaryGrouped, borderRadius: comm.layout.sectionRadius }]}>
+          <View
+            style={[
+              styles.emptyWrap,
+              {
+                backgroundColor: comm.native.secondaryGrouped,
+                borderRadius: comm.layout.sectionRadius,
+              },
+            ]}
+          >
             <CommEmptyState
-              icon={filter === "unread" ? "checkmark-circle-outline" : "notifications-off-outline"}
-              title={filter === "unread" ? "You're All Caught Up" : "No Notifications"}
+              icon={
+                filter === "unread"
+                  ? "checkmark-circle-outline"
+                  : filter === "pinned"
+                    ? "pin-outline"
+                    : filter === "archived"
+                      ? "archive-outline"
+                      : "notifications-off-outline"
+              }
+              title={
+                filter === "unread"
+                  ? "You're All Caught Up"
+                  : filter === "pinned"
+                    ? "No Pinned Notifications"
+                    : filter === "archived"
+                      ? "No Archived Notifications"
+                      : "No Notifications"
+              }
               body={
                 filter === "unread"
                   ? "New student activity and course updates will show here."
-                  : "Course alerts appear here as students engage with your modules."
+                  : filter === "pinned"
+                    ? "Pin important alerts from a notification to keep them on top."
+                    : filter === "archived"
+                      ? "Archived notifications will appear here."
+                      : "Course alerts appear here as students engage with your modules."
               }
             />
           </View>
         ) : (
-          <NotificationCenterList items={paged} onOpen={(item) => void handleOpen(item)} />
+          <NotificationCenterList
+            items={paged}
+            pinnedIds={prefs.pinnedIds}
+            onOpen={(item) => void handleOpen(item)}
+          />
         )}
 
         {visible.length > 0 ? (
@@ -193,15 +329,21 @@ export function FacultyNotificationsScreen() {
         ) : null}
 
         <CommSectionFooter>
-          Tap an alert to read the AI summary and full message. Use Open Related Screen when you are ready to jump in.
+          Tap an alert to pin, archive, or delete it. Open Related Screen jumps to the matching module.
         </CommSectionFooter>
       </ScrollView>
 
       <FacultyNotificationDetailSheet
         visible={detailOpen}
         notification={selected}
+        pinned={selected ? pinnedSet.has(selected.id) : false}
+        archived={selected ? archivedSet.has(selected.id) : false}
+        actionBusy={actionBusy}
         onClose={() => setDetailOpen(false)}
         onOpenRelated={handleOpenRelated}
+        onTogglePin={(item) => void handleTogglePin(item)}
+        onToggleArchive={(item) => void handleToggleArchive(item)}
+        onDelete={handleDelete}
       />
     </>
   )

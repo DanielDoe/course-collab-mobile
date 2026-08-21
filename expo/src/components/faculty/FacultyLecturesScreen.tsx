@@ -185,6 +185,7 @@ export function FacultyLecturesScreen() {
         contentContainerStyle={[styles.content, scrollPad]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void handleRefresh()} tintColor={FACULTY_COLLAB_COLOR.link} />}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
       >
         <FacultySearchToolbar
           value={search}

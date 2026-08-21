@@ -235,6 +235,7 @@ export function FacultyPracticeTopicQuestionsModal({
               />
             }
             keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
             showsVerticalScrollIndicator={false}
           >
             <Text style={collabSheetStyles.introText}>

@@ -1,8 +1,15 @@
-import { parseLectureSamplePractice } from "./lecture-sample-practice-utils"
+import {
+  parseLectureSamplePractice,
+  parseLectureSamplePracticeStudentApiResponse,
+  samplePracticePayloadHasQuestions,
+  samplePracticeQuestionsFromRecord,
+} from "./lecture-sample-practice-utils"
 import {
   coerceWorkspaceQuestionsArray,
   parseLectureWorkspace,
   parseLectureWorkspaceStudentApiResponse,
+  unwrapLectureWorkspacePayload,
+  workspacePayloadHasQuestions,
   workspaceQuestionsFromRecord,
 } from "./lecture-workspace-utils"
 import type { LectureSamplePracticeConfig, LectureWorkspaceConfig } from "./lecture-types"
@@ -44,17 +51,32 @@ function lectureConfigFields(source: unknown): Record<string, unknown> | null {
 }
 
 function extractSamplePracticeRaw(...sources: unknown[]): unknown {
+  let fallback: unknown = null
   for (const source of sources) {
     const parsed = parseJsonField(source)
     if (!parsed || typeof parsed !== "object") continue
     const record = parsed as Record<string, unknown>
-    if (record.config != null) return parseJsonField(record.config)
-    if (record.sample_practice != null) return parseJsonField(record.sample_practice)
-    if (record.samplePractice != null) return parseJsonField(record.samplePractice)
-    if (record.sample_practice_config != null) return parseJsonField(record.sample_practice_config)
-    if (record.enabled != null || Array.isArray(record.questions)) return record
+    const candidates: Record<string, unknown>[] = [record]
+    for (const key of ["config", "sample_practice", "samplePractice", "sample_practice_config"] as const) {
+      const nested = parseJsonField(record[key])
+      if (nested && typeof nested === "object") {
+        candidates.push(nested as Record<string, unknown>)
+      }
+    }
+    for (const candidate of candidates) {
+      const questions = samplePracticeQuestionsFromRecord(candidate)
+      if (questions.length > 0) {
+        return { ...candidate, questions }
+      }
+      if (
+        fallback == null &&
+        (candidate.enabled != null || Array.isArray(candidate.questions))
+      ) {
+        fallback = { ...candidate, questions }
+      }
+    }
   }
-  return null
+  return fallback
 }
 
 function workspaceCandidateRecords(source: unknown): Record<string, unknown>[] {
@@ -111,9 +133,75 @@ async function studentLectureRequestHeaders(
   return headers
 }
 
-function workspacePayloadHasQuestions(body: unknown): boolean {
+function pickBestWorkspaceConfig(payloads: unknown[]): LectureWorkspaceConfig {
+  let best = parseLectureWorkspaceStudentApiResponse(null)
+  for (const payload of payloads) {
+    if (payload == null) continue
+    const parsed = parseLectureWorkspaceStudentApiResponse(payload)
+    if (parsed.questions.length > best.questions.length) {
+      best = parsed
+    }
+  }
+  return best
+}
+
+function isSamplePracticeOnlyPayload(body: unknown): boolean {
   if (!body || typeof body !== "object") return false
-  return workspaceQuestionsFromRecord(body as Record<string, unknown>).length > 0
+  if (workspacePayloadHasQuestions(body)) return false
+
+  const record = body as Record<string, unknown>
+  if (
+    "workspace" in record ||
+    "lecture_workspace" in record ||
+    "workspace_config" in record
+  ) {
+    return false
+  }
+
+  if ("sample_practice" in record || "samplePractice" in record) {
+    return samplePracticePayloadHasQuestions(body)
+  }
+
+  const questions = samplePracticeQuestionsFromRecord(record)
+  if (questions.length === 0) return false
+  return true
+}
+
+function appendWorkspacePayloadSources(payloads: unknown[], source: unknown): void {
+  if (source == null) return
+  payloads.push(unwrapLectureWorkspacePayload(source))
+  if (typeof source !== "object") return
+
+  const record = source as Record<string, unknown>
+  for (const key of ["workspace", "lecture_workspace", "workspace_config"] as const) {
+    if (record[key] != null) {
+      payloads.push(unwrapLectureWorkspacePayload(record[key]))
+    }
+  }
+
+  const lecture = record.lecture
+  if (lecture && typeof lecture === "object") {
+    const lectureRecord = lecture as Record<string, unknown>
+    for (const key of ["workspace", "lecture_workspace", "workspace_config"] as const) {
+      if (lectureRecord[key] != null) {
+        payloads.push(unwrapLectureWorkspacePayload(lectureRecord[key]))
+      }
+    }
+  }
+}
+
+function bundledWorkspaceSource(bundled: Record<string, unknown>): unknown {
+  return bundled.workspace ?? bundled.lecture_workspace
+}
+
+function isWorkspaceOnlyPayload(body: unknown): boolean {
+  if (!body || typeof body !== "object") return false
+  const record = body as Record<string, unknown>
+  if ("lecture_workspace" in record || "workspace_config" in record) return true
+  if ("workspace" in record && !("sample_practice" in record) && !("samplePractice" in record)) {
+    return workspacePayloadHasQuestions(body)
+  }
+  return false
 }
 
 async function fetchStudentLectureWorkspacePayload(
@@ -208,19 +296,69 @@ export async function fetchStudentLectureWorkspaceConfig(
   lectureId: number,
   sources: unknown[] = [],
 ): Promise<LectureWorkspaceConfig> {
-  const payloads: unknown[] = [...sources]
+  const payloads: unknown[] = sources
+    .filter((source) => source != null)
+    .map((source) => unwrapLectureWorkspacePayload(source))
 
   const dedicated = await fetchStudentLectureWorkspacePayload(session, lectureId)
-  if (dedicated != null) payloads.unshift(dedicated)
+  if (dedicated != null) payloads.unshift(unwrapLectureWorkspacePayload(dedicated))
 
   const viaFetch = await studentLectureFetchJson(
     session,
     `/api/student/lectures/${lectureId}/workspace`,
   )
-  if (viaFetch != null && workspacePayloadHasQuestions(viaFetch)) payloads.push(viaFetch)
+  if (viaFetch != null) payloads.push(unwrapLectureWorkspacePayload(viaFetch))
 
   try {
     const viaApi = await studentApi.getLectureWorkspace(session, lectureId)
+    payloads.push(unwrapLectureWorkspacePayload(viaApi))
+  } catch {
+    /* fall through */
+  }
+
+  const content = await studentLectureFetchJson(
+    session,
+    `/api/student/lectures/${lectureId}/content`,
+  )
+  if (content != null) appendWorkspacePayloadSources(payloads, content)
+
+  const detail = await studentLectureFetchJson(session, `/api/student/lectures/${lectureId}`)
+  if (detail != null) appendWorkspacePayloadSources(payloads, detail)
+
+  const list = await studentApi.getLectures(session).catch(() => null)
+  const summary = list?.lectures?.find((item) => item.id === lectureId)
+  if (summary) {
+    appendWorkspacePayloadSources(payloads, summary)
+  }
+
+  const eligible = payloads.filter(
+    (payload) => payload != null && !isSamplePracticeOnlyPayload(payload),
+  )
+  const best = pickBestWorkspaceConfig(eligible)
+  if (best.questions.length > 0) return best
+
+  if (dedicated != null) {
+    return parseLectureWorkspaceStudentApiResponse(unwrapLectureWorkspacePayload(dedicated))
+  }
+
+  return parseLectureWorkspace(extractWorkspaceRaw(...payloads) ?? payloads[0])
+}
+
+export async function fetchStudentLectureSamplePracticeConfig(
+  session: StudentSession,
+  lectureId: number,
+  sources: unknown[] = [],
+): Promise<LectureSamplePracticeConfig> {
+  const payloads: unknown[] = [...sources]
+
+  const dedicated = await studentLectureFetchJson(
+    session,
+    `/api/student/lectures/${lectureId}/sample-practice`,
+  )
+  if (dedicated != null) payloads.unshift(dedicated)
+
+  try {
+    const viaApi = await studentApi.getLectureSamplePractice(session, lectureId)
     payloads.push(viaApi)
   } catch {
     /* fall through */
@@ -239,94 +377,88 @@ export async function fetchStudentLectureWorkspaceConfig(
   const summary = list?.lectures?.find((item) => item.id === lectureId)
   if (summary) {
     payloads.push(summary)
-    const lectureWorkspace = (summary as Record<string, unknown>).lecture_workspace
-    if (lectureWorkspace != null) payloads.unshift(lectureWorkspace)
+    const embedded = (summary as Record<string, unknown>).sample_practice
+    if (embedded != null) payloads.unshift(embedded)
   }
 
   for (const payload of payloads) {
-    if (payload && typeof payload === "object" && workspacePayloadHasQuestions(payload)) {
-      const parsed = parseLectureWorkspaceStudentApiResponse(payload)
+    if (!payload || typeof payload !== "object" || isWorkspaceOnlyPayload(payload)) continue
+    if (samplePracticePayloadHasQuestions(payload)) {
+      const parsed = parseLectureSamplePracticeStudentApiResponse(payload)
       if (parsed.questions.length > 0) return parsed
     }
   }
 
   for (const payload of payloads) {
-    const parsed = parseLectureWorkspace(extractWorkspaceRaw(payload) ?? payload)
+    if (!payload || typeof payload === "object" && isWorkspaceOnlyPayload(payload)) continue
+    const parsed = parseLectureSamplePractice(extractSamplePracticeRaw(payload) ?? payload)
     if (parsed.questions.length > 0) return parsed
   }
 
   if (dedicated != null) {
-    return parseLectureWorkspaceStudentApiResponse(dedicated)
+    return parseLectureSamplePracticeStudentApiResponse(dedicated)
   }
 
-  return parseLectureWorkspace(extractWorkspaceRaw(...payloads) ?? payloads[0])
+  return parseLectureSamplePractice(extractSamplePracticeRaw(...payloads) ?? payloads[0])
 }
 
-export async function fetchStudentLectureSamplePracticeConfig(
-  session: StudentSession,
-  lectureId: number,
-  sources: unknown[] = [],
-): Promise<LectureSamplePracticeConfig> {
-  const payloads = [...sources]
-  const dedicated = await studentLectureFetchJson(
-    session,
-    `/api/student/lectures/${lectureId}/sample-practice`,
-  )
-  if (dedicated != null) payloads.push(dedicated)
-
-  const content = await studentLectureFetchJson(
-    session,
-    `/api/student/lectures/${lectureId}/content`,
-  )
-  if (content != null) payloads.push(content)
-
-  const detail = await studentLectureFetchJson(session, `/api/student/lectures/${lectureId}`)
-  if (detail != null) payloads.push(detail)
-
-  const list = await studentApi.getLectures(session).catch(() => null)
-  const summary = list?.lectures?.find((item) => item.id === lectureId)
-  if (summary) payloads.push(summary)
-
-  const samplePracticeRaw = extractSamplePracticeRaw(...payloads)
-  return parseLectureSamplePractice(samplePracticeRaw)
+function bundledSamplePracticeSource(bundled: Record<string, unknown>): unknown {
+  return bundled.samplePractice ?? bundled.sample_practice
 }
 
 export async function fetchStudentLectureViewerData(
   session: StudentSession,
   lectureId: number,
 ): Promise<StudentLectureViewerData> {
+  let lecture: StudentLectureDetail
+  let deckUrl: string | null = null
+  const samplePracticeSources: unknown[] = []
+  const workspaceSources: unknown[] = []
+
   try {
     const bundled = await studentApi.getLectureViewer(session, lectureId)
-    const lecture = bundled.lecture
-    if (!lecture) {
+    if (!bundled.lecture) {
       throw new ApiError("This lecture could not be found.", 404)
     }
-    return {
-      lecture,
-      samplePractice: parseLectureSamplePractice(
-        extractSamplePracticeRaw(bundled.samplePractice, lecture),
-      ),
-      workspace: parseLectureWorkspaceStudentApiResponse(
-        bundled.workspace ?? lecture,
-      ),
-      deckUrl: bundled.deckUrl || lectureDeckUrl(lecture),
-    }
+    lecture = bundled.lecture
+    deckUrl = bundled.deckUrl || lectureDeckUrl(lecture)
+    const bundledRecord = bundled as Record<string, unknown>
+    const lectureFields = lectureConfigFields(bundled.lecture)
+    samplePracticeSources.push(
+      bundledSamplePracticeSource(bundledRecord),
+      lectureFields?.sample_practice,
+    )
+    workspaceSources.push(
+      unwrapLectureWorkspacePayload(bundledWorkspaceSource(bundledRecord)),
+      unwrapLectureWorkspacePayload(lectureFields?.workspace),
+      unwrapLectureWorkspacePayload(lectureFields?.lecture_workspace),
+    )
   } catch (error) {
     if (!(error instanceof ApiError) || error.status !== 404) throw error
+
+    const detail = await studentApi.getLectureById(session, lectureId)
+    if (!detail.lecture) {
+      throw new ApiError("This lecture could not be found.", 404)
+    }
+    lecture = detail.lecture
+    deckUrl = lectureDeckUrl(lecture)
+    const lectureFields = lectureConfigFields(lecture)
+    samplePracticeSources.push(lectureFields?.sample_practice)
+    workspaceSources.push(
+      unwrapLectureWorkspacePayload(lectureFields?.workspace),
+      unwrapLectureWorkspacePayload(lectureFields?.lecture_workspace),
+    )
   }
 
-  const detail = await studentApi.getLectureById(session, lectureId)
-  const lecture = detail.lecture
-  if (!lecture) {
-    throw new ApiError("This lecture could not be found.", 404)
-  }
-  const lectureFields = lectureConfigFields(lecture)
+  const [samplePractice, workspace] = await Promise.all([
+    fetchStudentLectureSamplePracticeConfig(session, lectureId, samplePracticeSources),
+    fetchStudentLectureWorkspaceConfig(session, lectureId, workspaceSources),
+  ])
+
   return {
     lecture,
-    samplePractice: parseLectureSamplePractice(extractSamplePracticeRaw(lecture, lectureFields)),
-    workspace: parseLectureWorkspace(
-      extractWorkspaceRaw(lecture, lectureFields?.workspace, lectureFields?.lecture_workspace),
-    ),
-    deckUrl: lectureDeckUrl(lecture),
+    samplePractice,
+    workspace,
+    deckUrl,
   }
 }

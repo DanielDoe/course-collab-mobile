@@ -353,6 +353,7 @@ export function CoraToolFlowSheet({ visible, toolId, session, onClose, onLaunch 
           style={styles.flex}
           contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 24 }]}
           keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         >
           {processing ? (
             <View style={styles.centered}>

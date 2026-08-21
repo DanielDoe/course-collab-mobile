@@ -321,7 +321,8 @@ export function FacultySummerCampProgramActionSheet({
           }
         />
 
-        <ScrollView contentContainerStyle={collabSheetStyles.scroll} keyboardShouldPersistTaps="handled">
+        <ScrollView contentContainerStyle={collabSheetStyles.scroll} keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag">
           <FacultySheetHero
             title={camp.title}
             subtitle={`${camp.training_count ?? trainings.length} tracks · ${camp.enrollment_count ?? 0} enrolled`}
@@ -616,6 +617,7 @@ export function FacultySummerCampTrainingActionSheet({
         <ScrollView
           contentContainerStyle={collabSheetStyles.scroll}
           keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
           refreshControl={
             <RefreshControl
               refreshing={loadingDetail}
@@ -875,6 +877,7 @@ export function FacultySummerCampRequestActionSheet({
             contentContainerStyle={[collabSheetStyles.scroll, { paddingBottom: insets.bottom + 24 }]}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
           >
             <FacultySheetHero
               title={request.full_name}

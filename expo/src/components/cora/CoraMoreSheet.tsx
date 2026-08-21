@@ -115,6 +115,7 @@ export function CoraMoreSheet({ visible, onClose, onSelect }: Props) {
           contentContainerStyle={[collabSheetStyles.scroll, styles.scroll, { paddingBottom: insets.bottom + 28 }]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         >
           <FacultySheetSection label="Learning & Progress" tone={SHEET_SECTION.review} hint="Study smarter with course-aware tools">
             <SectionRows sections={LEARNING_SECTIONS} onSelect={onSelect} onClose={onClose} />

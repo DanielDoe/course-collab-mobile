@@ -1,5 +1,9 @@
 import type { InstructorCourse } from "./instructor-api"
 
+function pickerRowKey(course: InstructorCourse): string {
+  return course.picker_key ?? `course-${course.id}`
+}
+
 export function splitFacultyCoursesByTerm(courses: InstructorCourse[]) {
   const currentTerm = courses.filter((course) => course.is_active_term !== false)
   const otherTerms = courses.filter((course) => course.is_active_term === false)
@@ -13,7 +17,7 @@ export function facultyCoursesForLoginSelection(courses: InstructorCourse[]): In
 }
 
 export function facultyCoursePickerSections(courses: InstructorCourse[]) {
-  const unique = [...new Map(courses.map((course) => [course.id, course])).values()]
+  const unique = [...new Map(courses.map((course) => [pickerRowKey(course), course])).values()]
   const { currentTerm, otherTerms } = splitFacultyCoursesByTerm(unique)
   const hasTermSplit = currentTerm.length > 0 && otherTerms.length > 0
 

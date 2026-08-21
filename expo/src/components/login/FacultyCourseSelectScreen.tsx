@@ -20,6 +20,7 @@ import { bootstrapFacultyForCourse } from "../../lib/post-login-bootstrap"
 import {
   consumeFacultyCoursesForSelection,
   facultyNeedsCourseSelection,
+  facultyPickerItemMatchesSelection,
   fetchFacultyCoursesList,
   resolveFacultyCourses,
   stashFacultyCoursesForSelection,
@@ -32,18 +33,18 @@ import { persistFacultyCourse } from "../../hooks/useFacultyShellRefresh"
 import type { InstructorCourse } from "../../lib/instructor-api"
 import { FacultyCoursePickerRow } from "../faculty/FacultyCollabListCards"
 import type { FacultySession } from "../../lib/session"
-import { useAuthFlowContentStyle } from "../../lib/responsive-layout"
+import { AUTH_FORM_PHONE_MAX_WIDTH, useAuthFlowLayout } from "../../lib/responsive-layout"
 
 export function FacultyCourseSelectScreen() {
   const insets = useSafeAreaInsets()
   const { session, signOut } = useSession()
   const { LOGIN, loginType } = useLoginTheme()
-  const shellStyle = useAuthFlowContentStyle(440)
+  const authLayout = useAuthFlowLayout({ phoneMax: AUTH_FORM_PHONE_MAX_WIDTH })
 
-  const [courses, setCourses] = useState<InstructorCourse[]>(() => consumeFacultyCoursesForSelection() ?? [])
-  const [suggestedCourseId, setSuggestedCourseId] = useState<number | null>(null)
-  const [loading, setLoading] = useState(courses.length === 0)
-  const [submittingId, setSubmittingId] = useState<number | null>(null)
+  const [courses, setCourses] = useState<InstructorCourse[]>([])
+  const [suggestedCourse, setSuggestedCourse] = useState<InstructorCourse | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [submittingKey, setSubmittingKey] = useState<string | null>(null)
   const [error, setError] = useState("")
   const [redirectToDashboard, setRedirectToDashboard] = useState(false)
   const [exitToLogin, setExitToLogin] = useState(false)
@@ -54,7 +55,8 @@ export function FacultyCourseSelectScreen() {
     let mounted = true
     void (async () => {
       try {
-        const list = courses.length > 0 ? courses : await fetchFacultyCoursesList(session)
+        consumeFacultyCoursesForSelection()
+        const list = await fetchFacultyCoursesList(session)
         if (!mounted) return
 
         if (!facultyNeedsCourseSelection(list)) {
@@ -66,7 +68,7 @@ export function FacultyCourseSelectScreen() {
         stashFacultyCoursesForSelection(list)
         const resolution = await resolveFacultyCourses(session)
         if (mounted && resolution.suggestedCourse) {
-          setSuggestedCourseId(resolution.suggestedCourse.id)
+          setSuggestedCourse(resolution.suggestedCourse)
         }
       } catch (err) {
         if (!mounted) return
@@ -79,12 +81,9 @@ export function FacultyCourseSelectScreen() {
     return () => {
       mounted = false
     }
-  }, [courses.length, session])
+  }, [session])
 
-  const uniqueCourses = useMemo(
-    () => [...new Map(courses.map((course) => [course.id, course])).values()],
-    [courses],
-  )
+  const uniqueCourses = useMemo(() => courses, [courses])
 
   const duplicateCodes = useMemo(() => {
     return new Set(
@@ -128,16 +127,17 @@ export function FacultyCourseSelectScreen() {
   }
 
   async function selectCourse(course: InstructorCourse) {
-    if (course.id <= 0 || submittingId != null) return
-    setSubmittingId(course.id)
+    const rowKey = course.picker_key ?? String(course.id)
+    if (course.id <= 0 || submittingKey != null) return
+    setSubmittingKey(rowKey)
     setError("")
     try {
-      await persistFacultyCourse(facultySession.id, course.id)
+      await persistFacultyCourse(facultySession.id, course.id, course.session_code)
       await bootstrapFacultyForCourse(facultySession, course, uniqueCourses)
       setRedirectToDashboard(true)
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not open that course.")
-      setSubmittingId(null)
+      setSubmittingKey(null)
     }
   }
 
@@ -150,14 +150,16 @@ export function FacultyCourseSelectScreen() {
           {
             paddingTop: insets.top + 20,
             paddingBottom: insets.bottom + 16,
+            paddingHorizontal: authLayout.horizontalPadding,
           },
         ]}
       >
-        <View style={[styles.shell, shellStyle]}>
+        <View style={[styles.shell, authLayout.contentStyle]}>
           <LoginPortalStack style={styles.portalStack}>
             <LoginBrandHeader
               title="Select a course"
               subtitle="Choose the course you want to work in before opening your dashboard."
+              style={styles.brandHeader}
             />
 
             {error ? <ErrorBanner message={error} /> : null}
@@ -180,12 +182,13 @@ export function FacultyCourseSelectScreen() {
               <View style={styles.listViewport}>
                 <SectionList
                   sections={sections}
-                  keyExtractor={(course) => String(course.id)}
+                  keyExtractor={(course) => course.picker_key ?? String(course.id)}
                   style={styles.list}
                   contentContainerStyle={styles.listContent}
                   showsVerticalScrollIndicator
                   stickySectionHeadersEnabled={false}
                   keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
                   renderSectionHeader={({ section }) =>
                     section.title ? (
                       <Text style={[loginType.fieldLabel, styles.sectionLabel, { color: LOGIN.secondaryLabel }]}>
@@ -195,7 +198,7 @@ export function FacultyCourseSelectScreen() {
                   }
                   renderItem={({ item: course }) => {
                     const showSemester = facultyCourseRowSemesterVisible(course, uniqueCourses, duplicateCodes)
-                    const isSuggested = course.id === suggestedCourseId
+                    const isSuggested = facultyPickerItemMatchesSelection(suggestedCourse, course)
                     return (
                       <View style={styles.rowWrap}>
                         <FacultyCoursePickerRow
@@ -203,7 +206,7 @@ export function FacultyCourseSelectScreen() {
                           active={isSuggested}
                           showSemester={showSemester}
                           onPress={() => {
-                            if (submittingId != null) return
+                            if (submittingKey != null) return
                             void selectCourse(course)
                           }}
                         />
@@ -228,7 +231,6 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   frame: {
     flex: 1,
-    paddingHorizontal: 20,
   },
   shell: {
     flex: 1,
@@ -237,6 +239,9 @@ const styles = StyleSheet.create({
   portalStack: {
     flex: 1,
     gap: 16,
+  },
+  brandHeader: {
+    zIndex: 2,
   },
   listViewport: {
     flex: 1,

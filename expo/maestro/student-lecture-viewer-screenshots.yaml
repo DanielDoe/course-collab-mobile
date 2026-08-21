@@ -1,0 +1,31 @@
+appId: com.coursecollab.app
+---
+- openLink: coursecollab://dev-student-login
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 120000
+- openLink: coursecollab:///lecture/1?lectureId=65
+- extendedWaitUntil:
+    visible: "Back to Lectures"
+    timeout: 90000
+- extendedWaitUntil:
+    visible: "Ask Cora about these slides"
+    timeout: 30000
+- takeScreenshot: 04-pdf-cora-fab
+- tapOn:
+    text: "Ask Cora about these slides"
+- extendedWaitUntil:
+    visible: "Exit to Cora"
+    timeout: 60000
+- takeScreenshot: 05-cora-chat-open
+- tapOn:
+    text: "Exit to Cora"
+- extendedWaitUntil:
+    visible: "Open lecture tools"
+    timeout: 30000
+- tapOn:
+    text: "Open lecture tools"
+- extendedWaitUntil:
+    visible: "Slide tools"
+    timeout: 30000
+- takeScreenshot: 06-tools-sheet

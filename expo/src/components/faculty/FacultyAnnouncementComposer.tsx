@@ -175,7 +175,8 @@ export function FacultyAnnouncementComposer({visible,
 
         <ScrollView
           contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + 24 }]}
-          keyboardShouldPersistTaps="always"
+          keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}
         >
           <Text style={type.caption} accessible={false}>

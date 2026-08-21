@@ -381,6 +381,7 @@ export function NoteEditorScreen() {
         style={styles.scroll}
         contentContainerStyle={[styles.content, { paddingBottom: footerHeight + 16 }]}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
       >
         <FlashInfoHintQueue hints={flashHints} />
@@ -561,6 +562,7 @@ export function NoteEditorScreen() {
             <ScrollView
               contentContainerStyle={[styles.shareList, { paddingBottom: insets.bottom + 88 }]}
               keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
             >
               {shareError ? (
                 <View style={[styles.shareErrorBox, { backgroundColor: `${tokens.danger}14` }]}>

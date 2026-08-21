@@ -342,6 +342,7 @@ export function FlashcardsHomeScreen() {
         contentContainerStyle={pageScrollStyle}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         directionalLockEnabled
         nestedScrollEnabled
         refreshControl={
@@ -375,6 +376,7 @@ export function FlashcardsHomeScreen() {
         contentContainerStyle={pageScrollStyle}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         directionalLockEnabled
         nestedScrollEnabled
         refreshControl={

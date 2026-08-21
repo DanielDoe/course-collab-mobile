@@ -250,6 +250,7 @@ export function FacultyPlaygroundScreen() {
               <RefreshControl refreshing={refreshing} onRefresh={() => void handleRefresh()} tintColor={FACULTY_PLAYGROUND_COLOR.link} />
             }
             keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
             showsVerticalScrollIndicator={false}
           >
             <FacultySearchToolbar
@@ -320,6 +321,7 @@ export function FacultyPlaygroundScreen() {
           <ScrollView
             contentContainerStyle={[collabSheetStyles.scroll, scrollPad]}
             keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
           >
             <FacultySheetNotice message="Pulls random questions from selected topics. For hand-picked questions, use the Question bank tab." />
             {createError ? <FacultySheetErrorBanner message={createError} /> : null}

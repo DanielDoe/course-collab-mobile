@@ -62,7 +62,10 @@ function AppShellFrameInner({
     <ChromeInsetProvider topInset={topInset} bottomInset={floatSearchDock ? searchDockInset : 0}>
       <View style={[styles.root, { backgroundColor }]}>
         {showTopBar && !floatChrome ? topBar : null}
-        <View style={styles.content}>{children}</View>
+        {/* Opaque fill — prevents prior stack scenes from showing through translucent chrome. */}
+        <View style={[styles.content, { backgroundColor }]}>
+          <View style={[styles.contentFill, { backgroundColor }]}>{children}</View>
+        </View>
         {showTopBar && floatChrome ? (
           <View style={styles.floatingChrome} pointerEvents="box-none">
             {topBar}
@@ -77,6 +80,7 @@ function AppShellFrameInner({
 const styles = StyleSheet.create({
   root: { flex: 1 },
   content: { flex: 1 },
+  contentFill: { flex: 1 },
   floatingChrome: {
     position: "absolute",
     top: 0,

@@ -195,6 +195,7 @@ export function FacultyAddStudentModal({
       <ScrollView
         contentContainerStyle={[collabSheetStyles.scroll, { paddingBottom: insets.bottom + 24 }]}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
       >
         <View style={localStyles.modeRow}>
           <Pressable

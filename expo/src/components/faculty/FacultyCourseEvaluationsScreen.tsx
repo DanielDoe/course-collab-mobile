@@ -677,6 +677,7 @@ export function FacultyCourseEvaluationsScreen() {
         }
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
       >
         {error ? (
           <View

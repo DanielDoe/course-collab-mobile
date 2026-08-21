@@ -109,6 +109,7 @@ export function FacultyProfileSettingsSheet({
         <ScrollView
           contentContainerStyle={[collabSheetStyles.scroll, { paddingBottom: insets.bottom + 24 }]}
           keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}
         >
           <Text style={[type.caption, { color: native.secondaryLabel, lineHeight: 20, marginBottom: 4 }]}>
@@ -195,6 +196,7 @@ export function FacultySecuritySettingsSheet({
         <ScrollView
           contentContainerStyle={[collabSheetStyles.scroll, { paddingBottom: insets.bottom + 24 }]}
           keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}
         >
           <MfaSecurityCard userType="instructor" userId={instructorId} variant="faculty" />

@@ -147,6 +147,7 @@ export function ClassroomPointsTaskScreen() {
         contentContainerStyle={[styles.content, scrollPad, moduleContent]}
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
     >
       {error ? (
         <View

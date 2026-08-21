@@ -14,6 +14,7 @@ import {
 import { isMfaGatedResponse } from "./mfa-types"
 import { mergeCookieHeaders, persistHttpCookiesFromResponse, studentHttpCookieHeader } from "./student-http-cookies"
 import { assertProductionHttpsUrl, createApiAbortSignal, noteApiFailure } from "./http"
+import { normalizeLoginIdentifier, normalizeLoginPassword } from "./login-credentials"
 
 export class ApiError extends Error {
   constructor(
@@ -307,7 +308,8 @@ export const api = {
     }),
 
   universityStudentLogin: async (payload: UniversityStudentLoginRequest) => {
-    const authId = payload.identifier.trim()
+    const authId = normalizeLoginIdentifier(payload.identifier)
+    const password = normalizeLoginPassword(payload.password)
     const loginKey = studentMfaLoginKey(payload.universityId, authId)
     const aliasKeys = studentMfaAliasKeys(payload.universityId, authId)
     const trustHeaders = await mfaLoginCookieHeadersForStudent(payload.universityId, authId)
@@ -317,7 +319,7 @@ export const api = {
       body: JSON.stringify({
         universityId: payload.universityId,
         identifier: authId,
-        password: payload.password,
+        password,
         rememberMe: Boolean(payload.rememberMe),
         ...(payload.courseId != null ? { courseId: payload.courseId } : {}),
       }),
@@ -348,9 +350,9 @@ export const api = {
       method: "PUT",
       body: JSON.stringify({
         universityId: payload.universityId,
-        identifier: payload.identifier.trim(),
-        newPassword: payload.newPassword,
-        confirmPassword: payload.confirmPassword,
+        identifier: normalizeLoginIdentifier(payload.identifier),
+        newPassword: normalizeLoginPassword(payload.newPassword),
+        confirmPassword: normalizeLoginPassword(payload.confirmPassword),
       }),
     }),
 
@@ -377,14 +379,15 @@ export const api = {
     }),
 
   instructorLogin: async (username: string, password: string) => {
-    const authId = username.trim()
+    const authId = normalizeLoginIdentifier(username)
+    const normalizedPassword = normalizeLoginPassword(password)
     const loginKey = instructorMfaLoginKey(authId)
     const aliasKeys = instructorMfaAliasKeys(authId)
     const trustHeaders = await mfaLoginCookieHeadersForInstructor(authId)
     const data = await request<InstructorLoginResponse>("/api/instructor/login", {
       method: "POST",
       headers: trustHeaders,
-      body: JSON.stringify({ username: authId, password }),
+      body: JSON.stringify({ username: authId, password: normalizedPassword }),
     })
     const record = data as Record<string, unknown>
     if (isMfaGatedResponse(record)) {
@@ -404,13 +407,14 @@ export const api = {
   },
 
   adminLogin: async (username: string, password: string) => {
-    const authId = username.trim()
+    const authId = normalizeLoginIdentifier(username)
+    const normalizedPassword = normalizeLoginPassword(password)
     const loginKey = `admin:${authId.toLowerCase()}`
     const trustHeaders = await mfaLoginCookieHeaders(loginKey)
     const data = await request<AdminLoginResponse>("/api/admin/login", {
       method: "POST",
       headers: trustHeaders,
-      body: JSON.stringify({ username: authId, password }),
+      body: JSON.stringify({ username: authId, password: normalizedPassword }),
     })
     const record = data as Record<string, unknown>
     if (isMfaGatedResponse(record)) {
@@ -428,13 +432,14 @@ export const api = {
   },
 
   guestLogin: async (email: string, password: string) => {
-    const authId = email.trim().toLowerCase()
+    const authId = normalizeLoginIdentifier(email)
+    const normalizedPassword = normalizeLoginPassword(password)
     const loginKey = studentMfaLoginKey(0, authId)
     const trustHeaders = await mfaLoginCookieHeadersForStudent(0, authId)
     const data = await request<GuestLoginResponse>("/api/guest/login", {
       method: "POST",
       headers: trustHeaders,
-      body: JSON.stringify({ email: authId, password }),
+      body: JSON.stringify({ email: authId, password: normalizedPassword }),
     })
     const record = data as Record<string, unknown>
     if (isMfaGatedResponse(record)) {
@@ -472,13 +477,14 @@ export const api = {
     }),
 
   summerLogin: async (email: string, password: string) => {
-    const authId = email.trim().toLowerCase()
+    const authId = normalizeLoginIdentifier(email)
+    const normalizedPassword = normalizeLoginPassword(password)
     const loginKey = studentMfaLoginKey(0, authId)
     const trustHeaders = await mfaLoginCookieHeadersForStudent(0, authId)
     const data = await request<SummerLoginResponse>("/api/summer-camp/login", {
       method: "POST",
       headers: trustHeaders,
-      body: JSON.stringify({ email: email.trim(), password }),
+      body: JSON.stringify({ email: authId, password: normalizedPassword }),
     })
     const record = data as Record<string, unknown>
     if (isMfaGatedResponse(record)) {

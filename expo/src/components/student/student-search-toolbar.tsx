@@ -302,6 +302,7 @@ export function StudentFilterSheet({
         <ScrollView
           contentContainerStyle={[styles.filterSheetList, { paddingBottom: insets.bottom + 24 }]}
           keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}
         >
           <GlassMenuList>
@@ -350,6 +351,7 @@ export function StudentGroupedFilterSheet({
         <ScrollView
           contentContainerStyle={[styles.groupedFilterList, { paddingBottom: insets.bottom + 24 }]}
           keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}
         >
           {groups.map((group) => (

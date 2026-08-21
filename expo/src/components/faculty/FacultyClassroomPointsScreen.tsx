@@ -270,6 +270,7 @@ export function FacultyClassroomPointsScreen() {
           />
         }
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
       >
         {error ? (

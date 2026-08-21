@@ -1,0 +1,14 @@
+appId: com.coursecollab.app
+---
+- openLink: coursecollab:///lecture/1?lectureId=65
+- extendedWaitUntil:
+    visible: "Back to Lectures"
+    timeout: 60000
+- tapOn:
+    text: "Open lecture tools"
+- extendedWaitUntil:
+    visible: "Slide tools"
+    timeout: 30000
+- assertVisible: "Sample Practice"
+- assertVisible: "Workspace"
+- takeScreenshot: 05-tools-sheet-workspace

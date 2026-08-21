@@ -1,5 +1,13 @@
 import { useEffect, useMemo, useState } from "react"
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from "react-native"
+import {
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native"
 import { useRouter } from "expo-router"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { useSession } from "../../context/SessionProvider"
@@ -12,7 +20,7 @@ import {
 import { resolvePostLoginRoute } from "../../lib/onboarding"
 import { studentApi } from "../../lib/student-api"
 import { navigatePostSignIn, replaceAuthRoute } from "../../lib/navigation-reset"
-import { useAuthFlowContentStyle } from "../../lib/responsive-layout"
+import { AUTH_FORM_PHONE_MAX_WIDTH, useAuthFlowLayout } from "../../lib/responsive-layout"
 import type { FacultySession, StudentSession } from "../../lib/session"
 import { ErrorBanner, LoginFieldGroup } from "./LoginCard"
 import { LoginButton, LoginField, LoginPasswordToggle } from "./LoginButton"
@@ -33,7 +41,11 @@ export function FirstLoginChangePasswordScreen() {
   const router = useRouter()
   const { session, signIn } = useSession()
   const { LOGIN, loginType } = useLoginTheme()
-  const contentStyle = useAuthFlowContentStyle()
+  const [keyboardVisible, setKeyboardVisible] = useState(false)
+  const authLayout = useAuthFlowLayout({
+    keyboardVisible,
+    phoneMax: AUTH_FORM_PHONE_MAX_WIDTH,
+  })
 
   const [currentPassword, setCurrentPassword] = useState("")
   const [newPassword, setNewPassword] = useState("")
@@ -42,6 +54,17 @@ export function FirstLoginChangePasswordScreen() {
   const [showNew, setShowNew] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState("")
+
+  useEffect(() => {
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow"
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide"
+    const showSub = Keyboard.addListener(showEvent, () => setKeyboardVisible(true))
+    const hideSub = Keyboard.addListener(hideEvent, () => setKeyboardVisible(false))
+    return () => {
+      showSub.remove()
+      hideSub.remove()
+    }
+  }, [])
 
   useEffect(() => {
     if (!session) {
@@ -65,17 +88,20 @@ export function FirstLoginChangePasswordScreen() {
         root: {
           flex: 1,
           backgroundColor: LOGIN.canvas,
-          paddingTop: insets.top + 12,
-          paddingBottom: insets.bottom + 16,
-          paddingHorizontal: 20,
         },
         lead: {
           ...loginType.body,
           color: LOGIN.secondaryLabel,
           marginBottom: 4,
         },
+        scrollInner: {
+          width: "100%",
+          ...(authLayout.shouldCenterVertically && !keyboardVisible
+            ? { flexGrow: 1, justifyContent: "center" as const }
+            : { flexGrow: 0, justifyContent: "flex-start" as const }),
+        },
       }),
-    [LOGIN, insets.bottom, insets.top, loginType.body],
+    [LOGIN, authLayout.shouldCenterVertically, keyboardVisible, loginType.body],
   )
 
   async function continueAfterChange(nextSession: FacultySession | StudentSession) {
@@ -134,14 +160,24 @@ export function FirstLoginChangePasswordScreen() {
     <KeyboardAvoidingView
       style={styles.root}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
+      keyboardVerticalOffset={Platform.OS === "ios" ? insets.top : 0}
     >
       <ScrollView
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ flexGrow: 1, justifyContent: "center" }}
+        keyboardDismissMode="on-drag"
+        automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
+        contentContainerStyle={{
+          flexGrow: 1,
+          minHeight: authLayout.minScrollHeight,
+          paddingHorizontal: authLayout.horizontalPadding,
+          paddingTop: insets.top + authLayout.verticalPadding,
+          paddingBottom: insets.bottom + (keyboardVisible ? 16 : authLayout.verticalPadding),
+        }}
         showsVerticalScrollIndicator={false}
       >
-        <View style={contentStyle}>
-          <LoginPortalStack>
+        <View style={styles.scrollInner}>
+          <View style={authLayout.contentStyle}>
+            <LoginPortalStack>
           <LoginPortalHeader portal={session.portal === "faculty" ? "faculty" : "student"} />
           <Text style={styles.lead}>
             First sign-in: choose a new password, then continue to your dashboard. Two-factor
@@ -190,6 +226,7 @@ export function FirstLoginChangePasswordScreen() {
             loading={submitting}
           />
         </LoginPortalStack>
+          </View>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>

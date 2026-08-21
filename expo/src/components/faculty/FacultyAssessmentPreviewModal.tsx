@@ -196,6 +196,7 @@ export function FacultyAssessmentPreviewModal({ quiz, assessmentType, scope, onC
               contentContainerStyle={[themedStyles.content, { paddingBottom: insets.bottom + 100 }]}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
             >
               <ScrollView
                 horizontal

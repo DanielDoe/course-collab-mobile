@@ -10,6 +10,7 @@ import { InfoSectionCard, useCourseInfoTheme } from "./course-info-shared"
 import { SolidListThumbTile } from "../theme/SolidListThumbTile"
 import { useThemedNative } from "../../context/AppearanceProvider"
 import { useNativeType } from "../../lib/themed-module-theme"
+import { NATIVE } from "../../constants/faculty-native-theme"
 
 function useStudentSession(): StudentSession | null {
   const { session } = useSession()
@@ -55,6 +56,7 @@ export function PoliciesScreen() {
         setRefreshing(true)
         load().finally(() => setRefreshing(false))
       }}
+      contentStyle={styles.screenContent}
     >
       <InfoSectionCard
         title="Assessment Governance"
@@ -118,43 +120,44 @@ export function PoliciesScreen() {
 }
 
 const styles = StyleSheet.create({
+  screenContent: {
+    paddingHorizontal: Math.max(NATIVE.pagePadding, 20),
+    gap: 16,
+  },
   highlight: {
     borderRadius: 12,
-    padding: 12,
-    gap: 4,
-    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    gap: 6,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   highlightLabel: {
     fontWeight: "600",
     letterSpacing: 0.3,
   },
   highlightValue: {},
-  body: { lineHeight: 21 },
+  body: { lineHeight: 22 },
   notice: {
     flexDirection: "row",
-    gap: 12,
-    padding: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-  },
-  noticeIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
+    alignItems: "flex-start",
+    gap: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 18,
+    borderRadius: NATIVE.sectionRadius,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   membershipIcon: { marginTop: 1 },
-  noticeBody: { flex: 1, gap: 6 },
+  noticeBody: { flex: 1, gap: 8, minWidth: 0 },
   noticeTitle: {},
-  noticeSpaced: { marginTop: 4 },
+  noticeSpaced: { marginTop: 2 },
   membershipNote: {
     flexDirection: "row",
     alignItems: "flex-start",
-    gap: 8,
-    padding: 14,
-    borderRadius: 12,
-    borderWidth: 1,
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderRadius: NATIVE.sectionRadius,
+    borderWidth: StyleSheet.hairlineWidth,
   },
-  membershipText: { flex: 1, lineHeight: 18 },
+  membershipText: { flex: 1, lineHeight: 20, minWidth: 0 },
 })

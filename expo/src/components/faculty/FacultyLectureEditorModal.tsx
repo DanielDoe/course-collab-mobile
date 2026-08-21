@@ -259,6 +259,7 @@ export function FacultyLectureEditorModal({
         <ScrollView
           contentContainerStyle={[collabSheetStyles.scroll, { paddingBottom: insets.bottom + 24 }]}
           keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         >
           {error ? <FacultySheetErrorBanner message={error} /> : null}
 

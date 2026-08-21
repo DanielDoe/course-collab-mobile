@@ -17,8 +17,10 @@ type Props = {
   lectureTitle?: string
   samplePracticeLabel: string
   samplePracticeCount: number
+  showSamplePractice?: boolean
   workspaceLabel: string
   workspaceCount: number
+  showWorkspace?: boolean
   canDownload: boolean
   canOpenExternally: boolean
   onOpenSamplePractice: () => void
@@ -38,8 +40,10 @@ export function StudentLectureToolsSheet({
   lectureTitle,
   samplePracticeLabel,
   samplePracticeCount,
+  showSamplePractice = samplePracticeCount > 0,
   workspaceLabel,
   workspaceCount,
+  showWorkspace = workspaceCount > 0,
   canDownload,
   canOpenExternally,
   onOpenSamplePractice,
@@ -69,46 +73,53 @@ export function StudentLectureToolsSheet({
           contentContainerStyle={[collabSheetStyles.scroll, { paddingBottom: insets.bottom + 24 }]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         >
           <FacultySheetHero
             title="Lecture tools"
             subtitle={subtitle}
-            icon="layers-outline"
+            icon="document-text-outline"
             thumbColor={tokens.accent}
           />
 
-          <FacultySheetSection label="On slides" tone={SHEET_SECTION.highlight}>
-            <FacultySheetActionRow
-              icon="sparkles-outline"
-              label={samplePracticeLabel}
-              subtitle={countDetail(
-                samplePracticeCount,
-                "example",
-                "examples",
-                "Interactive drills while you follow the deck",
-              )}
-              accent={SHEET_LECTURE.samplePractice}
-              onPress={() => pick(onOpenSamplePractice)}
-            />
-            <FacultySheetActionRow
-              icon="brush-outline"
-              label={workspaceLabel}
-              subtitle={countDetail(
-                workspaceCount,
-                "problem",
-                "problems",
-                "Ink workspace with step-by-step solutions",
-              )}
-              accent={SHEET_LECTURE.workspace}
-              onPress={() => pick(onOpenWorkspace)}
-            />
-          </FacultySheetSection>
+          {showSamplePractice || showWorkspace ? (
+            <FacultySheetSection label="On slides" tone={SHEET_SECTION.highlight}>
+              {showSamplePractice ? (
+                <FacultySheetActionRow
+                  icon="list-circle-outline"
+                  label={samplePracticeLabel}
+                  subtitle={countDetail(
+                    samplePracticeCount,
+                    "example",
+                    "examples",
+                    "Interactive drills while you follow the deck",
+                  )}
+                  accent={SHEET_LECTURE.samplePractice}
+                  onPress={() => pick(onOpenSamplePractice)}
+                />
+              ) : null}
+              {showWorkspace ? (
+                <FacultySheetActionRow
+                  icon="easel-outline"
+                  label={workspaceLabel}
+                  subtitle={countDetail(
+                    workspaceCount,
+                    "problem",
+                    "problems",
+                    "Ink workspace with step-by-step solutions",
+                  )}
+                  accent={SHEET_LECTURE.workspace}
+                  onPress={() => pick(onOpenWorkspace)}
+                />
+              ) : null}
+            </FacultySheetSection>
+          ) : null}
 
           {canDownload || canOpenExternally ? (
             <FacultySheetSection label="Slide deck" tone={SHEET_LECTURE.slideDeck}>
               {canDownload ? (
                 <FacultySheetActionRow
-                  icon="download-outline"
+                  icon="arrow-down-circle-outline"
                   label="Download slides"
                   subtitle="Save the PDF deck to your device"
                   accent={SHEET_LECTURE.deck}
@@ -117,7 +128,7 @@ export function StudentLectureToolsSheet({
               ) : null}
               {canOpenExternally ? (
                 <FacultySheetActionRow
-                  icon="open-outline"
+                  icon="share-outline"
                   label="Open externally"
                   subtitle="View in browser or Files"
                   accent={SHEET_LECTURE.preview}

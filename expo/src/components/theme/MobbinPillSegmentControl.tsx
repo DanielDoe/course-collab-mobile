@@ -374,6 +374,7 @@ export function MobbinPillSegmentControl<T extends string>({
           style={styles.scroll}
           showsHorizontalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
           directionalLockEnabled
           decelerationRate="fast"
           scrollEventThrottle={16}

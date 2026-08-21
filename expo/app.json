@@ -121,7 +121,9 @@
             "buildReactNativeFromSource": true
           }
         }
-      ]
+      ],
+      "@config-plugins/react-native-pdf",
+      "@config-plugins/react-native-blob-util"
     ],
     "owner": "danieldoe"
   }

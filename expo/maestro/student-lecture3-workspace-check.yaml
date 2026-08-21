@@ -1,0 +1,52 @@
+appId: com.coursecollab.app
+---
+# Lecture 3 (lectureId=67) — workspace smoke + interactions
+- stopApp
+- openLink: coursecollab://dev-student-login
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 120000
+- openLink: coursecollab:///lecture/3?lectureId=67
+- extendedWaitUntil:
+    visible: "Open lecture tools"
+    timeout: 120000
+- tapOn:
+    text: "Open lecture tools"
+- extendedWaitUntil:
+    visible: "Slide tools"
+    timeout: 30000
+- assertVisible: ".*Sample Practice.*"
+- assertVisible: ".*Workspace.*8 problems.*"
+- takeScreenshot: lecture3-tools-sheet-workspace
+- tapOn:
+    text: ".*Workspace.*8 problems.*"
+- extendedWaitUntil:
+    visible: "Chapter 3: Analysis Techniques Workspace"
+    timeout: 90000
+- assertVisible: ".*Problem 3.1.*"
+- takeScreenshot: lecture3-workspace-loaded
+- tapOn:
+    text: ".*Problem 3.1.*"
+- scrollUntilVisible:
+    element: ".*Solve with Cora.*"
+    direction: DOWN
+    timeout: 60000
+    visibilityPercentage: 50
+    speed: 60
+- tapOn:
+    text: ".*Solve with Cora.*"
+- extendedWaitUntil:
+    visible: "Close Cora"
+    timeout: 45000
+- takeScreenshot: lecture3-workspace-cora-open
+- tapOn:
+    text: "Close Cora"
+- extendedWaitUntil:
+    visible: "Back to Lecture"
+    timeout: 30000
+- tapOn:
+    text: "Back to Lecture"
+- extendedWaitUntil:
+    visible: "Open lecture tools"
+    timeout: 30000
+- takeScreenshot: lecture3-back-to-viewer

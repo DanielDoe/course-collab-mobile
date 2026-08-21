@@ -32,6 +32,13 @@ export type InstructorCourse = {
   academic_term_id?: number | null
   description?: string | null
   exchange_provenance?: Record<string, unknown> | null
+  /** Picker-only metadata when the active term lists sections separately. */
+  picker_key?: string
+  picker_display_title?: string
+  picker_display_subtitle?: string
+  picker_is_section_row?: boolean
+  session_id?: number | null
+  session_code?: string | null
 }
 
 export type InstructorProfile = {
@@ -51,6 +58,16 @@ export type InstructorDashboardStats = {
   pendingIssues: number
   upcomingAssessments: number
   recentSubmissions24h: number
+}
+
+export const EMPTY_INSTRUCTOR_DASHBOARD_STATS: InstructorDashboardStats = {
+  totalQuizzes: 0,
+  activeQuizzes: 0,
+  totalStudents: 0,
+  totalAttempts: 0,
+  pendingIssues: 0,
+  upcomingAssessments: 0,
+  recentSubmissions24h: 0,
 }
 
 export type InstructorRecentActivity = {
@@ -1485,10 +1502,15 @@ function normalizeFacultyEvaluationRow(raw: Record<string, unknown>): FacultyCou
   }
 }
 
-type Scope = {
+export type InstructorScope = {
   instructorId: number
   courseId?: number
+  sessionId?: number | null
+  sessionCode?: string | null
+  academicTermId?: number | null
 }
+
+type Scope = InstructorScope
 
 function refreshTokenFromCookieHeader(cookie: string | undefined): string | undefined {
   if (!cookie) return undefined
@@ -1727,6 +1749,13 @@ export const instructorApi = {
           ...c,
           id: Number(c.id ?? c.course_id ?? 0),
           course_id: Number(c.course_id ?? c.id ?? 0),
+          session_id:
+            c.session_id != null && Number.isFinite(Number(c.session_id))
+              ? Number(c.session_id)
+              : null,
+          session_code: c.session_code != null ? String(c.session_code) : null,
+          catalog_course_code:
+            c.catalog_course_code != null ? String(c.catalog_course_code) : null,
         }))
         .filter((c) => Number.isFinite(c.id) && c.id > 0),
     })),

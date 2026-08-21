@@ -57,7 +57,7 @@ export function notificationActionLabel(type: string, link?: string | null): str
   if (key.includes("quiz") || key.includes("submission") || key.includes("homework") || key.includes("exam")) {
     return "Open Related Assessment"
   }
-  if (key.includes("announcement")) return "Open Announcements"
+  if (key.includes("announcement")) return "Open Announcement"
   if (key.includes("lecture")) return "Open Lectures"
   if (key.includes("group")) return "Open Groups"
   if (key.includes("project")) return "Open Projects"

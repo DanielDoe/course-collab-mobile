@@ -149,6 +149,7 @@ export function FacultyOfficeHourCreateModal({ visible, scope, onClose, onCreate
               { paddingTop: 8, gap: 12, paddingBottom: insets.bottom + 24 },
             ]}
             keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
           >
             <FacultySheetNotice
               tone="warning"
@@ -207,6 +208,7 @@ export function FacultyOfficeHourCreateModal({ visible, scope, onClose, onCreate
               { paddingTop: 8, gap: 14, paddingBottom: insets.bottom + 24 },
             ]}
             keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
           >
             {selected ? (
               <Pressable

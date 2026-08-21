@@ -346,6 +346,7 @@ export function FacultyQuestionBankEditorModal({
           <ScrollView
             contentContainerStyle={[collabSheetStyles.scroll, { paddingBottom: insets.bottom + 24 }]}
             keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
             showsVerticalScrollIndicator={false}
           >
             {error ? <FacultySheetErrorBanner message={error} /> : null}

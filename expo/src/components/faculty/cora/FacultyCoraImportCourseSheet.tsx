@@ -239,6 +239,7 @@ export function FacultyCoraImportCourseSheet({
               contentContainerStyle={styles.list}
               ItemSeparatorComponent={() => <View style={styles.listGap} />}
               keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
               renderItem={({ item: container }) => {
                 const highlighted = matchesHint(container.label, hint?.containerHint)
                 return (
@@ -284,6 +285,7 @@ export function FacultyCoraImportCourseSheet({
               contentContainerStyle={styles.list}
               ItemSeparatorComponent={() => <View style={styles.listGap} />}
               keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
               renderItem={({ item }) => (
                 <Pressable
                   testID={`faculty-cora-import-question-${item.ref}`}
@@ -328,6 +330,7 @@ export function FacultyCoraImportCourseSheet({
               contentContainerStyle={styles.list}
               ItemSeparatorComponent={() => <View style={styles.listGap} />}
               keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
               renderItem={({ item: source }) => (
                 <Pressable
                   testID={`faculty-cora-import-source-${source.key}`}

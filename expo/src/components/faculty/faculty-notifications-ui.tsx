@@ -13,12 +13,15 @@ import { AppButton } from "../theme/AppButton"
 export function NotificationCenterList({
   items,
   onOpen,
+  pinnedIds = [],
 }: {
   items: InstructorNotification[]
   onOpen: (item: InstructorNotification) => void
+  pinnedIds?: number[]
 }) {
   const native = useThemedNative()
   const tokens = useAppThemeTokens()
+  const pinned = new Set(pinnedIds)
 
   return (
     <View style={styles.list}>
@@ -47,6 +50,9 @@ export function NotificationCenterList({
             onPress={() => onOpen(item)}
             trailing={
               <View style={styles.trailing}>
+                {pinned.has(item.id) ? (
+                  <Ionicons name="pin" size={14} color={tokens.accent} />
+                ) : null}
                 {!item.is_read ? (
                   <View style={[styles.unreadDot, { backgroundColor: tokens.accent }]} />
                 ) : null}

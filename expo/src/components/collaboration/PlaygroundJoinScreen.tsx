@@ -284,6 +284,7 @@ export function PlaygroundJoinScreen() {
             { paddingBottom: Math.max(insets.bottom, 16) + 16 },
           ]}
           keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         >
         <View style={[styles.card, { backgroundColor: SN.secondaryGrouped, borderColor: native.separator }]}>
           <CollabSectionTitle title="Your details" hint="From your enrollment profile" />

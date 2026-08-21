@@ -206,6 +206,7 @@ export function FacultyPlaygroundQuestionBank({
           />
         }
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
       >
         {view === "topics" ? (

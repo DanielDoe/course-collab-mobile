@@ -15,6 +15,7 @@ import { useNativeType } from "../../lib/themed-module-theme"
 import { useNotificationModuleRefresh } from "../../lib/notifications/notification-events"
 import { COURSE_INFO_SCHEDULE_ADJUSTMENT } from "../../lib/course-info-color-theme"
 import { ScheduleAdjustmentNoticeBanner } from "../schedule-adjustment/ScheduleAdjustmentNoticeBanner"
+import { NATIVE } from "../../constants/faculty-native-theme"
 
 function useStudentSession(): StudentSession | null {
   const { session } = useSession()
@@ -25,14 +26,25 @@ function RequestRow({ item, onPress }: { item: ScheduleAdjustmentRequest; onPres
   const native = useThemedNative()
   const type = useNativeType()
   return (
-    <Pressable onPress={onPress} style={[styles.row, { borderBottomColor: native.separator }]}>
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.row,
+        { borderBottomColor: native.separator },
+        pressed && { opacity: NATIVE.pressedOpacity },
+      ]}
+      accessibilityRole="button"
+      accessibilityLabel={item.reason}
+    >
       <View style={styles.rowBody}>
         <Text style={type.bodyEmphasis}>{item.reason}</Text>
-        <Text style={type.caption}>
-          {item.section_code ?? "Course"} · {item.meeting_type}
-        </Text>
+        <View style={styles.rowMeta}>
+          <Text style={[type.caption, styles.rowMetaText]} numberOfLines={1}>
+            {item.section_code ?? "Course"} · {item.meeting_type}
+          </Text>
+          <StatusBadge label={formatStatusLabel(item.status)} tone={statusTone(item.status)} />
+        </View>
       </View>
-      <StatusBadge label={formatStatusLabel(item.status)} tone={statusTone(item.status)} />
       <Ionicons name="chevron-forward" size={18} color={native.tertiaryLabel} />
     </Pressable>
   )
@@ -78,6 +90,7 @@ export function ScheduleAdjustmentScreen() {
       refreshing={refreshing}
       onRefresh={() => void onRefresh()}
       error={error}
+      contentStyle={styles.screenContent}
     >
       <ScheduleAdjustmentNoticeBanner />
       <InfoSectionCard
@@ -86,7 +99,7 @@ export function ScheduleAdjustmentScreen() {
         iconThumb={COURSE_INFO_SCHEDULE_ADJUSTMENT.list}
         theme={theme}
       >
-        <Text style={type.caption}>
+        <Text style={[type.caption, styles.intro]}>
           Review availability polls and sign consent for proposed class time changes.
         </Text>
         {requests.length === 0 ? (
@@ -96,13 +109,15 @@ export function ScheduleAdjustmentScreen() {
             body="Your instructor will notify you when a schedule adjustment needs your input."
           />
         ) : (
-          requests.map((item) => (
-            <RequestRow
-              key={item.id}
-              item={item}
-              onPress={() => router.push(`/schedule-adjustment/${item.id}` as never)}
-            />
-          ))
+          <View style={styles.list}>
+            {requests.map((item) => (
+              <RequestRow
+                key={item.id}
+                item={item}
+                onPress={() => router.push(`/schedule-adjustment/${item.id}` as never)}
+              />
+            ))}
+          </View>
         )}
       </InfoSectionCard>
     </ModuleScreen>
@@ -110,6 +125,12 @@ export function ScheduleAdjustmentScreen() {
 }
 
 const styles = StyleSheet.create({
+  screenContent: {
+    paddingHorizontal: Math.max(NATIVE.pagePadding, 20),
+    gap: 16,
+  },
+  intro: { lineHeight: 18, marginBottom: 4 },
+  list: { marginTop: 4 },
   row: {
     flexDirection: "row",
     alignItems: "center",
@@ -117,5 +138,13 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  rowBody: { flex: 1, gap: 4 },
+  rowBody: { flex: 1, gap: 8, minWidth: 0 },
+  rowMeta: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    flexWrap: "wrap",
+  },
+  rowMetaText: { flexShrink: 1, minWidth: 0 },
 })

@@ -39,7 +39,6 @@ export default function Index() {
 
   useEffect(() => {
     bootLog("Index route mounted")
-    hideSplash()
   }, [])
 
   useEffect(() => {
@@ -49,10 +48,6 @@ export default function Index() {
   const onLayout = useCallback(() => {
     hideSplash()
   }, [])
-
-  useEffect(() => {
-    if (!isLoading) hideSplash()
-  }, [isLoading])
 
   useEffect(() => {
     if (isLoading) return

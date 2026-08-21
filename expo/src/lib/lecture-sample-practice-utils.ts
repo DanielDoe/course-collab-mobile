@@ -1,4 +1,5 @@
 import { normalizeQuestionMedia, repairLatexDamagedByJsonEscapes, type QuestionMedia } from "./classroom-submission"
+import { rawLooksLikeWorkspaceQuestion } from "./lecture-workspace-utils"
 import type { LectureSamplePracticeConfig, LectureSamplePracticeQuestion } from "./lecture-types"
 
 const LETTERS = ["A", "B", "C", "D", "E", "F"] as const
@@ -125,6 +126,7 @@ export function normalizeSamplePracticeQuestion(
   fallbackIndex = 0,
 ): LectureSamplePracticeQuestion | null {
   if (!raw || typeof raw !== "object") return null
+  if (rawLooksLikeWorkspaceQuestion(raw) && !rawLooksLikeSamplePracticeQuestion(raw)) return null
   const o = raw as Record<string, unknown>
   const id =
     typeof o.id === "string" && o.id.trim() ? o.id.trim() : `q${fallbackIndex + 1}`
@@ -151,17 +153,93 @@ export function parseLectureSamplePractice(raw: unknown): LectureSamplePracticeC
     return { enabled: false, button_label: "Sample Practice", questions: [] }
   }
   const o = raw as Record<string, unknown>
-  const questionsRaw = Array.isArray(o.questions) ? o.questions : []
+  const configParsed =
+    o.config != null
+      ? typeof o.config === "string"
+        ? (() => {
+            try {
+              return JSON.parse(o.config) as unknown
+            } catch {
+              return null
+            }
+          })()
+        : o.config
+      : null
+  const configRecord =
+    configParsed && typeof configParsed === "object" ? (configParsed as Record<string, unknown>) : null
+  const questionsRaw = Array.isArray(o.questions)
+    ? o.questions
+    : configRecord && Array.isArray(configRecord.questions)
+      ? configRecord.questions
+      : []
   const questions = questionsRaw
     .map((q, idx) => normalizeSamplePracticeQuestion(q, idx))
     .filter((q): q is LectureSamplePracticeQuestion => q != null)
 
+  const enabledSource = o.enabled ?? configRecord?.enabled
+  const labelSource = o.button_label ?? configRecord?.button_label
+
   return {
-    enabled: o.enabled === true,
+    enabled:
+      enabledSource === false || enabledSource === 0
+        ? false
+        : questions.length > 0 || enabledSource === true,
     button_label:
-      typeof o.button_label === "string" && o.button_label.trim()
-        ? o.button_label.trim()
+      typeof labelSource === "string" && labelSource.trim()
+        ? labelSource.trim()
         : "Sample Practice",
     questions,
   }
+}
+
+/** Parse student GET /sample-practice responses (config wrapper + bare questions). */
+export function parseLectureSamplePracticeStudentApiResponse(
+  raw: unknown,
+): LectureSamplePracticeConfig {
+  if (raw == null || typeof raw !== "object") {
+    return { enabled: false, button_label: "Sample Practice", questions: [] }
+  }
+  return parseLectureSamplePractice(raw)
+}
+
+export function rawLooksLikeSamplePracticeQuestion(raw: unknown): boolean {
+  if (!raw || typeof raw !== "object") return false
+  const o = raw as Record<string, unknown>
+  const subQs = o.subquestions ?? o.sub_questions
+  if (Array.isArray(subQs) && subQs.length > 0) return true
+  if (o.category != null || o.step_by_step_solution != null || o.instructor_solution_workspace != null) {
+    return false
+  }
+  return false
+}
+
+export function filterSamplePracticeQuestionRaw(raw: unknown[]): unknown[] {
+  return raw.filter(rawLooksLikeSamplePracticeQuestion)
+}
+
+export function samplePracticeQuestionsFromRecord(record: Record<string, unknown>): unknown[] {
+  const nested =
+    record.data && typeof record.data === "object"
+      ? (record.data as Record<string, unknown>)
+      : record.result && typeof record.result === "object"
+        ? (record.result as Record<string, unknown>)
+        : null
+
+  const candidates = [
+    record.questions,
+    record.sample_practice_questions,
+    nested?.questions,
+  ]
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate) && candidate.length > 0) {
+      const filtered = filterSamplePracticeQuestionRaw(candidate)
+      if (filtered.length > 0) return filtered
+    }
+  }
+  return Array.isArray(record.questions) ? filterSamplePracticeQuestionRaw(record.questions) : []
+}
+
+export function samplePracticePayloadHasQuestions(body: unknown): boolean {
+  if (!body || typeof body !== "object") return false
+  return samplePracticeQuestionsFromRecord(body as Record<string, unknown>).length > 0
 }

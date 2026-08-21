@@ -1,6 +1,7 @@
 import Expo
 import React
 import ReactAppDependencyProvider
+import UIKit
 
 @UIApplicationMain
 public class AppDelegate: ExpoAppDelegate {
@@ -22,43 +23,49 @@ public class AppDelegate: ExpoAppDelegate {
     bindReactNativeFactory(factory)
 
 #if os(iOS) || os(tvOS)
+    let brandPurple = UIColor(red: 0.345, green: 0.173, blue: 0.514, alpha: 1)
     window = UIWindow(frame: UIScreen.main.bounds)
-    // Brand purple — avoids a white gap if JS paints late or splash hides early.
-    window?.backgroundColor = UIColor(red: 0.345, green: 0.173, blue: 0.514, alpha: 1)
+    window?.backgroundColor = brandPurple
     factory.startReactNative(
       withModuleName: "main",
       in: window,
-      launchOptions: launchOptions)
+      launchOptions: launchOptions
+    )
+    window?.rootViewController?.view.backgroundColor = brandPurple
 #endif
 
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
-  // Linking API
   public override func application(
     _ app: UIApplication,
     open url: URL,
     options: [UIApplication.OpenURLOptionsKey: Any] = [:]
   ) -> Bool {
-    return super.application(app, open: url, options: options) || RCTLinkingManager.application(app, open: url, options: options)
+    return super.application(app, open: url, options: options)
+      || RCTLinkingManager.application(app, open: url, options: options)
   }
 
-  // Universal Links
   public override func application(
     _ application: UIApplication,
     continue userActivity: NSUserActivity,
     restorationHandler: @escaping ([UIUserActivityRestoring]?) -> Void
   ) -> Bool {
-    let result = RCTLinkingManager.application(application, continue: userActivity, restorationHandler: restorationHandler)
-    return super.application(application, continue: userActivity, restorationHandler: restorationHandler) || result
+    let result = RCTLinkingManager.application(
+      application,
+      continue: userActivity,
+      restorationHandler: restorationHandler
+    )
+    return super.application(
+      application,
+      continue: userActivity,
+      restorationHandler: restorationHandler
+    ) || result
   }
 }
 
 class ReactNativeDelegate: ExpoReactNativeFactoryDelegate {
-  // Extension point for config-plugins
-
   override func sourceURL(for bridge: RCTBridge) -> URL? {
-    // needed to return the correct URL for expo-dev-client.
     bridge.bundleURL ?? bundleURL()
   }
 

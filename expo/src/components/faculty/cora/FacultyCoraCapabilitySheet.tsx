@@ -60,6 +60,7 @@ export function FacultyCoraCapabilitySheet({
         <ScrollView
           contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + 24 }]}
           keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         >
           <View style={[styles.heroStrip, materialStyle, { backgroundColor: cardBg }]}>
             <SolidListThumbTile thumb={accent.thumb} icon={capability.icon} size="list" />

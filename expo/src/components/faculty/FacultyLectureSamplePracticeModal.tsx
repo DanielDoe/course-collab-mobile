@@ -229,6 +229,7 @@ export function FacultyLectureSamplePracticeModal({ visible, lecture, onClose }:
           <ScrollView
             contentContainerStyle={[collabSheetStyles.scroll, { paddingBottom: insets.bottom + 24 }]}
             keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
           >
             {error ? <FacultySheetErrorBanner message={error} /> : null}
 

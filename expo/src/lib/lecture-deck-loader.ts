@@ -1,14 +1,26 @@
 import { cacheDirectory, writeAsStringAsync, EncodingType } from "expo-file-system/legacy"
 import { resolveLectureDeckUrl } from "./lecture-deck-url"
 
-export type LectureDeckWebViewSource = {
+export type LectureDeckPdfSource = {
   uri: string
   headers?: Record<string, string>
 }
 
+/** @deprecated Use LectureDeckPdfSource */
+export type LectureDeckWebViewSource = LectureDeckPdfSource
+
 export type LoadLectureDeckResult =
-  | { ok: true; source: LectureDeckWebViewSource }
+  | { ok: true; source: LectureDeckPdfSource }
   | { ok: false; message: string; status?: number }
+
+/** Normalize expo cache paths for react-native-pdf (requires file:// on iOS). */
+export function ensurePdfFileUri(uri: string): string {
+  const trimmed = uri.trim()
+  if (!trimmed) return trimmed
+  if (trimmed.startsWith("file://")) return trimmed
+  if (trimmed.startsWith("/")) return `file://${trimmed}`
+  return trimmed
+}
 
 function parseJsonError(text: string): string | null {
   const trimmed = text.trim()
@@ -72,9 +84,9 @@ function cacheFileUri(cacheKey: string): string | null {
 
 /**
  * Download a lecture deck with auth headers, validate PDF bytes, and cache locally
- * for WebView rendering. Avoids showing raw JSON error bodies in the WebView.
+ * for in-app PDF rendering. Avoids handing auth URLs to the system preview sheet.
  */
-export async function loadLectureDeckForWebView(params: {
+export async function loadLectureDeckPdf(params: {
   url: string
   headers?: Record<string, string>
   cacheKey?: string
@@ -135,10 +147,13 @@ export async function loadLectureDeckForWebView(params: {
     const fileUri = cacheFileUri(cacheKey)
     if (fileUri) {
       await writePdfCache(fileUri, buffer)
-      return { ok: true, source: { uri: fileUri } }
+      return { ok: true, source: { uri: ensurePdfFileUri(fileUri) } }
     }
 
-    return { ok: true, source: { uri: responseUrl, headers: params.headers } }
+    return {
+      ok: true,
+      source: { uri: ensurePdfFileUri(responseUrl), headers: params.headers },
+    }
   } catch {
     return {
       ok: false,
@@ -146,3 +161,6 @@ export async function loadLectureDeckForWebView(params: {
     }
   }
 }
+
+/** @deprecated Use loadLectureDeckPdf */
+export const loadLectureDeckForWebView = loadLectureDeckPdf

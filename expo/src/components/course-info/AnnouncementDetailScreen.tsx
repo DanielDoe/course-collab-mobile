@@ -110,6 +110,13 @@ export function AnnouncementDetailScreen() {
 
       void courseInfoApi.markAnnouncementViewed(session, announcementId).catch(() => undefined)
     } catch (err) {
+      // Stale notification deep links (deleted announcements) should not look like a crash.
+      if (err instanceof ApiError && (err.status === 404 || /not found/i.test(err.message))) {
+        setAnnouncement(null)
+        setComments([])
+        setError("")
+        return
+      }
       setError(err instanceof ApiError ? err.message : "Could not load announcement.")
     }
   }, [session, announcementId])
@@ -199,7 +206,9 @@ export function AnnouncementDetailScreen() {
         loading={loading}
         error={error}
         empty={!loading && !announcement}
-        emptyTitle="Announcement not found"
+        emptyTitle="Announcement unavailable"
+        emptyBody="This post may have been removed or is no longer shared with your course. Pull to refresh, or go back to Announcements for the latest posts."
+        emptyIcon="megaphone-outline"
         refreshing={refreshing}
         onRefresh={onRefresh}
         disableTopInsetAdjustment

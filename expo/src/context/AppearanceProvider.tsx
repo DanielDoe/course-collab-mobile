@@ -25,6 +25,7 @@ import {
   type ThemeId,
 } from "../constants/app-themes"
 import { NATIVE as STATIC_NATIVE } from "../constants/faculty-native-theme"
+import { isBootComplete, subscribeBootLogs } from "../lib/boot-diagnostics"
 
 const STATIC_CHROME = resolveThemeTokens(
   DEFAULT_APPEARANCE_PREFS.themeId,
@@ -91,7 +92,14 @@ export function AppearanceProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (Platform.OS === "web" || !ready) return
-    void SystemUI.setBackgroundColorAsync(tokens.native.groupedBackground).catch(() => {})
+
+    const apply = () => {
+      if (!isBootComplete()) return
+      void SystemUI.setBackgroundColorAsync(tokens.native.groupedBackground).catch(() => {})
+    }
+
+    apply()
+    return subscribeBootLogs(apply)
   }, [ready, tokens.native.groupedBackground])
 
   const value = useMemo<AppearanceContextValue>(

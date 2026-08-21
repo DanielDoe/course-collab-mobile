@@ -80,6 +80,7 @@ export function CodebenchAiFullscreenShell({
                 contentContainerStyle={styles.scrollContent}
                 showsVerticalScrollIndicator
                 keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
               >
                 {children}
               </ScrollView>

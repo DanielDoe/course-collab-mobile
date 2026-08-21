@@ -773,6 +773,7 @@ export function FlashcardStudyScreen() {
           <ScrollView
             contentContainerStyle={[styles.studyScroll, { paddingBottom: insets.bottom + 16 }]}
             keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
           >
             <FlashcardMcqPrompt
               mcq={currentMcq}

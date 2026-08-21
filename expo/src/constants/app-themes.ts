@@ -1553,6 +1553,23 @@ export const THEME_CATALOG = Object.fromEntries(
   THEME_DEFINITIONS.map((def) => [def.id, def]),
 ) as Record<ThemeId, ThemeDefinition>
 
+/** University + default themes surfaced first in onboarding / appearance pickers. */
+const APPEARANCE_PICKER_PRIORITY: ThemeId[] = [
+  "cougar-crimson",
+  "university-of-houston-steel",
+  "pvamu-purple",
+  "pvamu-gold",
+  "course-collab",
+]
+
+/** Full theme catalog for appearance setup — priority themes first, then catalog order. */
+export function appearancePickerThemeIds(): ThemeId[] {
+  const all = THEME_DEFINITIONS.map((def) => def.id)
+  const priority = APPEARANCE_PICKER_PRIORITY.filter((id) => all.includes(id))
+  const rest = all.filter((id) => !priority.includes(id))
+  return [...priority, ...rest]
+}
+
 export const DEFAULT_THEME_ID: ThemeId = "apple-lavender"
 export const DEFAULT_APPEARANCE_MODE: AppearanceMode = "system"
 

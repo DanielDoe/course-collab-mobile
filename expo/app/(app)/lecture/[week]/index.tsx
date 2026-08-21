@@ -2,7 +2,7 @@ import { useLocalSearchParams } from "expo-router"
 import { LectureInvalidRoute } from "../../../../src/components/lectures/LectureInvalidRoute"
 import { StudentLectureViewerScreen } from "../../../../src/components/lectures/StudentLectureViewerScreen"
 
-/** Student lecture viewer — production web shell with workspace & sample practice. */
+/** Student lecture viewer — native PDF deck with tools action sheet. */
 export default function LectureViewerScreen() {
   const { week, lectureId } = useLocalSearchParams<{ week: string; lectureId: string }>()
   const weekNum = typeof week === "string" ? Number(week) : NaN

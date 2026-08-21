@@ -715,6 +715,7 @@ export function CodebenchIdeScreen() {
           horizontal
           showsHorizontalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
           style={styles.actionScroll}
           contentContainerStyle={styles.actionRow}
         >
@@ -1153,6 +1154,7 @@ export function CodebenchIdeScreen() {
             contentContainerStyle={styles.sheetScrollContent}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
           >
             <View style={styles.sheetList}>
             {sheet === "cora-tool" ? (

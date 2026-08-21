@@ -21,14 +21,18 @@ type KpiDef = {
   thumb: SolidListThumb
 }
 
-function buildKpis(stats: InstructorDashboardStats): KpiDef[] {
+function buildKpis(
+  stats: InstructorDashboardStats,
+  sessionCode?: string | null,
+  termLabel?: string | null,
+): KpiDef[] {
   const pendingIssues = stats.pendingIssues ?? 0
   return [
     {
       id: "active-quizzes",
       label: "Active Quizzes",
       value: String(stats.activeQuizzes),
-      sub: `${stats.totalQuizzes} total in course`,
+      sub: termLabel ? `${stats.totalQuizzes} scheduled · ${termLabel}` : `${stats.totalQuizzes} scheduled this term`,
       icon: "clipboard-outline",
       thumb: FACULTY_DASHBOARD_KPI_THUMBS.activeQuizzes,
     },
@@ -36,7 +40,7 @@ function buildKpis(stats: InstructorDashboardStats): KpiDef[] {
       id: "students",
       label: "Students",
       value: String(stats.totalStudents),
-      sub: "Enrolled in selected course",
+      sub: sessionCode ? "Enrolled in selected section" : "Enrolled in selected course",
       icon: "people-outline",
       thumb: FACULTY_DASHBOARD_KPI_THUMBS.students,
     },
@@ -44,7 +48,7 @@ function buildKpis(stats: InstructorDashboardStats): KpiDef[] {
       id: "attempts",
       label: "Quiz Attempts",
       value: String(stats.totalAttempts),
-      sub: "All-time submissions",
+      sub: termLabel ? `Submissions · ${termLabel}` : "Submissions this term",
       icon: "bar-chart-outline",
       thumb: FACULTY_DASHBOARD_KPI_THUMBS.quizAttempts,
     },
@@ -75,10 +79,18 @@ function buildKpis(stats: InstructorDashboardStats): KpiDef[] {
   ]
 }
 
-export function FacultyKpiGrid({ stats }: { stats: InstructorDashboardStats }) {
+export function FacultyKpiGrid({
+  stats,
+  sessionCode,
+  termLabel,
+}: {
+  stats: InstructorDashboardStats
+  sessionCode?: string | null
+  termLabel?: string | null
+}) {
   const { native, tokens, type } = useModuleTheme()
   const cardLayout = useKpiGridCardStyle()
-  const kpis = buildKpis(stats)
+  const kpis = buildKpis(stats, sessionCode, termLabel)
 
   return (
     <View style={styles.grid}>

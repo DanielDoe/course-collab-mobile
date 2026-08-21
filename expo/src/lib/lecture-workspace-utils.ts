@@ -14,11 +14,41 @@ function parseJsonField(raw: unknown): unknown {
   }
 }
 
+function rawLooksLikeSamplePracticeQuestion(raw: unknown): boolean {
+  if (!raw || typeof raw !== "object") return false
+  const o = raw as Record<string, unknown>
+  const subQs = o.subquestions ?? o.sub_questions
+  return Array.isArray(subQs) && subQs.length > 0
+}
+
+function workspaceRecordLayers(record: Record<string, unknown>): Record<string, unknown>[] {
+  const layers: Record<string, unknown>[] = [record]
+  for (const key of ["config", "workspace", "workspace_config", "lecture_workspace", "data", "result"] as const) {
+    const parsed = parseJsonField(record[key])
+    if (parsed && typeof parsed === "object") {
+      layers.push(parsed as Record<string, unknown>)
+    }
+  }
+  return layers
+}
+
+function questionArrayCandidates(record: Record<string, unknown>): unknown[] {
+  const keys = ["questions", "problems", "items", "workspace_questions", "lecture_workspace_questions"] as const
+  const out: unknown[] = []
+  for (const layer of workspaceRecordLayers(record)) {
+    for (const key of keys) {
+      out.push(...coerceWorkspaceQuestionsArray(layer[key]))
+    }
+  }
+  return out
+}
+
 function dedupeWorkspaceQuestionRaw(raw: unknown[]): unknown[] {
   const seen = new Set<string>()
   const out: unknown[] = []
   for (const item of raw) {
     if (!item || typeof item !== "object") continue
+    if (rawLooksLikeSamplePracticeQuestion(item)) continue
     const record = item as Record<string, unknown>
     const id =
       typeof record.id === "string" && record.id.trim()
@@ -45,22 +75,52 @@ export function coerceWorkspaceQuestionsArray(raw: unknown): unknown[] {
   return []
 }
 
-export function workspaceQuestionsFromRecord(record: Record<string, unknown>): unknown[] {
-  const nested =
-    record.data && typeof record.data === "object"
-      ? (record.data as Record<string, unknown>)
-      : record.result && typeof record.result === "object"
-        ? (record.result as Record<string, unknown>)
-        : null
-
-  return coerceWorkspaceQuestionsArray(
-    record.questions ??
-      record.problems ??
-      record.items ??
-      nested?.questions ??
-      nested?.problems ??
-      nested?.items,
+export function rawLooksLikeWorkspaceQuestion(raw: unknown): boolean {
+  if (!raw || typeof raw !== "object") return false
+  if (rawLooksLikeSamplePracticeQuestion(raw)) return false
+  const o = raw as Record<string, unknown>
+  const hasText = Boolean(
+    String(o.question_text ?? o.problem_text ?? o.prompt ?? o.title ?? o.name ?? "").trim(),
   )
+  return (
+    o.category != null ||
+    o.step_by_step_solution != null ||
+    o.instructor_solution_workspace != null ||
+    o.instructor_solution != null ||
+    o.published_solution != null ||
+    o.reference_solution != null ||
+    hasText
+  )
+}
+
+export function filterWorkspaceQuestionRaw(raw: unknown[]): unknown[] {
+  return raw.filter(rawLooksLikeWorkspaceQuestion)
+}
+
+/** Mirror faculty viewer: unwrap `{ config }` / `{ workspace: { config } }` envelopes. */
+export function unwrapLectureWorkspacePayload(raw: unknown): unknown {
+  if (raw == null || typeof raw !== "object") return raw
+  const record = raw as Record<string, unknown>
+  const config = parseJsonField(record.config)
+  if (config && typeof config === "object") return config
+
+  const workspace = parseJsonField(record.workspace ?? record.lecture_workspace)
+  if (workspace && typeof workspace === "object") {
+    const ws = workspace as Record<string, unknown>
+    const nested = parseJsonField(ws.config)
+    if (nested && typeof nested === "object") return nested
+    return workspace
+  }
+
+  return raw
+}
+
+export function workspaceQuestionsFromRecord(record: Record<string, unknown>): unknown[] {
+  return dedupeWorkspaceQuestionRaw(questionArrayCandidates(record))
+}
+
+export function workspacePayloadHasQuestions(body: unknown): boolean {
+  return parseLectureWorkspaceStudentApiResponse(body).questions.length > 0
 }
 
 export function groupWorkspaceQuestions(
@@ -202,19 +262,16 @@ export function parseLectureWorkspaceStudentApiResponse(raw: unknown): LectureWo
   if (raw == null || typeof raw !== "object") {
     return { enabled: true, title: DEFAULT_TITLE, button_label: DEFAULT_BUTTON_LABEL, questions: [] }
   }
-  const record = raw as Record<string, unknown>
+  const unwrapped = unwrapLectureWorkspacePayload(raw)
+  if (unwrapped == null || typeof unwrapped !== "object") {
+    return { enabled: true, title: DEFAULT_TITLE, button_label: DEFAULT_BUTTON_LABEL, questions: [] }
+  }
+  const record = unwrapped as Record<string, unknown>
   const configRaw = record.config != null ? parseJsonField(record.config) : null
   const configRecord =
     configRaw && typeof configRaw === "object" ? (configRaw as Record<string, unknown>) : null
 
-  const rawQuestions = dedupeWorkspaceQuestionRaw([
-    ...(Array.isArray(record.questions) ? record.questions : workspaceQuestionsFromRecord(record)),
-    ...(configRecord && Array.isArray(configRecord.questions)
-      ? configRecord.questions
-      : configRecord
-        ? workspaceQuestionsFromRecord(configRecord)
-        : []),
-  ])
+  const rawQuestions = dedupeWorkspaceQuestionRaw(questionArrayCandidates(record))
 
   const questions = rawQuestions
     .map((q, idx) => normalizeLectureWorkspaceQuestionLenient(q, idx))
@@ -277,10 +334,7 @@ export function parseLectureWorkspace(raw: unknown): LectureWorkspaceConfig {
   const configRaw = o.config != null ? parseJsonField(o.config) : null
   const configRecord =
     configRaw && typeof configRaw === "object" ? (configRaw as Record<string, unknown>) : null
-  const questionsRaw = dedupeWorkspaceQuestionRaw([
-    ...workspaceQuestionsFromRecord(o),
-    ...(configRecord ? workspaceQuestionsFromRecord(configRecord) : []),
-  ])
+  const questionsRaw = dedupeWorkspaceQuestionRaw(questionArrayCandidates(o))
   const questions = questionsRaw
     .map((q, idx) => normalizeLectureWorkspaceQuestion(q, idx))
     .filter((q): q is LectureWorkspaceQuestion => q != null)

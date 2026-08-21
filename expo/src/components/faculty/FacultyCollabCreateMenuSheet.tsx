@@ -37,6 +37,7 @@ export function FacultyCollabCreateMenuSheet({
         <ScrollView
           contentContainerStyle={[collabSheetStyles.scroll, { paddingBottom: insets.bottom + 24 }]}
           keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         >
           <FacultySheetNotice message="Create a group or project on behalf of a student. They will appear in the student collaboration area." />
           <FacultySheetActionRow

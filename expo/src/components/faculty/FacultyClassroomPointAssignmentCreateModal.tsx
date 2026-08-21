@@ -174,6 +174,7 @@ export function FacultyClassroomPointAssignmentCreateModal({
         <ScrollView
           contentContainerStyle={[collabSheetStyles.scroll, { paddingBottom: insets.bottom + 24 }]}
           keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}
         >
           <FacultySheetSection label="Assignment details" tone={SHEET_CLASSROOM_POINTS.assignment}>

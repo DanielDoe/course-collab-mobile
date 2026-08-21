@@ -237,6 +237,7 @@ export function FacultyAcademicTermsScreen() {
         }
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
       >
         <ActiveTermInsightBanner courseCode={course?.course_code} />
 

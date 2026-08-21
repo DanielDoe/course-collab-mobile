@@ -25,34 +25,66 @@ export const AUTH_FLOW_PHONE_MAX_WIDTH = 560
 /** Phone max width for login forms and compact auth steps. */
 export const AUTH_FORM_PHONE_MAX_WIDTH = 440
 
+/** Extra vertical breathing room below safe area on auth screens (welcome + sign-in). */
+export const AUTH_FLOW_VERTICAL_PADDING = 32
+
 /** Upper cap for auth flow content on large tablets (readability). */
 export const AUTH_FLOW_TABLET_MAX_WIDTH = 920
 
-/** Modal card width on phone vs tablet. */
-export const MODAL_CARD_PHONE_MAX_WIDTH = 360
-export const MODAL_CARD_TABLET_MAX_WIDTH = 480
+/** Short-phone height — iPhone SE, landscape phones. */
+export const AUTH_COMPACT_HEIGHT_MAX = 700
 
-/** Side panel caps — drawer and Cora history. */
-export const DRAWER_PANEL_PHONE_MAX_WIDTH = 328
-export const DRAWER_PANEL_TABLET_MAX_WIDTH = 400
-export const CORA_HISTORY_PHONE_MAX_WIDTH = 320
-export const CORA_HISTORY_TABLET_MAX_WIDTH = 380
+/** Very short viewport — prefer top-aligned scroll over vertical centering. */
+export const AUTH_MIN_CENTER_HEIGHT = 580
 
-export function useIsTabletLayout(): boolean {
-  const { width } = useWindowDimensions()
-  return width >= TABLET_MIN_WIDTH
+export function authFlowHorizontalPadding(screenWidth: number): number {
+  if (screenWidth >= LARGE_TABLET_MIN_WIDTH) return 48
+  if (screenWidth >= TABLET_MIN_WIDTH) return 32
+  if (screenWidth <= COMPACT_PHONE_MAX_WIDTH) return 16
+  return 20
 }
 
-export function moduleContentMaxWidth(screenWidth: number): number {
-  if (screenWidth < TABLET_MIN_WIDTH) return screenWidth
-  return Math.min(MODULE_CONTENT_MAX_WIDTH, Math.round(screenWidth * 0.88))
+export function authFlowVerticalPadding(
+  screenHeight: number,
+  keyboardVisible = false,
+  isLandscape = false,
+): number {
+  if (keyboardVisible) return 12
+  if (isLandscape) return 16
+  if (screenHeight < 667) return 12
+  if (screenHeight < AUTH_COMPACT_HEIGHT_MAX) return 20
+  if (screenHeight < 820) return 24
+  return AUTH_FLOW_VERTICAL_PADDING
 }
 
-export function dashboardContentMaxWidth(screenWidth: number): number {
-  if (screenWidth < TABLET_MIN_WIDTH) {
-    return Math.min(screenWidth, DASHBOARD_CONTENT_MAX_WIDTH)
-  }
-  return Math.min(MODULE_CONTENT_MAX_WIDTH, Math.round(screenWidth * 0.88))
+export function authFlowContentGap(screenWidth: number, screenHeight: number): number {
+  if (screenWidth >= TABLET_MIN_WIDTH) return 20
+  if (screenHeight < AUTH_COMPACT_HEIGHT_MAX) return 12
+  return 16
+}
+
+export function authFlowStackGap(screenWidth: number, screenHeight: number): number {
+  if (screenWidth >= TABLET_MIN_WIDTH) return 24
+  if (screenHeight < AUTH_COMPACT_HEIGHT_MAX) return 16
+  return 20
+}
+
+export function authFlowShouldCenterVertically(
+  screenHeight: number,
+  keyboardVisible: boolean,
+  isLandscape: boolean,
+): boolean {
+  if (keyboardVisible) return false
+  if (isLandscape && screenHeight < 500) return false
+  return screenHeight >= AUTH_MIN_CENTER_HEIGHT
+}
+
+/** Typography scale for auth screens — down on compact phones, slightly up on tablet. */
+export function authFlowTypeScale(screenWidth: number, screenHeight: number): number {
+  if (screenWidth >= TABLET_MIN_WIDTH) return 1.06
+  if (screenHeight < 667 || screenWidth <= 320) return 0.92
+  if (screenHeight < AUTH_COMPACT_HEIGHT_MAX) return 0.96
+  return 1
 }
 
 export function authFlowContentMaxWidth(
@@ -82,6 +114,86 @@ export function useAuthFlowContentStyle(
     }),
     [phoneMax, width],
   )
+}
+
+export type AuthFlowLayout = {
+  width: number
+  height: number
+  contentStyle: ViewStyle
+  horizontalPadding: number
+  verticalPadding: number
+  contentGap: number
+  stackGap: number
+  shouldCenterVertically: boolean
+  minScrollHeight: number
+  isCompactPhone: boolean
+  isCompactHeight: boolean
+  isShortLandscape: boolean
+  isTablet: boolean
+  isLandscape: boolean
+  typeScale: number
+}
+
+export function useAuthFlowLayout(options?: {
+  keyboardVisible?: boolean
+  phoneMax?: number
+}): AuthFlowLayout {
+  const { width, height } = useWindowDimensions()
+  const keyboardVisible = options?.keyboardVisible ?? false
+  const phoneMax = options?.phoneMax ?? AUTH_FORM_PHONE_MAX_WIDTH
+  const isLandscape = width > height
+  const contentStyle = useAuthFlowContentStyle(phoneMax)
+
+  return useMemo(() => {
+    const isCompactPhone = width < COMPACT_PHONE_MAX_WIDTH
+    const isCompactHeight = height < AUTH_COMPACT_HEIGHT_MAX
+    const isTablet = width >= TABLET_MIN_WIDTH
+
+    return {
+      width,
+      height,
+      contentStyle,
+      horizontalPadding: authFlowHorizontalPadding(width),
+      verticalPadding: authFlowVerticalPadding(height, keyboardVisible, isLandscape),
+      contentGap: authFlowContentGap(width, height),
+      stackGap: authFlowStackGap(width, height),
+      shouldCenterVertically: authFlowShouldCenterVertically(height, keyboardVisible, isLandscape),
+      minScrollHeight: height,
+      isCompactPhone,
+      isCompactHeight,
+      isShortLandscape: isLandscape && height < 500,
+      isTablet,
+      isLandscape,
+      typeScale: authFlowTypeScale(width, height),
+    }
+  }, [contentStyle, width, height, keyboardVisible, isLandscape])
+}
+
+/** Modal card width on phone vs tablet. */
+export const MODAL_CARD_PHONE_MAX_WIDTH = 360
+export const MODAL_CARD_TABLET_MAX_WIDTH = 480
+
+/** Side panel caps — drawer and Cora history. */
+export const DRAWER_PANEL_PHONE_MAX_WIDTH = 328
+export const DRAWER_PANEL_TABLET_MAX_WIDTH = 400
+export const CORA_HISTORY_PHONE_MAX_WIDTH = 320
+export const CORA_HISTORY_TABLET_MAX_WIDTH = 380
+
+export function useIsTabletLayout(): boolean {
+  const { width } = useWindowDimensions()
+  return width >= TABLET_MIN_WIDTH
+}
+
+export function moduleContentMaxWidth(screenWidth: number): number {
+  if (screenWidth < TABLET_MIN_WIDTH) return screenWidth
+  return Math.min(MODULE_CONTENT_MAX_WIDTH, Math.round(screenWidth * 0.88))
+}
+
+export function dashboardContentMaxWidth(screenWidth: number): number {
+  if (screenWidth < TABLET_MIN_WIDTH) {
+    return Math.min(screenWidth, DASHBOARD_CONTENT_MAX_WIDTH)
+  }
+  return Math.min(MODULE_CONTENT_MAX_WIDTH, Math.round(screenWidth * 0.88))
 }
 
 export function useModuleContentStyle(): ViewStyle {

@@ -28,23 +28,42 @@ describe("student lecture client auth contract", () => {
     assert.doesNotMatch(deck, /"x-student-id":\s*session\.databaseId/)
   })
 
-  it("opens the viewer through a single /viewer bundle", () => {
+  it("loads viewer bundle then dedicated sample-practice and workspace configs", () => {
     const lectureApi = readFileSync(join(here, "student-lecture-api.ts"), "utf8")
     const viewerFn = lectureApi.slice(lectureApi.indexOf("export async function fetchStudentLectureViewerData"))
     assert.match(viewerFn, /getLectureViewer/)
-    assert.doesNotMatch(viewerFn, /getLectures\(/)
-    assert.doesNotMatch(viewerFn, /getLectureContent\(/)
-    assert.doesNotMatch(viewerFn, /Promise\.all/)
+    assert.match(viewerFn, /fetchStudentLectureSamplePracticeConfig/)
+    assert.match(viewerFn, /fetchStudentLectureWorkspaceConfig/)
+    assert.match(viewerFn, /Promise\.all/)
   })
 
-  it("embeds the lecture viewer through WebModuleScreen with scoped origins", () => {
+  it("keeps workspace when content payload also includes sample practice", () => {
+    const lectureApi = readFileSync(join(here, "student-lecture-api.ts"), "utf8")
+    const fn = lectureApi.slice(
+      lectureApi.indexOf("function isSamplePracticeOnlyPayload"),
+      lectureApi.indexOf("function bundledWorkspaceSource"),
+    )
+    assert.match(fn, /workspacePayloadHasQuestions\(body\)/)
+    assert.match(fn, /"workspace" in record/)
+    assert.match(fn, /return samplePracticePayloadHasQuestions\(body\)/)
+    assert.match(lectureApi, /appendWorkspacePayloadSources/)
+  })
+
+  it("renders the lecture viewer with native PDF deck and react-native-pdf", () => {
     const viewer = readFileSync(
       join(here, "../components/lectures/StudentLectureViewerScreen.tsx"),
       "utf8",
     )
-    const webModule = readFileSync(join(here, "../components/modules/WebModuleScreen.tsx"), "utf8")
-    assert.match(viewer, /WebModuleScreen/)
-    assert.match(webModule, /getAllowedWebViewOriginPrefixes/)
-    assert.doesNotMatch(webModule, /originWhitelist=\{\["\*"\]\}/)
+    const pdfViewer = readFileSync(
+      join(here, "../components/lectures/LectureDeckPdfViewer.tsx"),
+      "utf8",
+    )
+    assert.match(viewer, /LectureDeckPdfViewer/)
+    assert.match(viewer, /StudentLectureToolsSheet/)
+    assert.match(viewer, /showWorkspace/)
+    assert.doesNotMatch(viewer, /WebModuleScreen/)
+    assert.match(pdfViewer, /react-native-pdf/)
+    assert.match(pdfViewer, /loadLectureDeckPdf|useResolvedLectureDeckSource/)
+    assert.doesNotMatch(pdfViewer, /WebView/)
   })
 })

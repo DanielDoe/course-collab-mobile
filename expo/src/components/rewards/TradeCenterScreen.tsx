@@ -386,6 +386,7 @@ export function TradeCenterScreen() {
         contentContainerStyle={pageScrollStyle}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         directionalLockEnabled
         nestedScrollEnabled
         refreshControl={

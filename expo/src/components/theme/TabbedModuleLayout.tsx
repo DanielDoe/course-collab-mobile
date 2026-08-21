@@ -9,6 +9,8 @@ import { useAppThemeTokens } from "../../context/AppearanceProvider"
 import { useNativeType } from "../../lib/themed-module-theme"
 import { PillSwipeTabs } from "./PillSwipeTabs"
 import type { MobbinPillSegmentOption } from "./MobbinPillSegmentControl"
+import { DismissKeyboardView } from "../ui/DismissKeyboardView"
+import { keyboardDismissScrollProps } from "../../lib/keyboard-dismiss-scroll-props"
 
 type TabOption<T extends string> = MobbinPillSegmentOption<T>
 
@@ -64,7 +66,7 @@ export function TabbedModuleLayout<T extends string>({
         style={styles.pageScroll}
         contentContainerStyle={pageScrollStyle}
         showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
+        {...keyboardDismissScrollProps}
         automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
         directionalLockEnabled
         nestedScrollEnabled
@@ -74,7 +76,7 @@ export function TabbedModuleLayout<T extends string>({
           ) : undefined
         }
       >
-        {content}
+        <DismissKeyboardView>{content}</DismissKeyboardView>
       </ScrollView>
     )
   }

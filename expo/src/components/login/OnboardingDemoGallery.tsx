@@ -140,9 +140,11 @@ function DemoLegal({
         <Text style={[loginType.heroTitle, styles.legalTitle]}>{title}</Text>
         <Text style={[loginType.heroSubtitle, styles.legalSubtitle]}>{subtitle}</Text>
       </View>
-      <ScrollView style={styles.legalScroll} nestedScrollEnabled showsVerticalScrollIndicator>
-        <OnboardingLegalContent document={document} />
-      </ScrollView>
+      <View style={styles.legalScrollHost}>
+        <ScrollView style={styles.legalScroll} nestedScrollEnabled showsVerticalScrollIndicator>
+          <OnboardingLegalContent document={document} />
+        </ScrollView>
+      </View>
       <View style={[styles.footerPreview, { borderTopColor: LOGIN.separator }]}>
         <OnboardingAcceptFooter
           agreeLabel={agreeLabel}
@@ -394,6 +396,7 @@ const styles = StyleSheet.create({
   pillText: { fontSize: 11, fontWeight: "600" },
   legalTitle: { fontSize: 22, lineHeight: 28, textAlign: "center" },
   legalSubtitle: { fontSize: 14, textAlign: "center", paddingHorizontal: 8 },
+  legalScrollHost: { flex: 1, minHeight: 0 },
   legalScroll: { flex: 1, paddingHorizontal: 16 },
   footerPreview: { borderTopWidth: StyleSheet.hairlineWidth, paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8 },
   coraCard: { borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, overflow: "hidden" },

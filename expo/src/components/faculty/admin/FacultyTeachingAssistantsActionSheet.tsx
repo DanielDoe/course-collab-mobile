@@ -297,6 +297,7 @@ export function FacultyTeachingAssistantActionSheet({
           style={collabSheetStyles.scroll}
           contentContainerStyle={styles.scrollBody}
           keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}
         >
           {error ? <FacultySheetErrorBanner message={error} /> : null}
