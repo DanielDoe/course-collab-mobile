@@ -176,11 +176,26 @@ export function redactPiiFromText(text: string): string {
     .replace(INTERNAL_ID_RE, "[redacted-id]")
 }
 
+export type ExternalAiChatMessage = {
+  role: string
+  content: string
+  tool_calls?: unknown
+  tool_call_id?: string
+  name?: string
+}
+
+/** Redact PII; preserve tool_calls / tool_call_id for agent multi-round chats. */
 export function sanitizeMessagesForExternalAi(
-  messages: { role: string; content: string }[],
-): { role: string; content: string }[] {
-  return messages.map((m) => ({
-    role: m.role,
-    content: typeof m.content === "string" ? redactPiiFromText(m.content) : m.content,
-  }))
+  messages: ExternalAiChatMessage[],
+): ExternalAiChatMessage[] {
+  return messages.map((m) => {
+    const next: ExternalAiChatMessage = {
+      role: m.role,
+      content: typeof m.content === "string" ? redactPiiFromText(m.content) : m.content,
+    }
+    if (m.tool_calls != null) next.tool_calls = m.tool_calls
+    if (typeof m.tool_call_id === "string" && m.tool_call_id) next.tool_call_id = m.tool_call_id
+    if (typeof m.name === "string" && m.name) next.name = m.name
+    return next
+  })
 }
