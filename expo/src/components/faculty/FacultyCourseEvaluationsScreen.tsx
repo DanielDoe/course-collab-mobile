@@ -451,7 +451,7 @@ export function FacultyCourseEvaluationsScreen() {
     setError("")
     const [allRows, sessionRes] = await Promise.all([
       instructorApi.getCourseEvaluations(scope, { status: "all", session: "all" }),
-      instructorApi.getSessions(scope).catch(() => ({ sessions: [] as { code: string }[] })),
+      instructorApi.getSessions(scope, scope.academicTermId ?? undefined).catch(() => ({ sessions: [] as { code: string }[] })),
     ])
     const sessionCodes = (sessionRes.sessions ?? []).map((row) => row.code).filter(Boolean)
     const scoped = allRows.filter((row) =>

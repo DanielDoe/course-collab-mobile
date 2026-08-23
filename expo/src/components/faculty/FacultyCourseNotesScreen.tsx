@@ -126,7 +126,7 @@ export function FacultyCourseNotesScreen() {
       instructorCourseNotesApi.listDeleted(scope),
       instructorCourseNotesApi.listTopics(scope, topicSession),
       instructorCourseNotesApi.getConfiguration(scope),
-      instructorApi.getSessions(scope).catch(() => ({ sessions: [] as InstructorSession[] })),
+      instructorApi.getSessions(scope, scope.academicTermId ?? undefined).catch(() => ({ sessions: [] as InstructorSession[] })),
     ])
     setNotes(notesRes.notes ?? [])
     setDeletedNotes(deletedRes.notes ?? [])

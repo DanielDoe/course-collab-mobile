@@ -19,6 +19,7 @@ import { getStoredSession } from "./session"
 import { mergeCookieHeaders, persistHttpCookiesFromResponse, studentHttpCookieHeader } from "./student-http-cookies"
 import { assessmentResultSectionHints, evaluationRowBelongsToCourse } from "./course-sections"
 import { headersHaveStudentSessionProof, STUDENT_REFRESH_HEADER } from "./student-session-proof"
+import { buildFacultyApiHeaders, type FacultyApiScope } from "./faculty-api-headers"
 
 export type InstructorCourse = {
   id: number
@@ -592,6 +593,8 @@ export type SyllabusSection = {
     imageUrl?: string
     imageCaption?: string
     imageFileName?: string
+    documentUrl?: string
+    documentFileName?: string
   }
   isRequired: boolean
   isVisible: boolean
@@ -601,11 +604,16 @@ export type SyllabusSection = {
 export type InstructorSyllabus = {
   id: number
   courseId?: number
+  sessionId?: number | null
   title: string
   term: string
   status: "draft" | "published"
   contentMode: "structured" | "pdf"
   pdfUrl?: string | null
+  pdfFileName?: string | null
+  logoUrl?: string | null
+  logoFileName?: string | null
+  templateProvenance?: import("./syllabus-exchange-types").SyllabusTemplateProvenance | null
   sections: SyllabusSection[]
   publishedAt?: string | null
   updatedAt?: string
@@ -1502,13 +1510,7 @@ function normalizeFacultyEvaluationRow(raw: Record<string, unknown>): FacultyCou
   }
 }
 
-export type InstructorScope = {
-  instructorId: number
-  courseId?: number
-  sessionId?: number | null
-  sessionCode?: string | null
-  academicTermId?: number | null
-}
+export type InstructorScope = FacultyApiScope
 
 type Scope = InstructorScope
 
@@ -1521,33 +1523,44 @@ function refreshTokenFromCookieHeader(cookie: string | undefined): string | unde
 
 /** Same session-proof headers as instructorRequest, without fetching. */
 export async function instructorAuthenticatedHeaders(
-  scope: { instructorId: number; courseId?: number },
+  scope: FacultyApiScope,
   init?: { requireAuthHeader?: boolean; omitCourseId?: boolean; headers?: Record<string, string> },
 ): Promise<Record<string, string>> {
-  const headers: Record<string, string> = {
-    Accept: "application/json",
-    "Content-Type": "application/json",
-    "x-instructor-id": String(scope.instructorId),
-    ...(init?.headers)}
-  if (scope.courseId != null && !init?.omitCourseId) {
-    headers["x-course-id"] = String(scope.courseId)
-  }
-  if (init?.requireAuthHeader) {
-    headers.Authorization = "instructor"
-  }
+  return buildFacultyApiHeaders(scope, init)
+}
 
-  const stored = await getStoredSession()
-  const faculty = stored?.portal === "faculty" ? stored : undefined
-  const jarCookie = await studentHttpCookieHeader()
-  const trust = await mfaTrustRequestHeadersForInstructor(faculty)
-  Object.assign(headers, mergeCookieHeaders(trust.Cookie, jarCookie))
-  const refresh =
-    refreshTokenFromCookieHeader(jarCookie) ?? refreshTokenFromCookieHeader(trust.Cookie)
-  if (refresh) headers[STUDENT_REFRESH_HEADER] = refresh
-  if (!headersHaveStudentSessionProof(headers)) {
-    throw new ApiError("Instructor authentication required", 401)
+async function instructorFormUpload<T>(
+  path: string,
+  scope: Scope,
+  form: FormData,
+): Promise<T> {
+  const url = `${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`
+  assertProductionHttpsUrl(url)
+  const headers = await instructorAuthenticatedHeaders(scope)
+  delete headers["Content-Type"]
+
+  const response = await fetch(url, {
+    method: "POST",
+    credentials: "include",
+    headers,
+    body: form,
+    signal: createApiAbortSignal(undefined, undefined),
+  })
+  let body: unknown = null
+  const text = await response.text()
+  if (text) {
+    try {
+      body = JSON.parse(text)
+    } catch {
+      body = { error: text }
+    }
   }
-  return headers
+  if (!response.ok) {
+    noteApiFailure(path, response.status)
+    throw new ApiError(extractApiErrorMessage(body, response.status, path), response.status, body)
+  }
+  await persistHttpCookiesFromResponse(url, response.headers)
+  return body as T
 }
 
 async function instructorRequest<T>(
@@ -1730,13 +1743,13 @@ async function fetchAssessmentResultsForCourse(
 }
 
 export const instructorApi = {
-  getCourses: (instructorId: number) =>
+  getCourses: (scope: Pick<FacultyApiScope, "instructorId" | "universityId">) =>
     instructorRequest<{
       courses: Array<InstructorCourse & { course_id?: number }>
       offerings?: Array<InstructorCourse & { course_id?: number; academic_term_id?: number | null }>
       activeTerm?: { id: number; label: string } | null
       actorRole?: string
-    }>("/api/instructor/courses", { instructorId }).then((r) => ({
+    }>("/api/instructor/courses", scope, { omitCourseId: true }).then((r) => ({
       ...r,
       courses: (r.courses ?? [])
         .map((c) => ({
@@ -2876,6 +2889,89 @@ export const instructorApi = {
       "/api/instructor/syllabus",
       scope,
       { method: "PUT", body: JSON.stringify(payload) },
+    ),
+
+  discoverSyllabusTemplates: (scope: Scope, query?: string, limit = 50) => {
+    const params = new URLSearchParams()
+    if (query?.trim()) params.set("q", query.trim())
+    params.set("limit", String(limit))
+    const suffix = params.toString() ? `?${params.toString()}` : ""
+    return instructorRequest<{ syllabi: import("./syllabus-exchange-types").DiscoverableSyllabusRow[] }>(
+      `/api/instructor/syllabus-exchange/discover${suffix}`,
+      scope,
+      { omitCourseId: true },
+    )
+  },
+
+  applySyllabusTemplate: (scope: Scope, sourceSyllabusId: number) =>
+    instructorRequest<{ syllabus: InstructorSyllabus; success?: boolean }>(
+      "/api/instructor/syllabus-exchange/apply",
+      scope,
+      { method: "POST", body: JSON.stringify({ sourceSyllabusId }) },
+    ),
+
+  uploadSyllabusDocument: async (
+    scope: Scope,
+    file: { uri: string; name: string; type: string },
+  ) => {
+    const form = new FormData()
+    form.append("file", { uri: file.uri, name: file.name, type: file.type } as unknown as Blob)
+    return instructorFormUpload<{ success: boolean; syllabus: InstructorSyllabus; pdfUrl?: string }>(
+      "/api/instructor/syllabus/document",
+      scope,
+      form,
+    )
+  },
+
+  deleteSyllabusDocument: (scope: Scope) =>
+    instructorRequest<{ success: boolean; syllabus: InstructorSyllabus }>(
+      "/api/instructor/syllabus/document",
+      scope,
+      { method: "DELETE" },
+    ),
+
+  uploadSyllabusLogo: async (
+    scope: Scope,
+    file: { uri: string; name: string; type: string },
+  ) => {
+    const form = new FormData()
+    form.append("file", { uri: file.uri, name: file.name, type: file.type } as unknown as Blob)
+    return instructorFormUpload<{
+      success: boolean
+      logoUrl?: string
+      logoFileName?: string
+      syllabus: InstructorSyllabus
+    }>("/api/instructor/syllabus/logo", scope, form)
+  },
+
+  deleteSyllabusLogo: (scope: Scope) =>
+    instructorRequest<{ success: boolean; syllabus: InstructorSyllabus }>(
+      "/api/instructor/syllabus/logo",
+      scope,
+      { method: "DELETE" },
+    ),
+
+  uploadSyllabusSectionDocument: async (
+    scope: Scope,
+    sectionId: string,
+    file: { uri: string; name: string; type: string },
+  ) => {
+    const form = new FormData()
+    form.append("file", { uri: file.uri, name: file.name, type: file.type } as unknown as Blob)
+    form.append("sectionId", sectionId)
+    return instructorFormUpload<{
+      success: boolean
+      documentUrl?: string
+      documentFileName?: string
+      syllabus: InstructorSyllabus
+    }>("/api/instructor/syllabus/section-document", scope, form)
+  },
+
+  deleteSyllabusSectionDocument: (scope: Scope, sectionId: string) =>
+    instructorRequest<{ success: boolean; syllabus: InstructorSyllabus }>(
+      `/api/instructor/syllabus/section-document?sectionId=${encodeURIComponent(sectionId)}`,
+      scope,
+      { method: "DELETE" },
     ),
 
   getLectures: (scope: Scope, week?: number) => {
@@ -4268,6 +4364,7 @@ export const instructorApi = {
       purpose: string
       requestedModules: import("./course-exchange-shared").CourseExchangeModule[]
       destinationCourseId: number
+      destinationSessionId?: number | null
     },
   ) =>
     instructorRequest<{
@@ -4284,6 +4381,7 @@ export const instructorApi = {
         purpose: payload.purpose,
         requestedModules: payload.requestedModules,
         destinationCourseId: payload.destinationCourseId,
+        destinationSessionId: payload.destinationSessionId ?? null,
       }),
     }),
 
@@ -4425,16 +4523,18 @@ export const instructorApi = {
       },
     ),
 
-  getAllInstructorSessions: (scope: Scope) =>
-    instructorRequest<{ sessions: Array<InstructorSession & { course_id?: number }> }>(
-      "/api/instructor/sessions",
+  getAllInstructorSessions: (scope: Scope, academicTermId?: number) => {
+    const q = academicTermId != null ? `?academic_term_id=${academicTermId}` : ""
+    return instructorRequest<{ sessions: Array<InstructorSession & { course_id?: number }> }>(
+      `/api/instructor/sessions${q}`,
       scope,
     ).then((r) =>
       (r.sessions ?? []).map((s) => ({
         ...s,
         course_id: Number(s.course_id ?? scope.courseId ?? 0),
       })),
-    ),
+    )
+  },
 }
 
 export function formatFacultyRelativeTime(iso: string): string {

@@ -17,6 +17,7 @@ export function useFacultyScope() {
       sessionId: selectedCourse.session_id ?? null,
       sessionCode: selectedCourse.session_code ?? null,
       academicTermId: selectedCourse.academic_term_id ?? null,
+      universityId: facultySession.selectedUniversityId ?? null,
     }
   }, [facultySession, selectedCourse])
 

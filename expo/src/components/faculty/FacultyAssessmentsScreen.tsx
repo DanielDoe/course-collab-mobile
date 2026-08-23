@@ -91,7 +91,7 @@ export function FacultyAssessmentsScreen({assessmentType,
     try {
       const [items, sessionData, openIssues, deletedItems] = await Promise.all([
         instructorApi.getQuizzes(scope, type),
-        instructorApi.getSessions(scope),
+        instructorApi.getSessions(scope, scope.academicTermId ?? undefined),
         instructorApi.getIssues(scope, "open", type),
         instructorApi.getDeletedAssessments(scope, type),
       ])

@@ -112,7 +112,7 @@ export function FacultyGroupsScreen() {
     const [activeRows, deletedRows, sessionData] = await Promise.all([
       instructorApi.getGroups(scope, { session }),
       instructorApi.getGroups(scope, { session, status: "deleted" }),
-      instructorApi.getSessions(scope).catch(() => ({ sessions: [] as InstructorSession[] })),
+      instructorApi.getSessions(scope, scope.academicTermId ?? undefined).catch(() => ({ sessions: [] as InstructorSession[] })),
     ])
     setActiveGroups(activeRows)
     setDeletedGroups(deletedRows)

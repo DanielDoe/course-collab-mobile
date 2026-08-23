@@ -74,7 +74,7 @@ export function FacultyRecommendationsScreen() {
     setError("")
     const [rows, sessionRes] = await Promise.all([
       instructorApi.getRecommendations(scope),
-      instructorApi.getSessions(scope),
+      instructorApi.getSessions(scope, scope.academicTermId ?? undefined),
     ])
     setRequests(rows)
     setSessions(sessionRes.sessions ?? [])

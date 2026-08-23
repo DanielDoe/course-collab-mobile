@@ -65,7 +65,10 @@ export function facultyCoursePickerItemsForTermSplit(
 export async function fetchFacultyCoursePickerItems(
   session: FacultySession,
 ): Promise<FacultyCoursePickerItem[]> {
-  const data = await instructorApi.getCourses(session.id)
+  const data = await instructorApi.getCourses({
+    instructorId: session.id,
+    universityId: session.selectedUniversityId ?? null,
+  })
   const catalog = (data.courses ?? []).filter((course) => course.id > 0)
   const offerings = (data.offerings ?? []) as FacultyTermOffering[]
   const activeTermId = data.activeTerm?.id ?? null

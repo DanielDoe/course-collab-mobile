@@ -9,6 +9,7 @@ import {
   type CourseExchangeModule,
   type DestinationCourseRow,
   type DiscoverableCourse,
+  type ExchangeSessionRow,
   discoverRelationshipLabel,
   exchangeRequestStatusColor,
 } from "../../../lib/course-exchange-shared"
@@ -40,6 +41,7 @@ type Props = {
   visible: boolean
   course: DiscoverableCourse | null
   destinationCourses: DestinationCourseRow[]
+  sessions: ExchangeSessionRow[]
   preferredDestinationCourseId?: number | null
   loading: boolean
   onClose: () => void
@@ -49,6 +51,7 @@ type Props = {
     modules: CourseExchangeModule[]
     purpose: string
     destinationCourseId: number
+    destinationSessionId?: number | null
   }) => Promise<void>
 }
 
@@ -56,6 +59,7 @@ export function FacultyCourseExchangeDiscoverSheet({
   visible,
   course,
   destinationCourses,
+  sessions,
   preferredDestinationCourseId,
   loading,
   onClose,
@@ -81,6 +85,12 @@ export function FacultyCourseExchangeDiscoverSheet({
   const [selected, setSelected] = useState<CourseExchangeModule[]>([])
   const [purpose, setPurpose] = useState("")
   const [destinationCourseId, setDestinationCourseId] = useState<number | null>(null)
+  const [destinationSessionId, setDestinationSessionId] = useState<number | null>(null)
+
+  const filteredSessions = useMemo(() => {
+    if (!destinationCourseId) return []
+    return sessions.filter((s) => s.course_id === destinationCourseId)
+  }, [destinationCourseId, sessions])
 
   useEffect(() => {
     if (visible && course) {
@@ -88,6 +98,7 @@ export function FacultyCourseExchangeDiscoverSheet({
       setSelected([...allowed])
       setPurpose("")
       setDestinationCourseId(null)
+      setDestinationSessionId(null)
     }
   }, [visible, course, allowed])
 
@@ -109,7 +120,12 @@ export function FacultyCourseExchangeDiscoverSheet({
 
   async function handleSubmit() {
     if (!destinationCourseId || selected.length === 0) return
-    await onSubmit({ modules: selected, purpose, destinationCourseId })
+    await onSubmit({
+      modules: selected,
+      purpose,
+      destinationCourseId,
+      destinationSessionId,
+    })
   }
 
   return (
@@ -257,7 +273,10 @@ export function FacultyCourseExchangeDiscoverSheet({
                   return (
                     <Pressable
                       key={c.course_id}
-                      onPress={() => setDestinationCourseId(c.course_id)}
+                      onPress={() => {
+                        setDestinationCourseId(c.course_id)
+                        setDestinationSessionId(null)
+                      }}
                       style={[
                         styles.courseRow,
                         {
@@ -282,6 +301,48 @@ export function FacultyCourseExchangeDiscoverSheet({
                 })}
               </View>
             </FacultySheetSection>
+
+            {filteredSessions.length > 0 ? (
+              <FacultySheetSection label="Destination section (optional)">
+                <View style={styles.courseList}>
+                  <Pressable
+                    onPress={() => setDestinationSessionId(null)}
+                    style={[
+                      styles.courseRow,
+                      {
+                        borderColor:
+                          destinationSessionId == null ? FACULTY_COURSE_EXCHANGE_COLOR.action : native.separator,
+                        backgroundColor:
+                          destinationSessionId == null
+                            ? `${FACULTY_COURSE_EXCHANGE_COLOR.action}12`
+                            : native.fill,
+                      },
+                    ]}
+                  >
+                    <Text style={[type.body, { color: native.label }]}>No section mapping</Text>
+                  </Pressable>
+                  {filteredSessions.map((s) => {
+                    const active = destinationSessionId === s.id
+                    return (
+                      <Pressable
+                        key={s.id}
+                        onPress={() => setDestinationSessionId(s.id)}
+                        style={[
+                          styles.courseRow,
+                          {
+                            borderColor: active ? FACULTY_COURSE_EXCHANGE_COLOR.action : native.separator,
+                            backgroundColor: active ? `${FACULTY_COURSE_EXCHANGE_COLOR.action}12` : native.fill,
+                          },
+                        ]}
+                      >
+                        <Text style={[type.bodyEmphasis, { color: native.label }]}>{s.code}</Text>
+                      </Pressable>
+                    )
+                  })}
+                </View>
+              </FacultySheetSection>
+            ) : null}
+
             <View style={styles.footerActions}>
               <AppButton label="Back" variant="secondary" onPress={() => setStep("details")} />
               <AppButton

@@ -96,6 +96,7 @@ async function bootstrapFacultyForCourse(
     sessionId: course.session_id ?? null,
     sessionCode: course.session_code ?? null,
     academicTermId: course.academic_term_id ?? null,
+    universityId: session.selectedUniversityId ?? null,
   }
   const [stats, charts, activity, notifications, pendingPoints, issues, officeHours, exchangeSummary, tier] =
     await Promise.all([

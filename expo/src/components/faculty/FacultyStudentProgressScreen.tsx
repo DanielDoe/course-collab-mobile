@@ -94,7 +94,7 @@ export function FacultyStudentProgressScreen() {
       instructorApi.getDashboardCharts(scope),
       instructorApi.getPracticeStudentProgress(scope),
       instructorApi.getAttendanceAnalytics(scope, sessionCode).catch(() => null),
-      instructorApi.getSessions(scope),
+      instructorApi.getSessions(scope, scope.academicTermId ?? undefined),
     ])
     setStats(nextStats)
     setCharts(nextCharts)

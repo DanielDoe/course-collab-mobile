@@ -66,7 +66,7 @@ export function FacultyAnnouncementsScreen() {
     try {
       const [items, sessionsRes] = await Promise.all([
         instructorApi.getAnnouncements(scope),
-        instructorApi.getSessions(scope).catch(() => ({ sessions: [] })),
+        instructorApi.getSessions(scope, scope.academicTermId ?? undefined).catch(() => ({ sessions: [] })),
       ])
       setAnnouncements(items)
       const seen = new Set<string>()

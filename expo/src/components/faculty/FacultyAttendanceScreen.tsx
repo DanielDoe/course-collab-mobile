@@ -425,7 +425,7 @@ export function FacultyAttendanceScreen() {
   const load = useCallback(async () => {
     if (!scope) return
     setError("")
-    const sessionsRes = await instructorApi.getSessions(scope)
+    const sessionsRes = await instructorApi.getSessions(scope, scope.academicTermId ?? undefined)
     const sections = sessionsRes.sessions ?? []
     setCourseSessions(sections)
     const sectionCode = resolveSessionFilterCode(sections, sectionFilter)

@@ -160,7 +160,7 @@ export function FacultyCourseExchangeScreen() {
         instructorId: scope.instructorId,
         universityId: scope.universityId ?? null,
       }),
-      instructorApi.getAllInstructorSessions(scope),
+      instructorApi.getAllInstructorSessions(scope, scope.academicTermId ?? undefined),
     ])
     const offerings = coursesRes.offerings ?? coursesRes.courses ?? []
     setInstitutionHint(offerings.find((c) => c.university?.trim())?.university ?? null)
@@ -442,6 +442,7 @@ export function FacultyCourseExchangeScreen() {
         purpose: payload.purpose,
         requestedModules: filtered.modules,
         destinationCourseId: payload.destinationCourseId,
+        destinationSessionId: payload.destinationSessionId ?? null,
       })
       const imported = Boolean(data.request?.imported || data.request?.autoApproved)
       AppAlert.alert(
@@ -1001,6 +1002,7 @@ export function FacultyCourseExchangeScreen() {
         visible={discoverCourse != null}
         course={discoverCourse}
         destinationCourses={destinationOptions}
+        sessions={sessions}
         preferredDestinationCourseId={preferredDestinationForDiscover}
         loading={acting}
         onClose={() => setDiscoverCourse(null)}

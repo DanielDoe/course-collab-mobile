@@ -63,7 +63,7 @@ export function FacultyResultsScreen() {
   const load = useCallback(async () => {
     if (!scope) return
     setError("")
-    const sessionRes = await instructorApi.getSessions(scope)
+    const sessionRes = await instructorApi.getSessions(scope, scope.academicTermId ?? undefined)
     const nextSessions = sessionRes.sessions ?? []
     setSessions(nextSessions)
     const sessionCode = resolveSessionFilterCode(nextSessions, sessionFilter)

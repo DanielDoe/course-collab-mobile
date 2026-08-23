@@ -114,7 +114,7 @@ export function FacultyClassroomPointsScreen() {
           instructorApi.getClassroomPoints(scope, { status: "approved", limit: 80 }),
           instructorApi.getClassroomPointsSummary(scope),
           instructorApi.getClassroomPointAssignments(scope),
-          instructorApi.getSessions(scope),
+          instructorApi.getSessions(scope, scope.academicTermId ?? undefined),
         ])
       setPending(pendingRows)
       setPracticePending(practiceRows)

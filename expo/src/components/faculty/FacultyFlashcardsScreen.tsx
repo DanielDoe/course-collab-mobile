@@ -130,7 +130,7 @@ export function FacultyFlashcardsScreen() {
       instructorFlashcardsApi.listTopics(scope, topicSession),
       instructorFlashcardsApi.getConfiguration(scope),
       instructorApi.getQuestionBankTopics(scope),
-      instructorApi.getSessions(scope).catch(() => ({ sessions: [] as InstructorSession[] })),
+      instructorApi.getSessions(scope, scope.academicTermId ?? undefined).catch(() => ({ sessions: [] as InstructorSession[] })),
     ])
     setDecks(decksRes.decks ?? [])
     setDeletedDecks(deletedRes.decks ?? [])

@@ -970,7 +970,7 @@ export function FacultyAssessmentEditorModal({quiz,
     try {
       const [detail, sessionData] = await Promise.all([
         instructorApi.getQuiz(scope, quiz.id),
-        instructorApi.getSessions(scope),
+        instructorApi.getSessions(scope, scope.academicTermId ?? undefined),
       ])
       setDraft(quizDetailToEditorDraft(detail))
       setSessions(sessionData.sessions ?? [])

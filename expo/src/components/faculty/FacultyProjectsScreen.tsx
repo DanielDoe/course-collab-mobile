@@ -129,7 +129,7 @@ export function FacultyProjectsScreen() {
       tab === "leaderboard"
         ? instructorApi.getProjectLeaderboard(scope, { session: boardSession, limit: 50 })
         : Promise.resolve({ leaderboard: [] as ProjectLeaderboardEntry[], stats: undefined }),
-      instructorApi.getSessions(scope),
+      instructorApi.getSessions(scope, scope.academicTermId ?? undefined),
     ])
     if (projectResult.status === "rejected") {
       throw projectResult.reason
