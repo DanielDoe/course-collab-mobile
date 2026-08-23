@@ -1,4 +1,5 @@
 import type { InstructorCourse, InstructorSession } from "./instructor-api"
+import { courseUsesLabSections } from "./course-sections"
 import { facultySectionDisplayLabel } from "./faculty-section-label"
 
 /** Shell / picker row — may represent a whole course or one section in the active term. */
@@ -105,7 +106,12 @@ export function expandFacultyOfferingsForActiveTerm(
       .sort((a, b) => a.code.localeCompare(b.code))
 
     if (sessions.length <= 1) {
-      items.push(asCoursePickerItem(base, { session: sessions[0] ?? null, isSectionRow: false }))
+      const session = sessions[0] ?? null
+      const showSection =
+        session != null &&
+        courseUsesLabSections(base.course_code) &&
+        session.code.trim().toUpperCase() !== base.course_code.trim().toUpperCase()
+      items.push(asCoursePickerItem(base, { session, isSectionRow: showSection }))
       continue
     }
 
@@ -127,7 +133,12 @@ export function expandFacultyCoursesForActiveTerm(
   for (const course of courses) {
     const sessions = sessionsForCourse(course, sessionsByCourseId.get(course.id) ?? [])
     if (sessions.length <= 1) {
-      items.push(asCoursePickerItem(course, { session: sessions[0] ?? null, isSectionRow: false }))
+      const session = sessions[0] ?? null
+      const showSection =
+        session != null &&
+        courseUsesLabSections(course.course_code) &&
+        session.code.trim().toUpperCase() !== course.course_code.trim().toUpperCase()
+      items.push(asCoursePickerItem(course, { session, isSectionRow: showSection }))
       continue
     }
 

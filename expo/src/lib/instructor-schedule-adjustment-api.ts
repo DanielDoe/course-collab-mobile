@@ -1,7 +1,7 @@
 import { ApiError } from "./api"
-import { instructorAuthenticatedRequest } from "./instructor-api"
+import { instructorAuthenticatedRequest, type InstructorScope } from "./instructor-api"
 
-export type AdminScope = { instructorId: number; courseId: number }
+export type AdminScope = InstructorScope
 
 export type InstructorScheduleRequest = {
   id: number
