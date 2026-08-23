@@ -8,6 +8,7 @@ import {
   type DestinationCourseRow,
   type ExchangeRequestDetail,
   type ExchangeSessionRow,
+  pickPreferredDestinationCourseId,
 } from "../../../lib/course-exchange-shared"
 import { FACULTY_COURSE_EXCHANGE_COLOR } from "../../../lib/faculty-course-exchange-theme"
 import {
@@ -26,6 +27,7 @@ type Props = {
   request: ExchangeRequestDetail | null
   destinationCourses: DestinationCourseRow[]
   sessions: ExchangeSessionRow[]
+  institutionHint?: string | null
   loading: boolean
   onClose: () => void
   onImport: (payload: { destinationCourseId: number; destinationSessionId?: number | null }) => Promise<void>
@@ -36,6 +38,7 @@ export function FacultyCourseExchangeImportSheet({
   request,
   destinationCourses,
   sessions,
+  institutionHint,
   loading,
   onClose,
   onImport,
@@ -52,11 +55,12 @@ export function FacultyCourseExchangeImportSheet({
     if (!visible || !request) return
     const preferred =
       request.destination_course_id ??
+      pickPreferredDestinationCourseId(destinationCourses, request.courseCode, institutionHint) ??
       destinationCourses[0]?.course_id ??
       null
     setDestinationCourseId(preferred)
     setDestinationSessionId(request.destination_session_id ?? null)
-  }, [visible, request, destinationCourses])
+  }, [visible, request, destinationCourses, institutionHint])
 
   const filteredSessions = useMemo(() => {
     if (!destinationCourseId) return []

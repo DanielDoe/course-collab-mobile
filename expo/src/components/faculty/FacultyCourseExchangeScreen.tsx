@@ -40,6 +40,9 @@ import {
   parseCourseExchangeTabParam,
   parseExchangeProvenance,
   pickPreferredDestinationCourseId,
+  filterGroupsProjectsForOwnSession,
+  ownGroupsProjectsSessionMessage,
+  resolveExchangeSessionCode,
 } from "../../lib/course-exchange-shared"
 import { FACULTY_COURSE_EXCHANGE_COLOR } from "../../lib/faculty-course-exchange-theme"
 import { instructorApi } from "../../lib/instructor-api"
@@ -153,7 +156,10 @@ export function FacultyCourseExchangeScreen() {
   const loadCoursesAndSessions = useCallback(async () => {
     if (!scope) return
     const [coursesRes, sessionsRes] = await Promise.all([
-      instructorApi.getCourses(scope.instructorId),
+      instructorApi.getCourses({
+        instructorId: scope.instructorId,
+        universityId: scope.universityId ?? null,
+      }),
       instructorApi.getAllInstructorSessions(scope),
     ])
     const offerings = coursesRes.offerings ?? coursesRes.courses ?? []
@@ -420,14 +426,21 @@ export function FacultyCourseExchangeScreen() {
     modules: CourseExchangeModule[]
     purpose: string
     destinationCourseId: number
+    destinationSessionId?: number | null
   }) {
     if (!scope || !discoverCourse) return
+    const sessionCode = resolveExchangeSessionCode(sessions, payload.destinationSessionId)
+    const filtered = filterGroupsProjectsForOwnSession(payload.modules, sessionCode)
+    if (filtered.modules.length === 0) {
+      AppAlert.alert("Cannot import", ownGroupsProjectsSessionMessage())
+      return
+    }
     setActing(true)
     try {
       const data = await instructorApi.createCourseExchangeRequest(scope, {
         sourceCourseId: discoverCourse.courseId,
         purpose: payload.purpose,
-        requestedModules: payload.modules,
+        requestedModules: filtered.modules,
         destinationCourseId: payload.destinationCourseId,
       })
       const imported = Boolean(data.request?.imported || data.request?.autoApproved)
@@ -484,6 +497,13 @@ export function FacultyCourseExchangeScreen() {
 
   async function runImport(payload: { destinationCourseId: number; destinationSessionId?: number | null }) {
     if (!scope || !importRequest) return
+    const sessionCode = resolveExchangeSessionCode(sessions, payload.destinationSessionId)
+    const approved = importRequest.approved_modules ?? importRequest.requested_modules ?? []
+    const filtered = filterGroupsProjectsForOwnSession(approved, sessionCode)
+    if (filtered.skippedGroupsProjects && filtered.modules.length === 0) {
+      AppAlert.alert("Cannot import", ownGroupsProjectsSessionMessage())
+      return
+    }
     setActing(true)
     try {
       const data = await instructorApi.executeCourseExchangeCopy(scope, importRequest.id, payload)
@@ -1033,6 +1053,7 @@ export function FacultyCourseExchangeScreen() {
         request={importRequest}
         destinationCourses={destinationOptions}
         sessions={sessions}
+        institutionHint={institutionHint}
         loading={acting}
         onClose={() => setImportRequest(null)}
         onImport={runImport}
