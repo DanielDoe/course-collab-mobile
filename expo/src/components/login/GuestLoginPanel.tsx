@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { ApiError, api } from "../../lib/api"
 import { parseAccessLifecyclePayload } from "../../lib/access-governance"
 import { useSession } from "../../context/SessionProvider"
@@ -7,14 +7,15 @@ import { persistMfaDeviceTrustFromLogin, studentMfaLoginKey } from "../../lib/mf
 import { MfaLoginStep } from "../auth/MfaLoginStep"
 import { ErrorBanner, InfoBanner, LoginFieldGroup } from "./LoginCard"
 import { LoginButton, LoginField, LoginPasswordToggle } from "./LoginButton"
-import { LoginBackLink, LoginPortalHeader, LoginPortalStack } from "./login-chrome"
+import { LoginBackLink, LoginPortalHeader, LoginPortalStack, type RegisterAuthPanelBack } from "./login-chrome"
 import { AccessRequestStatusScreen } from "../auth/AccessRequestStatusScreen"
 
 type Props = {
   onBack?: () => void
+  registerPanelBack?: RegisterAuthPanelBack
 }
 
-export function GuestLoginPanel({ onBack }: Props) {
+export function GuestLoginPanel({ onBack, registerPanelBack }: Props) {
   const { signIn } = useSession()
 
   const [email, setEmail] = useState("")
@@ -24,6 +25,23 @@ export function GuestLoginPanel({ onBack }: Props) {
   const [error, setError] = useState("")
   const [mfaState, setMfaState] = useState<MfaLoginState | null>(null)
   const [accessStatus, setAccessStatus] = useState<ReturnType<typeof parseAccessLifecyclePayload>>(null)
+
+  const handlePanelBack = useCallback((): boolean => {
+    if (accessStatus) {
+      setAccessStatus(null)
+      return true
+    }
+    if (mfaState) {
+      setMfaState(null)
+      return true
+    }
+    return false
+  }, [accessStatus, mfaState])
+
+  useEffect(() => {
+    registerPanelBack?.(handlePanelBack)
+    return () => registerPanelBack?.(null)
+  }, [handlePanelBack, registerPanelBack])
 
   async function finishGuestLogin(data: Record<string, unknown>) {
     const normalized = parseMfaCompletePayload(data) ?? data

@@ -15,7 +15,7 @@ import {
 } from "../../lib/cora-privacy-api"
 import { loadCoraLocalPreferences, saveCoraLocalPreferences } from "../../lib/cora-preferences-storage"
 import { setAllMemoryToggles, type CoraLocalPrivacyStorage } from "../../lib/cora-learning-memory"
-import { navigatePostSignIn, replaceAuthRoute } from "../../lib/navigation-reset"
+import { advanceAuthOnboarding, navigatePostSignIn, replaceAuthRoute } from "../../lib/navigation-reset"
 import { NATIVE } from "../../constants/faculty-native-theme"
 import { LoginButton } from "./LoginButton"
 import { OnboardingShell } from "./onboarding-ui"
@@ -124,7 +124,7 @@ export function OnboardingCoraScreen() {
     setSaving(true)
     try {
       const next = await completeOnboardingStepAndResolveNext(session, "cora")
-      navigatePostSignIn(router, next)
+      advanceAuthOnboarding(router, next)
     } finally {
       setSaving(false)
     }
@@ -203,7 +203,7 @@ export function OnboardingCoraScreen() {
 
       <Pressable style={[styles.linkRow]} accessibilityRole="button" disabled>
         <Text style={[loginType.info, { color: LOGIN.secondaryLabel, lineHeight: 20, textAlign: "center" }]}>
-          Full AI & Data disclosure was shown in the previous step. Manage detailed memory toggles later in Settings →
+          Full AI & Data disclosure is included in Terms & Policies. Manage detailed memory toggles later in Settings →
           Cora privacy.
         </Text>
       </Pressable>

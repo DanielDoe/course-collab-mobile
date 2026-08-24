@@ -18,6 +18,10 @@ import {
   type AttendanceRecord,
   type AttendanceScore,
   type AttendanceStreak} from "../../lib/rewards-api"
+import {
+  attendanceDisplayPercent,
+  attendanceLeaderboardForCurrentOffering,
+} from "../../lib/attendance-leaderboard-scope"
 import { EmptyBlock, useRewardsTheme } from "./rewards-shared"
 import { AttendanceLeaderboardPodium } from "./AttendanceLeaderboardPodium"
 import { AttendanceOverviewHero } from "./AttendanceOverviewHero"
@@ -56,7 +60,7 @@ function LeaderboardListCard({ entry, index }: { entry: AttendanceLeaderboardEnt
     <SignatureListCard
       index={index}
       title={`${entry.full_name ?? "Student"}${isMe ? " (you)" : ""}`}
-      meta={`${Math.round(Number(entry.attendance_percentage ?? 0))}% · ${entry.current_streak ?? 0} day streak`}
+      meta={`${attendanceDisplayPercent(entry.attendance_percentage)}% · ${entry.current_streak ?? 0} day streak`}
       metaIcon="stats-chart-outline"
       trailingValue={String(entry.total_points ?? 0)}
       trailingValueColor={theme.primary}
@@ -90,10 +94,10 @@ export function AttendanceScreen() {
     if (!session) return
     try {
       const [scoreData, streakData, recordsData, lbData] = await Promise.all([
-        rewardsApi.getAttendanceScore(session),
-        rewardsApi.getAttendanceStreaks(session),
-        rewardsApi.getAttendanceRecords(session),
-        rewardsApi.getAttendanceLeaderboard(session),
+        rewardsApi.getAttendanceScore(session).catch(() => ({ attendance: {} })),
+        rewardsApi.getAttendanceStreaks(session).catch(() => ({ streak: {} })),
+        rewardsApi.getAttendanceRecords(session).catch(() => ({ records: [] })),
+        rewardsApi.getAttendanceLeaderboard(session).catch(() => ({ leaderboard: [] })),
       ])
       setScore(scoreData.attendance ?? {})
       setStreak(streakData.streak ?? {})
@@ -138,10 +142,11 @@ export function AttendanceScreen() {
   )
 
   const filteredLeaderboard = useMemo(() => {
+    const scoped = session ? attendanceLeaderboardForCurrentOffering(leaderboard, session) : []
     const q = search.trim().toLowerCase()
-    if (!q) return leaderboard
-    return leaderboard.filter((entry) => (entry.full_name ?? "Student").toLowerCase().includes(q))
-  }, [leaderboard, search])
+    if (!q) return scoped
+    return scoped.filter((entry) => (entry.full_name ?? "Student").toLowerCase().includes(q))
+  }, [leaderboard, search, session])
 
   async function handleCheckIn() {
     if (!session) return

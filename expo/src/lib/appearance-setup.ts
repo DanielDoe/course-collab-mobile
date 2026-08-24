@@ -1,6 +1,7 @@
 import * as SecureStore from "./secure-store-client"
 import { getApiBaseUrl } from "../constants"
 import type { StudentSession } from "./session"
+import { studentAuthenticatedHeaders } from "./student-api"
 
 /** Per-student flag: user explicitly picked appearance during onboarding. */
 export function appearanceSetupStorageKey(studentDbId: string): string {
@@ -37,10 +38,9 @@ async function appearanceSetupRequest(
   const url = `${getApiBaseUrl()}${path.startsWith("/") ? path : `/${path}`}`
   const response = await fetch(url, {
     ...init,
+    credentials: "include",
     headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      "x-student-id": session.databaseId,
+      ...(await studentAuthenticatedHeaders(session)),
       ...init?.headers,
     },
   })

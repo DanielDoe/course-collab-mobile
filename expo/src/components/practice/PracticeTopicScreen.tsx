@@ -21,8 +21,11 @@ import {
 } from "../../lib/practice-session-count"
 import { setActivePracticeSession } from "../../lib/practice-session"
 import type { StudentSession } from "../../lib/session"
+import type { MembershipTier } from "../../types/dashboard"
 import { NotetakerScreenHeader } from "../notetaker/NotetakerScreenHeader"
 import { ModuleSection, ModuleSectionHeader } from "../modules/ModuleScreen"
+import { StudentThemedLocked } from "../student/student-themed-hero"
+import { canAccessPracticeHub, PRACTICE_HUB_MIN_TIER, resolvePracticeAccess } from "../../lib/practice-hub-access"
 
 type Difficulty = "easy" | "medium" | "hard" | "mixed"
 
@@ -38,8 +41,8 @@ function useStudentSession(): StudentSession | null {
   return session?.portal === "student" ? session : null
 }
 
-function topicProgressPct(topic: TopicProgress): number {
-  const total = practiceTopicUnlockedCount(topic)
+function topicProgressPct(topic: TopicProgress, tier?: MembershipTier): number {
+  const total = practiceTopicUnlockedCount(topic, tier)
   if (total <= 0) return 0
   return Math.min(100, Math.round((topic.completed / total) * 100))
 }
@@ -286,15 +289,20 @@ export function PracticeTopicScreen() {
     load().finally(() => setLoading(false))
   }, [session, topicName, load])
 
-  const canStartPractice = practiceAccess?.canStartPractice !== false
-  const topicLocked = topic ? isPracticeTopicLocked(topic, canStartPractice) : true
-  const unlockedCount = topic ? practiceTopicUnlockedCount(topic) : 0
+  const resolvedPracticeAccess = resolvePracticeAccess(
+    membershipTier,
+    membershipTierLoaded,
+    practiceAccess,
+  )
+  const canStartPractice = resolvedPracticeAccess.canStartPractice
+  const topicLocked = topic ? isPracticeTopicLocked(topic, canStartPractice, membershipTier) : true
+  const unlockedCount = topic ? practiceTopicUnlockedCount(topic, membershipTier) : 0
 
   const startPractice = async () => {
     if (!session || !topic || topicLocked) {
       AppAlert.alert(
         "Practice locked",
-        practiceAccess?.level === "none"
+        resolvedPracticeAccess.level === "none"
           ? "Upgrade to Explorer to start practicing."
           : "Upgrade to Trailblazer for full topic access.",
         [
@@ -373,6 +381,13 @@ export function PracticeTopicScreen() {
         )
         return
       }
+      if (err instanceof ApiError && err.status === 404) {
+        AppAlert.alert(
+          "No questions available",
+          err.message || "No questions found for this topic in your Fall 2026 course.",
+        )
+        return
+      }
       AppAlert.alert(
         "Could not start practice",
         err instanceof ApiError ? err.message : "Please try again.",
@@ -390,6 +405,20 @@ export function PracticeTopicScreen() {
     )
   }
 
+  if (membershipTierLoaded && !canAccessPracticeHub(membershipTier)) {
+    return (
+      <View style={[styles.root, { backgroundColor: native.groupedBackground }]}>
+        <NotetakerScreenHeader title="Practice" fallbackHref="/module/practice" />
+        <StudentThemedLocked
+          icon="fitness-outline"
+          subtitle={`Practice Hub requires ${PRACTICE_HUB_MIN_TIER} membership or higher.`}
+          paddingTop={insets.top + 24}
+          onUpgrade={() => router.push("/membership" as never)}
+        />
+      </View>
+    )
+  }
+
   if (!topicName) {
     return (
       <View style={[styles.root, { backgroundColor: native.groupedBackground }]}>
@@ -401,7 +430,7 @@ export function PracticeTopicScreen() {
     )
   }
 
-  const pct = topic ? topicProgressPct(topic) : 0
+  const pct = topic ? topicProgressPct(topic, membershipTier) : 0
   const newCount = topic ? Math.max(0, unlockedCount - topic.completed) : 0
   const lockedInTopic = topic ? Math.max(0, topic.questionCount - unlockedCount) : 0
 

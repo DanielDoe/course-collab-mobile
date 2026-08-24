@@ -1,11 +1,10 @@
 import { type ReactNode } from "react"
 import { Platform, StyleSheet, View } from "react-native"
-import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { ChromeInsetProvider } from "../../context/ChromeInsetContext"
 import { useSearchDockBottomInset } from "../../context/ModuleSearchDockContext"
 import { ModuleSearchDockProvider } from "../../context/ModuleSearchDockProvider"
 import { useGlassChromeActive } from "../theme/GlassSurface"
-import { NATIVE_HEADER_BAR_HEIGHT } from "./shell-shared"
+import { floatingTopChromeInset, useStableTopSafeInset } from "./shell-shared"
 
 type Props = {
   backgroundColor: string
@@ -50,11 +49,11 @@ function AppShellFrameInner({
   children,
   overlays,
 }: Props) {
-  const insets = useSafeAreaInsets()
+  const topSafeInset = useStableTopSafeInset()
   const glassChromeActive = useGlassChromeActive()
   const showTopBar = !immersive
   const floatChrome = showTopBar && glassChromeActive
-  const topInset = floatChrome ? insets.top + NATIVE_HEADER_BAR_HEIGHT : 0
+  const topInset = floatChrome ? floatingTopChromeInset(topSafeInset) : 0
   const searchDockInset = useSearchDockBottomInset()
   const floatSearchDock = searchDockInset > 0
 

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native"
 import { AppAlert } from '../../lib/app-alert'
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useRouter } from "expo-router"
@@ -10,8 +10,9 @@ import type { StudentSession } from "../../lib/session"
 import { NATIVE } from "../../constants/faculty-native-theme"
 import { useThemedStudentNative } from "../../lib/themed-module-theme"
 import { collaborationApi, type RosterStudent } from "../../lib/collaboration-api"
-import { CollabScreenTitle } from "./collab-nav"
+import { CollabFlowHeader } from "./collab-nav"
 import { useCollabTheme } from "./collab-module-ui"
+import { keyboardDismissScrollProps } from "../../lib/keyboard-dismiss-scroll-props"
 
 function useStudentSession(): StudentSession | null {
   const { session } = useSession()
@@ -84,8 +85,21 @@ export function GroupCreateScreen() {
   const others = roster.filter((s) => String(s.id) !== session?.databaseId)
 
   return (
-    <ScrollView contentContainerStyle={[styles.content, scrollPad]}>
-      <CollabScreenTitle title="Create group" subtitle="Up to 4 members total" />
+    <View style={[styles.screen, { backgroundColor: SN.groupedBackground }]}>
+      <CollabFlowHeader
+        title="Create group"
+        subtitle="Up to 4 members total"
+        fallbackHref="/module/groups"
+      />
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+        <ScrollView
+          contentContainerStyle={[styles.content, { paddingBottom: scrollPad.paddingBottom }]}
+          keyboardShouldPersistTaps="handled"
+          {...keyboardDismissScrollProps}
+        >
         <Text style={[styles.label, { color: theme.primaryDark }]}>Group name</Text>
         <TextInput
           style={[styles.input, { backgroundColor: SN.secondaryGrouped, borderColor: SN.separator }]}
@@ -142,11 +156,15 @@ export function GroupCreateScreen() {
             </>
           )}
         </Pressable>
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </View>
   )
 }
 
 const styles = StyleSheet.create({
+  screen: { flex: 1 },
+  flex: { flex: 1 },
   content: { padding: 16, gap: 10 },
   label: { fontSize: 13, fontWeight: "700", marginTop: 4 },
   input: {

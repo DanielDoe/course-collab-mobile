@@ -260,13 +260,16 @@ export function buildBankQuestionSavePayload(input: {
   const requiresOptions = bankTypeRequiresOptions(type)
   const filledOptions = input.options.filter((opt) => opt.option_text.trim())
   const formattedOptions = filledOptions.map((opt, index) => ({
+    id: OPTION_LETTERS[index] ?? String(index + 1),
     text: opt.option_text.trim(),
-    isCorrect: opt.is_correct,
-    order: index + 1}))
+  }))
+  const correctIndex = filledOptions.findIndex((opt) => opt.is_correct)
   const correctAnswer = requiresOptions
     ? type === "select_all"
-      ? formattedOptions.filter((opt) => opt.isCorrect).map((opt) => opt.text)
-      : formattedOptions.find((opt) => opt.isCorrect)?.text ?? null
+      ? formattedOptions.filter((_, index) => filledOptions[index]?.is_correct).map((opt) => opt.text)
+      : correctIndex >= 0
+        ? (OPTION_LETTERS[correctIndex] ?? "A")
+        : "A"
     : null
 
   const payload: QuestionBankSavePayload = {

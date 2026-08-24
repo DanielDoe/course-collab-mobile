@@ -8,6 +8,14 @@ import { useSession } from "../../context/SessionProvider"
 import { ApiError } from "../../lib/student-api"
 import type { StudentSession } from "../../lib/session"
 import { flashcardsApi, type FlashcardCard, type FlashcardDeck } from "../../lib/flashcards-api"
+import {
+  prepareTempCardId,
+  useAddStudentFlashcardCard,
+  useDeleteStudentFlashcardCard,
+  useDeleteStudentFlashcardDeck,
+  useStudentFlashcardDeck,
+  useUpdateStudentFlashcardDeck,
+} from "../../hooks/query/useStudentFlashcards"
 import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
 import { useNativeType } from "../../lib/themed-module-theme"
 import { safeRouterBack } from "../../lib/safe-router-back"
@@ -35,6 +43,11 @@ export function FlashcardDeckEditorScreen() {
   const native = useThemedNative()
   const type = useNativeType()
 
+  const deckQuery = useStudentFlashcardDeck(session, deckId)
+  const updateDeckMutation = useUpdateStudentFlashcardDeck(session)
+  const deleteDeckMutation = useDeleteStudentFlashcardDeck(session)
+  const addCardMutation = useAddStudentFlashcardCard(session)
+  const deleteCardMutation = useDeleteStudentFlashcardCard(session)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
@@ -51,6 +64,17 @@ export function FlashcardDeckEditorScreen() {
 
   const load = useCallback(async () => {
     if (!session || !Number.isFinite(deckId)) return
+    const cached = deckQuery.data
+    if (cached?.deck) {
+      if (cached.deck.canEdit === false) throw new ApiError("You can only edit your own decks.", 403)
+      setDeck(cached.deck)
+      setCards(cached.cards ?? [])
+      setTitle(cached.deck.title)
+      setDescription(cached.deck.description)
+      setTopic(cached.deck.topic ?? "")
+      if (deckId < 0 || !deckQuery.isFetching) return
+    }
+    if (deckId < 0) return
     const res = await flashcardsApi.getDeck(session, deckId)
     if (!res.deck.canEdit) throw new ApiError("You can only edit your own decks.", 403)
     setDeck(res.deck)
@@ -58,21 +82,20 @@ export function FlashcardDeckEditorScreen() {
     setTitle(res.deck.title)
     setDescription(res.deck.description)
     setTopic(res.deck.topic ?? "")
-  }, [session, deckId])
+  }, [session, deckId, deckQuery.data, deckQuery.isFetching])
 
   useEffect(() => {
     if (!session || !Number.isFinite(deckId)) return
-    setLoading(true)
-    load()
-      .catch((err) => setError(err instanceof ApiError ? err.message : "Could not load deck."))
-      .finally(() => setLoading(false))
-  }, [session, deckId, load])
+    setLoading(deckQuery.isLoading && !deckQuery.data)
+    load().catch((err) => setError(err instanceof ApiError ? err.message : "Could not load deck."))
+  }, [session, deckId, load, deckQuery.isLoading, deckQuery.data])
 
   async function saveDeck() {
     if (!session || !deck || saving) return
     setSaving(true)
     try {
-      const res = await flashcardsApi.updateDeck(session, deck.id, {
+      const res = await updateDeckMutation.mutateAsync({
+        deckId: deck.id,
         title,
         description,
         topic: topic.trim() || undefined,
@@ -93,13 +116,15 @@ export function FlashcardDeckEditorScreen() {
     }
     setAddingCard(true)
     try {
-      const res = await flashcardsApi.addCard(session, deck.id, {
+      const res = await addCardMutation.mutateAsync({
+        deckId: deck.id,
+        tempId: prepareTempCardId(),
         frontText: frontText.trim(),
         backText: backText.trim(),
         sortOrder: cards.length,
         difficulty: cardDifficulty,
       })
-      setCards((prev) => [...prev, res.card])
+      setCards((prev) => [...prev.filter((row) => row.id !== res.card.id), res.card])
       setFrontText("")
       setBackText("")
       setPreviewFlipped(false)
@@ -121,7 +146,8 @@ export function FlashcardDeckEditorScreen() {
         onPress: () => {
           void (async () => {
             try {
-              await flashcardsApi.deleteCard(session, card.id)
+              if (!deck) return
+              deleteCardMutation.mutate({ deckId: deck.id, cardId: card.id })
               setCards((prev) => prev.filter((row) => row.id !== card.id))
               setDeck((prev) => (prev ? { ...prev, cardCount: Math.max(0, prev.cardCount - 1) } : prev))
             } catch (err) {
@@ -143,7 +169,7 @@ export function FlashcardDeckEditorScreen() {
         onPress: () => {
           void (async () => {
             try {
-              await flashcardsApi.deleteDeck(session, deck.id)
+              deleteDeckMutation.mutate(deck.id)
               safeRouterBack(router, FLASHCARDS_HOME)
             } catch (err) {
               AppAlert.alert("Delete failed", err instanceof ApiError ? err.message : "Try again.")

@@ -24,6 +24,7 @@ import type { CodeReplayPhase, CodeReplayStep } from "../../lib/codebench-replay
 import { useNativeType } from "../../lib/themed-module-theme"
 import { CoraBrand } from "../cora/CoraBrand"
 import { CoraThinkingIndicator } from "../ai-tutor/CoraThinkingIndicator"
+import { IosEdgeBackSwipe } from "../navigation/IosEdgeBackSwipe"
 
 const CORA_PURPLE = "#7C3AED"
 const H_PAD = 20
@@ -585,6 +586,7 @@ export function CodebenchWalkthroughPanel({
     return (
       <Modal visible animationType="fade" statusBarTranslucent presentationStyle="fullScreen">
         <View style={[styles.fullscreenHost, { backgroundColor: native.secondaryGrouped }]}>
+          <IosEdgeBackSwipe onBack={() => (onCollapse ?? onClose)?.()} topInset={insets.top} />
           <View
             style={[
               styles.fullscreenFrame,

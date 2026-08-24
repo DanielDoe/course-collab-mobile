@@ -47,8 +47,9 @@ try {
 
 export default function RootLayout() {
   useEffect(() => {
-    globalThis.__CC_ROOT_LAYOUT_MOUNTED__ = true
     bootLog("RootLayout mounted")
+    globalThis.__CC_ROOT_LAYOUT_MOUNTED__ = true
+    void SplashScreen.hideAsync().catch(() => {})
   }, [])
 
   return (

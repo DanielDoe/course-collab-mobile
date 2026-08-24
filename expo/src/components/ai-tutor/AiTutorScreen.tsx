@@ -48,6 +48,7 @@ import {
   withMessageProposals,
   type CoraActionProposal,
 } from "../../lib/cora"
+import { navigateCoraRecommendationLink } from "../../lib/cora/resolve-open-route"
 import * as Haptics from "expo-haptics"
 import { hasNavAccess } from "../../constants/student-nav"
 import { formatCoraCreditsLabel, isCoraLiteEligible } from "../../lib/cora/credits/economy"
@@ -131,7 +132,6 @@ import {
   createThreadId,
   deriveThreadTitle,
   exchangesRemaining,
-  findStudentCoraThreadForCapability,
   getMaxExchangesForTier,
   isStorableChatMessage,
   isThreadAtExchangeLimit,
@@ -1330,25 +1330,8 @@ export function AiTutorScreen() {
   const handleCapabilityAction = useCallback(
     (capability: StudentCoraCapability, prompt?: string) => {
       if (prompt?.trim()) {
-        const existing = findStudentCoraThreadForCapability(
-          threadsRef.current,
-          archivedThreadsRef.current,
-          capability.id,
-        )
-        if (existing) {
-          setMessages(existing.messages)
-          setActiveThreadId(existing.id)
-          if (session) {
-            void saveSessionPrefs(session.databaseId, {
-              activeThreadId: existing.id,
-              activeTab: "workspace",
-            })
-          }
-          enterImmersiveChat()
-          return
-        }
         pendingCapabilityRef.current = capability.id
-        openWorkspacePrompt(prompt.trim())
+        void openWorkspaceWithNewChat(prompt.trim(), null, true)
         return
       }
 
@@ -1412,10 +1395,10 @@ export function AiTutorScreen() {
           handleNewConversation()
           return true
         default:
-          return false
+          return navigateCoraRecommendationLink(router, rec.link)
       }
     },
-    [handleCapabilityAction, handleNewConversation],
+    [handleCapabilityAction, handleNewConversation, router],
   )
 
   const persistCurrentThreadIfNeeded = useCallback(async () => {

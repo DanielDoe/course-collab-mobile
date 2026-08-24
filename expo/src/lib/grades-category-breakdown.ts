@@ -285,9 +285,13 @@ function projectItem(project: ProjectRecord): GradeBreakdownItem {
 }
 
 async function fetchProjectBreakdown(session: StudentSession): Promise<GradeBreakdownItem[]> {
-  const data = await collaborationApi.getProjects(session)
-  const projects = data.projects ?? []
-  return projects.map(projectItem).sort((a, b) => (b.sortTime ?? 0) - (a.sortTime ?? 0))
+  try {
+    const data = await collaborationApi.getProjects(session)
+    const projects = data.projects ?? []
+    return projects.map(projectItem).sort((a, b) => (b.sortTime ?? 0) - (a.sortTime ?? 0))
+  } catch {
+    return []
+  }
 }
 
 export async function fetchGradeCategoryBreakdown(

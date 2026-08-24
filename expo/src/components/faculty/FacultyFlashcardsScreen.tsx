@@ -14,6 +14,10 @@ import { FlashcardQuizPreview } from "../flashcards/FlashcardQuizPreview"
 import { FlashcardDifficultyPicker } from "../flashcards/FlashcardDifficultyPicker"
 import type { FlashcardDifficulty } from "../../lib/flashcard-difficulty"
 import { useFacultyScope } from "../../hooks/useFacultyScope"
+import { useFacultyFlashcards } from "../../hooks/query/useFacultyFlashcards"
+import { QueryRefreshBanner } from "../query/QueryRefreshBanner"
+import { QuerySkeleton } from "../query/QuerySkeleton"
+import { useFacultySectionFilter } from "../../lib/faculty-section-scope"
 import { useSuppressModuleSearchDock } from "../../context/ModuleSearchDockContext"
 import { consumeFacultyCoraPending } from "../../lib/faculty-cora-pending"
 import { useModuleTheme } from "../../lib/themed-module-shell"
@@ -74,22 +78,37 @@ const TABS: Array<{ id: Tab; label: string; icon: keyof typeof Ionicons.glyphMap
 export function FacultyFlashcardsScreen() {
   const { listScrollPad } = useFacultyStickyHeaderScrollLayout({ extraBottom: 88 })
   const { scope, ready } = useFacultyScope()
+  const { sessionFilter: deckSessionFilter, setSessionFilter: setDeckSessionFilter, apiSession: deckApiSession } =
+    useFacultySectionFilter(scope, "all")
+  const {
+    sessionFilter: topicSession,
+    setSessionFilter: setTopicSession,
+    apiSession: topicApiSession,
+    sentinel: topicSentinel,
+  } = useFacultySectionFilter(scope, "ALL")
   const { tokens, native, styles: moduleStyles, type } = useModuleTheme()
 
   const [tab, setTab] = useState<Tab>("all")
   const [search, setSearch] = useState("")
-  const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
-  const [error, setError] = useState("")
-  const [decks, setDecks] = useState<FlashcardDeck[]>([])
-  const [deletedDecks, setDeletedDecks] = useState<FlashcardDeck[]>([])
-  const [deletedCards, setDeletedCards] = useState<FlashcardCard[]>([])
-  const [topics, setTopics] = useState<ModuleTopicRow[]>([])
-  const [bankTopics, setBankTopics] = useState<InstructorBankTopic[]>([])
-  const [config, setConfig] = useState<ModuleConfiguration | null>(null)
-  const [sessions, setSessions] = useState<InstructorSession[]>([])
-  const [topicSession, setTopicSession] = useState("ALL")
-  const [deckSessionFilter, setDeckSessionFilter] = useState("")
+  const cardsQuery = useFacultyFlashcards(
+    ready ? scope : null,
+    deckApiSession ?? "",
+    topicApiSession ?? topicSentinel,
+  )
+  const decks = cardsQuery.decks
+  const deletedDecks = cardsQuery.deletedDecks
+  const deletedCards = cardsQuery.deletedCards
+  const topics = cardsQuery.topics
+  const bankTopics = cardsQuery.bankTopics
+  const config = cardsQuery.config
+  const sessions = cardsQuery.sessions
+  const loading = cardsQuery.isInitialLoading
+  const refreshing = cardsQuery.isRefreshing && !cardsQuery.isInitialLoading
+  const error = cardsQuery.error instanceof ApiError
+    ? cardsQuery.error.message
+    : cardsQuery.error
+      ? "Could not load flashcards."
+      : ""
 
   const [deckEditorOpen, setDeckEditorOpen] = useState(false)
   useSuppressModuleSearchDock(deckEditorOpen)
@@ -121,36 +140,12 @@ export function FacultyFlashcardsScreen() {
   const [editDifficulty, setEditDifficulty] = useState<FlashcardDifficulty>("medium")
 
   const load = useCallback(async () => {
-    if (!scope) return
-    setError("")
-    const deckSession = deckSessionFilter.trim() || undefined
-    const [decksRes, deletedRes, topicsRes, configRes, bankTopicsRes, sessionsRes] = await Promise.all([
-      instructorFlashcardsApi.listDecks(scope, deckSession),
-      instructorFlashcardsApi.listDeleted(scope),
-      instructorFlashcardsApi.listTopics(scope, topicSession),
-      instructorFlashcardsApi.getConfiguration(scope),
-      instructorApi.getQuestionBankTopics(scope),
-      instructorApi.getSessions(scope).catch(() => ({ sessions: [] as InstructorSession[] })),
-    ])
-    setDecks(decksRes.decks ?? [])
-    setDeletedDecks(deletedRes.decks ?? [])
-    setDeletedCards(deletedRes.cards ?? [])
-    setTopics(topicsRes.topics ?? [])
-    setBankTopics(bankTopicsRes)
-    setConfig(configRes)
-    setSessions(sessionsRes.sessions ?? [])
-    setConfigBatchSize(String(configRes.cardsBeforeQuiz ?? DEFAULT_FLASHCARD_BATCH_SIZE))
-  }, [scope, topicSession, deckSessionFilter])
+    await cardsQuery.refetch()
+  }, [cardsQuery.refetch])
 
   useEffect(() => {
-    if (!ready || !scope) return
-    setLoading(true)
-    load()
-      .catch((err) =>
-        setError(err instanceof ApiError || err instanceof Error ? err.message : "Could not load flashcards."),
-      )
-      .finally(() => setLoading(false))
-  }, [ready, scope, load])
+    if (cardsQuery.configBatchSize) setConfigBatchSize(cardsQuery.configBatchSize)
+  }, [cardsQuery.configBatchSize])
 
   useEffect(() => {
     if (!ready || !scope?.courseId) return
@@ -191,8 +186,10 @@ export function FacultyFlashcardsScreen() {
 
   const sessionOptions = useMemo(
     () => [
-      { value: "", label: "All sections" },
-      ...sessions.map((session) => ({
+      { value: "all", label: scope?.sessionCode ? scope.sessionCode : "All sections" },
+      ...sessions
+        .filter((session) => !scope?.sessionCode || session.code === scope.sessionCode)
+        .map((session) => ({
         value: session.code,
         label: session.code,
         detail:
@@ -202,19 +199,21 @@ export function FacultyFlashcardsScreen() {
             : undefined),
       })),
     ],
-    [sessions],
+    [sessions, scope?.sessionCode],
   )
 
   const topicSessionOptions = useMemo(
     () => [
-      { value: "ALL", label: "All sections" },
-      ...sessions.map((session) => ({
+      { value: topicSentinel, label: scope?.sessionCode ? scope.sessionCode : "All sections" },
+      ...sessions
+        .filter((session) => !scope?.sessionCode || session.code === scope.sessionCode)
+        .map((session) => ({
         value: session.code,
         label: session.code,
         detail: session.description ?? undefined,
       })),
     ],
-    [sessions],
+    [sessions, scope?.sessionCode, topicSentinel],
   )
 
   const filteredDecks = useMemo(() => {
@@ -266,7 +265,7 @@ export function FacultyFlashcardsScreen() {
     setTitle("")
     setDescription("")
     setTopic("")
-    setSessionCode("")
+    setSessionCode(scope?.sessionCode ?? "")
     setShowInPracticeHub(false)
     setIsPublished(true)
     setRequireMcqValidation(config?.requireMcqValidation !== false)
@@ -577,6 +576,7 @@ export function FacultyFlashcardsScreen() {
           />
         ) : null}
 
+        <QueryRefreshBanner visible={cardsQuery.refreshFailed} onRetry={() => void load()} />
         {error ? (
           <View style={[localStyles.errorBox, { backgroundColor: `${tokens.danger}14` }]}>
             <Text style={[type.caption, { color: tokens.danger }]}>{error}</Text>
@@ -585,9 +585,7 @@ export function FacultyFlashcardsScreen() {
       </FacultyModuleStickyHeader>
 
       {loading ? (
-        <View style={localStyles.loadingBox}>
-          <ActivityIndicator color={FACULTY_FLASHCARD_COLOR.action} />
-        </View>
+        <QuerySkeleton />
       ) : (
         <ScrollView
           style={moduleStyles.scroll}
@@ -598,8 +596,7 @@ export function FacultyFlashcardsScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={() => {
-                setRefreshing(true)
-                load().finally(() => setRefreshing(false))
+                void load()
               }}
             />
           }

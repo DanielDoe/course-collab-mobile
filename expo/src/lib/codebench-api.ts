@@ -255,7 +255,16 @@ export const codebenchApi = {
       prepared?: PreparedCoraRequest
     },
   ) =>
-    request<{ response?: string; accessDenied?: boolean; rbacBlocked?: boolean; blockReason?: string; error?: string }>(
+    request<{
+      response?: string
+      accessDenied?: boolean
+      rbacBlocked?: boolean
+      blockReason?: string
+      error?: string
+      /** Set when assessment integrity refused the request; `response` is the refusal text. */
+      examBlocked?: boolean
+      assessmentIntegrity?: { state?: string; coraPolicy?: string; title?: string | null; reason?: string | null }
+    }>(
       session,
       "/api/ai-tutor",
       {
@@ -346,6 +355,30 @@ export const codebenchApi = {
         constraints: payload.constraints,
         sampleInput: payload.sampleInput,
         sampleOutput: payload.sampleOutput,
+      }),
+    }),
+
+  submitDailyChallenge: (
+    session: StudentSession,
+    payload: {
+      code: string
+      challengeId: string
+      challengeTitle: string
+      challengeDescription: string
+      score?: number
+      feedback?: string
+    },
+  ) =>
+    request<{ success?: boolean; message?: string }>(session, "/api/codebench/daily-challenge/submit", {
+      method: "POST",
+      body: JSON.stringify({
+        studentId: session.databaseId,
+        code: payload.code,
+        challengeId: payload.challengeId,
+        challengeTitle: payload.challengeTitle,
+        challengeDescription: payload.challengeDescription,
+        score: payload.score ?? 0,
+        feedback: payload.feedback,
       }),
     }),
 

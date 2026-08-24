@@ -1,6 +1,7 @@
 import { Platform } from "react-native"
 import type { CalendarEvent } from "./types"
 import { formatEventTimeRange } from "./calendar-utils"
+import { resolveStudySessionRoute } from "./study-session-navigation"
 import { getClassReminderPrefs } from "./reminder-preferences"
 import {
   getNotificationsModule,
@@ -96,11 +97,7 @@ export async function syncStudySessionReminders(events: CalendarEvent[]): Promis
           subtitle: event.title,
           body: timeLabel,
           data: {
-            route: event.title?.startsWith("Flashcards:")
-              ? "/module/flashcards"
-              : event.title?.startsWith("Practice Hub:")
-                ? "/module/practice"
-                : "/module/calendar",
+            route: resolveStudySessionRoute(event),
             eventType: event.event_type,
             type: "calendar",
           },

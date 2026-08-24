@@ -2,6 +2,7 @@ import { useMemo } from "react"
 import { StyleSheet, Text, View } from "react-native"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { LinearGradient } from "expo-linear-gradient"
+import { attendanceDisplayPercent } from "../../lib/attendance-leaderboard-scope"
 import type { AttendanceLeaderboardEntry } from "../../lib/rewards-api"
 import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
 import { useNativeType } from "../../lib/themed-module-theme"
@@ -27,7 +28,7 @@ function PodiumBlock({
   const config = podiumRankStyle(rank, tokens.isDark)
   const barHeight = PODIUM_BAR_HEIGHT[rank]
   const name = entry.full_name?.trim() || "Student"
-  const pct = Math.round(Number(entry.attendance_percentage ?? 0))
+  const pct = attendanceDisplayPercent(entry.attendance_percentage)
   const streak = entry.current_streak ?? 0
 
   return (

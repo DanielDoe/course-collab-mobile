@@ -4,11 +4,13 @@ import { Ionicons } from "@/components/icons/AppIcon"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import {
   COURSE_EXCHANGE_MODULE_LABELS,
+  EXCHANGE_OWN_GROUPS_PROJECTS_NOTE,
   EXCHANGE_POST_IMPORT_CHECKLIST,
   type DestinationCourseRow,
   type ExchangeRequestDetail,
   type ExchangeSessionRow,
 } from "../../../lib/course-exchange-shared"
+import { isOwnGroupsProjectsSession } from "../../../lib/course-exchange/groups-projects-session-policy"
 import { FACULTY_COURSE_EXCHANGE_COLOR } from "../../../lib/faculty-course-exchange-theme"
 import {
   FacultySheetChrome,
@@ -58,10 +60,26 @@ export function FacultyCourseExchangeImportSheet({
     setDestinationSessionId(request.destination_session_id ?? null)
   }, [visible, request, destinationCourses])
 
+  const importHasGroupsProjects = useMemo(
+    () => (request?.approved_modules ?? []).some((m) => m === "groups" || m === "projects"),
+    [request],
+  )
+
   const filteredSessions = useMemo(() => {
     if (!destinationCourseId) return []
-    return sessions.filter((s) => s.course_id === destinationCourseId)
-  }, [destinationCourseId, sessions])
+    let list = sessions.filter((s) => s.course_id === destinationCourseId)
+    if (importHasGroupsProjects) {
+      list = list.filter((s) => !isOwnGroupsProjectsSession(s.code))
+    }
+    return list
+  }, [destinationCourseId, sessions, importHasGroupsProjects])
+
+  const selectedDestinationCode = useMemo(() => {
+    if (!destinationCourseId) return null
+    return destinationCourses.find((c) => c.course_id === destinationCourseId)?.course_code ?? null
+  }, [destinationCourseId, destinationCourses])
+
+  const groupsProjectsExcludedForCourse = isOwnGroupsProjectsSession(selectedDestinationCode)
 
   if (!request) return null
 
@@ -120,6 +138,9 @@ export function FacultyCourseExchangeImportSheet({
 
           {filteredSessions.length > 0 ? (
             <FacultySheetSection label="Destination section (optional)">
+              {importHasGroupsProjects ? (
+                <FacultySheetNotice message={EXCHANGE_OWN_GROUPS_PROJECTS_NOTE} />
+              ) : null}
               <View style={styles.list}>
                 <Pressable
                   onPress={() => setDestinationSessionId(null)}
@@ -164,10 +185,17 @@ export function FacultyCourseExchangeImportSheet({
             ))}
           </FacultySheetSection>
 
-          <FacultySheetNotice
-            tone="warning"
-            message="This creates an independent copy. Your edits never affect the creator's course."
-          />
+          {groupsProjectsExcludedForCourse && importHasGroupsProjects ? (
+            <FacultySheetNotice
+              tone="warning"
+              message="Groups and projects will be skipped for this destination. Other approved modules will still import."
+            />
+          ) : (
+            <FacultySheetNotice
+              tone="warning"
+              message="This creates an independent copy. Your edits never affect the creator's course."
+            />
+          )}
 
           <AppButton
             label="Run import"

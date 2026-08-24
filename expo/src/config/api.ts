@@ -1,7 +1,7 @@
 import Constants from "expo-constants"
 import { getAppEnvironment, isProductionEnvironment } from "./environment"
 
-export const PRODUCTION_API_BASE_URL = "https://coursecollab.vercel.app"
+export const PRODUCTION_API_BASE_URL = "https://course-collab.com"
 
 const LOCAL_HOST_PATTERNS =
   /^(localhost|127\.0\.0\.1|0\.0\.0\.0|.*\.local|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+)$/

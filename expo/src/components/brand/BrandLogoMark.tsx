@@ -1,5 +1,6 @@
 import { memo, useState } from "react"
-import { Image, StyleSheet, View, type StyleProp, type ImageStyle, type ViewStyle } from "react-native"
+import { StyleSheet, View, type StyleProp, type ImageStyle, type ViewStyle } from "react-native"
+import { Image } from "expo-image"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { BRAND } from "../../constants"
 
@@ -13,15 +14,7 @@ export const BRAND_LOGO_TILE = {
 } as const
 
 const MARK = require("../../../assets/logo-mark.png")
-
-try {
-  const resolved = Image.resolveAssetSource(MARK)
-  if (resolved?.uri) {
-    void Image.prefetch(resolved.uri)
-  }
-} catch {
-  // Prefetch is best-effort only.
-}
+const MARK_FALLBACK = require("../../../assets/icon.png")
 
 export type BrandLogoMarkSize = "drawer" | "login" | "loading" | "compact"
 
@@ -51,18 +44,25 @@ function BrandLogoMarkInner({ size = "drawer", framed, style, logoStyle }: Props
   const preset = SIZE[size]
   const showFrame = framed ?? preset.framed
   const [imageFailed, setImageFailed] = useState(false)
+  const [useFallbackAsset, setUseFallbackAsset] = useState(false)
 
   const image = imageFailed ? (
     <Ionicons name="school" size={preset.logo} color={BRAND.purple} accessibilityLabel="CourseCollab" />
   ) : (
     <Image
-      source={MARK}
+      source={useFallbackAsset ? MARK_FALLBACK : MARK}
       style={[{ width: preset.logo, height: preset.logo }, logoStyle]}
-      resizeMode="contain"
-      fadeDuration={0}
-      accessibilityIgnoresInvertColors
+      contentFit="contain"
+      transition={0}
+      cachePolicy="memory-disk"
       accessibilityLabel="CourseCollab"
-      onError={() => setImageFailed(true)}
+      onError={() => {
+        if (!useFallbackAsset) {
+          setUseFallbackAsset(true)
+          return
+        }
+        setImageFailed(true)
+      }}
     />
   )
 

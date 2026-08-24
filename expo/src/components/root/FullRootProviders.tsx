@@ -3,6 +3,7 @@ import { StyleSheet, View } from "react-native"
 import { GestureHandlerRootView } from "react-native-gesture-handler"
 import { SafeAreaProvider } from "react-native-safe-area-context"
 import { SessionProvider } from "../../context/SessionProvider"
+import { QueryProvider } from "../../context/QueryProvider"
 import { AppearanceProvider } from "../../context/AppearanceProvider"
 import { NotificationProvider } from "../../context/NotificationProvider"
 import { AppAlertProvider } from "../../context/AppAlertProvider"
@@ -28,6 +29,7 @@ export function FullRootProviders({ children }: { children: ReactNode }) {
         <View style={styles.fill}>
           <SafeAreaProvider>
             <SessionProvider>
+              <QueryProvider>
               <SystemErrorCapture />
               <AppearanceProvider>
                 <StripeAppProvider>
@@ -40,6 +42,7 @@ export function FullRootProviders({ children }: { children: ReactNode }) {
                   </AppAlertProvider>
                 </StripeAppProvider>
               </AppearanceProvider>
+              </QueryProvider>
             </SessionProvider>
           </SafeAreaProvider>
         </View>

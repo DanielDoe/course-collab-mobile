@@ -188,11 +188,8 @@ export function extractLectureSamplePracticeQuestionTexts(questions: LectureSamp
   for (const q of questions) {
     fields.push(q.question_text ?? "")
     fields.push(q.title ?? "")
-    for (const sq of getGradableSubquestions(q.subquestions)) {
-      fields.push(sq.prompt)
-      fields.push(...subquestionOptionLabels(sq).map((opt) => opt.text))
-      if (sq.explanation) fields.push(sq.explanation)
-    }
+    fields.push(...(q.options?.map((opt) => opt.text) ?? []))
+    if (q.explanation) fields.push(q.explanation)
   }
   return dedupeTexts(fields)
 }

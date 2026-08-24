@@ -289,6 +289,7 @@ export function RecommendationsScreen() {
           value={deadline}
           onChange={setDeadline}
           accessibilityLabel="Deadline"
+          yearPolicy="upcoming"
         />
         <TextInput
           style={[styles.input, styles.textArea, { borderColor: native.separator, color: native.label, backgroundColor: native.fill }]}

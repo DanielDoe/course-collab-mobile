@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
 import { nativeType } from "../../constants/faculty-native-theme"
 import type { LectureItem } from "../../lib/student-api"
+import { lectureDisplayTitle } from "./lecture-list-utils"
 import { MarkdownContentWebView } from "../course-info/MarkdownContentWebView"
 
 type Props = {
@@ -55,7 +56,7 @@ export function StudentLectureDetailSheet({ visible, lecture, onClose, onViewSli
             </View>
             <View style={styles.headerCopy}>
               <Text style={[styles.title, { color: native.label }]} numberOfLines={3}>
-                {lecture.title}
+                {lectureDisplayTitle(lecture)}
               </Text>
               <Text style={[styles.subtitle, { color: native.secondaryLabel }]}>
                 Week {lecture.week} · {formatLectureStatus(lecture.status)} · {progress}% viewed

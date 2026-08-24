@@ -73,6 +73,8 @@ export type EnrollmentOption = {
   courseCode: string
   courseTitle: string
   section?: string
+  academicTermId?: number | null
+  academic_term_id?: number | null
 }
 
 export type UniversityStudentLoginRequest = {
@@ -218,7 +220,6 @@ async function requestOnce<T>(
     }
 
     if (!response.ok) {
-      noteApiFailure(path, response.status)
       const message =
         typeof body === "object" &&
         body !== null &&
@@ -226,6 +227,7 @@ async function requestOnce<T>(
         typeof (body as { error: unknown }).error === "string"
           ? (body as { error: string }).error
           : `Request failed (${response.status})`
+      noteApiFailure(path, response.status, message)
       throw new ApiError(message, response.status, body)
     }
 

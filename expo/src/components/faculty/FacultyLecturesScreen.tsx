@@ -26,6 +26,7 @@ import { FacultyLectureEditorModal } from "./FacultyLectureEditorModal"
 import { FacultyLectureSamplePracticeModal } from "./FacultyLectureSamplePracticeModal"
 import { FacultyLectureWorkspaceModal } from "./FacultyLectureWorkspaceModal"
 import { useModuleTheme } from "../../lib/themed-module-shell"
+import { lectureDisplayTitle, lectureListDisplayTitle } from "../lectures/lecture-list-utils"
 
 const SHEET_DISMISS_MS = 280
 
@@ -82,6 +83,8 @@ export function FacultyLecturesScreen() {
     return lectures.filter(
       (l) =>
         l.title.toLowerCase().includes(q) ||
+        lectureDisplayTitle(l).toLowerCase().includes(q) ||
+        lectureListDisplayTitle(l, lectures).toLowerCase().includes(q) ||
         String(l.week).includes(q) ||
         (l.description?.toLowerCase().includes(q) ?? false),
     )
@@ -215,13 +218,14 @@ export function FacultyLecturesScreen() {
           filtered.map((lecture) => {
             const published = lecture.is_published ?? lecture.is_active ?? false
             const weekThumb = solidListThumbFixed(FACULTY_COLLAB_COLOR.tabActive)
+            const displayTitle = lectureListDisplayTitle(lecture, filtered)
             return (
               <Pressable
                 key={lecture.id}
                 style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
                 onPress={() => setSelected(lecture)}
                 accessibilityRole="button"
-                accessibilityLabel={lecture.title}
+                accessibilityLabel={displayTitle}
               >
                 <View style={styles.cardTop}>
                   <SolidListThumbTile thumb={weekThumb} size="compact">
@@ -232,7 +236,7 @@ export function FacultyLecturesScreen() {
                   <View style={styles.cardCopy}>
                     <View style={localStyles.titleRow}>
                       <Text style={styles.cardTitle} numberOfLines={2}>
-                        {lecture.title}
+                        {displayTitle}
                       </Text>
                       <Ionicons name="chevron-forward" size={18} color={native.tertiaryLabel} />
                     </View>

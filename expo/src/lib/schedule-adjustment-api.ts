@@ -1,5 +1,6 @@
 import { studentAuthenticatedRequest } from "./student-api"
 import type { StudentSession } from "./session"
+import { filterScheduleAdjustmentsToSection } from "./schedule-adjustment/section-scope"
 import type { AvailabilitySlotState } from "./schedule-adjustment/time-slots"
 
 export type ScheduleAdjustmentRequest = {
@@ -71,11 +72,16 @@ function qs(session: StudentSession) {
 }
 
 export const scheduleAdjustmentApi = {
-  list: (session: StudentSession) =>
-    studentAuthenticatedRequest<{ success?: boolean; requests: ScheduleAdjustmentRequest[] }>(
+  list: async (session: StudentSession) => {
+    const data = await studentAuthenticatedRequest<{ success?: boolean; requests: ScheduleAdjustmentRequest[] }>(
       session,
       `/api/student/schedule-adjustments?${qs(session)}`,
-    ),
+    )
+    return {
+      ...data,
+      requests: filterScheduleAdjustmentsToSection(data.requests ?? [], session.section),
+    }
+  },
 
   getDetail: (session: StudentSession, requestId: number) =>
     studentAuthenticatedRequest<ScheduleAdjustmentDetail>(

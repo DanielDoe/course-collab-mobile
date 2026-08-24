@@ -52,9 +52,7 @@ function DemoWelcome() {
   const { LOGIN, loginType } = useLoginTheme()
   const session = ONBOARDING_DEMO_SESSION
   const steps = [
-    { icon: "document-text-outline" as const, label: "Terms of Service", description: "How you may use CourseCollab" },
-    { icon: "shield-checkmark-outline" as const, label: "Privacy Policy", description: "How we collect and protect your data" },
-    { icon: "hardware-chip-outline" as const, label: "AI Use Disclosure", description: "How Cora and AI features work" },
+    { icon: "document-text-outline" as const, label: "Terms & Policies", description: "Terms of Service, Privacy Policy, and AI Use & Data — one acceptance" },
     { icon: "sparkles" as const, label: "Cora Settings", description: "Choose your AI personalization preferences" },
     { icon: "color-palette-outline" as const, label: "Appearance", description: "Pick your theme and light or dark mode" },
   ]
@@ -66,7 +64,7 @@ function DemoWelcome() {
       pillLabel="Getting started"
       icon="hand-left-outline"
       title="Welcome, Alex"
-      subtitle="Before your dashboard, we'll walk through legal disclosures, AI settings, and a few preferences."
+      subtitle="Before your dashboard, we'll walk through legal agreements, AI settings, and a few preferences."
       scrollable={false}
       footer={<View style={[styles.demoCta, { backgroundColor: LOGIN.purple }]}>
         <Text style={[loginType.button, { color: "#fff" }]}>Get started →</Text>
@@ -96,31 +94,11 @@ function DemoWelcome() {
   )
 }
 
-function DemoLegal({
-  stepId,
-  pillLabel,
-  title,
-  subtitle,
-  icon,
-  document,
-  agreeLabel,
-}: {
-  stepId: "terms" | "privacy" | "ai-disclosure"
-  pillLabel: string
-  title: string
-  subtitle: string
-  icon: "document-text-outline" | "shield-checkmark-outline" | "hardware-chip-outline"
-  document: {
-    title: string
-    updated: string
-    intro: string
-    sections: Array<{ title: string; paragraphs?: string[]; bullets?: string[] }>
-  }
-  agreeLabel: string
-}) {
+function DemoLegal() {
   const session = ONBOARDING_DEMO_SESSION
-  const { stepIndex, totalSteps, progress } = onboardingStepMeta(session, stepId)
+  const { stepIndex, totalSteps, progress } = onboardingStepMeta(session, "terms")
   const { LOGIN, loginType } = useLoginTheme()
+  const documents = [TERMS_OF_SERVICE, PRIVACY_POLICY, AI_AND_DATA]
 
   return (
     <View style={[styles.legalDemo, { backgroundColor: LOGIN.canvas }]}>
@@ -134,20 +112,24 @@ function DemoLegal({
       </View>
       <View style={styles.legalHeader}>
         <View style={[styles.pill, { backgroundColor: LOGIN.soft, borderColor: LOGIN.softBorder }]}>
-          <Ionicons name={icon} size={12} color={LOGIN.purple} />
-          <Text style={[styles.pillText, { color: LOGIN.purple }]}>{pillLabel}</Text>
+          <Ionicons name="document-text-outline" size={12} color={LOGIN.purple} />
+          <Text style={[styles.pillText, { color: LOGIN.purple }]}>Legal</Text>
         </View>
-        <Text style={[loginType.heroTitle, styles.legalTitle]}>{title}</Text>
-        <Text style={[loginType.heroSubtitle, styles.legalSubtitle]}>{subtitle}</Text>
+        <Text style={[loginType.heroTitle, styles.legalTitle]}>Terms & Policies</Text>
+        <Text style={[loginType.heroSubtitle, styles.legalSubtitle]}>
+          Please read the Terms of Service, Privacy Policy, and AI Use & Data disclosure. One acceptance covers all three.
+        </Text>
       </View>
       <View style={styles.legalScrollHost}>
         <ScrollView style={styles.legalScroll} nestedScrollEnabled showsVerticalScrollIndicator>
-          <OnboardingLegalContent document={document} />
+          {documents.map((document) => (
+            <OnboardingLegalContent key={document.title} document={document} showTitle />
+          ))}
         </ScrollView>
       </View>
       <View style={[styles.footerPreview, { borderTopColor: LOGIN.separator }]}>
         <OnboardingAcceptFooter
-          agreeLabel={agreeLabel}
+          agreeLabel="I have read and agree to the Terms of Service, Privacy Policy, and AI Use & Data disclosure"
           continueLabel="Accept & continue"
           checked
           onToggleCheck={() => {}}
@@ -290,47 +272,15 @@ export function OnboardingDemoGallery() {
         <DemoWelcome />
       </DemoFrame>
 
-      <DemoFrame label="2 · Terms of Service">
-        <DemoLegal
-          stepId="terms"
-          pillLabel="Legal"
-          title="Terms of Service"
-          subtitle="Please read and accept the terms that govern your use of CourseCollab."
-          icon="document-text-outline"
-          document={TERMS_OF_SERVICE}
-          agreeLabel="I have read and agree to the Terms of Service"
-        />
+      <DemoFrame label="2 · Terms & Policies">
+        <DemoLegal />
       </DemoFrame>
 
-      <DemoFrame label="3 · Privacy Policy">
-        <DemoLegal
-          stepId="privacy"
-          pillLabel="Privacy"
-          title="Privacy Policy"
-          subtitle="Learn how CourseCollab collects, uses, and protects your information."
-          icon="shield-checkmark-outline"
-          document={PRIVACY_POLICY}
-          agreeLabel="I have read and acknowledge the Privacy Policy"
-        />
-      </DemoFrame>
-
-      <DemoFrame label="4 · AI Use Disclosure">
-        <DemoLegal
-          stepId="ai-disclosure"
-          pillLabel="AI disclosure"
-          title="AI Use & Data"
-          subtitle="Understand how Cora and other AI features process your course context."
-          icon="hardware-chip-outline"
-          document={AI_AND_DATA}
-          agreeLabel="I have read and acknowledge the AI Use & Data disclosure"
-        />
-      </DemoFrame>
-
-      <DemoFrame label="5 · Cora Settings">
+      <DemoFrame label="3 · Cora Settings">
         <DemoCora />
       </DemoFrame>
 
-      <DemoFrame label="6 · Appearance → Dashboard">
+      <DemoFrame label="4 · Appearance → Dashboard">
         <DemoAppearance />
       </DemoFrame>
     </ScrollView>

@@ -10,6 +10,7 @@ import {
 import {
   clearStoredSession,
   getStoredSession,
+  patchStoredSession,
   refreshStoredSession,
   saveSession,
   type AppSession,
@@ -29,6 +30,7 @@ type SessionContextValue = {
   signIn: (data: SignInPayload) => Promise<void>
   signOut: () => Promise<void>
   refreshSession: () => Promise<void>
+  updateSession: (patch: { name?: string; email?: string }) => Promise<void>
 }
 
 const SessionContext = createContext<SessionContextValue | null>(null)
@@ -107,6 +109,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setSession(next)
   }, [])
 
+  const updateSession = useCallback(async (patch: { name?: string; email?: string }) => {
+    const next = await patchStoredSession(patch)
+    if (next) setSession(next)
+  }, [])
+
   useEffect(() => {
     return subscribeSessionExpired(() => {
       void (async () => {
@@ -124,8 +131,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const value = useMemo(
-    () => ({ session, isLoading, signIn, signOut, refreshSession }),
-    [session, isLoading, signIn, signOut, refreshSession],
+    () => ({ session, isLoading, signIn, signOut, refreshSession, updateSession }),
+    [session, isLoading, signIn, signOut, refreshSession, updateSession],
   )
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>

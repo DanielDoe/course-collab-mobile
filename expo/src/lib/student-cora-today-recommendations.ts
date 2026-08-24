@@ -1,5 +1,6 @@
 import type { AiTutorRecommendation, AiTutorStats } from "./ai-tutor-api"
 import type { CoraProgressDetailed } from "./cora-insights-types"
+import { resolveCoraOpenRoute } from "./cora/resolve-open-route-logic"
 import type { StudentContextPayload } from "./student-context-api"
 
 export const CORA_TODAY_LINK_CHAT = "cora:chat"
@@ -23,6 +24,15 @@ function item(id: string, title: string, description: string, link: string): AiT
 
 function dedupeKey(rec: AiTutorRecommendation): string {
   return rec.id || rec.title.trim().toLowerCase()
+}
+
+function normalizeRecommendationLink(link: string): string {
+  if (!link || link.startsWith("cora:")) return link
+  return resolveCoraOpenRoute(link) ?? link
+}
+
+function normalizeApiRecommendation(rec: AiTutorRecommendation): AiTutorRecommendation {
+  return { ...rec, link: normalizeRecommendationLink(rec.link) }
 }
 
 function fallbackRecommendations(courseCode?: string | null): AiTutorRecommendation[] {
@@ -86,7 +96,7 @@ export function buildStudentCoraTodayRecommendations(input: StudentCoraTodayInpu
   }
 
   if (!payload) {
-    for (const rec of apiRecommendations) push(rec)
+    for (const rec of apiRecommendations) push(normalizeApiRecommendation(rec))
     if (merged.length >= 3) return merged.slice(0, MAX_TODAY_ITEMS)
     for (const rec of fallbackRecommendations()) push(rec)
     return merged.slice(0, MAX_TODAY_ITEMS)
@@ -199,7 +209,7 @@ export function buildStudentCoraTodayRecommendations(input: StudentCoraTodayInpu
     )
   }
 
-  for (const rec of apiRecommendations) push(rec)
+  for (const rec of apiRecommendations) push(normalizeApiRecommendation(rec))
 
   if (merged.length < 3) {
     for (const rec of fallbackRecommendations(courseCode)) {

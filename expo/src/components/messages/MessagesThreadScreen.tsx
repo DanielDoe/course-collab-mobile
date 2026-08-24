@@ -14,6 +14,7 @@ import * as DocumentPicker from "expo-document-picker"
 import * as ImagePicker from "expo-image-picker"
 import { useLocalSearchParams, useRouter } from "expo-router"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
+import { useStableTopSafeInset } from "../shell/shell-shared"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useSession } from "../../context/SessionProvider"
 import { presentApiError, type ApiErrorPresentation } from "../../lib/present-api-error"
@@ -195,6 +196,7 @@ export function MessagesThreadScreen() {
   const threadId = Number(rawThreadId)
   const router = useRouter()
   const insets = useSafeAreaInsets()
+  const topSafeInset = useStableTopSafeInset()
   const { session } = useSession()
   const auth = useMemo(
     () => messagesAuthFromSession(session),
@@ -207,7 +209,7 @@ export function MessagesThreadScreen() {
   const tokens = useAppThemeTokens()
   const native = useThemedNative()
   const type = useNativeType()
-  const headerHeight = messagesThreadHeaderHeight(insets.top)
+  const headerHeight = messagesThreadHeaderHeight(topSafeInset)
   const facultyShell = useOptionalFacultyShell()
   const studentSession = session?.portal === "student" ? (session as StudentSession) : null
   const facultySession = session?.portal === "faculty" ? (session as FacultySession) : null

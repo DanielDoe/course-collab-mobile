@@ -51,6 +51,7 @@ import { CoraEdgeBackSwipe } from "../cora/CoraEdgeBackSwipe"
 import { resolveStudentCoraCapability } from "../../lib/student-cora-context-store"
 import type { ChatMessage, CoraImportedProblem, AiTutorCredits } from "../../lib/ai-tutor-api"
 import type { CoraActionProposal } from "../../lib/cora/types"
+import { openCoraNativeRoute } from "../../lib/cora/resolve-open-route"
 import {
   buildWorkspaceSendText,
   isLikelyTextFile,
@@ -225,6 +226,8 @@ type Props = {
   onArchiveThread: (threadId: string) => void
   onRestoreThread: (threadId: string) => void
   onDeleteThread: (threadId: string) => void
+  seedImportedQuestion?: CoraImportedProblem | null
+  seedImportedQuestionLabel?: string | null
 }
 
 export function CoraImmersiveChat({
@@ -268,6 +271,8 @@ export function CoraImmersiveChat({
   onArchiveThread,
   onRestoreThread,
   onDeleteThread,
+  seedImportedQuestion = null,
+  seedImportedQuestionLabel = null,
 }: Props) {
   const router = useRouter()
   const insets = useSafeAreaInsets()
@@ -296,6 +301,17 @@ export function CoraImmersiveChat({
   const [attachments, setAttachments] = useState<CoraComposerAttachment[]>([])
   const [importedQuestion, setImportedQuestion] = useState<CoraImportedProblem | null>(null)
   const [importedQuestionLabel, setImportedQuestionLabel] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!seedImportedQuestion) return
+    setImportedQuestion(seedImportedQuestion)
+    setImportedQuestionLabel(
+      seedImportedQuestionLabel ??
+        seedImportedQuestion.title ??
+        seedImportedQuestion.topic ??
+        null,
+    )
+  }, [seedImportedQuestion, seedImportedQuestionLabel])
   const [menuMessage, setMenuMessage] = useState<ChatMessage | null>(null)
   const [sideNavOpen, setSideNavOpen] = useState(false)
   const [composerHeight, setComposerHeight] = useState(128)
@@ -845,7 +861,7 @@ export function CoraImmersiveChat({
                       resultMessage={item.proposalResultById?.[proposal.actionId]?.message}
                       onConfirm={() => onConfirmProposal?.(item.id, proposal)}
                       onCancel={() => onCancelProposal?.(item.id, proposal.actionId)}
-                      onOpen={(route) => router.push(route as never)}
+                      onOpen={(route) => openCoraNativeRoute(router, route)}
                     />
                   </View>
                 ))

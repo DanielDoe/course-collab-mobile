@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import {
   ActivityIndicator,
   Keyboard,
@@ -21,7 +21,8 @@ import { SummerLoginPanel } from "../../src/components/login/SummerLoginPanel"
 import { StaffLoginPanel } from "../../src/components/login/StaffLoginPanel"
 import { LoginButton } from "../../src/components/login/LoginButton"
 import { LoginTypewriter } from "../../src/components/login/LoginTypewriter"
-import { DismissKeyboardView } from "../../src/components/login/login-chrome"
+import { DismissKeyboardView, type RegisterAuthPanelBack } from "../../src/components/login/login-chrome"
+import { useAuthNestedBack } from "../../src/components/navigation/useAuthNestedBack"
 import { BrandLogoMark } from "../../src/components/brand/BrandLogoMark"
 import { ConnectivityOverlay } from "../../src/components/ConnectivityOverlay"
 import { useSession } from "../../src/context/SessionProvider"
@@ -126,15 +127,29 @@ export default function LoginScreen() {
     if (id !== "summer") void persistRememberedLoginPortal(id)
   }
 
-  if (!sessionLoading && session) {
-    return <Redirect href="/(auth)/signing-in" />
-  }
+  const panelBackRef = useRef<(() => boolean) | null>(null)
+  const registerPanelBack = useCallback<RegisterAuthPanelBack>((handler) => {
+    panelBackRef.current = handler
+  }, [])
 
-  function goWelcome() {
+  const goWelcome = useCallback(() => {
     setFocusedPortal(null)
     if (inviteToken) {
       router.replace("/login")
     }
+  }, [inviteToken, router])
+
+  const nestedBackActive = Boolean(inviteToken || focusedPortal)
+
+  const handleNestedBack = useCallback(() => {
+    if (panelBackRef.current?.()) return
+    goWelcome()
+  }, [goWelcome])
+
+  const nestedBackSwipe = useAuthNestedBack(nestedBackActive, handleNestedBack, insets.top)
+
+  if (!sessionLoading && session) {
+    return <Redirect href="/(auth)/signing-in" />
   }
 
   if (bootstrappingUniversity) {
@@ -148,6 +163,7 @@ export default function LoginScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: themeLogin.canvas }]} onLayout={onLoginLayout}>
+      {nestedBackSwipe}
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -191,7 +207,11 @@ export default function LoginScreen() {
               <View style={[styles.shell, authLayout.contentStyle]}>
                 {inviteToken ? (
                   <View key="invite-signup" style={styles.portalBleed}>
-                    <StudentInviteSignupPanel token={inviteToken} onBack={goWelcome} />
+                    <StudentInviteSignupPanel
+                      token={inviteToken}
+                      onBack={goWelcome}
+                      registerPanelBack={registerPanelBack}
+                    />
                   </View>
                 ) : !focusedPortal ? (
                   <View key="welcome" style={[styles.welcome, { gap: authLayout.contentGap }]}>
@@ -262,13 +282,13 @@ export default function LoginScreen() {
                 ) : (
                   <View key={`panel-${focusedPortal}`} style={styles.portalBleed}>
                     {focusedPortal === "student" ? (
-                      <StudentLoginPanel onBack={goWelcome} />
+                      <StudentLoginPanel onBack={goWelcome} registerPanelBack={registerPanelBack} />
                     ) : focusedPortal === "guest" ? (
-                      <GuestLoginPanel onBack={goWelcome} />
+                      <GuestLoginPanel onBack={goWelcome} registerPanelBack={registerPanelBack} />
                     ) : focusedPortal === "summer" ? (
-                      <SummerLoginPanel onBack={goWelcome} />
+                      <SummerLoginPanel onBack={goWelcome} registerPanelBack={registerPanelBack} />
                     ) : (
-                      <StaffLoginPanel onBack={goWelcome} />
+                      <StaffLoginPanel onBack={goWelcome} registerPanelBack={registerPanelBack} />
                     )}
                   </View>
                 )}

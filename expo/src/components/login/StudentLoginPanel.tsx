@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import {
   ActivityIndicator,
+  Linking,
   Platform,
   Pressable,
   StyleSheet,
@@ -9,6 +10,7 @@ import {
   TextInput,
   View,
 } from "react-native"
+import { useRouter } from "expo-router"
 import { hexToRgba } from "../../constants/app-themes"
 import { Ionicons } from "@/components/icons/AppIcon"
 import {
@@ -18,32 +20,30 @@ import {
   type UniversityRecord,
   type UniversityStudentLoginResponse,
 } from "../../lib/api"
-import { primeMembershipTierCache } from "../../lib/membership-tier-cache"
 import {
   clearRememberedStudentCredentials,
   clearRememberedUniversity,
-  persistRememberedStudentAuth,
   persistRememberedUniversity,
   readRememberedStudentAuth,
   readRememberedUniversity,
 } from "../../lib/remembered-student-auth"
-import { persistMfaDeviceTrustFromLogin, studentMfaLoginKey, studentMfaAliasKeys } from "../../lib/mfa-device-trust"
-import { stashPendingLoginPassword } from "../../lib/pending-login-password"
 import { useSession } from "../../context/SessionProvider"
 import { MfaLoginStep } from "../auth/MfaLoginStep"
 import { ErrorBanner, LoginFieldGroup } from "./LoginCard"
 import { LoginButton, LoginField, LoginPasswordToggle } from "./LoginButton"
 import { LoginBrandHeader } from "./LoginBrandHeader"
 import { UniversityAuthLogoImage } from "./UniversityAuthLogoImage"
-import { LoginBackLink, LoginPortalStack } from "./login-chrome"
+import { LoginBackLink, LoginPortalStack, type RegisterAuthPanelBack } from "./login-chrome"
 import { useLoginTheme } from "./login-theme"
 import { parseAccessLifecyclePayload } from "../../lib/access-governance"
 import { formatStudentLoginApiError } from "../../lib/student-login-errors"
 import { normalizeLoginIdentifier, normalizeLoginPassword } from "../../lib/login-credentials"
+import { completeStudentUniversityLogin } from "../../lib/student-login-completion"
+import { stashPendingStudentCourseLogin } from "../../lib/student-login-pending"
 import { AccessRequestStatusScreen } from "../auth/AccessRequestStatusScreen"
 import { parseMfaCompletePayload, parseMfaLoginResponse, type MfaLoginState } from "../../lib/mfa-types"
 
-type Step = "university" | "credentials" | "course" | "mfa"
+type Step = "university" | "credentials" | "mfa"
 
 /** Mirrors web lib/universities-shared.ts — the catch-all "Other" picker row. */
 function isOtherUniversity(uni: Pick<UniversityRecord, "short_name"> | null | undefined): boolean {
@@ -59,6 +59,7 @@ type AuthMode = "login" | "activate"
 
 type Props = {
   onBack?: () => void
+  registerPanelBack?: RegisterAuthPanelBack
 }
 
 function isCourseSelectionResponse(
@@ -67,8 +68,9 @@ function isCourseSelectionResponse(
   return "requiresCourseSelection" in data && data.requiresCourseSelection === true
 }
 
-export function StudentLoginPanel({ onBack }: Props) {
+export function StudentLoginPanel({ onBack, registerPanelBack }: Props) {
   const { signIn } = useSession()
+  const router = useRouter()
   const { LOGIN, loginType } = useLoginTheme()
 
   const [step, setStep] = useState<Step>("university")
@@ -89,7 +91,6 @@ export function StudentLoginPanel({ onBack }: Props) {
   const [rememberMe, setRememberMe] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
 
-  const [enrollments, setEnrollments] = useState<EnrollmentOption[]>([])
   const [pendingCredentials, setPendingCredentials] = useState<{
     identifier: string
     password: string
@@ -180,64 +181,30 @@ export function StudentLoginPanel({ onBack }: Props) {
   const schoolAccent = selectedUniversity?.primary_color ?? linkAccent
 
   async function finishLogin(data: Extract<UniversityStudentLoginResponse, { student: unknown }>) {
-    const student = data.student
-    const enrollment = data.enrollment
-    const university = data.university ?? selectedUniversity
-
-    const loginIdentifier = pendingCredentials?.identifier ?? identifier
-    const universityId = university?.id ?? selectedUniversity?.id
-    if (universityId && loginIdentifier.trim()) {
-      const loginKey = studentMfaLoginKey(universityId, loginIdentifier)
-      await persistMfaDeviceTrustFromLogin({
-        userType: "student",
-        loginKey,
-        payload: data as Record<string, unknown>,
-        aliasKeys: studentMfaAliasKeys(universityId, loginIdentifier, {
-          student_id: student.student_id,
-          email: student.email,
-        }),
-      })
-    }
-
-    await primeMembershipTierCache(String(student.id), data.effectiveMembershipTier)
-
-    if (university) {
-      await persistRememberedUniversity(university)
-    }
-    if (rememberMe) {
-      await persistRememberedStudentAuth({
-        university: university ?? selectedUniversity!,
-        identifier: identifier.trim() || String(student.student_id ?? ""),
-        rememberMe: true,
-      })
-    } else {
-      await clearRememberedStudentCredentials()
-    }
-
-    const requiresPasswordChange = student.has_changed_password === false
-    const loginPassword = pendingCredentials?.password ?? password
-    if (requiresPasswordChange && loginPassword) {
-      stashPendingLoginPassword(loginPassword)
-    }
-
-    await signIn({
-      portal: "student",
-      id: student.student_id,
-      authIdentifier: loginIdentifier.trim() || String(student.student_id ?? ""),
-      email: student.email,
-      name: student.full_name,
-      section: student.section ?? enrollment?.section ?? "",
-      databaseId: String(student.id),
-      courseId: enrollment?.courseId ?? (student.course_id != null ? Number(student.course_id) : undefined),
-      courseCode: enrollment?.courseCode,
-      courseTitle: enrollment?.courseTitle,
-      universityId: university?.id,
-      universityName: university?.name,
-      universityShortName: university?.short_name,
-      requiresPasswordChange,
+    await completeStudentUniversityLogin({
+      data,
+      selectedUniversity,
+      identifier: pendingCredentials?.identifier ?? identifier,
+      password: pendingCredentials?.password ?? password,
+      rememberMe,
+      signIn,
     })
+  }
 
-    // Parent login screen redirects to signing-in when session is set.
+  function navigateToCourseSelection(
+    id: string,
+    pw: string,
+    enrollmentList: EnrollmentOption[],
+  ) {
+    if (!selectedUniversity) return
+    stashPendingStudentCourseLogin({
+      university: selectedUniversity,
+      identifier: id,
+      password: pw,
+      rememberMe,
+      enrollments: enrollmentList,
+    })
+    router.push("/(auth)/student-select-course")
   }
 
   async function submitLogin(courseId?: number) {
@@ -263,9 +230,7 @@ export function StudentLoginPanel({ onBack }: Props) {
       })
 
       if (isCourseSelectionResponse(data)) {
-        setEnrollments(data.enrollments ?? [])
-        setPendingCredentials({ identifier: id, password: pw })
-        setStep("course")
+        navigateToCourseSelection(id, pw, data.enrollments ?? [])
         return
       }
 
@@ -303,9 +268,31 @@ export function StudentLoginPanel({ onBack }: Props) {
 
   function handleMfaBack() {
     setMfaState(null)
-    setStep(pendingCredentials ? "course" : "credentials")
+    setStep("credentials")
     setError("")
   }
+
+  const handlePanelBack = useCallback((): boolean => {
+    if (accessStatus) {
+      setAccessStatus(null)
+      return true
+    }
+    if (step === "mfa" && mfaState) {
+      handleMfaBack()
+      return true
+    }
+    if (step === "credentials") {
+      setStep("university")
+      setError("")
+      return true
+    }
+    return false
+  }, [accessStatus, mfaState, step])
+
+  useEffect(() => {
+    registerPanelBack?.(handlePanelBack)
+    return () => registerPanelBack?.(null)
+  }, [handlePanelBack, registerPanelBack])
 
   async function handleLogin() {
     const id = normalizeLoginIdentifier(identifier)
@@ -359,8 +346,7 @@ export function StudentLoginPanel({ onBack }: Props) {
       })
 
       if (isCourseSelectionResponse(data)) {
-        setEnrollments(data.enrollments ?? [])
-        setStep("course")
+        navigateToCourseSelection(identifier, activatePassword, data.enrollments ?? [])
         return
       }
 
@@ -410,8 +396,25 @@ export function StudentLoginPanel({ onBack }: Props) {
     setStep("university")
     setError("")
     setMode("login")
-    setEnrollments([])
     setPendingCredentials(null)
+  }
+
+  function handleRequestAccess() {
+    if (!selectedUniversity) {
+      setError("Select your university first.")
+      setStep("university")
+      return
+    }
+    router.push({
+      pathname: "/(auth)/student-signup",
+      params: {
+        universityId: String(selectedUniversity.id),
+        universityName: selectedUniversity.name,
+        universityShortName: selectedUniversity.short_name,
+        universityDomain: selectedUniversity.domain ?? "",
+        universityColor: selectedUniversity.primary_color ?? "",
+      },
+    })
   }
 
   if (step === "university") {
@@ -586,56 +589,6 @@ export function StudentLoginPanel({ onBack }: Props) {
     )
   }
 
-  if (step === "course") {
-    return (
-      <LoginPortalStack>
-        <View style={styles.stepHeader}>
-          <Text style={loginType.panelTitle}>Select a Course</Text>
-          <Text style={loginType.panelDescription}>
-            You are enrolled in multiple courses. Choose one to continue.
-          </Text>
-        </View>
-
-        <View style={styles.uniList}>
-          {enrollments.map((course) => (
-            <Pressable
-              key={course.courseId}
-              disabled={submitting}
-              onPress={() => void submitLogin(course.courseId)}
-              style={({ pressed }) => [
-                styles.uniRow,
-                {
-                  borderColor: LOGIN.separator,
-                  backgroundColor: LOGIN.fill,
-                },
-                pressed && styles.pressed,
-              ]}
-              accessibilityRole="button"
-            >
-              <View style={styles.uniText}>
-                <Text style={[loginType.stepLabel, { color: LOGIN.label }]}>{course.courseTitle}</Text>
-                <Text style={[loginType.info, { color: LOGIN.secondaryLabel }]}>{course.courseCode}</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={linkAccent} />
-            </Pressable>
-          ))}
-        </View>
-
-        {error ? <ErrorBanner message={error} /> : null}
-        {submitting ? <ActivityIndicator color={linkAccent} /> : null}
-
-        <LoginBackLink
-          label="Back to login"
-          onPress={() => {
-            setStep("credentials")
-            setPendingCredentials(null)
-            setError("")
-          }}
-        />
-      </LoginPortalStack>
-    )
-  }
-
   return (
     <LoginPortalStack>
       <LoginBrandHeader
@@ -771,6 +724,23 @@ export function StudentLoginPanel({ onBack }: Props) {
         </Pressable>
 
         <Pressable
+          onPress={handleRequestAccess}
+          style={({ pressed }) => [
+            styles.secondaryCta,
+            {
+              borderColor: LOGIN.softBorder,
+              backgroundColor: LOGIN.fill,
+            },
+            pressed && styles.pressed,
+          ]}
+          accessibilityRole="button"
+        >
+          <Text style={[loginType.link, { color: linkAccent, textAlign: "center" }]}>
+            New student? Request course access
+          </Text>
+        </Pressable>
+
+        <Pressable
           onPress={handleChangeUniversity}
           style={({ pressed }) => [styles.navRow, pressed && styles.pressed]}
           accessibilityRole="button"
@@ -798,7 +768,20 @@ export function StudentLoginPanel({ onBack }: Props) {
         ) : null}
       </View>
 
-      <Text style={[loginType.info, styles.helpText]}>Need help? Contact your instructor.</Text>
+      <Pressable
+        onPress={() => {
+          void Linking.openURL(
+            "mailto:support@course-collab.com?subject=Student%20login%20help&body=I%20need%20help%20signing%20in%20to%20CourseCollab.",
+          )
+        }}
+        style={({ pressed }) => [styles.helpBtn, pressed && styles.pressed]}
+        accessibilityRole="link"
+        accessibilityLabel="Need help? Contact support"
+      >
+        <Text style={[loginType.info, styles.helpText, { color: linkAccent }]}>
+          Need help? Contact support
+        </Text>
+      </Pressable>
     </LoginPortalStack>
   )
 }
@@ -851,5 +834,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 10,
   },
-  helpText: { textAlign: "center" },
+  helpBtn: {
+    alignSelf: "center",
+    minHeight: 44,
+    paddingHorizontal: 12,
+    justifyContent: "center",
+  },
+  helpText: { textAlign: "center", fontWeight: "600" },
 })

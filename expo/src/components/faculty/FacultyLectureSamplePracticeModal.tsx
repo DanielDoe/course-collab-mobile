@@ -54,8 +54,7 @@ function QuestionEditor({
   onRemove: () => void
 }) {
   const collabSheetStyles = useCollabSheetStyles()
-  const mcq = question.subquestions[0]
-  const optionsText = mcq ? subquestionOptionsToText(mcq.options) : ""
+  const optionsText = subquestionOptionsToText(question.options)
 
   return (
     <>
@@ -86,7 +85,7 @@ function QuestionEditor({
             onChangeText={(topic) => onChange({ ...question, topic })}
           />
         </FacultySheetField>
-        <FacultySheetField label="Problem statement">
+        <FacultySheetField label="Question text">
           <TextInput
             style={[collabSheetStyles.fieldInput, collabSheetStyles.textArea]}
             value={question.question_text}
@@ -95,63 +94,53 @@ function QuestionEditor({
             textAlignVertical="top"
           />
         </FacultySheetField>
-        {mcq ? (
-          <>
-            <FacultySheetField label="MCQ prompt (part a)">
-              <TextInput
-                style={[collabSheetStyles.fieldInput, collabSheetStyles.textArea]}
-                value={mcq.prompt}
-                onChangeText={(prompt) => {
-                  const next = [...question.subquestions]
-                  next[0] = { ...mcq, prompt }
-                  onChange({ ...question, subquestions: next })
-                }}
-                multiline
-                textAlignVertical="top"
-              />
-            </FacultySheetField>
-            <FacultySheetField label="Options (one per line)">
-              <TextInput
-                style={[collabSheetStyles.fieldInput, collabSheetStyles.textArea]}
-                value={optionsText}
-                onChangeText={(text) => {
-                  const options = subquestionOptionsFromText(text)
-                  const next = [...question.subquestions]
-                  next[0] = { ...mcq, options }
-                  onChange({ ...question, subquestions: next })
-                }}
-                multiline
-                textAlignVertical="top"
-              />
-            </FacultySheetField>
-            <FacultySheetField label="Correct answer (A, B, C… or option text)">
-              <TextInput
-                style={collabSheetStyles.fieldInput}
-                value={mcq.correct_answer ?? ""}
-                onChangeText={(correct_answer) => {
-                  const next = [...question.subquestions]
-                  next[0] = { ...mcq, correct_answer: correct_answer.trim().toUpperCase() }
-                  onChange({ ...question, subquestions: next })
-                }}
-                autoCapitalize="characters"
-              />
-            </FacultySheetField>
-            <FacultySheetField label="Explanation (shown after submit)">
-              <TextInput
-                style={[collabSheetStyles.fieldInput, collabSheetStyles.textArea]}
-                value={mcq.explanation ?? ""}
-                onChangeText={(explanation) => {
-                  const next = [...question.subquestions]
-                  next[0] = { ...mcq, explanation }
-                  onChange({ ...question, subquestions: next })
-                }}
-                multiline
-                textAlignVertical="top"
-                placeholderTextColor={sheetPlaceholderColor}
-              />
-            </FacultySheetField>
-          </>
-        ) : null}
+        <FacultySheetField label="Options (one per line)">
+          <TextInput
+            style={[collabSheetStyles.fieldInput, collabSheetStyles.textArea]}
+            value={optionsText}
+            onChangeText={(text) => {
+              onChange({ ...question, options: subquestionOptionsFromText(text) })
+            }}
+            multiline
+            textAlignVertical="top"
+          />
+        </FacultySheetField>
+        <FacultySheetField label="Correct answer">
+          <View style={localStyles.answerChips}>
+            {(question.options.length > 0
+              ? question.options.map((opt) => opt.id.toUpperCase())
+              : ["A", "B", "C", "D"]
+            ).map((letter) => {
+              const selected = (question.correct_answer ?? "").toUpperCase() === letter
+              return (
+                <Pressable
+                  key={letter}
+                  style={[localStyles.answerChip, selected && localStyles.answerChipSelected]}
+                  onPress={() => onChange({ ...question, correct_answer: letter })}
+                >
+                  <Text
+                    style={[
+                      localStyles.answerChipText,
+                      selected && localStyles.answerChipTextSelected,
+                    ]}
+                  >
+                    {letter}
+                  </Text>
+                </Pressable>
+              )
+            })}
+          </View>
+        </FacultySheetField>
+        <FacultySheetField label="Explanation (shown after submit)">
+          <TextInput
+            style={[collabSheetStyles.fieldInput, collabSheetStyles.textArea]}
+            value={question.explanation ?? ""}
+            onChangeText={(explanation) => onChange({ ...question, explanation })}
+            multiline
+            textAlignVertical="top"
+            placeholderTextColor={sheetPlaceholderColor}
+          />
+        </FacultySheetField>
       </FacultySheetSection>
     </>
   )
@@ -296,4 +285,21 @@ export function FacultyLectureSamplePracticeModal({ visible, lecture, onClose }:
 const localStyles = StyleSheet.create({
   loadingBox: { flex: 1, alignItems: "center", justifyContent: "center" },
   empty: { alignItems: "center", gap: 8, paddingVertical: 12 },
+  answerChips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  answerChip: {
+    minWidth: 40,
+    height: 40,
+    borderRadius: 999,
+    borderWidth: 1.5,
+    borderColor: "#cbd5e1",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 12,
+  },
+  answerChipSelected: {
+    backgroundColor: "#6366f1",
+    borderColor: "#6366f1",
+  },
+  answerChipText: { fontSize: 15, fontWeight: "700", color: "#475569" },
+  answerChipTextSelected: { color: "#ffffff" },
 })

@@ -21,7 +21,10 @@ export function CoraOverlayShell({ children, onBack }: Props) {
 
   return (
     <View style={styles.root}>
-      <View style={styles.content}>{children}</View>
+      {/* The overlay covers the screen with no nav bar, and none of the tabs it
+          hosts add a top inset of their own, so their first card collided with
+          the status bar on taller devices. */}
+      <View style={[styles.content, { paddingTop: insets.top }]}>{children}</View>
       <View
         style={[
           styles.footer,

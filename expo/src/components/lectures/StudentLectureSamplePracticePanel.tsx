@@ -2,14 +2,20 @@ import { StyleSheet, Text, View } from "react-native"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
 import { useNativeType } from "../../lib/themed-module-theme"
-import type { LectureSamplePracticeConfig } from "../../lib/lecture-types"
+import type {
+  LectureSamplePracticeAttempt,
+  LectureSamplePracticeConfig,
+} from "../../lib/lecture-types"
+import type { StudentSession } from "../../lib/session"
 import { StudentLectureSamplePracticeQuestionCard } from "./StudentLectureSamplePracticeQuestionCard"
 
 type Props = {
+  session: StudentSession
   lectureId: number
   studentDatabaseId: string
   courseLabel: string
   config: LectureSamplePracticeConfig
+  attemptsByQuestionId: Map<string, LectureSamplePracticeAttempt>
   expandedId: string | null
   reviewedIds: Set<string>
   onToggle: (questionId: string) => void
@@ -17,10 +23,12 @@ type Props = {
 }
 
 export function StudentLectureSamplePracticePanel({
+  session,
   lectureId,
   studentDatabaseId,
   courseLabel,
   config,
+  attemptsByQuestionId,
   expandedId,
   reviewedIds,
   onToggle,
@@ -49,6 +57,7 @@ export function StudentLectureSamplePracticePanel({
         {config.questions.map((question, index) => (
           <StudentLectureSamplePracticeQuestionCard
             key={question.id}
+            session={session}
             lectureId={lectureId}
             studentDatabaseId={studentDatabaseId}
             courseLabel={courseLabel}
@@ -56,6 +65,7 @@ export function StudentLectureSamplePracticePanel({
             index={index}
             expanded={expandedId === question.id}
             reviewed={reviewedIds.has(question.id)}
+            savedAttempt={attemptsByQuestionId.get(question.id) ?? null}
             onToggle={() => onToggle(question.id)}
             onReviewed={() => onReviewed(question.id)}
           />

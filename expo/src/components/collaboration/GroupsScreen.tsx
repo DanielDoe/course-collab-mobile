@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useMemo, useState } from "react"
 import { StyleSheet, Text, View } from "react-native"
 import { useRouter } from "expo-router"
 import { useSession } from "../../context/SessionProvider"
@@ -6,11 +6,9 @@ import { ApiError } from "../../lib/student-api"
 import type { StudentSession } from "../../lib/session"
 import { useNativeType, useThemedStudentNative } from "../../lib/themed-module-theme"
 import { useNotificationModuleRefresh } from "../../lib/notifications/notification-events"
-import {
-  collaborationApi,
-  formatRelativeTime,
-  type GroupRecord,
-} from "../../lib/collaboration-api"
+import { formatRelativeTime, type GroupRecord } from "../../lib/collaboration-api"
+import { useStudentGroups } from "../../hooks/query/useStudentGroups"
+import { QueryRefreshBanner } from "../query/QueryRefreshBanner"
 import {
   collabGroupStatusAccent,
   collabGroupStatusIcon,
@@ -68,45 +66,22 @@ export function GroupsScreen() {
   const router = useRouter()
   const type = useNativeType()
   const SN = useThemedStudentNative()
-  const [groups, setGroups] = useState<GroupRecord[]>([])
-  const [discover, setDiscover] = useState<GroupRecord[]>([])
-  const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
-  const [error, setError] = useState("")
+  const groupsQuery = useStudentGroups(session)
+  const groups = groupsQuery.groups
+  const discover = groupsQuery.discover
+  const loading = groupsQuery.isInitialLoading
+  const refreshing = groupsQuery.isRefreshing && !groupsQuery.isInitialLoading
+  const error = groupsQuery.error instanceof ApiError
+    ? groupsQuery.error.message
+    : groupsQuery.error
+      ? "Failed to load groups."
+      : ""
   const [filter, setFilter] = useState<GroupFilter>("all")
   const [search, setSearch] = useState("")
 
-  const load = useCallback(async () => {
-    if (!session) return
-    setError("")
-    try {
-      const [groupRes, discoverRes] = await Promise.all([
-        collaborationApi.getGroups(session),
-        collaborationApi.getGroupsDiscover(session),
-      ])
-      setGroups(groupRes.groups ?? [])
-      setDiscover(discoverRes.openGroups ?? [])
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to load groups.")
-      setGroups([])
-      setDiscover([])
-    }
-  }, [session])
-
-  useEffect(() => {
-    if (!session) {
-      setLoading(false)
-      return
-    }
-    setLoading(true)
-    load().finally(() => setLoading(false))
-  }, [load, session])
-
   const onRefresh = useCallback(async () => {
-    setRefreshing(true)
-    await load()
-    setRefreshing(false)
-  }, [load])
+    await groupsQuery.refetch()
+  }, [groupsQuery.refetch])
 
   useNotificationModuleRefresh("groups", onRefresh)
 
@@ -204,6 +179,8 @@ export function GroupsScreen() {
       onRefresh={() => void onRefresh()}
       error={error}
       chrome={
+        <>
+        <QueryRefreshBanner visible={groupsQuery.refreshFailed} onRetry={() => void onRefresh()} />
         <CollabSearch
           value={search}
           onChange={setSearch}
@@ -214,6 +191,7 @@ export function GroupsScreen() {
             icon: "add",
           }}
         />
+        </>
       }
       pages={[renderGroupPage("all"), renderGroupPage("mine"), renderGroupPage("discover")]}
     />

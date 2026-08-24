@@ -25,6 +25,14 @@ import {
   setStudentDashboardBootstrap,
   setStudentShellBootstrap,
 } from "./app-bootstrap-cache"
+import { getQueryClient } from "./query/client"
+import {
+  prefetchFacultyPhase2,
+  prefetchStudentPhase1,
+  seedAnnouncementsCache,
+  seedFacultyDashboardCache,
+  seedStudentDashboardCache,
+} from "./query/prefetch"
 
 let bootstrapInFlight: Promise<void> | null = null
 let bootstrapCompletedKey: string | null = null
@@ -83,6 +91,11 @@ async function bootstrapStudent(session: StudentSession) {
     classroomPoints: dashboard.stats.classroomPoints,
     notificationCount: notifications,
   })
+
+  const queryClient = getQueryClient()
+  seedAnnouncementsCache(queryClient, session, announcementData.announcements ?? [])
+  seedStudentDashboardCache(queryClient, session, dashboard)
+  void prefetchStudentPhase1(queryClient, session)
 }
 
 async function bootstrapFacultyForCourse(
@@ -144,6 +157,14 @@ async function bootstrapFacultyForCourse(
     academicTermId: course.academic_term_id ?? null,
     sessionCode: course.session_code ?? null,
   })
+
+  const queryClient = getQueryClient()
+  seedFacultyDashboardCache(queryClient, scope, {
+    stats,
+    charts,
+    activity: activity.slice(0, 8),
+  })
+  void prefetchFacultyPhase2(queryClient, scope)
 }
 
 async function bootstrapFaculty(session: FacultySession) {

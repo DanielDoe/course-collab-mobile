@@ -24,6 +24,8 @@ export type StudentSession = BaseSession & {
   courseId?: number
   courseCode?: string
   courseTitle?: string
+  /** Fall 2026+ offerings are term-scoped on production. */
+  academicTermId?: number
   universityId?: number
   universityName?: string
   universityShortName?: string
@@ -138,6 +140,18 @@ export async function refreshStoredSession(): Promise<AppSession | null> {
   if (!current) return null
   const { expiresAt: _, ...rest } = current
   return saveSession(rest)
+}
+
+export async function patchStoredSession(patch: {
+  name?: string
+  email?: string
+}): Promise<AppSession | null> {
+  const current = await getStoredSession()
+  if (!current) return null
+
+  const next = { ...current, ...patch } as AppSession
+  await SecureStore.setItemAsync(SESSION_KEY, JSON.stringify(next))
+  return next
 }
 
 /** Learner portals share student-like dashboard patterns. */

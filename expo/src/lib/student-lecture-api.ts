@@ -12,7 +12,7 @@ import {
   workspacePayloadHasQuestions,
   workspaceQuestionsFromRecord,
 } from "./lecture-workspace-utils"
-import type { LectureSamplePracticeConfig, LectureWorkspaceConfig } from "./lecture-types"
+import type { LectureSamplePracticeConfig, LectureSamplePracticeStudentState, LectureWorkspaceConfig } from "./lecture-types"
 import { persistHttpCookiesFromResponse } from "./student-http-cookies"
 import { ApiError, studentApi, studentAuthenticatedHeaders, type StudentLectureDetail } from "./student-api"
 import type { StudentSession } from "./session"
@@ -344,6 +344,31 @@ export async function fetchStudentLectureWorkspaceConfig(
   return parseLectureWorkspace(extractWorkspaceRaw(...payloads) ?? payloads[0])
 }
 
+export async function fetchStudentLectureSamplePracticeState(
+  session: StudentSession,
+  lectureId: number,
+): Promise<LectureSamplePracticeStudentState> {
+  const dedicated = await studentLectureFetchJson(
+    session,
+    `/api/student/lectures/${lectureId}/sample-practice`,
+  )
+  if (dedicated != null) {
+    const parsed = parseLectureSamplePracticeStudentApiResponse(dedicated)
+    if (parsed.questions.length > 0) return parsed
+  }
+
+  try {
+    const viaApi = await studentApi.getLectureSamplePractice(session, lectureId)
+    const parsed = parseLectureSamplePracticeStudentApiResponse(viaApi)
+    if (parsed.questions.length > 0) return parsed
+  } catch {
+    /* fall through */
+  }
+
+  const config = await fetchStudentLectureSamplePracticeConfig(session, lectureId, [])
+  return { ...config, attempts: [] }
+}
+
 export async function fetchStudentLectureSamplePracticeConfig(
   session: StudentSession,
   lectureId: number,
@@ -436,11 +461,24 @@ export async function fetchStudentLectureViewerData(
   } catch (error) {
     if (!(error instanceof ApiError) || error.status !== 404) throw error
 
-    const detail = await studentApi.getLectureById(session, lectureId)
-    if (!detail.lecture) {
+    const detailPayload = await studentLectureFetchJson(
+      session,
+      `/api/student/lectures/${lectureId}`,
+    )
+    const detailLecture =
+      detailPayload &&
+      typeof detailPayload === "object" &&
+      "lecture" in detailPayload &&
+      detailPayload.lecture &&
+      typeof detailPayload.lecture === "object"
+        ? (detailPayload.lecture as StudentLectureDetail)
+        : detailPayload && typeof detailPayload === "object" && "id" in detailPayload
+          ? (detailPayload as StudentLectureDetail)
+          : null
+    if (!detailLecture) {
       throw new ApiError("This lecture could not be found.", 404)
     }
-    lecture = detail.lecture
+    lecture = detailLecture
     deckUrl = lectureDeckUrl(lecture)
     const lectureFields = lectureConfigFields(lecture)
     samplePracticeSources.push(lectureFields?.sample_practice)

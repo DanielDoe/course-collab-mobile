@@ -1,7 +1,7 @@
 import { API_BASE_URL } from "../constants"
 import { instructorAuthenticatedHeaders } from "./instructor-api"
-import { mergeCookieHeaders, studentHttpCookieHeader } from "./student-http-cookies"
-import { mfaTrustRequestHeadersForStudent } from "./mfa-device-trust"
+import { studentAuthenticatedHeaders } from "./student-api"
+import { adminAuthenticatedHeaders } from "./admin-session-headers"
 import type {
   AdminSession,
   FacultySession,
@@ -67,20 +67,15 @@ async function privacyHeaders(session: CoraPrivacySession): Promise<HeadersInit>
   }
 
   if (session.portal === "admin") {
-    const jarCookie = await studentHttpCookieHeader()
     return {
       ...base,
-      "x-admin-id": String(session.id),
-      ...(jarCookie ? { Cookie: jarCookie } : {}),
+      ...(await adminAuthenticatedHeaders(session.id)),
     }
   }
 
-  const jarCookie = await studentHttpCookieHeader()
-  const trust = await mfaTrustRequestHeadersForStudent(session)
   return {
     ...base,
-    "x-student-id": session.databaseId,
-    ...mergeCookieHeaders(jarCookie, trust.Cookie),
+    ...(await studentAuthenticatedHeaders(session)),
   }
 }
 

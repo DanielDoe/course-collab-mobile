@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from "react-native"
 import { Ionicons } from "@/components/icons/AppIcon"
-import { useSafeAreaInsets } from "react-native-safe-area-context"
+import { useStableTopSafeInset } from "../shell/shell-shared"
 import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
 import { useNativeType } from "../../lib/themed-module-theme"
 import type { MessageRecipient } from "../../lib/messages-api"
@@ -34,7 +34,7 @@ export function MessagesThreadHeader({
   onBack,
   onOpenProfile,
 }: Props) {
-  const insets = useSafeAreaInsets()
+  const topSafeInset = useStableTopSafeInset()
   const tokens = useAppThemeTokens()
   const native = useThemedNative()
   const type = useNativeType()
@@ -48,7 +48,7 @@ export function MessagesThreadHeader({
     <View style={styles.host} pointerEvents="box-none">
       <GlassChromeBar
         style={[
-          { paddingTop: insets.top },
+          { paddingTop: topSafeInset },
           glassActive ? { borderBottomWidth: 0 } : null,
         ]}
         borderBottomColor={glassActive ? "transparent" : native.separator}

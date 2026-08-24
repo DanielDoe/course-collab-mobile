@@ -14,6 +14,7 @@ import type {
   StudentReportSearchHit} from "./instructor-reports-utils"
 import { normalizeSavedReport } from "./instructor-reports-utils"
 import { assertProductionHttpsUrl, createApiAbortSignal, noteApiFailure } from "./http"
+import { observeHttpResponse } from "./perf/http"
 import { mfaTrustRequestHeadersForInstructor } from "./mfa-device-trust"
 import { getStoredSession } from "./session"
 import { mergeCookieHeaders, persistHttpCookiesFromResponse, studentHttpCookieHeader } from "./student-http-cookies"
@@ -1532,6 +1533,13 @@ export async function instructorAuthenticatedHeaders(
   if (scope.courseId != null && !init?.omitCourseId) {
     headers["x-course-id"] = String(scope.courseId)
   }
+  const scoped = scope as InstructorScope
+  if (scoped.sessionId != null && scoped.sessionId > 0) {
+    headers["x-session-id"] = String(scoped.sessionId)
+  }
+  if (scoped.academicTermId != null && scoped.academicTermId > 0) {
+    headers["x-academic-term-id"] = String(scoped.academicTermId)
+  }
   if (init?.requireAuthHeader) {
     headers.Authorization = "instructor"
   }
@@ -1564,6 +1572,7 @@ async function instructorRequest<T>(
   })
 
   const { requireAuthHeader: _, omitCourseId: __, ...fetchInit } = init ?? {}
+  const startedAt = Date.now()
   const response = await fetch(url, {
     ...fetchInit,
     credentials: "include",
@@ -1572,6 +1581,13 @@ async function instructorRequest<T>(
   })
   let body: unknown = null
   const text = await response.text()
+  observeHttpResponse({
+    method: fetchInit.method ?? "GET",
+    path,
+    status: response.status,
+    startedAt,
+    payloadBytes: text.length,
+  })
   if (text) {
     try {
       body = JSON.parse(text)
@@ -1581,8 +1597,8 @@ async function instructorRequest<T>(
   }
 
   if (!response.ok) {
-    noteApiFailure(path, response.status)
     const message = extractApiErrorMessage(body, response.status, path)
+    noteApiFailure(path, response.status, message)
     const isExpectedMobilePaymentGap =
       (response.status === 404 || response.status === 503) &&
       path.includes("mobile-payment")
@@ -2574,6 +2590,10 @@ export const instructorApi = {
   getAttendanceAnalytics: (scope: Scope, section?: string) => {
     const params = new URLSearchParams({ instructorId: String(scope.instructorId) })
     if (section && section !== "ALL") params.set("section", section)
+    if (scope.courseId != null) params.set("courseId", String(scope.courseId))
+    if (scope.academicTermId != null && scope.academicTermId > 0) {
+      params.set("academic_term_id", String(scope.academicTermId))
+    }
     return instructorRequest<{ analytics: AttendanceAnalytics }>(
       `/api/attendance/analytics?${params}`,
       scope,
@@ -2587,6 +2607,10 @@ export const instructorApi = {
     const q = new URLSearchParams({ instructorId: String(scope.instructorId) })
     if (params?.section && params.section !== "ALL") q.set("section", params.section)
     if (params?.isActive != null) q.set("isActive", params.isActive ? "true" : "false")
+    if (scope.courseId != null) q.set("courseId", String(scope.courseId))
+    if (scope.academicTermId != null && scope.academicTermId > 0) {
+      q.set("academic_term_id", String(scope.academicTermId))
+    }
     return instructorRequest<{ sessions: AttendanceSession[] }>(
       `/api/attendance/sessions?${q}`,
       scope,
@@ -2600,6 +2624,10 @@ export const instructorApi = {
     const q = new URLSearchParams()
     if (params.sessionId != null) q.set("sessionId", String(params.sessionId))
     else if (params.section) q.set("section", params.section)
+    if (scope.courseId != null) q.set("courseId", String(scope.courseId))
+    if (scope.academicTermId != null && scope.academicTermId > 0) {
+      q.set("academic_term_id", String(scope.academicTermId))
+    }
     return instructorRequest<{ records: AttendanceRecord[] }>(
       `/api/attendance/records?${q}`,
       scope,
@@ -4268,6 +4296,7 @@ export const instructorApi = {
       purpose: string
       requestedModules: import("./course-exchange-shared").CourseExchangeModule[]
       destinationCourseId: number
+      destinationSessionId?: number | null
     },
   ) =>
     instructorRequest<{
@@ -4284,6 +4313,7 @@ export const instructorApi = {
         purpose: payload.purpose,
         requestedModules: payload.requestedModules,
         destinationCourseId: payload.destinationCourseId,
+        destinationSessionId: payload.destinationSessionId ?? null,
       }),
     }),
 

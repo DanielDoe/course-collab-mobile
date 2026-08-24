@@ -22,13 +22,13 @@ function useStudentSession(): StudentSession | null {
   return session?.portal === "student" ? session : null
 }
 
-export function MembershipSuccessScreen({ plan: planFromRoute, sessionId }: Props) {
+export function MembershipSuccessScreen({ plan: planFromRoute }: Props) {
   const session = useStudentSession()
   const router = useRouter()
   const tokens = useAppThemeTokens()
   const native = useThemedNative()
   const { membershipTier, refreshStudentData } = useStudentShell()
-  const [verifying, setVerifying] = useState(Boolean(sessionId))
+  const [verifying, setVerifying] = useState(true)
   const [verified, setVerified] = useState(false)
   const [error, setError] = useState("")
 
@@ -43,9 +43,7 @@ export function MembershipSuccessScreen({ plan: planFromRoute, sessionId }: Prop
     setError("")
     setVerifying(true)
     try {
-      if (sessionId) {
-        await syncStudentMembershipFromStripe(session)
-      }
+      await syncStudentMembershipFromStripe(session)
       await refreshStudentData?.({ force: true })
       setVerified(true)
     } catch (err) {
@@ -54,7 +52,7 @@ export function MembershipSuccessScreen({ plan: planFromRoute, sessionId }: Prop
     } finally {
       setVerifying(false)
     }
-  }, [refreshStudentData, session, sessionId])
+  }, [refreshStudentData, session])
 
   useEffect(() => {
     void verify()

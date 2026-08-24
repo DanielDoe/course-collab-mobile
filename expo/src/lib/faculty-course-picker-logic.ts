@@ -44,6 +44,10 @@ export function offeringToSession(offering: FacultyTermOffering): InstructorSess
   }
 }
 
+function shouldUseSectionRow(session: InstructorSession | null | undefined): boolean {
+  return Boolean(session?.code?.trim())
+}
+
 export function asCoursePickerItem(
   course: InstructorCourse,
   opts?: {
@@ -105,7 +109,13 @@ export function expandFacultyOfferingsForActiveTerm(
       .sort((a, b) => a.code.localeCompare(b.code))
 
     if (sessions.length <= 1) {
-      items.push(asCoursePickerItem(base, { session: sessions[0] ?? null, isSectionRow: false }))
+      const session = sessions[0] ?? null
+      items.push(
+        asCoursePickerItem(base, {
+          session,
+          isSectionRow: shouldUseSectionRow(session),
+        }),
+      )
       continue
     }
 
@@ -127,7 +137,13 @@ export function expandFacultyCoursesForActiveTerm(
   for (const course of courses) {
     const sessions = sessionsForCourse(course, sessionsByCourseId.get(course.id) ?? [])
     if (sessions.length <= 1) {
-      items.push(asCoursePickerItem(course, { session: sessions[0] ?? null, isSectionRow: false }))
+      const session = sessions[0] ?? null
+      items.push(
+        asCoursePickerItem(course, {
+          session,
+          isSectionRow: shouldUseSectionRow(session),
+        }),
+      )
       continue
     }
 

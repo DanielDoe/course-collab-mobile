@@ -1,4 +1,5 @@
 import type { AttendanceRecord, AttendanceScore, AttendanceStreak } from "./rewards-api"
+import { attendanceDisplayPercent } from "./attendance-leaderboard-scope"
 import { gradePerformanceColor } from "./grades-theme"
 
 export type AttendanceStatusBucket = "present" | "late" | "absent" | "other"
@@ -67,7 +68,7 @@ export function buildAttendanceOverviewSnapshot(
   const attended = Number(score.classes_attended ?? 0)
   const scoredTotal = Number(score.sessions_scored_so_far ?? score.total_classes ?? 0)
   const scheduledTotal = Number(score.sessions_scheduled_total ?? scoredTotal)
-  const pct = Math.min(100, Math.max(0, Number(score.attendance_percentage ?? 0)))
+  const pct = scoredTotal > 0 ? attendanceDisplayPercent(score.attendance_percentage) : 0
   const missed = Math.max(0, scoredTotal - attended)
   const classesLeft = Math.max(0, scheduledTotal - scoredTotal)
 

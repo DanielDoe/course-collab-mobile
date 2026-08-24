@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
+import { RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@/components/icons/AppIcon"
 import { AppAlert } from '../../lib/app-alert'
 import { useSafeAreaInsets } from "react-native-safe-area-context"
@@ -10,8 +10,15 @@ import {
   type AssessmentModuleSegment,
   type AssessmentStatusFilter,
   type AssessmentType} from "../../lib/faculty-assessment-utils"
-import { instructorApi, type InstructorQuiz, type InstructorSession } from "../../lib/instructor-api"
+import { instructorApi, type InstructorQuiz } from "../../lib/instructor-api"
 import { useFacultyScope } from "../../hooks/useFacultyScope"
+import {
+  useDeleteFacultyAssessment,
+  useFacultyAssessments,
+  useToggleFacultyAssessmentSession,
+} from "../../hooks/query/useFacultyAssessments"
+import { QueryRefreshBanner } from "../query/QueryRefreshBanner"
+import { QuerySkeleton } from "../query/QuerySkeleton"
 import { useNotificationModuleRefresh } from "../../lib/notifications/notification-events"
 import { consumeFacultyCoraPending } from "../../lib/faculty-cora-pending"
 import { FacultyEmptyState } from "./faculty-shared"
@@ -46,10 +53,13 @@ export function FacultyAssessmentsScreen({assessmentType,
   const { listScrollPad } = useFacultyStickyHeaderScrollLayout()
   const { scope, ready } = useFacultyScope()
 
-  const [quizzes, setQuizzes] = useState<InstructorQuiz[]>([])
-  const [sessions, setSessions] = useState<InstructorSession[]>([])
-  const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
+  const listQuery = useFacultyAssessments(ready ? scope : null, type)
+  const toggleSessionMutation = useToggleFacultyAssessmentSession(scope, type)
+  const deleteAssessment = useDeleteFacultyAssessment(scope, type)
+  const quizzes = listQuery.quizzes
+  const sessions = listQuery.sessions
+  const loading = listQuery.isInitialLoading
+  const refreshing = listQuery.isRefreshing && !listQuery.isInitialLoading
   const [togglingKey, setTogglingKey] = useState<string | null>(null)
   const [selected, setSelected] = useState<InstructorQuiz | null>(null)
   const [previewQuiz, setPreviewQuiz] = useState<InstructorQuiz | null>(null)
@@ -65,7 +75,16 @@ export function FacultyAssessmentsScreen({assessmentType,
   const [segment, setSegment] = useState<AssessmentModuleSegment>(initialSegment)
   const [openIssueCount, setOpenIssueCount] = useState(0)
   const [deletedCount, setDeletedCount] = useState(0)
-  const [error, setError] = useState("")
+  const error = listQuery.error instanceof ApiError
+    ? listQuery.error.message
+    : listQuery.error
+      ? "Could not load assessments."
+      : ""
+
+  useEffect(() => {
+    setOpenIssueCount(listQuery.openIssueCount)
+    setDeletedCount(listQuery.deletedCount)
+  }, [listQuery.openIssueCount, listQuery.deletedCount])
 
   useEffect(() => {
     setSegment(initialSegment)
@@ -86,32 +105,8 @@ export function FacultyAssessmentsScreen({assessmentType,
   }, [ready, scope?.courseId, scope?.instructorId, assessmentType])
 
   const load = useCallback(async () => {
-    if (!scope) return
-    setError("")
-    try {
-      const [items, sessionData, openIssues, deletedItems] = await Promise.all([
-        instructorApi.getQuizzes(scope, type),
-        instructorApi.getSessions(scope),
-        instructorApi.getIssues(scope, "open", type),
-        instructorApi.getDeletedAssessments(scope, type),
-      ])
-      setQuizzes(items)
-      setSessions(sessionData.sessions ?? [])
-      setOpenIssueCount(openIssues.length)
-      setDeletedCount(deletedItems.length)
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not load assessments.")
-    }
-  }, [scope, type])
-
-  useEffect(() => {
-    if (!ready) {
-      setLoading(false)
-      return
-    }
-    setLoading(true)
-    load().finally(() => setLoading(false))
-  }, [ready, load])
+    await listQuery.refetch()
+  }, [listQuery.refetch])
 
   const previousSegment = useRef(segment)
   useEffect(() => {
@@ -129,14 +124,7 @@ export function FacultyAssessmentsScreen({assessmentType,
   }, [quizzes, selected?.id])
 
   const handleRefresh = useCallback(async () => {
-    setRefreshing(true)
-    try {
-      await load()
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not refresh assessments.")
-    } finally {
-      setRefreshing(false)
-    }
+    await load()
   }, [load])
 
   useNotificationModuleRefresh(["assessments", "issues"], handleRefresh)
@@ -146,11 +134,9 @@ export function FacultyAssessmentsScreen({assessmentType,
     const key = `${quizId}:${sessionCode}`
     setTogglingKey(key)
     try {
-      await instructorApi.toggleQuizSession(scope, quizId, sessionCode, next)
-      await load()
+      await toggleSessionMutation.mutateAsync({ quizId, sessionCode, next })
     } catch (err) {
       AppAlert.alert("Could not update access", err instanceof ApiError ? err.message : "Try again.")
-      setError(err instanceof ApiError ? err.message : "Could not update access.")
     } finally {
       setTogglingKey(null)
     }
@@ -177,11 +163,10 @@ export function FacultyAssessmentsScreen({assessmentType,
     void (async () => {
       if (!scope) return
       try {
-        await instructorApi.deleteQuiz(scope, quiz.id)
+        await deleteAssessment.mutateAsync(quiz)
         if (selected?.id === quiz.id) setSelected(null)
         if (previewQuiz?.id === quiz.id) setPreviewQuiz(null)
         if (editQuiz?.id === quiz.id) setEditQuiz(null)
-        await load()
       } catch (err) {
         AppAlert.alert("Delete failed", err instanceof ApiError ? err.message : "Try again.")
       }
@@ -276,10 +261,9 @@ export function FacultyAssessmentsScreen({assessmentType,
           onClose={() => setFilterSheetOpen(false)}
         />
 
+        <QueryRefreshBanner visible={listQuery.refreshFailed} onRetry={() => void handleRefresh()} />
         {loading ? (
-          <View style={styles.loadingBox}>
-            <ActivityIndicator color={FACULTY_ASSESSMENT_COLOR.link} size="large" />
-          </View>
+          <QuerySkeleton />
         ) : filtered.length === 0 ? (
           <FacultyEmptyState
             icon={config.icon}

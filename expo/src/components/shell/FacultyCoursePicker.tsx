@@ -76,8 +76,12 @@ export function FacultyCoursePicker({ session }: Props) {
   const duplicateCodes = useMemo(() => {
     return new Set(
       uniqueCourses
-        .filter((c, i, arr) => arr.findIndex((x) => x.course_code === c.course_code) !== i)
-        .map((c) => c.course_code),
+        .filter(
+          (course, index, arr) =>
+            arr.findIndex((item) => (item.picker_key ?? String(item.id)) === (course.picker_key ?? String(course.id))) !==
+            index,
+        )
+        .map((course) => course.picker_key ?? String(course.id)),
     )
   }, [uniqueCourses])
 

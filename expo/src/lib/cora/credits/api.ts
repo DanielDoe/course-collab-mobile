@@ -1,32 +1,19 @@
 import { API_BASE_URL } from "../../../constants"
 import type { StudentSession } from "../../session"
 import type { FacultySession } from "../../session"
-import { ApiError } from "../../student-api"
-import { mfaTrustRequestHeadersForStudent } from "../../mfa-device-trust"
-import { mergeCookieHeaders, persistHttpCookiesFromResponse, studentHttpCookieHeader } from "../../student-http-cookies"
+import { persistHttpCookiesFromResponse } from "../../student-http-cookies"
+import { instructorAuthenticatedHeaders } from "../../instructor-api"
+import { ApiError, studentAuthenticatedHeaders } from "../../student-api"
 import type { CoraActivityRow, CoraBalance, CoraCreditPack } from "./types"
 
 type CoraRole = "student" | "instructor"
 
 async function studentAuthHeaders(session: StudentSession): Promise<HeadersInit> {
-  const base: Record<string, string> = {
-    Accept: "application/json",
-    "Content-Type": "application/json",
-    "x-student-id": session.databaseId,
-  }
-  if (session.section) base["x-student-session"] = session.section
-  const jarCookie = await studentHttpCookieHeader()
-  const trust = await mfaTrustRequestHeadersForStudent(session)
-  Object.assign(base, mergeCookieHeaders(trust.Cookie, jarCookie))
-  return base
+  return studentAuthenticatedHeaders(session)
 }
 
 async function instructorAuthHeaders(session: FacultySession): Promise<HeadersInit> {
-  return {
-    Accept: "application/json",
-    "Content-Type": "application/json",
-    "x-instructor-id": String(session.id),
-  }
+  return instructorAuthenticatedHeaders({ instructorId: session.id })
 }
 
 async function requestJson<T>(

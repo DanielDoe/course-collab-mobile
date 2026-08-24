@@ -6,6 +6,10 @@ import { LoginBrandHeader } from "./LoginBrandHeader"
 import { useLoginTheme } from "./login-theme"
 export { DismissKeyboardView } from "../ui/DismissKeyboardView"
 
+/** Return true when the panel handled back internally (do not pop to welcome). */
+export type AuthPanelBackHandler = () => boolean
+export type RegisterAuthPanelBack = (handler: AuthPanelBackHandler | null) => void
+
 type BackLinkProps = {
   label: string
   onPress: () => void

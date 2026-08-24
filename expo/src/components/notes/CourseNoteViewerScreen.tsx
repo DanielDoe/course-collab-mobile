@@ -59,7 +59,7 @@ export function CourseNoteViewerScreen() {
     if (cached) {
       setNote(cached)
       const ink = parseCircuitWorkspace(cached.inkWorkspace)
-      if (workspaceHasContent(ink) && !cached.bodyText.trim()) setContentTab("ink")
+      if (workspaceHasContent(ink) && !String(cached.bodyText ?? "").trim()) setContentTab("ink")
       return
     }
     const res = await digitalNotesApi.listCourseNotes(session)
@@ -67,7 +67,7 @@ export function CourseNoteViewerScreen() {
     if (!found) throw new ApiError("Note not found", 404)
     setNote(found)
     const ink = parseCircuitWorkspace(found.inkWorkspace)
-    if (workspaceHasContent(ink) && !found.bodyText.trim()) setContentTab("ink")
+    if (workspaceHasContent(ink) && !String(found.bodyText ?? "").trim()) setContentTab("ink")
   }, [session, noteId])
 
   useEffect(() => {

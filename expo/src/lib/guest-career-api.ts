@@ -1,6 +1,7 @@
 import { API_BASE_URL } from "../constants"
 import { ApiError } from "./api"
 import type { GuestSession } from "./session"
+import { studentAuthenticatedHeaders } from "./student-api"
 
 // ---------------------------------------------------------------------------
 // Types — mirror lib/guest/career/types.ts in the web app (v0-coursecollabv3),
@@ -335,9 +336,9 @@ async function parseCareerResponse<T>(response: Response): Promise<T> {
 async function careerRequest<T>(session: GuestSession, path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(careerUrl(session, path), {
     ...init,
+    credentials: "include",
     headers: {
-      Accept: "application/json",
-      "x-student-id": session.databaseId,
+      ...(await studentAuthenticatedHeaders(session)),
       ...(init.headers ?? {}),
     },
   })
@@ -443,11 +444,12 @@ export const guestCareerApi = {
     form.append("file", file as unknown as Blob)
     const response = await fetch(careerUrl(session, "/api/guest/career/resumes"), {
       method: "POST",
-      headers: {
-        Accept: "application/json",
-        "x-student-id": session.databaseId,
-        // Content-Type intentionally omitted — fetch sets the multipart boundary.
-      },
+      credentials: "include",
+      headers: await (async () => {
+        const headers = await studentAuthenticatedHeaders(session)
+        delete headers["Content-Type"]
+        return headers
+      })(),
       body: form,
     })
     return parseCareerResponse<{ resume: ResumeProfile }>(response)

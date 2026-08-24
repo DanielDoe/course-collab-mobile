@@ -29,6 +29,7 @@ import {
   type CodebenchStreak,
   type DailyChallenge,
 } from "../../lib/codebench-api"
+import { stashPendingDailyChallenge } from "../../lib/codebench-daily-challenge-pending"
 import type { StudentSession } from "../../lib/session"
 import { AppErrorScreen } from "../errors/AppErrorScreen"
 import { CommSectionFooter } from "../faculty/faculty-communication-ui"
@@ -123,6 +124,12 @@ export function AnalyticsMoreScreen({ initialTab = "overview" }: Props) {
       pathname: "/codebench/ide",
       params: tool ? { tool } : {},
     } as never)
+  }
+
+  const openDailyChallenge = () => {
+    if (!dailyChallenge) return
+    stashPendingDailyChallenge(dailyChallenge)
+    openIde("practice")
   }
 
   if (!session) {
@@ -240,7 +247,7 @@ export function AnalyticsMoreScreen({ initialTab = "overview" }: Props) {
             ),
             renderPageScroll(
               <>
-                <ChallengePanel challenge={dailyChallenge} onOpenIde={() => openIde("practice")} />
+                <ChallengePanel challenge={dailyChallenge} onOpenIde={openDailyChallenge} />
                 <BadgesPanel badges={badges} badgeDetails={badgeDetails} />
                 <LeaderboardPanel leaderboard={leaderboard} session={session} myRank={myRank} />
                 <StreakPanel streak={streak} onOpenIde={() => openIde()} />

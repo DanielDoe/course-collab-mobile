@@ -226,7 +226,9 @@ const styles = StyleSheet.create({
   sheetHost: {
     width: "100%",
     zIndex: 2,
-    overflow: "visible",
+    overflow: "hidden",
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
     // Size to content; maxHeight on the host clamps tall sheets.
     // flexGrow:1 here left a empty gap under short sheets (gray "cut off" bar).
     flexGrow: 0,
@@ -244,6 +246,7 @@ const styles = StyleSheet.create({
   sheetBody: {
     flexGrow: 0,
     flexShrink: 1,
+    overflow: "hidden",
   },
   handleDragZone: {
     position: "absolute",
@@ -263,12 +266,12 @@ const styles = StyleSheet.create({
   scrollWrap: {
     flexGrow: 0,
     flexShrink: 1,
-    overflow: "visible",
+    overflow: "hidden",
   },
   scrollView: {
     flexGrow: 0,
     flexShrink: 1,
-    overflow: "visible",
+    overflow: "hidden",
   },
   scrollContent: {
     flexGrow: 0,

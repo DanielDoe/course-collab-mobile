@@ -1,0 +1,77 @@
+export const MUTATION_STRATEGY = {
+  OPTIMISTIC: "OPTIMISTIC",
+  PENDING: "PENDING",
+  CONFIRMATION_REQUIRED: "CONFIRMATION_REQUIRED",
+} as const
+
+export type MutationStrategy = (typeof MUTATION_STRATEGY)[keyof typeof MUTATION_STRATEGY]
+
+/** Phase 1 + reserved catalog. Classify before wiring — do not default to optimistic. */
+export const MUTATION_CATALOG = {
+  student: {
+    notes: {
+      create: MUTATION_STRATEGY.OPTIMISTIC,
+      update: MUTATION_STRATEGY.OPTIMISTIC,
+      delete: MUTATION_STRATEGY.OPTIMISTIC,
+      share: MUTATION_STRATEGY.PENDING,
+    },
+    flashcards: {
+      createDeck: MUTATION_STRATEGY.OPTIMISTIC,
+      updateDeck: MUTATION_STRATEGY.OPTIMISTIC,
+      deleteDeck: MUTATION_STRATEGY.OPTIMISTIC,
+      addCard: MUTATION_STRATEGY.OPTIMISTIC,
+      updateCard: MUTATION_STRATEGY.OPTIMISTIC,
+      deleteCard: MUTATION_STRATEGY.OPTIMISTIC,
+    },
+    announcements: {
+      markViewed: MUTATION_STRATEGY.OPTIMISTIC,
+      react: MUTATION_STRATEGY.OPTIMISTIC,
+      comment: MUTATION_STRATEGY.PENDING,
+    },
+    notifications: {
+      markRead: MUTATION_STRATEGY.OPTIMISTIC,
+      markAllRead: MUTATION_STRATEGY.OPTIMISTIC,
+      dismiss: MUTATION_STRATEGY.OPTIMISTIC,
+      delete: MUTATION_STRATEGY.CONFIRMATION_REQUIRED,
+    },
+  },
+  faculty: {
+    announcements: {
+      createDraft: MUTATION_STRATEGY.OPTIMISTIC,
+      editDraft: MUTATION_STRATEGY.OPTIMISTIC,
+      send: MUTATION_STRATEGY.CONFIRMATION_REQUIRED,
+    },
+    notes: {
+      create: MUTATION_STRATEGY.OPTIMISTIC,
+      update: MUTATION_STRATEGY.OPTIMISTIC,
+      delete: MUTATION_STRATEGY.OPTIMISTIC,
+      publish: MUTATION_STRATEGY.PENDING,
+    },
+    questionBank: {
+      createDraft: MUTATION_STRATEGY.OPTIMISTIC,
+      edit: MUTATION_STRATEGY.OPTIMISTIC,
+      delete: MUTATION_STRATEGY.CONFIRMATION_REQUIRED,
+    },
+    assessments: {
+      createDraft: MUTATION_STRATEGY.OPTIMISTIC,
+      editMetadata: MUTATION_STRATEGY.OPTIMISTIC,
+      publish: MUTATION_STRATEGY.CONFIRMATION_REQUIRED,
+      gradeChange: MUTATION_STRATEGY.CONFIRMATION_REQUIRED,
+    },
+  },
+  highRisk: {
+    assessmentSubmit: MUTATION_STRATEGY.PENDING,
+    examSubmit: MUTATION_STRATEGY.PENDING,
+    attendanceVerify: MUTATION_STRATEGY.PENDING,
+    enrollmentChange: MUTATION_STRATEGY.CONFIRMATION_REQUIRED,
+    deleteUser: MUTATION_STRATEGY.CONFIRMATION_REQUIRED,
+    roleChange: MUTATION_STRATEGY.CONFIRMATION_REQUIRED,
+    permissionChange: MUTATION_STRATEGY.CONFIRMATION_REQUIRED,
+    payment: MUTATION_STRATEGY.CONFIRMATION_REQUIRED,
+    tradeCenter: MUTATION_STRATEGY.CONFIRMATION_REQUIRED,
+    passwordChange: MUTATION_STRATEGY.PENDING,
+    coraExternalSend: MUTATION_STRATEGY.CONFIRMATION_REQUIRED,
+    coraDestructive: MUTATION_STRATEGY.CONFIRMATION_REQUIRED,
+    bulkAdmin: MUTATION_STRATEGY.CONFIRMATION_REQUIRED,
+  },
+} as const

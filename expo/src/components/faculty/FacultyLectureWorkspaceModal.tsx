@@ -154,6 +154,16 @@ function QuestionEditor({
             placeholderTextColor={sheetPlaceholderColor}
           />
         </FacultySheetField>
+        <FacultySheetToggleRow
+          label="Unlock step-by-step for students"
+          hint={
+            question.solution_unlocked
+              ? "Students can reveal the written solution in class."
+              : "Students see a locked message until you unlock this problem."
+          }
+          value={question.solution_unlocked === true}
+          onValueChange={(solution_unlocked) => onChange({ ...question, solution_unlocked })}
+        />
       </FacultySheetSection>
     </>
   )

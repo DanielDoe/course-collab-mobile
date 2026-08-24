@@ -33,12 +33,16 @@ export function useStudentShellRefresh(session: StudentSession) {
 
       refreshingRef.current = true
       try {
-        await refreshStudentShellData(session, {
-          setMembershipTier,
-          setMembershipTierLoaded,
-          setClassroomPoints,
-          setNotificationCount,
-        })
+        await refreshStudentShellData(
+          session,
+          {
+            setMembershipTier,
+            setMembershipTierLoaded,
+            setClassroomPoints,
+            setNotificationCount,
+          },
+          { syncStripe: force },
+        )
         lastRefreshAtRef.current = Date.now()
       } finally {
         refreshingRef.current = false
@@ -81,10 +85,7 @@ export function useStudentShellRefresh(session: StudentSession) {
 
       if (!initialRefreshDoneRef.current) {
         initialRefreshDoneRef.current = true
-        const needsNetworkRefresh = lastRefreshAtRef.current === 0
-        if (needsNetworkRefresh) {
-          await refreshAll({ force: true })
-        }
+        await refreshAll({ force: true })
       }
     })()
 

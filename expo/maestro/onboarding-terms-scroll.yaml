@@ -2,10 +2,10 @@ appId: com.coursecollab.app
 ---
 - openLink: coursecollab://onboarding-terms
 - extendedWaitUntil:
-    visible: "Step 2 of 6"
+    visible: "Step 2 of"
     timeout: 60000
 - scrollUntilVisible:
-    element: "Contact"
+    element: "Accuracy"
     direction: DOWN
     timeout: 30000
     speed: 40

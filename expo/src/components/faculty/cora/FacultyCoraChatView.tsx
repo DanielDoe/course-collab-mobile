@@ -32,6 +32,7 @@ import {
 } from "../../../lib/cora-rbac"
 import { CoraBrand } from "../../cora/CoraBrand"
 import { CoraActionCard } from "../../cora/CoraActionCard"
+import { openCoraNativeRoute } from "../../../lib/cora/resolve-open-route"
 import { ComposerSendButton } from "../../theme/ComposerSendButton"
 import { SolidListThumbTile } from "../../theme/SolidListThumbTile"
 import {
@@ -535,7 +536,7 @@ export function FacultyCoraChatView({
                       onCancel={() => cancelProposal(message.id, proposal.actionId)}
                       onOpen={(route) => {
                         onClose?.()
-                        router.push(route as never)
+                        openCoraNativeRoute(router, route)
                       }}
                     />
                   ))

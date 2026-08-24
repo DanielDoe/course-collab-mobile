@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useMemo, useState, type ReactNo
 import type { InstructorCourse } from "../lib/instructor-api"
 import type { FacultyMembershipTier } from "../types/dashboard"
 import type { RefreshFacultyDataFn } from "../lib/faculty-shell-refresh-types"
+import { setFacultyQueryCourseId } from "../lib/query/faculty-course"
 
 export type FacultyBadges = {
   pendingPoints: number
@@ -51,7 +52,11 @@ export function FacultyShellProvider({ children }: { children: ReactNode }) {
   const [profileOpen, setProfileOpen] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [coursePickerOpen, setCoursePickerOpen] = useState(false)
-  const [selectedCourse, setSelectedCourse] = useState<InstructorCourse | null>(null)
+  const [selectedCourse, setSelectedCourseState] = useState<InstructorCourse | null>(null)
+  const setSelectedCourse = useCallback((course: InstructorCourse | null) => {
+    setSelectedCourseState(course)
+    setFacultyQueryCourseId(course?.id ?? null)
+  }, [])
   const [courses, setCourses] = useState<InstructorCourse[]>([])
   const [notificationCount, setNotificationCount] = useState(0)
   const [badges, setBadgesState] = useState<FacultyBadges>({

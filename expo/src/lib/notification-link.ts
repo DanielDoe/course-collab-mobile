@@ -84,6 +84,16 @@ export function resolveNotificationLink(link: string | null | undefined): string
 
   if (path.startsWith("/module/")) return path
 
+  if (path.startsWith("/flashcards/")) {
+    const deckId = path.slice("/flashcards/".length).split("/")[0]
+    if (deckId && /^\d+$/.test(deckId)) {
+      const rest = path.slice(`/flashcards/${deckId}`.length)
+      if (rest.startsWith("/edit")) return `/flashcards/${deckId}/edit`
+      return `/flashcards/${deckId}`
+    }
+    return "/module/flashcards"
+  }
+
   if (path.startsWith("/guest/messages")) {
     const threadId = params?.get("thread")
     return threadId ? `/messages/${threadId}` : "/module/messages"
@@ -170,6 +180,13 @@ function mapStudentDashboardSegment(segment: string, tail: string[], search: str
   }
   if (segment === "lectures" && tail[0]) {
     return `/lecture/${tail[0]}`
+  }
+  if (segment === "flashcards") {
+    if (tail[0] && /^\d+$/.test(tail[0])) {
+      if (tail[1] === "edit") return `/flashcards/${tail[0]}/edit`
+      return `/flashcards/${tail[0]}`
+    }
+    return "/module/flashcards"
   }
   if (segment === "assessment" || segment === "quiz" || segment === "homework" || segment === "mid-semester" || segment === "final") {
     const id = tail[0]

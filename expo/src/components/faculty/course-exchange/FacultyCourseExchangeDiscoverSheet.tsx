@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context"
 import {
   COURSE_EXCHANGE_DEFAULT_APPROVAL_MODULES,
   EXCHANGE_DESTINATION_SHELL_NOTE,
+  EXCHANGE_OWN_GROUPS_PROJECTS_NOTE,
   EXCHANGE_PARTIAL_MODULES_NOTE,
   type CourseExchangeModule,
   type DestinationCourseRow,
@@ -12,6 +13,10 @@ import {
   discoverRelationshipLabel,
   exchangeRequestStatusColor,
 } from "../../../lib/course-exchange-shared"
+import {
+  filterGroupsProjectsForOwnSession,
+  isOwnGroupsProjectsSession,
+} from "../../../lib/course-exchange/groups-projects-session-policy"
 import {
   FACULTY_COURSE_EXCHANGE_COLOR,
   facultyCourseExchangeDiscoverThumb,
@@ -82,6 +87,17 @@ export function FacultyCourseExchangeDiscoverSheet({
   const [purpose, setPurpose] = useState("")
   const [destinationCourseId, setDestinationCourseId] = useState<number | null>(null)
 
+  const destinationSessionCode = useMemo(() => {
+    if (!destinationCourseId) return null
+    return destinationCourses.find((c) => c.course_id === destinationCourseId)?.course_code ?? null
+  }, [destinationCourseId, destinationCourses])
+
+  const selectableModules = useMemo(() => {
+    return filterGroupsProjectsForOwnSession(allowed, destinationSessionCode).modules
+  }, [allowed, destinationSessionCode])
+
+  const groupsProjectsExcluded = isOwnGroupsProjectsSession(destinationSessionCode)
+
   useEffect(() => {
     if (visible && course) {
       setStep("details")
@@ -96,6 +112,11 @@ export function FacultyCourseExchangeDiscoverSheet({
     const preferred = preferredDestinationCourseId ?? destinationCourses[0]?.course_id ?? null
     if (preferred != null) setDestinationCourseId(preferred)
   }, [visible, step, preferredDestinationCourseId, destinationCourses])
+
+  useEffect(() => {
+    if (!visible || step !== "request") return
+    setSelected((prev) => filterGroupsProjectsForOwnSession(prev, destinationSessionCode).modules)
+  }, [visible, step, destinationSessionCode])
 
   if (!course) return null
 
@@ -232,8 +253,11 @@ export function FacultyCourseExchangeDiscoverSheet({
         ) : (
           <>
             <FacultySheetSection label="Select teaching modules">
+              {groupsProjectsExcluded ? (
+                <FacultySheetNotice message={EXCHANGE_OWN_GROUPS_PROJECTS_NOTE} />
+              ) : null}
               <FacultyCourseExchangeModulePicker
-                allowed={allowed}
+                allowed={selectableModules}
                 selected={selected}
                 onChange={setSelected}
                 defaults={COURSE_EXCHANGE_DEFAULT_APPROVAL_MODULES}

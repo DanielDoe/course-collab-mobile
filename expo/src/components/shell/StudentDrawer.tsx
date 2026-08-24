@@ -49,6 +49,8 @@ import { DrawerNavAnchor, useDrawerScrollToActive } from "../../lib/drawer-scrol
 import { useDrawerPanelWidth } from "../../lib/responsive-layout"
 import { isDrawerShellRouteActive, navigateDrawerShellRoute } from "../../lib/drawer-shell-navigation"
 import { normalizeRoutePathname } from "../../lib/navigation-reset"
+import { getQueryClient } from "../../lib/query/client"
+import { prefetchForRoute } from "../../lib/query/nav-prefetch"
 
 type Props = {
   session: StudentSession
@@ -106,6 +108,7 @@ export function StudentDrawer({ session }: Props) {
   }))
 
   function navigate(route: string) {
+    prefetchForRoute(getQueryClient(), session, route)
     closeDrawer()
     navigateDrawerShellRoute(router, pathname, route)
   }

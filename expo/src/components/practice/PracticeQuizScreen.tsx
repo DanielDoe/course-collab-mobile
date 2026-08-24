@@ -44,7 +44,7 @@ import { ApiError } from "../../lib/student-api"
 import { QuestionContentWebView, QuestionMediaView } from "../rewards/QuestionContent"
 import { parseQuestionMedia } from "../../lib/classroom-submission"
 import { QuestionPrepareGate } from "../questions/QuestionPrepareGate"
-import { extractPracticeQuestionTexts } from "../../lib/question-prepare"
+import { resolvePracticeQuestionMcqEarnedFraction } from "../../lib/practice-mcq-earned-fraction"
 import type { StudentSession } from "../../lib/session"
 import {
   emptyMultiPartAnswer,
@@ -265,6 +265,12 @@ export function PracticeQuizScreen() {
         )
       }
 
+      const mcqEarnedFraction = resolvePracticeQuestionMcqEarnedFraction(
+        currentQuestion,
+        selectedLetter,
+        selectedLetters,
+      )
+
       const evalResult = await practiceApi.evaluate(session, {
         questionId: currentQuestion.id,
         answer: answerToSubmit,
@@ -273,6 +279,7 @@ export function PracticeQuizScreen() {
         responseTimeMs,
         xpEarned,
         difficulty: currentQuestion.difficulty,
+        ...(mcqEarnedFraction != null ? { mcqEarnedFraction } : {}),
       })
 
       setAttemptCounts((prev) => ({ ...prev, [currentQuestion.id]: attemptNum }))

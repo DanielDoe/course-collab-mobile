@@ -7,6 +7,7 @@ import { mfaTrustRequestHeadersForInstructor } from "./mfa-device-trust"
 import { getStoredSession } from "./session"
 import { mergeCookieHeaders, persistHttpCookiesFromResponse, studentHttpCookieHeader } from "./student-http-cookies"
 import { headersHaveStudentSessionProof, STUDENT_REFRESH_HEADER } from "./student-session-proof"
+import { observeHttpResponse } from "./perf/http"
 
 export type InstructorScope = {
   instructorId: number
@@ -85,9 +86,17 @@ async function instructorRequest<T>(
     throw new ApiError("Instructor authentication required", 401)
   }
 
+  const startedAt = Date.now()
   const response = await fetch(url, { ...init, credentials: "include", headers })
   let body: unknown = null
   const text = await response.text()
+  observeHttpResponse({
+    method: init?.method ?? "GET",
+    path,
+    status: response.status,
+    startedAt,
+    payloadBytes: text.length,
+  })
   if (text) {
     try {
       body = JSON.parse(text)

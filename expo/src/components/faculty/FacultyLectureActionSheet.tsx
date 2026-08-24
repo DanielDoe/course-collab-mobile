@@ -7,6 +7,7 @@ import { useFacultyScope } from "../../hooks/useFacultyScope"
 import { FacultyStatusPill } from "./faculty-shared"
 import { NativeSelect } from "../NativeSelect"
 import { WEEK_OPTIONS } from "./FacultyNativePickers"
+import { lectureDisplayTitle } from "../lectures/lecture-list-utils"
 import {
   FacultySheetContainer,
   useCollabSheetStyles,
@@ -137,7 +138,7 @@ export function FacultyLectureActionSheet({
           showsVerticalScrollIndicator={false}
         >
           <FacultySheetHero
-            title={lecture.title}
+            title={lectureDisplayTitle(lecture)}
             subtitle={`Week ${lecture.week}`}
             icon="book-outline"
             thumbColor={FACULTY_SHEET_COLOR.link}

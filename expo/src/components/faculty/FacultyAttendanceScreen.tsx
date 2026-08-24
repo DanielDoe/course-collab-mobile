@@ -21,6 +21,7 @@ import {
   pickDefaultMeetingSession,
   resolveRosterSection,
   rosterFromAttendanceRecords,
+  sanitizeFacultyAttendanceAnalytics,
   STATUS_COLORS,
 } from "../../lib/faculty-attendance-utils"
 import {
@@ -405,8 +406,6 @@ export function FacultyAttendanceScreen() {
     [records, search, logStatus],
   )
 
-  const trendInsight = useMemo(() => computeTrendInsight(analytics), [analytics])
-  const trendTone = trendInsight.improving ? FACULTY_ATTENDANCE_COLOR.trend : tokens.warning
   const uniqueSections = useMemo(() => {
     const seen = new Set<string>()
     return courseSessions.filter((s) => {
@@ -416,6 +415,18 @@ export function FacultyAttendanceScreen() {
       return true
     })
   }, [courseSessions])
+  const displayAnalytics = useMemo(
+    () =>
+      sanitizeFacultyAttendanceAnalytics(analytics, {
+        sectionCode: scopedSectionCode === "ALL" ? "ALL" : scopedSectionCode,
+        courseSessionCodes: uniqueSections.map((s) => s.code),
+        meetings: filteredMeetings,
+        records: records,
+      }),
+    [analytics, scopedSectionCode, uniqueSections, filteredMeetings, records],
+  )
+  const trendInsight = useMemo(() => computeTrendInsight(displayAnalytics), [displayAnalytics])
+  const trendTone = trendInsight.improving ? FACULTY_ATTENDANCE_COLOR.trend : tokens.warning
 
   function selectSectionScope(code: string) {
     setSectionFilter(code)
@@ -777,7 +788,7 @@ export function FacultyAttendanceScreen() {
           <>
             {tab === "overview" ? (
               <OverviewTab
-                analytics={analytics}
+                analytics={displayAnalytics}
                 activeMeeting={activeMeeting}
                 onGoRoll={() => setTab("roll")}
                 onGoMeetings={() => setTab("meetings")}

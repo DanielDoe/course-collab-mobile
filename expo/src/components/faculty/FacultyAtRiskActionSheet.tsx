@@ -12,6 +12,7 @@ import { useRouter } from "expo-router"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { ApiError } from "../../lib/api"
+import { attendanceDisplayPercent } from "../../lib/attendance-leaderboard-scope"
 import {
   atRiskSignalsForStudent,
   type AtRiskStudentRow,
@@ -150,7 +151,7 @@ export function FacultyAtRiskActionSheet({
 
   const primaryTone = row.tone === "danger" ? "danger" : "warning"
   const attendancePct =
-    attendance?.attendance_percentage != null ? `${Math.round(attendance.attendance_percentage)}%` : null
+    attendance?.attendance_percentage != null ? `${attendanceDisplayPercent(attendance.attendance_percentage)}%` : null
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>

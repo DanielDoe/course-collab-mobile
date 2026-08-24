@@ -338,6 +338,7 @@ export function GuestRecommendationsScreen() {
             value={deadline}
             onChange={setDeadline}
             accessibilityLabel="Deadline"
+            yearPolicy="upcoming"
           />
         </ModuleSection>
 

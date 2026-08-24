@@ -37,6 +37,21 @@ describe("buildStudentDashboardFromRaw", () => {
     assert.doesNotMatch(stats.partialError ?? "", /grades/)
   })
 
+  it("does not flag Fall 2026 empty attendance as at-risk", () => {
+    const { stats } = buildStudentDashboardFromRaw(
+      raw({
+        attendance: { attendance_percentage: 200, sessions_scored_so_far: 0, classes_attended: 0 },
+        attendanceStreak: 0,
+        classroomPoints: 0,
+        quizHistory: [],
+        gradePayload: { grade: { total_score: 0, letter_grade: null } },
+      }),
+    )
+    assert.equal(stats.attendancePct, 0)
+    assert.equal(stats.riskLevel, "low")
+    assert.equal(stats.partialError, undefined)
+  })
+
   it("does not treat a failed grade fetch as a 0% gradebook", () => {
     const { stats } = buildStudentDashboardFromRaw(
       raw({
@@ -49,5 +64,16 @@ describe("buildStudentDashboardFromRaw", () => {
     assert.equal(stats.unavailable.grade, true)
     assert.equal(stats.classroomPoints, 12)
     assert.match(stats.partialError ?? "", /grades/)
+  })
+
+  it("does not warn when only the attendance streak widget is unavailable", () => {
+    const { stats } = buildStudentDashboardFromRaw(
+      raw({
+        unavailable: { streaks: true },
+      }),
+    )
+    assert.equal(stats.unavailable.streaks, true)
+    assert.equal(stats.attendanceStreak, 4)
+    assert.equal(stats.partialError, undefined)
   })
 })

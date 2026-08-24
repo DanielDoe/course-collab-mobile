@@ -1,7 +1,6 @@
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useLocalSearchParams, usePathname } from "expo-router"
-import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { useStudentShell } from "../../context/StudentShellContext"
 import { useAppThemeTokens, useShellChrome } from "../../context/AppearanceProvider"
 import type { StudentSession } from "../../lib/session"
@@ -15,6 +14,7 @@ import {
   HeaderProfileButton,
   NATIVE_HEADER_BAR_HEIGHT,
   shellTopBarStyles,
+  useStableTopSafeInset,
 } from "./shell-shared"
 
 type Props = {
@@ -22,7 +22,7 @@ type Props = {
 }
 
 export function StudentTopBar({ session }: Props) {
-  const insets = useSafeAreaInsets()
+  const topSafeInset = useStableTopSafeInset()
   const pathname = usePathname()
   const { path: webPathParam } = useLocalSearchParams<{ path?: string }>()
   const webPath = typeof webPathParam === "string" ? decodeURIComponent(webPathParam) : ""
@@ -42,7 +42,7 @@ export function StudentTopBar({ session }: Props) {
 
   return (
     <GlassChromeBar
-      style={[styles.wrapAndroid, { paddingTop: insets.top }]}
+      style={[styles.wrapAndroid, { paddingTop: topSafeInset }]}
       borderBottomColor={chrome.headerBorder}
     >
       <View style={[shellTopBarStyles.bar, { minHeight: NATIVE_HEADER_BAR_HEIGHT }]}>

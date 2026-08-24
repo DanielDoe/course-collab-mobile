@@ -34,6 +34,9 @@ import {
   initialScheduleAdjustmentForm,
   type ScheduleAdjustmentFormState,
 } from "../../../lib/schedule-adjustment/form-utils"
+import {
+  filterScheduleAdjustmentsToSection,
+} from "../../../lib/schedule-adjustment/section-scope"
 import { ScheduleAdjustmentStepper } from "../../schedule-adjustment/ScheduleAdjustmentStepper"
 import { ScheduleAdjustmentNoticeBanner } from "../../schedule-adjustment/ScheduleAdjustmentNoticeBanner"
 import { MobileAvailabilityPicker } from "../../schedule-adjustment/MobileAvailabilityPicker"
@@ -333,6 +336,22 @@ function FacultyScheduleAdjustmentContent() {
       .finally(() => setLoading(false))
   }, [loadList])
 
+  const sectionRequests = useMemo(
+    () => filterScheduleAdjustmentsToSection(requests, scope?.sessionCode),
+    [requests, scope?.sessionCode],
+  )
+
+  useEffect(() => {
+    if (!scope?.sessionCode || !selectedId || selectedId <= 0) return
+    const active = sectionRequests.some((row) => row.id === selectedId)
+    if (!active) {
+      setSelectedId(null)
+      setDetail(null)
+      setCandidates([])
+      setLiveAggregate(null)
+    }
+  }, [scope?.sessionCode, sectionRequests, selectedId])
+
   useEffect(() => {
     const req = detail?.request
     if (!req || req.status !== "DRAFT") return
@@ -386,7 +405,10 @@ function FacultyScheduleAdjustmentContent() {
     if (!scope || !validateForm()) return
     setCreating(true)
     try {
-      const data = await instructorScheduleAdjustmentApi.create(scope, draftPayloadFromForm(form))
+      const data = await instructorScheduleAdjustmentApi.create(scope, {
+        ...draftPayloadFromForm(form),
+        ...(scope.sessionId ? { sectionId: scope.sessionId } : {}),
+      })
       const id = data.request?.id
       AppAlert.alert("Draft saved", "Start the poll when you are ready.")
       setForm(initialScheduleAdjustmentForm)
@@ -471,8 +493,8 @@ function FacultyScheduleAdjustmentContent() {
   const showingList = !showingDetail && selectedId !== -1
   const filteredRequests = useMemo(() => {
     const q = search.trim().toLowerCase()
-    if (!q) return requests
-    return requests.filter((r) => {
+    if (!q) return sectionRequests
+    return sectionRequests.filter((r) => {
       const hay = [
         r.section_code,
         r.meeting_type,
@@ -485,7 +507,7 @@ function FacultyScheduleAdjustmentContent() {
         .toLowerCase()
       return hay.includes(q)
     })
-  }, [requests, search])
+  }, [sectionRequests, search])
   const cancellable =
     request &&
     !["COMPLETED", "FINALIZED", "CANCELLED"].includes(request.status) &&

@@ -37,6 +37,7 @@ import {
 import type { AdminSession } from "../../lib/session"
 import { CoraBrand } from "../cora/CoraBrand"
 import { CoraActionCard } from "../cora/CoraActionCard"
+import { openCoraNativeRoute } from "../../lib/cora/resolve-open-route"
 import { CoraScopeFeedbackBar } from "../cora/CoraScopeFeedbackBar"
 import { ComposerSendButton } from "../theme/ComposerSendButton"
 import { CORA_NAME } from "../../lib/cora-constants"
@@ -305,7 +306,7 @@ export function AdminCoraScreen() {
                       resultMessage={message.proposalResultById?.[proposal.actionId]?.message}
                       onConfirm={() => void confirmProposal(message.id, proposal)}
                       onCancel={() => cancelProposal(message.id, proposal.actionId)}
-                      onOpen={(route) => router.push(route as never)}
+                      onOpen={(route) => openCoraNativeRoute(router, route)}
                     />
                   ))
                 : null}

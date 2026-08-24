@@ -5,7 +5,7 @@ import { SYSTEM, NATIVE } from "../../constants/faculty-native-theme"
 import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
 import { useNativeType } from "../../lib/themed-module-theme"
 import type { LectureWorkspaceQuestion } from "../../lib/lecture-types"
-import { categoryLabel, solutionMarkdownFromQuestion } from "../../lib/lecture-workspace-utils"
+import { categoryLabel, isWorkspaceSolutionUnlocked, solutionMarkdownFromQuestion, workspaceQuestionHasAuthoredSolution } from "../../lib/lecture-workspace-utils"
 import { QuestionContentWebView, QuestionMediaView } from "../rewards/QuestionContent"
 
 import { CoraSolveButton } from "../cora/CoraSolveButton"
@@ -40,7 +40,9 @@ export function StudentLectureWorkspaceQuestionCard({
   const [showSolution, setShowSolution] = useState(false)
 
   const solutionMarkdown = solutionMarkdownFromQuestion(question)
-  const hasSolution = Boolean(solutionMarkdown.trim())
+  const hasSolution = workspaceQuestionHasAuthoredSolution(question)
+  const solutionLocked = hasSolution && !isWorkspaceSolutionUnlocked(question)
+  const canShowSolution = hasSolution && isWorkspaceSolutionUnlocked(question)
   const category = question.topic?.trim() || categoryLabel(question.category)
 
   const borderColor = useMemo(() => {
@@ -90,7 +92,20 @@ export function StudentLectureWorkspaceQuestionCard({
 
           <StudentLectureWorkspaceInkPanel workspace={question.instructor_solution_workspace} />
 
-          {hasSolution ? (
+          {solutionLocked ? (
+            <View style={[styles.solutionLockedBox, { backgroundColor: native.fill, borderColor: tokens.border }]}>
+              <Ionicons name="lock-closed-outline" size={18} color={native.secondaryLabel} />
+              <View style={styles.solutionLockedCopy}>
+                <Text style={[type.bodyEmphasis, { color: native.label }]}>Step-by-step solution locked</Text>
+                <Text style={[type.caption, { color: native.secondaryLabel }]}>
+                  Work through the problem in the workspace first. Your instructor will unlock the solution when
+                  ready.
+                </Text>
+              </View>
+            </View>
+          ) : null}
+
+          {canShowSolution ? (
             <>
               <Pressable
                 style={[styles.solutionToggle, { backgroundColor: tokens.accentSoft, borderColor: tokens.accentBorder }]}
@@ -164,6 +179,19 @@ const styles = StyleSheet.create({
   },
   promptBlock: {
     paddingHorizontal: 2,
+  },
+  solutionLockedBox: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  solutionLockedCopy: {
+    flex: 1,
+    gap: 4,
   },
   solutionToggle: {
     flexDirection: "row",

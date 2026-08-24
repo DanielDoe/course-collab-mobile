@@ -50,6 +50,8 @@ import {
   promoIconOnAccentStyle,
 } from "../../lib/promo-accent-theme"
 import { useDrawerPanelWidth } from "../../lib/responsive-layout"
+import { getQueryClient } from "../../lib/query/client"
+import { prefetchForRoute } from "../../lib/query/nav-prefetch"
 
 /** Small gap below status bar / Dynamic Island — no left or bottom outer inset. */
 const DRAWER_TOP_GAP = 8
@@ -190,6 +192,7 @@ export function StudentDrawerAccordion({ session }: Props) {
   function navigate(route: string) {
     const groupId = getNavGroupIdForPath(route)
     if (groupId) applyExpandedGroup(groupId)
+    prefetchForRoute(getQueryClient(), session, route)
     closeDrawer()
     router.push(route as never)
   }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { Platform, StyleSheet, Switch, Text, View } from "react-native"
 import { hexToRgba } from "../../constants/app-themes"
 import { ApiError, api } from "../../lib/api"
@@ -15,15 +15,16 @@ import { useSession } from "../../context/SessionProvider"
 import { MfaLoginStep } from "../auth/MfaLoginStep"
 import { ErrorBanner, LoginFieldGroup } from "./LoginCard"
 import { LoginButton, LoginField, LoginPasswordToggle } from "./LoginButton"
-import { LoginBackLink, LoginPortalHeader, LoginPortalStack } from "./login-chrome"
+import { LoginBackLink, LoginPortalHeader, LoginPortalStack, type RegisterAuthPanelBack } from "./login-chrome"
 import { AccessRequestStatusScreen } from "../auth/AccessRequestStatusScreen"
 import { useLoginTheme } from "./login-theme"
 
 type Props = {
   onBack?: () => void
+  registerPanelBack?: RegisterAuthPanelBack
 }
 
-export function StaffLoginPanel({ onBack }: Props) {
+export function StaffLoginPanel({ onBack, registerPanelBack }: Props) {
   const { signIn } = useSession()
   const { LOGIN, loginType } = useLoginTheme()
 
@@ -48,6 +49,24 @@ export function StaffLoginPanel({ onBack }: Props) {
       mounted = false
     }
   }, [])
+
+  const handlePanelBack = useCallback((): boolean => {
+    if (accessStatus) {
+      setAccessStatus(null)
+      return true
+    }
+    if (mfaState) {
+      setMfaState(null)
+      setError("")
+      return true
+    }
+    return false
+  }, [accessStatus, mfaState])
+
+  useEffect(() => {
+    registerPanelBack?.(handlePanelBack)
+    return () => registerPanelBack?.(null)
+  }, [handlePanelBack, registerPanelBack])
 
   async function finishStaffLogin(data: Record<string, unknown>, loginPassword?: string) {
     const normalized = parseMfaCompletePayload(data) ?? data

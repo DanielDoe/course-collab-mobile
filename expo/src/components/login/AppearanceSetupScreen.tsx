@@ -23,6 +23,7 @@ import {
   type ThemeId,
 } from "../../constants/app-themes"
 import { NATIVE } from "../../constants/faculty-native-theme"
+import { LoginBackLink } from "./login-chrome"
 import { persistAppearanceSetupComplete } from "../../lib/appearance-setup"
 import { onboardingStepMeta } from "../../lib/onboarding"
 import { authFlowContentMaxWidth, useAuthFlowContentStyle, useAuthFlowLayout } from "../../lib/responsive-layout"
@@ -277,6 +278,9 @@ export function AppearanceSetupScreen() {
         <Text style={[styles.progressLabel, { color: LOGIN.secondaryLabel }]}>
           Step {progressMeta.stepIndex + 1} of {progressMeta.totalSteps}
         </Text>
+        {router.canGoBack() ? (
+          <LoginBackLink label="Back" onPress={() => router.back()} style={styles.appearanceBack} />
+        ) : null}
       </View>
 
       <View style={[styles.scrollHost, contentStyle]}>
@@ -406,6 +410,10 @@ const styles = StyleSheet.create({
   progressLabel: {
     fontSize: 12,
     fontWeight: Platform.OS === "ios" ? "500" : "600",
+  },
+  appearanceBack: {
+    marginTop: 8,
+    alignSelf: "flex-start",
   },
   scrollHost: { flex: 1, minHeight: 0, width: "100%", alignSelf: "center" },
   scrollView: { flex: 1 },

@@ -8,7 +8,13 @@ import { NotetakerScreenHeader } from "../notetaker/NotetakerScreenHeader"
 import { useSession } from "../../context/SessionProvider"
 import { ApiError, type Announcement, type AnnouncementComment } from "../../lib/student-api"
 import type { StudentSession } from "../../lib/session"
-import { courseInfoApi, formatListDate } from "../../lib/course-info-api"
+import { formatListDate } from "../../lib/course-info-api"
+import {
+  useMarkAnnouncementViewed,
+  usePostAnnouncementComment,
+  useReactToAnnouncement,
+  useStudentAnnouncementDetail,
+} from "../../hooks/query/useStudentAnnouncements"
 import { summarizeAnnouncement } from "../../lib/announcement-summary"
 import { ANNOUNCEMENT_LOCKED_MESSAGE } from "../../lib/announcement-content"
 import { AnnouncementBodyWebView } from "./AnnouncementBodyWebView"
@@ -88,51 +94,32 @@ export function AnnouncementDetailScreen() {
   const type = useNativeType()
   const tokens = useAppThemeTokens()
   const aiSummaryStyle = courseInfoAiSummaryStyle(tokens.isDark)
-  const [announcement, setAnnouncement] = useState<Announcement | null>(null)
-  const [comments, setComments] = useState<AnnouncementComment[]>([])
-  const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
-  const [error, setError] = useState("")
+  const detailQuery = useStudentAnnouncementDetail(session, announcementId)
+  const markViewed = useMarkAnnouncementViewed(session)
+  const reactMutation = useReactToAnnouncement(session)
+  const commentMutation = usePostAnnouncementComment(session)
+  const announcement = detailQuery.announcement
+  const comments = detailQuery.comments
+  const loading = detailQuery.isInitialLoading
+  const refreshing = detailQuery.isRefreshing && !detailQuery.isInitialLoading
+  const error = detailQuery.error instanceof ApiError ? detailQuery.error.message : detailQuery.error ? "Could not load announcement." : ""
   const [commentDraft, setCommentDraft] = useState("")
-  const [submittingComment, setSubmittingComment] = useState(false)
-  const [reacting, setReacting] = useState(false)
-
-  const load = useCallback(async () => {
-    if (!session || !Number.isFinite(announcementId)) return
-    setError("")
-    try {
-      const [detail, commentsData] = await Promise.all([
-        courseInfoApi.getAnnouncementById(session, announcementId),
-        courseInfoApi.getAnnouncementComments(session, announcementId).catch(() => ({ comments: [] })),
-      ])
-      setAnnouncement(detail.announcement)
-      setComments(commentsData.comments ?? [])
-
-      void courseInfoApi.markAnnouncementViewed(session, announcementId).catch(() => undefined)
-    } catch (err) {
-      // Stale notification deep links (deleted announcements) should not look like a crash.
-      if (err instanceof ApiError && (err.status === 404 || /not found/i.test(err.message))) {
-        setAnnouncement(null)
-        setComments([])
-        setError("")
-        return
-      }
-      setError(err instanceof ApiError ? err.message : "Could not load announcement.")
-    }
-  }, [session, announcementId])
+  const submittingComment = commentMutation.isPending
+  const reacting = reactMutation.isPending
 
   useEffect(() => {
-    setLoading(true)
-    load().finally(() => setLoading(false))
-  }, [load])
+    if (!session || !Number.isFinite(announcementId) || !announcement) return
+    if (announcement.viewed_by_me || announcement.is_read) return
+    markViewed.mutate(announcementId)
+  }, [session, announcementId, announcement?.id])
 
   const onRefresh = useCallback(async () => {
-    setRefreshing(true)
-    await load()
-    setRefreshing(false)
-  }, [load])
+    await detailQuery.refetch()
+  }, [detailQuery])
 
-  useNotificationModuleRefresh("announcements", onRefresh)
+  useNotificationModuleRefresh("announcements", () => {
+    void detailQuery.refetch()
+  })
 
   const locked = announcement?.student_content_locked === true
   const summary = useMemo(
@@ -149,39 +136,24 @@ export function AnnouncementDetailScreen() {
 
   async function handleReaction(reactionType: string) {
     if (!session || !announcement || locked || announcement.allow_reactions === false) return
-    setReacting(true)
     try {
-      const result = await courseInfoApi.reactToAnnouncement(session, announcement.id, reactionType)
-      setAnnouncement((prev) =>
-        prev
-          ? {
-              ...prev,
-              my_reaction: result.reactionType}
-          : prev,
-      )
+      await reactMutation.mutateAsync({ announcementId: announcement.id, reactionType })
     } catch (err) {
       AppAlert.alert("Reaction failed", err instanceof ApiError ? err.message : "Try again.")
-    } finally {
-      setReacting(false)
     }
   }
 
   async function submitComment() {
     if (!session || !announcement || !commentDraft.trim()) return
     if (locked || announcement.allow_comments === false) return
-    setSubmittingComment(true)
     try {
-      const result = await courseInfoApi.postAnnouncementComment(
-        session,
-        announcement.id,
-        commentDraft.trim(),
-      )
-      setComments((prev) => [...prev, result.comment])
+      await commentMutation.mutateAsync({
+        announcementId: announcement.id,
+        content: commentDraft.trim(),
+      })
       setCommentDraft("")
     } catch (err) {
       AppAlert.alert("Comment failed", err instanceof ApiError ? err.message : "Try again.")
-    } finally {
-      setSubmittingComment(false)
     }
   }
 

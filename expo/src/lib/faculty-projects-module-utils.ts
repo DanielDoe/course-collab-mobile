@@ -1,12 +1,7 @@
 export const PROJECT_LECTURE_DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"] as const
 
-export const PROJECT_MODULE_SESSIONS: Array<{ code: string; label: string }> = [
-  { code: "ELEG1304P01", label: "ELEG1304P01" },
-  { code: "ELEG1301P01", label: "ELEG1301P01" },
-]
-
 export function projectModuleSessionCodes(): string[] {
-  return PROJECT_MODULE_SESSIONS.map((s) => s.code)
+  return []
 }
 
 /** Keep Board / Slots on the current course when those APIs ignore course scope. */

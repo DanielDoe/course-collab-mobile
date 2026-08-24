@@ -1,5 +1,6 @@
 import type { ReactNode } from "react"
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native"
+import { initialWindowMetrics, useSafeAreaInsets } from "react-native-safe-area-context"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { BRAND } from "../../constants"
 import { NATIVE, nativeType } from "../../constants/faculty-native-theme"
@@ -11,6 +12,21 @@ import { PresenceAvatarBadge } from "../presence/PresenceAvatarBadge"
 export { nativeType }
 
 export const NATIVE_HEADER_BAR_HEIGHT = 44
+
+/** `shellTopBarStyles.bar` uses paddingVertical: 6 — include both edges in floating chrome inset. */
+export const NATIVE_HEADER_BAR_VERTICAL_PADDING = 12
+
+export function floatingTopChromeInset(topSafeInset: number): number {
+  return topSafeInset + NATIVE_HEADER_BAR_HEIGHT + NATIVE_HEADER_BAR_VERTICAL_PADDING
+}
+
+const BOOTSTRAP_TOP_INSET = initialWindowMetrics?.insets.top ?? 0
+
+/** Floors top inset so chrome does not collapse under the status bar during stack pops. */
+export function useStableTopSafeInset(): number {
+  const insets = useSafeAreaInsets()
+  return Math.max(insets.top, BOOTSTRAP_TOP_INSET)
+}
 
 /** iOS HIG / Material label colors for app chrome (bars, sheets, menus). */
 export const nativeChrome = {

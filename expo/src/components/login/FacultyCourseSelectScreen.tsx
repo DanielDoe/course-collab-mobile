@@ -88,8 +88,12 @@ export function FacultyCourseSelectScreen() {
   const duplicateCodes = useMemo(() => {
     return new Set(
       uniqueCourses
-        .filter((course, index, arr) => arr.findIndex((item) => item.course_code === course.course_code) !== index)
-        .map((course) => course.course_code),
+        .filter(
+          (course, index, arr) =>
+            arr.findIndex((item) => (item.picker_key ?? String(item.id)) === (course.picker_key ?? String(course.id))) !==
+            index,
+        )
+        .map((course) => course.picker_key ?? String(course.id)),
     )
   }, [uniqueCourses])
 

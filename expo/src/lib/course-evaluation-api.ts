@@ -1,6 +1,6 @@
 import { API_BASE_URL } from "../constants"
 import type { SurveyFormState } from "../constants/course-evaluation-survey"
-import { ApiError } from "./student-api"
+import { ApiError, studentAuthenticatedHeaders } from "./student-api"
 import type { StudentSession } from "./session"
 
 export type CourseEvaluationProof = {
@@ -55,12 +55,8 @@ export type CourseEvaluationSubmitPayload = {
   files: PendingProofFile[]
 }
 
-function studentAuthHeaders(session: StudentSession): Record<string, string> {
-  return {
-    Accept: "application/json",
-    "x-student-id": session.databaseId,
-    "x-student-session": session.section,
-  }
+async function studentAuthHeaders(session: StudentSession): Promise<Record<string, string>> {
+  return studentAuthenticatedHeaders(session)
 }
 
 async function parseJsonBody(response: Response): Promise<unknown> {
@@ -117,7 +113,7 @@ export const courseEvaluationApi = {
     const url = `${API_BASE_URL}/api/student/course-evaluation?${qs.toString()}`
     const response = await fetch(url, {
       method: "GET",
-      headers: studentAuthHeaders(session),
+      headers: await studentAuthHeaders(session),
     })
     const body = await parseJsonBody(response)
     if (!response.ok) {
@@ -173,7 +169,7 @@ export const courseEvaluationApi = {
     const url = `${API_BASE_URL}/api/student/course-evaluation`
     const response = await fetch(url, {
       method: "POST",
-      headers: studentAuthHeaders(session),
+      headers: await studentAuthHeaders(session),
       body: form,
     })
     const body = await parseJsonBody(response)

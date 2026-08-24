@@ -35,6 +35,7 @@ import {
 } from "../../../lib/faculty-cora-theme"
 import { getThemedCoraChatBubblePalette } from "../../ai-tutor/cora-chat-bubble-theme"
 import { CoraActionCard } from "../../cora/CoraActionCard"
+import { openCoraNativeRoute } from "../../../lib/cora/resolve-open-route"
 import { CoraChatDayDivider } from "../../cora/CoraChatDayDivider"
 import { shouldShowChatDayDivider } from "../../../lib/cora/chat-day-divider"
 import {
@@ -1651,7 +1652,7 @@ export function FacultyCoraImmersiveChat({
                       onCancel={() => cancelProposal(item.id, proposal.actionId)}
                       onOpen={(route) => {
                         onClose()
-                        router.push(route as never)
+                        openCoraNativeRoute(router, route)
                       }}
                     />
                   </View>

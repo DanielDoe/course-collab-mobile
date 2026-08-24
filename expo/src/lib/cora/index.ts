@@ -12,6 +12,12 @@ export * from "./confirm-action"
 export * from "./local-proposals"
 export * from "./proposal-message"
 export {
+  resolveCoraOpenRoute,
+  openCoraNativeRoute,
+  navigateCoraRecommendationLink,
+  nativeRouteForModuleId,
+} from "./resolve-open-route"
+export {
   classifyCoraTaskDomain,
   classifyCoraTaskComplexity,
   buildCoraDomainHint,
@@ -20,3 +26,11 @@ export {
   type CoraRoutingMeta,
 } from "./ai/task-classifier"
 export * from "./models"
+export {
+  evaluateCoraSecurityTurn,
+  applyCoraOutputGate,
+  sanitizeCoraToolResult,
+  sanitizeCoraUserError,
+  bindCoraResourceScope,
+  securityActorFromPortal,
+} from "../cora-security"

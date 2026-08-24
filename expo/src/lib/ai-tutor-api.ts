@@ -1,8 +1,7 @@
 import { API_BASE_URL } from "../constants"
 import type { StudentSession } from "./session"
-import { ApiError } from "./student-api"
-import { mfaTrustRequestHeadersForStudent } from "./mfa-device-trust"
-import { mergeCookieHeaders, persistHttpCookiesFromResponse, studentHttpCookieHeader } from "./student-http-cookies"
+import { persistHttpCookiesFromResponse } from "./student-http-cookies"
+import { ApiError, studentAuthenticatedHeaders } from "./student-api"
 import type { CoraImportedProblem } from "./cora-api"
 import type { CoraPreferences } from "./cora-preferences-storage"
 import { learningMemoryForApi } from "./cora-learning-memory"
@@ -20,23 +19,19 @@ import { studentMonthlyAllocation, type CoraMode } from "./cora/credits/economy"
 import type { CoraExpensiveTaskPayload } from "./cora/credits/types"
 import { mapStudentChatResponse } from "./cora/scope/types"
 import { parseCoraChatMeta } from "./cora/models"
+import { observeHttpResponse } from "./perf/http"
+import { coraTurnFromResponse, logCoraTurn } from "./perf/cora"
+import { applyCoraOutputGate, evaluateCoraSecurityTurn, sanitizeCoraUserError } from "./cora-security"
 
 export type { CoraImportedProblem } from "./cora-api"
 
 async function tutorHeaders(session: StudentSession): Promise<HeadersInit> {
-  const base: Record<string, string> = {
-    Accept: "application/json",
-    "Content-Type": "application/json",
-    "x-student-id": session.databaseId,
-  }
-  const jarCookie = await studentHttpCookieHeader()
-  const trust = await mfaTrustRequestHeadersForStudent(session)
-  Object.assign(base, mergeCookieHeaders(trust.Cookie, jarCookie))
-  return base
+  return studentAuthenticatedHeaders(session)
 }
 
 async function request<T>(session: StudentSession, path: string, init?: RequestInit): Promise<T> {
   const url = `${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`
+  const startedAt = Date.now()
   const response = await fetch(url, {
     ...init,
     credentials: "include",
@@ -44,6 +39,13 @@ async function request<T>(session: StudentSession, path: string, init?: RequestI
   })
   let body: unknown = null
   const text = await response.text()
+  observeHttpResponse({
+    method: init?.method ?? "GET",
+    path,
+    status: response.status,
+    startedAt,
+    payloadBytes: text.length,
+  })
   if (text) {
     try {
       body = JSON.parse(text)
@@ -337,6 +339,24 @@ export const aiTutorApi = {
         handlers.onAborted?.()
         return
       }
+      const security = evaluateCoraSecurityTurn(
+        {
+          actor: "student",
+          message,
+          history: conversationHistory,
+        },
+        prepared?.identity,
+      )
+      if (security.action !== "allow" && security.reply) {
+        const safe = applyCoraOutputGate(security.reply, "student", prepared?.identity)
+        const completed = await revealText(safe, handlers.onChunk, signal)
+        if (!completed || signal?.aborted) {
+          handlers.onAborted?.()
+          return
+        }
+        handlers.onDone({ skipCreditRefresh: true })
+        return
+      }
       const coraPreferences = options?.learningMemory
       const useAgent = options?.useAgent !== false
       const platformBlock = !useAgent ? options?.platformContextBlock?.trim() : undefined
@@ -358,6 +378,7 @@ export const aiTutorApi = {
           content: entry.content,
         })),
       )
+      const startedAt = Date.now()
       const response = await fetch(`${API_BASE_URL}/api/ai-tutor`, {
         method: "POST",
         credentials: "include",
@@ -393,6 +414,22 @@ export const aiTutorApi = {
       let data: AiTutorMessageResponse
       try {
         data = (await response.json()) as AiTutorMessageResponse
+        const raw = data as unknown as Record<string, unknown>
+        const encoded = JSON.stringify(data)
+        observeHttpResponse({
+          method: "POST",
+          path: "/api/ai-tutor",
+          status: response.status,
+          startedAt,
+          payloadBytes: encoded.length,
+        })
+        logCoraTurn({
+          route: "/api/ai-tutor",
+          durationMs: Date.now() - startedAt,
+          status: response.status,
+          payloadBytes: encoded.length,
+          ...coraTurnFromResponse(raw),
+        })
       } catch {
         if (prepared) recordCoraError(prepared, message)
         handlers.onError("Could not read the Cora response.")
@@ -456,7 +493,7 @@ export const aiTutorApi = {
         outcome.kind === "scope_redirect" ||
         outcome.kind === "integrity_block" ||
         outcome.kind === "permission_deny"
-          ? outcome.text.trim()
+          ? applyCoraOutputGate(outcome.text.trim(), "student", prepared?.identity)
           : ""
 
       if (!answer) {
@@ -517,7 +554,7 @@ export const aiTutorApi = {
         return
       }
       if (prepared) recordCoraError(prepared, message)
-      handlers.onError(err instanceof Error ? err.message : "Could not reach Cora.")
+      handlers.onError(sanitizeCoraUserError(err instanceof Error ? err.message : "Could not reach Cora."))
     }
   },
 }

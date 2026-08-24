@@ -1,23 +1,37 @@
 import { useMemo, useState } from "react"
-import { Pressable, StyleSheet, Text, View } from "react-native"
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { SYSTEM, NATIVE } from "../../constants/faculty-native-theme"
 import { hexToRgba } from "../../constants/app-themes"
 import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
 import { useNativeType } from "../../lib/themed-module-theme"
-import type { LectureSamplePracticeQuestion } from "../../lib/lecture-types"
+import { ApiError } from "../../lib/api"
+import { studentApi } from "../../lib/student-api"
+import type { StudentSession } from "../../lib/session"
+import type {
+  LectureSamplePracticeAttempt,
+  LectureSamplePracticeEvaluateResult,
+  LectureSamplePracticeQuestion,
+} from "../../lib/lecture-types"
 import {
-  getGradableSubquestions,
+  initialSamplePracticeSelection,
+  normalizeSamplePracticeSelectAllResult,
+  resolveMcqEarnedFractionForSubmission,
+  samplePracticeEngagementPointsMessage,
+  samplePracticeOptionReviewState,
+  samplePracticeResultSummary,
+  selectedLettersFromSavedAnswer,
   subquestionOptionLabels,
-} from "../../lib/lecture-sample-practice-utils"
-import { buildSamplePracticeCoraProblem } from "../../lib/cora-problem"
+} from "../../lib/lecture-sample-practice-grading"
+import { samplePracticeQuestionToImportedProblem } from "../../lib/cora-problem"
 import { QuestionContentWebView, QuestionMediaView } from "../rewards/QuestionContent"
 import { CoraSolveButton } from "../cora/CoraSolveButton"
-import { useCora } from "../cora/CoraProvider"
+import { StudentSamplePracticeCoraChatModal } from "./StudentSamplePracticeCoraChatModal"
 
 const ACCENTS = [SYSTEM.blue, SYSTEM.purple, SYSTEM.teal, SYSTEM.orange] as const
 
 type Props = {
+  session: StudentSession
   lectureId: number
   studentDatabaseId: string
   courseLabel: string
@@ -25,11 +39,13 @@ type Props = {
   index: number
   expanded: boolean
   reviewed: boolean
+  savedAttempt?: LectureSamplePracticeAttempt | null
   onToggle: () => void
   onReviewed: () => void
 }
 
 export function StudentLectureSamplePracticeQuestionCard({
+  session,
   lectureId,
   studentDatabaseId,
   courseLabel,
@@ -37,21 +53,65 @@ export function StudentLectureSamplePracticeQuestionCard({
   index,
   expanded,
   reviewed,
+  savedAttempt,
   onToggle,
   onReviewed,
 }: Props) {
-  const { openCora } = useCora()
   const tokens = useAppThemeTokens()
   const native = useThemedNative()
   const type = useNativeType()
   const accent = ACCENTS[index % ACCENTS.length] ?? SYSTEM.blue
+  const isSelectAll = question.question_type === "select_all"
 
-  const mcq = getGradableSubquestions(question.subquestions)[0]
-  const options = mcq ? subquestionOptionLabels(mcq) : []
+  const options = subquestionOptionLabels({ options: question.options })
 
-  const [selectedLetter, setSelectedLetter] = useState("")
-  const [submitted, setSubmitted] = useState(false)
-  const [isCorrect, setIsCorrect] = useState<boolean | null>(null)
+  const [selected, setSelected] = useState<string | string[]>(() =>
+    initialSamplePracticeSelection(savedAttempt?.student_answer, question.question_type),
+  )
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState("")
+  const [submitted, setSubmitted] = useState(() => Boolean(savedAttempt?.result))
+  const [result, setResult] = useState<LectureSamplePracticeEvaluateResult | null>(() => {
+    const raw = savedAttempt?.result ?? null
+    if (!raw) return null
+    return normalizeSamplePracticeSelectAllResult(
+      raw,
+      question,
+      selectedLettersFromSavedAnswer(savedAttempt?.student_answer),
+    )
+  })
+  const [engagementRecorded, setEngagementRecorded] = useState(() => Boolean(savedAttempt?.result))
+  const [pointsSynced, setPointsSynced] = useState(false)
+  const [engagementPointsEarned, setEngagementPointsEarned] = useState<number | undefined>(undefined)
+  const [coraOpen, setCoraOpen] = useState(false)
+
+  const selectedLetters = useMemo(() => {
+    if (Array.isArray(selected)) {
+      return selected.map((entry) => entry.toUpperCase())
+    }
+    const letter = String(selected).trim().toUpperCase()
+    return letter ? [letter] : []
+  }, [selected])
+
+  const hasSelection = isSelectAll ? selectedLetters.length > 0 : selectedLetters.length === 1
+
+  const isCorrect = result?.is_mcq_correct ?? false
+  const mcqEarnedFraction = result?.mcq_earned_fraction
+
+  const engagementMessage = useMemo(() => {
+    if (!engagementRecorded) return ""
+    return samplePracticeEngagementPointsMessage({
+      pointsSynced,
+      pointsEarned: engagementPointsEarned,
+      mcqEarnedFraction,
+    })
+  }, [engagementPointsEarned, engagementRecorded, mcqEarnedFraction, pointsSynced])
+
+  const explanation =
+    result?.explanation?.trim() ||
+    result?.parts.find((part) => part.explanation?.trim())?.explanation?.trim() ||
+    question.explanation?.trim() ||
+    ""
 
   const borderColor = useMemo(() => {
     if (expanded) return accent.border
@@ -59,187 +119,302 @@ export function StudentLectureSamplePracticeQuestionCard({
     return tokens.border
   }, [accent.border, expanded, reviewed, tokens.border])
 
-  function handleSubmit() {
-    if (!mcq || !selectedLetter) return
-    const correct = (mcq.correct_answer ?? "").toUpperCase()
-    const correctAnswers = (mcq.correct_answers ?? []).map((value) => value.toUpperCase())
-    const ok =
-      selectedLetter.toUpperCase() === correct ||
-      correctAnswers.includes(selectedLetter.toUpperCase())
-    setIsCorrect(ok)
-    setSubmitted(true)
-    onReviewed()
+  const importedProblem = useMemo(
+    () =>
+      samplePracticeQuestionToImportedProblem(
+        lectureId,
+        question,
+        studentDatabaseId,
+        result,
+      ),
+    [lectureId, question, result, studentDatabaseId],
+  )
+
+  function toggleOption(letter: string) {
+    if (submitted || submitting) return
+    const upper = letter.toUpperCase()
+    if (isSelectAll) {
+      setSelected((prev) => {
+        const prevLetters = Array.isArray(prev)
+          ? prev.map((entry) => entry.toUpperCase())
+          : String(prev).trim()
+            ? [String(prev).trim().toUpperCase()]
+            : []
+        return prevLetters.includes(upper)
+          ? prevLetters.filter((entry) => entry !== upper)
+          : [...prevLetters, upper]
+      })
+      return
+    }
+    setSelected(upper)
   }
 
-  function handleOpenCora() {
-    openCora(buildSamplePracticeCoraProblem(lectureId, question, studentDatabaseId))
+  async function handleSubmit() {
+    if (!hasSelection || submitting || submitted) return
+    setSubmitting(true)
+    setSubmitError("")
+    try {
+      const answer = isSelectAll ? selectedLetters : selectedLetters[0] ?? ""
+      const mcqEarnedFractionForSubmit = resolveMcqEarnedFractionForSubmission({
+        questionType: question.question_type,
+        options: question.options,
+        correctAnswer: question.correct_answer,
+        correctAnswers: question.correct_answers,
+        selectedLetters,
+      })
+      const data = await studentApi.evaluateLectureSamplePractice(
+        session,
+        lectureId,
+        question.id,
+        answer,
+        mcqEarnedFractionForSubmit != null
+          ? { mcqEarnedFraction: mcqEarnedFractionForSubmit }
+          : undefined,
+      )
+      setResult(
+        data.result
+          ? normalizeSamplePracticeSelectAllResult(data.result, question, selectedLetters)
+          : null,
+      )
+      setSubmitted(true)
+      setEngagementRecorded(data.engagement?.recorded === true)
+      setPointsSynced(data.engagement?.pointsSynced === true)
+      setEngagementPointsEarned(
+        data.engagement?.pointsEarned != null && Number.isFinite(data.engagement.pointsEarned)
+          ? data.engagement.pointsEarned
+          : undefined,
+      )
+      onReviewed()
+    } catch (err) {
+      setSubmitError(err instanceof ApiError ? err.message : "Could not check your answer.")
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const promptText =
-    mcq?.prompt.trim() ||
     question.question_text.trim() ||
     "Work through this example, submit your answer, then review the solution."
 
+  const resultMessage = useMemo(() => {
+    if (!result) return ""
+    return samplePracticeResultSummary(result, question)
+  }, [question, result])
+
   return (
-    <View style={[styles.card, tokens.cardShadow, { backgroundColor: native.secondaryGrouped, borderColor }]}>
-      <Pressable
-        style={({ pressed }) => [styles.header, pressed && { opacity: NATIVE.pressedOpacity }]}
-        onPress={onToggle}
-        accessibilityRole="button"
-        accessibilityState={{ expanded }}
-      >
-        <View style={[styles.indexBadge, { backgroundColor: accent.soft }]}>
-          <Text style={[styles.indexText, { color: accent.color }]}>{index + 1}</Text>
-        </View>
-        <View style={styles.headerCopy}>
-          <Text style={[type.bodyEmphasis, { color: native.label }]} numberOfLines={2}>
-            {question.title}
-          </Text>
-          <Text style={[type.caption, { color: native.secondaryLabel }]} numberOfLines={1}>
-            {question.topic?.trim() || courseLabel}
-          </Text>
-        </View>
-        {reviewed && !expanded ? (
-          <View style={[styles.reviewBadge, { backgroundColor: tokens.accentSoft }]}>
-            <Text style={[styles.reviewBadgeText, { color: tokens.accentDark }]}>Review</Text>
+    <>
+      <View style={[styles.card, tokens.cardShadow, { backgroundColor: native.secondaryGrouped, borderColor }]}>
+        <Pressable
+          style={({ pressed }) => [styles.header, pressed && { opacity: NATIVE.pressedOpacity }]}
+          onPress={onToggle}
+          accessibilityRole="button"
+          accessibilityState={{ expanded }}
+        >
+          <View style={[styles.indexBadge, { backgroundColor: accent.soft }]}>
+            <Text style={[styles.indexText, { color: accent.color }]}>{index + 1}</Text>
           </View>
-        ) : null}
-        <Ionicons
-          name={expanded ? "chevron-up" : "chevron-down"}
-          size={18}
-          color={native.tertiaryLabel}
-        />
-      </Pressable>
-
-      {expanded ? (
-        <View style={styles.body}>
-          {question.question_media ? <QuestionMediaView media={question.question_media} embedded /> : null}
-
-          {question.question_text.trim() ? (
-            <View style={styles.promptBlock}>
-              <QuestionContentWebView text={question.question_text} embedded />
+          <View style={styles.headerCopy}>
+            <Text style={[type.bodyEmphasis, { color: native.label }]} numberOfLines={2}>
+              {question.title}
+            </Text>
+            <Text style={[type.caption, { color: native.secondaryLabel }]} numberOfLines={1}>
+              {question.topic?.trim() || courseLabel}
+            </Text>
+          </View>
+          {reviewed && !expanded ? (
+            <View style={[styles.reviewBadge, { backgroundColor: tokens.accentSoft }]}>
+              <Text style={[styles.reviewBadgeText, { color: tokens.accentDark }]}>Review</Text>
             </View>
           ) : null}
+          <Ionicons
+            name={expanded ? "chevron-up" : "chevron-down"}
+            size={18}
+            color={native.tertiaryLabel}
+          />
+        </Pressable>
 
-          {mcq?.prompt.trim() && mcq.prompt.trim() !== question.question_text.trim() ? (
-            <View style={styles.promptBlock}>
-              <QuestionContentWebView text={mcq.prompt} embedded compact />
-            </View>
-          ) : null}
+        {expanded ? (
+          <View style={styles.body}>
+            {question.question_media ? <QuestionMediaView media={question.question_media} embedded /> : null}
 
-          {!question.question_text.trim() && !mcq?.prompt.trim() ? (
-            <Text style={[type.secondary, { color: native.secondaryLabel }]}>{promptText}</Text>
-          ) : null}
+            {question.question_text.trim() ? (
+              <View style={styles.promptBlock}>
+                <QuestionContentWebView text={question.question_text} embedded />
+              </View>
+            ) : null}
 
-          {options.length > 0 ? (
-            <View style={styles.optionsStack}>
-              {options.map(({ letter, text }) => {
-                const selected = selectedLetter === letter
-                const showResult = submitted && selected
-                const isOptionCorrect =
-                  letter.toUpperCase() === (mcq?.correct_answer ?? "").toUpperCase() ||
-                  (mcq?.correct_answers ?? []).map((value) => value.toUpperCase()).includes(letter.toUpperCase())
+            {!question.question_text.trim() ? (
+              <Text style={[type.secondary, { color: native.secondaryLabel }]}>{promptText}</Text>
+            ) : null}
 
-                return (
-                  <Pressable
-                    key={letter}
-                    style={[
-                      styles.option,
-                      { borderColor: tokens.border, backgroundColor: native.groupedBackground },
-                      selected && {
-                        borderColor: tokens.accent,
-                        backgroundColor: hexToRgba(tokens.accent, 0.06),
-                      },
-                      submitted && isOptionCorrect && {
-                        borderColor: SYSTEM.green.color,
-                        backgroundColor: hexToRgba(SYSTEM.green.color, 0.08),
-                      },
-                      showResult && !isOptionCorrect && {
-                        borderColor: SYSTEM.red.color,
-                        backgroundColor: hexToRgba(SYSTEM.red.color, 0.06),
-                      },
-                    ]}
-                    disabled={submitted}
-                    onPress={() => setSelectedLetter(letter)}
-                  >
-                    <View
+            {isSelectAll && !submitted ? (
+              <Text style={[type.caption, { color: native.secondaryLabel }]}>
+                Select all that apply, then submit.
+              </Text>
+            ) : null}
+
+            {options.length > 0 ? (
+              <View style={styles.optionsStack}>
+                {options.map(({ letter, text }) => {
+                  const isSelected = selectedLetters.includes(letter)
+                  const { isCorrect: isOptionCorrect, showWrongSelection } =
+                    samplePracticeOptionReviewState(
+                      letter,
+                      selectedLetters,
+                      submitted ? result : null,
+                      question.options,
+                    )
+
+                  return (
+                    <Pressable
+                      key={letter}
                       style={[
-                        styles.optionLetter,
-                        { backgroundColor: native.secondaryGrouped, borderColor: tokens.border },
-                        selected && { backgroundColor: tokens.accent, borderColor: tokens.accent },
+                        styles.option,
+                        { borderColor: tokens.border, backgroundColor: native.groupedBackground },
+                        isSelected && !submitted && {
+                          borderColor: tokens.accent,
+                          backgroundColor: hexToRgba(tokens.accent, 0.06),
+                        },
+                        isOptionCorrect && {
+                          borderColor: SYSTEM.green.color,
+                          backgroundColor: hexToRgba(SYSTEM.green.color, 0.08),
+                        },
+                        showWrongSelection && {
+                          borderColor: SYSTEM.red.color,
+                          backgroundColor: hexToRgba(SYSTEM.red.color, 0.06),
+                        },
                       ]}
+                      disabled={submitted || submitting}
+                      onPress={() => toggleOption(letter)}
+                      accessibilityRole={isSelectAll ? "checkbox" : "radio"}
+                      accessibilityState={{ selected: isSelected, checked: isSelected }}
                     >
-                      <Text
+                      <View
                         style={[
-                          styles.optionLetterText,
-                          { color: native.secondaryLabel },
-                          selected && styles.optionLetterTextSelected,
+                          styles.optionLetter,
+                          { backgroundColor: native.secondaryGrouped, borderColor: tokens.border },
+                          isSelected && !submitted && { backgroundColor: tokens.accent, borderColor: tokens.accent },
+                          isOptionCorrect && { backgroundColor: SYSTEM.green.color, borderColor: SYSTEM.green.color },
                         ]}
                       >
-                        {letter}
-                      </Text>
-                    </View>
-                    <View style={styles.optionTextWrap}>
-                      <QuestionContentWebView text={text} embedded compact />
-                    </View>
-                  </Pressable>
-                )
-              })}
-            </View>
-          ) : null}
+                        <Text
+                          style={[
+                            styles.optionLetterText,
+                            { color: native.secondaryLabel },
+                            (isSelected && !submitted) || isOptionCorrect ? styles.optionLetterTextSelected : null,
+                          ]}
+                        >
+                          {letter}
+                        </Text>
+                      </View>
+                      <View style={styles.optionTextWrap}>
+                        <QuestionContentWebView text={text} embedded compact />
+                      </View>
+                      {isSelectAll ? (
+                        <Ionicons
+                          name={isSelected ? "checkbox" : "square-outline"}
+                          size={22}
+                          color={
+                            showWrongSelection
+                              ? SYSTEM.red.color
+                              : isOptionCorrect
+                                ? SYSTEM.green.color
+                                : isSelected
+                                  ? tokens.accent
+                                  : native.tertiaryLabel
+                          }
+                        />
+                      ) : isSelected ? (
+                        <Ionicons
+                          name="checkmark-circle"
+                          size={22}
+                          color={showWrongSelection ? SYSTEM.red.color : tokens.accent}
+                        />
+                      ) : null}
+                    </Pressable>
+                  )
+                })}
+              </View>
+            ) : null}
 
-          {options.length > 0 && !submitted ? (
-            <Pressable
-              style={[
-                styles.submitBtn,
-                { backgroundColor: tokens.accent },
-                !selectedLetter && styles.submitBtnDisabled,
-              ]}
-              disabled={!selectedLetter}
-              onPress={handleSubmit}
-            >
-              <Text style={styles.submitBtnText}>Submit answer</Text>
-            </Pressable>
-          ) : null}
+            {options.length > 0 && !submitted ? (
+              <Pressable
+                style={[
+                  styles.submitBtn,
+                  { backgroundColor: tokens.accent },
+                  (!hasSelection || submitting) && styles.submitBtnDisabled,
+                ]}
+                disabled={!hasSelection || submitting}
+                onPress={() => void handleSubmit()}
+              >
+                {submitting ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.submitBtnText}>Submit answer</Text>
+                )}
+              </Pressable>
+            ) : null}
 
-          {submitted ? (
-            <View
-              style={[
-                styles.resultBanner,
-                {
-                  backgroundColor: isCorrect
-                    ? hexToRgba(SYSTEM.green.color, 0.1)
-                    : hexToRgba(SYSTEM.orange.color, 0.1),
-                  borderColor: isCorrect ? SYSTEM.green.border : SYSTEM.orange.border,
-                },
-              ]}
-            >
-              <Ionicons
-                name={isCorrect ? "checkmark-circle" : "information-circle-outline"}
-                size={18}
-                color={isCorrect ? SYSTEM.green.color : SYSTEM.orange.color}
-              />
-              <Text style={[type.footnote, { color: native.label, flex: 1 }]}>
-                {isCorrect
-                  ? "Correct — nice work."
-                  : `Not quite. The correct answer is ${mcq?.correct_answer ?? "shown above"}.`}
+            {submitError ? (
+              <Text style={[type.footnote, { color: SYSTEM.red.color }]}>{submitError}</Text>
+            ) : null}
+
+            {submitted && result ? (
+              <View
+                style={[
+                  styles.resultBanner,
+                  {
+                    backgroundColor: isCorrect
+                      ? hexToRgba(SYSTEM.green.color, 0.1)
+                      : hexToRgba(SYSTEM.orange.color, 0.1),
+                    borderColor: isCorrect ? SYSTEM.green.border : SYSTEM.orange.border,
+                  },
+                ]}
+              >
+                <Ionicons
+                  name={isCorrect ? "checkmark-circle" : "information-circle-outline"}
+                  size={18}
+                  color={isCorrect ? SYSTEM.green.color : SYSTEM.orange.color}
+                />
+                <Text style={[type.footnote, { color: native.label, flex: 1 }]}>{resultMessage}</Text>
+              </View>
+            ) : null}
+
+            {submitted && engagementRecorded && engagementMessage ? (
+              <Text style={[type.caption, { color: SYSTEM.green.color }]}>{engagementMessage}</Text>
+            ) : null}
+
+            {submitted && explanation ? (
+              <View style={styles.explanation}>
+                <Text style={[type.caption, styles.explanationLabel, { color: native.secondaryLabel }]}>
+                  Solution
+                </Text>
+                <QuestionContentWebView text={explanation} embedded />
+              </View>
+            ) : null}
+
+            {!submitted ? (
+              <Text style={[type.caption, { color: native.secondaryLabel }]}>
+                Submit your answer first to unlock Solve with Cora.
               </Text>
-            </View>
-          ) : null}
+            ) : null}
 
-          {submitted && mcq?.explanation?.trim() ? (
-            <View style={styles.explanation}>
-              <Text style={[type.caption, styles.explanationLabel, { color: native.secondaryLabel }]}>
-                Solution
-              </Text>
-              <QuestionContentWebView text={mcq.explanation} embedded />
-            </View>
-          ) : null}
+            <CoraSolveButton
+              disabled={!submitted}
+              onPress={() => setCoraOpen(true)}
+            />
+          </View>
+        ) : null}
+      </View>
 
-          <CoraSolveButton onPress={handleOpenCora} />
-        </View>
-      ) : null}
-    </View>
+      <StudentSamplePracticeCoraChatModal
+        visible={coraOpen}
+        session={session}
+        importedProblem={importedProblem}
+        conversationTitle={question.title}
+        onClose={() => setCoraOpen(false)}
+      />
+    </>
   )
 }
 
@@ -297,7 +472,7 @@ const styles = StyleSheet.create({
   },
   option: {
     flexDirection: "row",
-    alignItems: "flex-start",
+    alignItems: "center",
     gap: 10,
     padding: 12,
     borderRadius: 12,
@@ -306,10 +481,11 @@ const styles = StyleSheet.create({
   optionLetter: {
     width: 28,
     height: 28,
-    borderRadius: 14,
+    borderRadius: 8,
     borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
+    flexShrink: 0,
   },
   optionLetterText: {
     fontSize: 13,
@@ -326,6 +502,8 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     paddingVertical: 12,
     alignItems: "center",
+    minHeight: 46,
+    justifyContent: "center",
   },
   submitBtnDisabled: {
     opacity: 0.45,

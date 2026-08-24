@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useState } from "react"
-import { ActivityIndicator, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
+import { Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
 import { AppAlert } from '../../lib/app-alert'
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
@@ -20,6 +20,14 @@ import {
   type InstructorBankTopic} from "../../lib/instructor-api"
 import type { CustomQuestionTypeRecord } from "../../lib/custom-question-types"
 import { useFacultyScope } from "../../hooks/useFacultyScope"
+import {
+  useFacultyQuestionBank,
+  usePermanentDeleteFacultyQuestion,
+  useRestoreFacultyQuestion,
+  useSoftDeleteFacultyQuestion,
+} from "../../hooks/query/useFacultyQuestionBank"
+import { QueryRefreshBanner } from "../query/QueryRefreshBanner"
+import { QuerySkeleton } from "../query/QuerySkeleton"
 import { useNotificationModuleRefresh } from "../../lib/notifications/notification-events"
 import { FacultyEmptyState, FacultyStatusPill } from "./faculty-shared"
 import { FacultyQuestionBankPreviewModal } from "./FacultyQuestionBankPreviewModal"
@@ -57,13 +65,22 @@ export function FacultyQuestionBankScreen() {
   const { scope, ready } = useFacultyScope()
 
   const [tab, setTab] = useState<QuestionBankTab>("all")
-  const [questions, setQuestions] = useState<InstructorBankQuestion[]>([])
-  const [topics, setTopics] = useState<InstructorBankTopic[]>([])
-  const [deleted, setDeleted] = useState<InstructorBankQuestion[]>([])
-  const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
-  const [error, setError] = useState("")
+  const bankQuery = useFacultyQuestionBank(ready ? scope : null)
+  const questions = bankQuery.questions
+  const topics = bankQuery.topics
+  const deleted = bankQuery.deleted
+  const customTypes = bankQuery.customTypes
+  const loading = bankQuery.isInitialLoading
+  const refreshing = bankQuery.isRefreshing && !bankQuery.isInitialLoading
+  const error = bankQuery.error instanceof ApiError
+    ? bankQuery.error.message
+    : bankQuery.error
+      ? "Could not load question bank."
+      : ""
   const [actingId, setActingId] = useState<number | null>(null)
+  const softDeleteQuestion = useSoftDeleteFacultyQuestion(scope)
+  const restoreQuestionMutation = useRestoreFacultyQuestion(scope)
+  const permanentDeleteQuestion = usePermanentDeleteFacultyQuestion(scope)
 
   const [search, setSearch] = useState("")
   const [typeFilter, setTypeFilter] = useState("ALL")
@@ -78,40 +95,12 @@ export function FacultyQuestionBankScreen() {
   const [createWizardOpen, setCreateWizardOpen] = useState(false)
   const [coraDrafts, setCoraDrafts] = useState<DraftQuestionBankItem[]>([])
   const [coraDraftModalOpen, setCoraDraftModalOpen] = useState(false)
-  const [customTypes, setCustomTypes] = useState<CustomQuestionTypeRecord[]>([])
 
-  const load = useCallback(async () => {
-    if (!scope) return
-    setError("")
-    const [allQuestions, topicRows, deletedRows, typeRows] = await Promise.all([
-      instructorApi.getQuestionBank(scope),
-      instructorApi.getQuestionBankTopics(scope),
-      instructorApi.getQuestionBankDeleted(scope),
-      instructorApi.getQuestionBankCustomTypes(scope),
-    ])
-    setQuestions(allQuestions)
-    setTopics(topicRows)
-    setDeleted(
-      deletedRows.map((row) => ({
-        ...row,
-        deleted_at: row.deleted_at ?? "deleted",
-      })),
-    )
-    setCustomTypes(typeRows)
-  }, [scope])
+  const handleRefresh = useCallback(async () => {
+    await bankQuery.refetch()
+  }, [bankQuery.refetch])
 
-  useNotificationModuleRefresh(["assessments", "question-bank"], load)
-
-  useEffect(() => {
-    if (!ready) {
-      setLoading(false)
-      return
-    }
-    setLoading(true)
-    load()
-      .catch((err) => setError(err instanceof ApiError ? err.message : "Could not load question bank."))
-      .finally(() => setLoading(false))
-  }, [ready, load])
+  useNotificationModuleRefresh(["assessments", "question-bank"], handleRefresh)
 
   useEffect(() => {
     if (!ready || !scope?.courseId) return
@@ -122,17 +111,6 @@ export function FacultyQuestionBankScreen() {
       }
     })
   }, [ready, scope?.courseId, scope?.instructorId])
-
-  async function handleRefresh() {
-    setRefreshing(true)
-    try {
-      await load()
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not refresh.")
-    } finally {
-      setRefreshing(false)
-    }
-  }
 
   const typeOptions = useMemo(() => {
     const types = [...new Set(questions.map((q) => q.question_type))].sort()
@@ -241,9 +219,8 @@ export function FacultyQuestionBankScreen() {
           void (async () => {
             setActingId(question.id)
             try {
-              await instructorApi.deleteQuestionBankQuestion(scope, question.id)
+              await softDeleteQuestion.mutateAsync(question)
               setSelected(null)
-              await load()
             } catch (err) {
               AppAlert.alert("Could not delete", err instanceof ApiError ? err.message : "Try again.")
             } finally {
@@ -258,9 +235,8 @@ export function FacultyQuestionBankScreen() {
     if (!scope) return
     setActingId(question.id)
     try {
-      await instructorApi.restoreQuestionBankQuestions(scope, [question.id])
+      await restoreQuestionMutation.mutateAsync(question)
       setSelected(null)
-      await load()
     } catch (err) {
       AppAlert.alert("Could not restore", err instanceof ApiError ? err.message : "Try again.")
     } finally {
@@ -279,9 +255,8 @@ export function FacultyQuestionBankScreen() {
           void (async () => {
             setActingId(question.id)
             try {
-              await instructorApi.permanentlyDeleteQuestionBankQuestions(scope, [question.id])
+              await permanentDeleteQuestion.mutateAsync(question)
               setSelected(null)
-              await load()
             } catch (err) {
               AppAlert.alert("Could not delete", err instanceof ApiError ? err.message : "Try again.")
             } finally {
@@ -379,6 +354,7 @@ export function FacultyQuestionBankScreen() {
       <FacultyModuleStickyHeader>
         <FacultyModuleTabBar tabs={tabItems} tab={tab} onChange={setTab} scrollable />
 
+        <QueryRefreshBanner visible={bankQuery.refreshFailed} onRetry={() => void handleRefresh()} />
         {error ? (
           <View style={[styles.errorBox, { backgroundColor: `${tokens.danger}14` }]}>
             <Text style={[type.caption, { color: tokens.danger, fontWeight: "600" }]}>{error}</Text>
@@ -414,9 +390,7 @@ export function FacultyQuestionBankScreen() {
         ListHeaderComponent={listHeader}
         ListEmptyComponent={
           loading ? (
-            <View style={styles.loadingBox}>
-              <ActivityIndicator size="large" color={FACULTY_QUESTION_BANK_COLOR.link} />
-            </View>
+            <QuerySkeleton />
           ) : listEmptyMeta ? (
             <FacultyEmptyState icon={listEmptyMeta.icon} title={listEmptyMeta.title} body={listEmptyMeta.body} />
           ) : null
@@ -457,7 +431,7 @@ export function FacultyQuestionBankScreen() {
         question={selected}
         onClose={() => setSelected(null)}
         onEdit={openEditQuestion}
-        onDuplicate={() => void load()}
+        onDuplicate={() => void bankQuery.refetch()}
         onDelete={selected && !selected.deleted_at && tab !== "deleted" ? () => void softDelete(selected) : undefined}
         onRestore={
           selected && (selected.deleted_at || tab === "deleted")
@@ -479,7 +453,7 @@ export function FacultyQuestionBankScreen() {
       <FacultyQuestionBankCreateWizard
         visible={createWizardOpen}
         onClose={() => setCreateWizardOpen(false)}
-        onSaved={() => void load()}
+        onSaved={() => void bankQuery.refetch()}
       />
 
       <FacultyQuestionBankEditorModal
@@ -487,14 +461,14 @@ export function FacultyQuestionBankScreen() {
         questionId={editorQuestionId}
         createMode={editorCreateMode}
         onClose={closeEditor}
-        onSaved={() => void load()}
+        onSaved={() => void bankQuery.refetch()}
       />
 
       <FacultyCoraQuestionBankDraftModal
         visible={coraDraftModalOpen}
         drafts={coraDrafts}
         onClose={() => setCoraDraftModalOpen(false)}
-        onSaved={() => void load()}
+        onSaved={() => void bankQuery.refetch()}
       />
     </View>
   )

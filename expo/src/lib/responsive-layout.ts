@@ -1,23 +1,32 @@
 import { useMemo } from "react"
 import { useWindowDimensions, type ViewStyle } from "react-native"
+import { modulePageLayout } from "./module-page-layout"
+import {
+  COMPACT_PHONE_MAX_WIDTH,
+  KPI_GRID_SINGLE_COLUMN_MAX_WIDTH,
+  LARGE_TABLET_MIN_WIDTH,
+  TABLET_MIN_WIDTH,
+} from "./responsive-layout-breakpoints"
 
-/** Below this logical width, two-column grids stack in a single column. */
-export const KPI_GRID_SINGLE_COLUMN_MAX_WIDTH = 340
-
-/** Logical width treated as a compact phone (e.g. iPhone SE). */
-export const COMPACT_PHONE_MAX_WIDTH = 375
+export {
+  COMPACT_PHONE_MAX_WIDTH,
+  KPI_GRID_SINGLE_COLUMN_MAX_WIDTH,
+  LARGE_TABLET_MIN_WIDTH,
+  TABLET_MIN_WIDTH,
+} from "./responsive-layout-breakpoints"
+export {
+  modulePageCardPadding,
+  modulePageHorizontalPadding,
+  modulePageLayout,
+  modulePageStackGap,
+  type ModulePageLayout,
+} from "./module-page-layout"
 
 /** Max content width for dashboard scroll areas on tablet / wide phones. */
 export const DASHBOARD_CONTENT_MAX_WIDTH = 720
 
 /** Max content width for module lists and prose on tablet. */
 export const MODULE_CONTENT_MAX_WIDTH = 840
-
-/** Logical width at which auth/onboarding flows expand for tablet. */
-export const TABLET_MIN_WIDTH = 768
-
-/** Large tablet breakpoint (e.g. iPad Pro 12.9"/13"). */
-export const LARGE_TABLET_MIN_WIDTH = 1024
 
 /** Phone max width for onboarding/legal scroll areas. */
 export const AUTH_FLOW_PHONE_MAX_WIDTH = 560
@@ -208,6 +217,11 @@ export function useModuleContentStyle(): ViewStyle {
       alignSelf: "center",
     }
   }, [width])
+}
+
+export function useModulePageLayout() {
+  const { width, height } = useWindowDimensions()
+  return useMemo(() => modulePageLayout(width, height), [width, height])
 }
 
 export function chartContentWidth(screenWidth: number, horizontalPad = 64): number {

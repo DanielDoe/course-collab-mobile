@@ -12,14 +12,17 @@ import { Ionicons } from "@/components/icons/AppIcon"
 import { useRouter } from "expo-router"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { resolveNotificationLink, announcementIdFromNotificationRoute } from "../../lib/notification-link"
+import { resolveCoraOpenRoute } from "../../lib/cora/resolve-open-route"
 import {
-  dismissNotification,
-  fetchStudentNotifications,
   formatNotificationTime,
-  markAllNotificationsRead,
-  markNotificationRead,
   type StudentNotification,
 } from "../../lib/student-notifications"
+import {
+  useDismissNotification,
+  useMarkAllNotificationsRead,
+  useMarkNotificationRead,
+  useStudentNotificationsInbox,
+} from "../../hooks/query/useStudentNotifications"
 import {
   loadNotificationInboxPrefs,
   saveNotificationInboxPrefs,
@@ -165,9 +168,14 @@ export function NotificationsSheet({
   const chrome = useShellChrome()
   const typeIcons = useNotificationTypeIcons()
   const [filter, setFilter] = useState<Filter>("all")
-  const [loading, setLoading] = useState(false)
-  const [notifications, setNotifications] = useState<StudentNotification[]>([])
-  const [unreadCount, setUnreadCount] = useState(0)
+  const inboxQuery = useStudentNotificationsInbox(session, true)
+  const markReadMutation = useMarkNotificationRead(session)
+  const markAllMutation = useMarkAllNotificationsRead(session)
+  const dismissMutation = useDismissNotification(session)
+  const notifications = inboxQuery.notifications
+  const loading = inboxQuery.isInitialLoading && notificationsOpen
+  const loadFailed = inboxQuery.loadFailed && notificationsOpen
+  const loadError = inboxQuery.loadError
   const [selected, setSelected] = useState<StudentNotification | null>(null)
   const [detailOpen, setDetailOpen] = useState(false)
   const [relatedAvailable, setRelatedAvailable] = useState(true)
@@ -183,36 +191,24 @@ export function NotificationsSheet({
   )
 
   const load = useCallback(async () => {
-    setLoading(true)
-    try {
-      const [result, nextPrefs] = await Promise.all([
-        fetchStudentNotifications(session),
-        loadNotificationInboxPrefs("student", session.databaseId),
-      ])
-      setPrefs(nextPrefs)
-      setNotifications(result.notifications)
-      const archived = new Set(nextPrefs.archivedIds)
-      const visibleUnread = result.notifications.filter(
-        (n) => !n.is_read && !archived.has(n.id),
-      ).length
-      setUnreadCount(visibleUnread)
-      setNotificationCount(visibleUnread)
-      if (result.throttled) {
-        setTimeout(() => void load(), 1500)
-      }
-    } finally {
-      setLoading(false)
-    }
-  }, [session, setNotificationCount])
+    const nextPrefs = await loadNotificationInboxPrefs("student", session.databaseId)
+    setPrefs(nextPrefs)
+    await inboxQuery.refetch()
+  }, [session.databaseId, inboxQuery])
 
   useEffect(() => {
-    if (notificationsOpen) {
-      void load()
-    }
+    if (notificationsOpen) void load()
   }, [notificationsOpen, load])
 
-  useEffect(() => onNotificationsRefresh(() => void load()), [load])
+  useEffect(() => onNotificationsRefresh(() => void inboxQuery.refetch()), [inboxQuery])
 
+  useEffect(() => {
+    const archived = new Set(prefs.archivedIds)
+    const visibleUnread = notifications.filter((n) => !n.is_read && !archived.has(n.id)).length
+    setNotificationCount(visibleUnread)
+  }, [notifications, prefs.archivedIds, setNotificationCount])
+
+  const unreadCount = inboxQuery.unreadCount
   const pinnedSet = useMemo(() => new Set(prefs.pinnedIds), [prefs.pinnedIds])
   const archivedSet = useMemo(() => new Set(prefs.archivedIds), [prefs.archivedIds])
 
@@ -239,7 +235,7 @@ export function NotificationsSheet({
   }, [archivedSet, notifications, pinnedSet])
 
   async function relatedTargetAvailable(item: StudentNotification): Promise<boolean> {
-    const route = resolveNotificationLink(item.link)
+    const route = resolveItemRoute(item)
     if (!route) return false
     const announcementId = announcementIdFromNotificationRoute(route)
     if (announcementId == null) return true
@@ -254,26 +250,25 @@ export function NotificationsSheet({
     }
   }
 
+  function resolveItemRoute(item: StudentNotification): string | null {
+    return resolveCoraOpenRoute(item.link) ?? resolveNotificationLink(item.link)
+  }
+
   async function handleOpen(item: StudentNotification) {
+    const route = resolveItemRoute(item)
     setSelected(item)
-    setRelatedAvailable(Boolean(item.link))
+    setRelatedAvailable(route ? Boolean(item.link) : false)
     closeNotifications()
     setDetailOpen(true)
 
     if (!item.is_read) {
-      const ok = await markNotificationRead(session, item.id)
-      if (ok) {
-        const nextItem = { ...item, is_read: true, read_at: new Date().toISOString() }
-        setSelected(nextItem)
-        setNotifications((prev) => prev.map((n) => (n.id === item.id ? nextItem : n)))
-        const nextUnread = Math.max(0, unreadCount - 1)
-        setUnreadCount(nextUnread)
-        setNotificationCount(nextUnread)
-      }
+      const nextItem = { ...item, is_read: true, read_at: new Date().toISOString() }
+      setSelected(nextItem)
+      void markReadMutation.mutateAsync(item.id)
     }
 
     if (item.link) {
-      const available = await relatedTargetAvailable(item)
+      const available = route ? await relatedTargetAvailable(item) : false
       setRelatedAvailable(available)
     }
   }
@@ -281,8 +276,11 @@ export function NotificationsSheet({
   function handleOpenRelated(item: StudentNotification) {
     setDetailOpen(false)
     closeNotifications()
-    const route = resolveNotificationLink(item.link)
-    if (!route) return
+    const route = resolveItemRoute(item)
+    if (!route) {
+      AppAlert.alert("Link unavailable", "This notification does not have a supported destination in the app.")
+      return
+    }
     if (!relatedAvailable && announcementIdFromNotificationRoute(route) != null) {
       router.push("/announcements" as never)
       return
@@ -291,15 +289,8 @@ export function NotificationsSheet({
   }
 
   async function handleDismiss(item: StudentNotification) {
-    const ok = await dismissNotification(session, item.id)
-    if (!ok) return
-    setNotifications((prev) => prev.filter((n) => n.id !== item.id))
+    void dismissMutation.mutateAsync(item.id)
     await persistPrefs(withoutNotification(prefs, item.id))
-    if (!item.is_read) {
-      const nextUnread = Math.max(0, unreadCount - 1)
-      setUnreadCount(nextUnread)
-      setNotificationCount(nextUnread)
-    }
   }
 
   async function handleTogglePin(item: StudentNotification) {
@@ -311,9 +302,7 @@ export function NotificationsSheet({
     const nextArchived = !archivedSet.has(item.id)
     await persistPrefs(withArchived(prefs, item.id, nextArchived))
     if (!item.is_read) {
-      const nextUnread = Math.max(0, unreadCount + (nextArchived ? -1 : 1))
-      setUnreadCount(nextUnread)
-      setNotificationCount(nextUnread)
+      setNotificationCount(Math.max(0, unreadCount + (nextArchived ? -1 : 1)))
     }
     if (nextArchived && selected?.id === item.id) {
       setDetailOpen(false)
@@ -344,13 +333,7 @@ export function NotificationsSheet({
   }
 
   async function handleMarkAllRead() {
-    const ok = await markAllNotificationsRead(session)
-    if (!ok) return
-    setNotifications((prev) =>
-      prev.map((n) => ({ ...n, is_read: true, read_at: n.read_at ?? new Date().toISOString() })),
-    )
-    setUnreadCount(0)
-    setNotificationCount(0)
+    await markAllMutation.mutateAsync()
   }
 
   const filterOptions: Array<{ id: Filter; label: string }> = [
@@ -376,6 +359,8 @@ export function NotificationsSheet({
         onClose={closeNotifications}
         accessibilityLabel="Close notifications"
         maxHeight="82%"
+        /* The title, unread count, and filters stay pinned; only the list scrolls. */
+        scrollable={false}
         sheetHostStyle={[
           styles.sheet,
           {
@@ -447,52 +432,74 @@ export function NotificationsSheet({
           </ScrollView>
         </View>
 
-        {loading && notifications.length === 0 ? (
-          <View style={styles.loadingWrap}>
-            <ActivityIndicator color={tokens.accent} />
-            <Text style={[styles.loadingText, { color: chrome.secondaryLabel }]}>
-              Loading notifications…
-            </Text>
-          </View>
-        ) : filtered.length === 0 ? (
-          <View style={styles.emptyWrap}>
-            <View style={[styles.emptyIcon, { backgroundColor: chrome.groupedBg }]}>
-              <Ionicons name="notifications-off-outline" size={28} color={chrome.tertiaryLabel} />
+        <ScrollView
+          style={styles.listScroll}
+          contentContainerStyle={styles.listScrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {loading && notifications.length === 0 ? (
+            <View style={styles.loadingWrap}>
+              <ActivityIndicator color={tokens.accent} />
+              <Text style={[styles.loadingText, { color: chrome.secondaryLabel }]}>
+                Loading notifications…
+              </Text>
             </View>
-            <Text style={[styles.emptyTitle, { color: chrome.label }]}>No notifications</Text>
-            <Text style={[styles.emptyBody, { color: chrome.secondaryLabel }]}>
-              {filter === "unread"
-                ? "You're all caught up."
-                : filter === "pinned"
-                  ? "Pin important updates to keep them on top."
-                  : filter === "archived"
-                    ? "Archived notifications will show up here."
-                    : "New updates will appear here."}
-            </Text>
-          </View>
-        ) : (
-          <View
-            style={[
-              styles.group,
-              { backgroundColor: chrome.groupedBg, borderColor: chrome.groupedBorder },
-            ]}
-          >
-            {filtered.map((item, index) => (
-              <View key={item.id}>
-                <NotificationRow
-                  item={item}
-                  pinned={pinnedSet.has(item.id)}
-                  typeIcons={typeIcons}
-                  onPress={() => void handleOpen(item)}
-                  onDismiss={() => void handleDismiss(item)}
-                />
-                {index < filtered.length - 1 ? (
-                  <View style={[styles.separator, { backgroundColor: chrome.separator }]} />
-                ) : null}
+          ) : loadFailed ? (
+            <View style={styles.emptyWrap}>
+              <View style={[styles.emptyIcon, { backgroundColor: chrome.groupedBg }]}>
+                <Ionicons name="cloud-offline-outline" size={28} color={chrome.tertiaryLabel} />
               </View>
-            ))}
-          </View>
-        )}
+              <Text style={[styles.emptyTitle, { color: chrome.label }]}>Could not load notifications</Text>
+              <Text style={[styles.emptyBody, { color: chrome.secondaryLabel }]}>
+                {loadError ?? "Check your connection and try again."}
+              </Text>
+              <Pressable
+                onPress={() => void load()}
+                style={[styles.retryBtn, { backgroundColor: tokens.accentSoftStrong, borderColor: tokens.accentBorder }]}
+              >
+                <Text style={[styles.retryBtnText, { color: tokens.accent }]}>Try again</Text>
+              </Pressable>
+            </View>
+          ) : filtered.length === 0 ? (
+            <View style={styles.emptyWrap}>
+              <View style={[styles.emptyIcon, { backgroundColor: chrome.groupedBg }]}>
+                <Ionicons name="notifications-off-outline" size={28} color={chrome.tertiaryLabel} />
+              </View>
+              <Text style={[styles.emptyTitle, { color: chrome.label }]}>No notifications</Text>
+              <Text style={[styles.emptyBody, { color: chrome.secondaryLabel }]}>
+                {filter === "unread"
+                  ? "You're all caught up."
+                  : filter === "pinned"
+                    ? "Pin important updates to keep them on top."
+                    : filter === "archived"
+                      ? "Archived notifications will show up here."
+                      : "New updates will appear here."}
+              </Text>
+            </View>
+          ) : (
+            <View
+              style={[
+                styles.group,
+                { backgroundColor: chrome.groupedBg, borderColor: chrome.groupedBorder },
+              ]}
+            >
+              {filtered.map((item, index) => (
+                <View key={item.id}>
+                  <NotificationRow
+                    item={item}
+                    pinned={pinnedSet.has(item.id)}
+                    typeIcons={typeIcons}
+                    onPress={() => void handleOpen(item)}
+                    onDismiss={() => void handleDismiss(item)}
+                  />
+                  {index < filtered.length - 1 ? (
+                    <View style={[styles.separator, { backgroundColor: chrome.separator }]} />
+                  ) : null}
+                </View>
+              ))}
+            </View>
+          )}
+        </ScrollView>
       </GlassBottomSheetModal>
 
       <StudentNotificationDetailSheet
@@ -520,6 +527,8 @@ const styles = StyleSheet.create({
     paddingTop: 8,
   },
   handleWrap: { alignItems: "center", paddingBottom: 8 },
+  listScroll: { flexGrow: 0, flexShrink: 1 },
+  listScrollContent: { paddingBottom: 4 },
   handle: {
     width: 36,
     height: 5,
@@ -567,6 +576,14 @@ const styles = StyleSheet.create({
   },
   emptyTitle: { fontSize: 17, fontWeight: "700" },
   emptyBody: { fontSize: 14, textAlign: "center" },
+  retryBtn: {
+    marginTop: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  retryBtnText: { fontSize: 14, fontWeight: "700" },
   group: {
     borderRadius: 14,
     overflow: "hidden",

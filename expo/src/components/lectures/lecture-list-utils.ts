@@ -3,8 +3,21 @@ import type { LectureItem } from "../../lib/student-api"
 import type { StudentSession } from "../../lib/session"
 import type { LectureCardKind } from "../../lib/lecture-list-theme"
 import { adaptThumbPaletteForAppearance, listThumbPalette, type ListThumbPaletteOptions } from "../theme/list-thumb-palette"
+import {
+  lectureDisplayTitle,
+  lectureListDisplayTitle,
+  parseLectureSyllabusReference,
+  stripSharedLectureSeriesPrefix,
+  type LectureTitleFields,
+} from "../../lib/lecture-display-title"
 
-export type { LectureCardKind }
+export type { LectureCardKind, LectureTitleFields }
+export {
+  lectureDisplayTitle,
+  lectureListDisplayTitle,
+  parseLectureSyllabusReference,
+  stripSharedLectureSeriesPrefix,
+}
 
 export type LectureCardPalette = {
   color: string

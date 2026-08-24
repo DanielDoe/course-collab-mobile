@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useMemo, useState } from "react"
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { AppAlert } from '../../lib/app-alert'
 import { Ionicons } from "@/components/icons/AppIcon"
@@ -6,7 +6,9 @@ import { useSession } from "../../context/SessionProvider"
 import { useThemedNative } from "../../context/AppearanceProvider"
 import { ApiError, type OfficeHoursRequest } from "../../lib/student-api"
 import type { StudentSession } from "../../lib/session"
-import { courseInfoApi, formatListDate } from "../../lib/course-info-api"
+import { formatListDate } from "../../lib/course-info-api"
+import { useCreateStudentOfficeHours, useStudentOfficeHours } from "../../hooks/query/useStudentOfficeHours"
+import { QueryRefreshBanner } from "../query/QueryRefreshBanner"
 import { useNativeType } from "../../lib/themed-module-theme"
 import { TabbedModuleLayout } from "../theme/TabbedModuleLayout"
 import { EmptyBlock } from "../rewards/rewards-shared"
@@ -65,39 +67,28 @@ export function OfficeHoursScreen() {
   const native = useThemedNative()
   const type = useNativeType()
   const [tab, setTab] = useState<Tab>("new")
-  const [requests, setRequests] = useState<OfficeHoursRequest[]>([])
+  const hoursQuery = useStudentOfficeHours(session)
+  const createHours = useCreateStudentOfficeHours(session)
+  const requests = hoursQuery.requests
   const [topic, setTopic] = useState("")
   const [area, setArea] = useState("")
   const [description, setDescription] = useState("")
   const [priority, setPriority] = useState("medium")
   const [preferredDate, setPreferredDate] = useState("")
-  const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
-  const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState("")
+  const loading = hoursQuery.isInitialLoading
+  const refreshing = hoursQuery.isRefreshing && !hoursQuery.isInitialLoading
+  const submitting = createHours.isPending
+  const error = hoursQuery.error instanceof ApiError
+    ? hoursQuery.error.message
+    : hoursQuery.error
+      ? "Failed to load requests."
+      : ""
+  const [submitError, setSubmitError] = useState("")
   const [message, setMessage] = useState("")
 
-  const load = useCallback(async () => {
-    if (!session) return
-    setError("")
-    try {
-      const data = await courseInfoApi.getOfficeHours(session)
-      setRequests(data.requests ?? [])
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to load requests.")
-    }
-  }, [session])
-
-  useEffect(() => {
-    setLoading(true)
-    load().finally(() => setLoading(false))
-  }, [load])
-
   const onRefresh = useCallback(async () => {
-    setRefreshing(true)
-    await load()
-    setRefreshing(false)
-  }, [load])
+    await hoursQuery.refetch()
+  }, [hoursQuery.refetch])
 
   useNotificationModuleRefresh("office-hours", onRefresh)
 
@@ -106,16 +97,16 @@ export function OfficeHoursScreen() {
       AppAlert.alert("Topic required", "Please enter what you'd like to discuss.")
       return
     }
-    setSubmitting(true)
     setMessage("")
-    setError("")
+    setSubmitError("")
     try {
-      await courseInfoApi.createOfficeHours(session, {
+      await createHours.mutateAsync({
         topic: topic.trim(),
         areaOfConcern: area.trim() || undefined,
         description: description.trim() || undefined,
         priority,
-        preferredDates: preferredDate.trim() ? [preferredDate.trim()] : undefined})
+        preferredDates: preferredDate.trim() ? [preferredDate.trim()] : undefined,
+      })
       setTopic("")
       setArea("")
       setDescription("")
@@ -123,11 +114,8 @@ export function OfficeHoursScreen() {
       setPriority("medium")
       setMessage("Request submitted — your instructor will review it.")
       setTab("requests")
-      await load()
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not submit request.")
-    } finally {
-      setSubmitting(false)
+      setSubmitError(err instanceof ApiError ? err.message : "Could not submit request.")
     }
   }
 
@@ -251,7 +239,8 @@ export function OfficeHoursScreen() {
       loading={loading}
       refreshing={refreshing}
       onRefresh={() => void onRefresh()}
-      error={error}
+      error={submitError || error}
+      chrome={<QueryRefreshBanner visible={hoursQuery.refreshFailed} onRetry={() => void onRefresh()} />}
       pages={[renderNewRequestPage(), renderRequestsPage()]}
     />
   )

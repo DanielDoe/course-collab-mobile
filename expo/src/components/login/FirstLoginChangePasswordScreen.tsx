@@ -19,7 +19,7 @@ import {
 } from "../../lib/pending-login-password"
 import { resolvePostLoginRoute } from "../../lib/onboarding"
 import { studentApi } from "../../lib/student-api"
-import { navigatePostSignIn, replaceAuthRoute } from "../../lib/navigation-reset"
+import { advanceAuthOnboarding, navigatePostSignIn, replaceAuthRoute } from "../../lib/navigation-reset"
 import { AUTH_FORM_PHONE_MAX_WIDTH, useAuthFlowLayout } from "../../lib/responsive-layout"
 import type { FacultySession, StudentSession } from "../../lib/session"
 import { ErrorBanner, LoginFieldGroup } from "./LoginCard"
@@ -106,7 +106,7 @@ export function FirstLoginChangePasswordScreen() {
 
   async function continueAfterChange(nextSession: FacultySession | StudentSession) {
     clearPendingLoginPassword()
-    navigatePostSignIn(router, await resolvePostLoginRoute(nextSession))
+    advanceAuthOnboarding(router, await resolvePostLoginRoute(nextSession))
   }
 
   async function handleSubmit() {

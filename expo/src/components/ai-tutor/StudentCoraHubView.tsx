@@ -25,6 +25,7 @@ import { CoraHubEnter } from "../cora/CoraHubEnter"
 import { CoraLoadingMark } from "../cora/CoraLoadingMark"
 import { SolidListThumbTile } from "../theme/SolidListThumbTile"
 import { NATIVE } from "../../constants/faculty-native-theme"
+import { navigateCoraRecommendationLink } from "../../lib/cora/resolve-open-route"
 import { useAuthFlowContentStyle, useModuleContentStyle, useResponsiveGridColumns } from "../../lib/responsive-layout"
 import {
   STUDENT_CORA_COLOR,
@@ -148,7 +149,7 @@ function TodayRecommendationsPager({
   cardBg,
   materialStyle,
   onOpenChat,
-  onNavigateLink,
+  onNavigateRecommendation,
   onRecommendationPress,
 }: {
   recommendations: AiTutorRecommendation[]
@@ -156,7 +157,7 @@ function TodayRecommendationsPager({
   cardBg: string
   materialStyle: ViewStyle
   onOpenChat: () => void
-  onNavigateLink: (link: string) => void
+  onNavigateRecommendation: (link: string) => boolean
   onRecommendationPress?: (rec: AiTutorRecommendation) => boolean
 }) {
   const native = useModuleTheme().native
@@ -203,8 +204,8 @@ function TodayRecommendationsPager({
                     iconSoft={`${STUDENT_CORA_COLOR.link}18`}
                     onPress={() => {
                       if (onRecommendationPress?.(rec)) return
-                      if (rec.link.startsWith("/")) onNavigateLink(rec.link)
-                      else onOpenChat()
+                      if (onNavigateRecommendation(rec.link)) return
+                      onOpenChat()
                     }}
                     isLast={index === page.length - 1}
                   />
@@ -416,7 +417,7 @@ export function StudentCoraHubView({
                   cardBg={cardBg}
                   materialStyle={materialStyle}
                   onOpenChat={onOpenChat}
-                  onNavigateLink={(link) => router.push(link as never)}
+                  onNavigateRecommendation={(link) => navigateCoraRecommendationLink(router, link)}
                   onRecommendationPress={onTodayRecommendationPress}
                 />
               </>

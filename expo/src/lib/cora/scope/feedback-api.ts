@@ -1,8 +1,9 @@
 import { API_BASE_URL } from "../../../constants"
 import type { AdminSession, FacultySession, StudentSession } from "../../session"
-import { ApiError } from "../../student-api"
-import { mfaTrustRequestHeadersForStudent } from "../../mfa-device-trust"
-import { mergeCookieHeaders, persistHttpCookiesFromResponse, studentHttpCookieHeader } from "../../student-http-cookies"
+import { persistHttpCookiesFromResponse } from "../../student-http-cookies"
+import { ApiError, studentAuthenticatedHeaders } from "../../student-api"
+import { instructorAuthenticatedHeaders } from "../../instructor-api"
+import { adminAuthenticatedHeaders } from "../../admin-session-headers"
 
 export type CoraScopeFeedbackRole = "student" | "instructor" | "faculty" | "admin"
 
@@ -13,15 +14,7 @@ export type CoraScopeFeedbackResult = {
 }
 
 async function studentHeaders(session: StudentSession): Promise<HeadersInit> {
-  const base: Record<string, string> = {
-    Accept: "application/json",
-    "Content-Type": "application/json",
-    "x-student-id": session.databaseId,
-  }
-  const jarCookie = await studentHttpCookieHeader()
-  const trust = await mfaTrustRequestHeadersForStudent(session)
-  Object.assign(base, mergeCookieHeaders(trust.Cookie, jarCookie))
-  return base
+  return studentAuthenticatedHeaders(session)
 }
 
 /**
@@ -42,9 +35,12 @@ export async function submitCoraScopeFeedback(args: {
   if (args.role === "student") {
     Object.assign(headers, await studentHeaders(args.session as StudentSession))
   } else if (args.role === "instructor" || args.role === "faculty") {
-    headers["x-instructor-id"] = String((args.session as FacultySession).id)
+    Object.assign(
+      headers,
+      await instructorAuthenticatedHeaders({ instructorId: (args.session as FacultySession).id }),
+    )
   } else {
-    headers["x-admin-id"] = String((args.session as AdminSession).id)
+    Object.assign(headers, await adminAuthenticatedHeaders((args.session as AdminSession).id))
   }
 
   const apiRole =

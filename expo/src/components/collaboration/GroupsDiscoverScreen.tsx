@@ -14,7 +14,7 @@ import {
   type GroupRecord,
   type OpenCall} from "../../lib/collaboration-api"
 import { CollabCard, CollabSectionTitle } from "./collab-shared"
-import { CollabScreenTitle } from "./collab-nav"
+import { CollabFlowHeader } from "./collab-nav"
 import { useCollabTheme } from "./collab-module-ui"
 
 function useStudentSession(): StudentSession | null {
@@ -66,8 +66,13 @@ export function GroupsDiscoverScreen() {
   }
 
   return (
-    <ScrollView contentContainerStyle={[styles.content, scrollPad]}>
-      <CollabScreenTitle title="Discover groups" subtitle="Join open teams or browse calls" />
+    <View style={[styles.screen, { backgroundColor: SN.groupedBackground }]}>
+      <CollabFlowHeader
+        title="Discover groups"
+        subtitle="Join open teams or browse calls"
+        fallbackHref="/module/groups"
+      />
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: scrollPad.paddingBottom }]}>
         {loading ? (
           <ActivityIndicator color={theme.primary} style={{ marginTop: 24 }} />
         ) : (
@@ -119,10 +124,12 @@ export function GroupsDiscoverScreen() {
           </>
         )}
       </ScrollView>
+    </View>
   )
 }
 
 const styles = StyleSheet.create({
+  screen: { flex: 1 },
   content: { padding: 16, gap: 12 },
   empty: { fontSize: 13, textAlign: "center", paddingVertical: 12 },
   cardWrap: { gap: 8 },

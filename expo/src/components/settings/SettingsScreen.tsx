@@ -150,7 +150,7 @@ export function SettingsScreen() {
   const native = useThemedNative()
   const tokens = useAppThemeTokens()
   const type = useNativeType()
-  const { signOut } = useSession()
+  const { signOut, updateSession } = useSession()
   const studentShell = useOptionalStudentShell()
   const { prefs } = useAppearance()
   const appearanceSummary = `${getThemeLabel(prefs.themeId)} · ${getAppearanceModeLabel(prefs.appearanceMode)}`
@@ -188,7 +188,8 @@ export function SettingsScreen() {
   const membershipTier = studentShell?.membershipTier ?? localMembershipTier
   const membershipTierLoaded = studentShell?.membershipTierLoaded ?? localMembershipTierLoaded
 
-  const displayName = studentSession?.name ?? summerSession?.name ?? "Account"
+  const displayName =
+    fullName.trim() || studentSession?.name || summerSession?.name || "Account"
   const profileInitials = useMemo(() => initialsFor(displayName), [displayName])
   const courseLine = useMemo(
     () => (studentSession ? getStudentCourseLine(studentSession) : null),
@@ -264,7 +265,10 @@ export function SettingsScreen() {
     setMessage("")
     setError("")
     try {
-      await studentApi.updateProfile(studentSession, { fullName: fullName.trim(), email: email.trim() })
+      const nextName = fullName.trim()
+      await studentApi.updateProfile(studentSession, { fullName: nextName, email: email.trim() })
+      setFullName(nextName)
+      await updateSession({ name: nextName, email: email.trim() })
       setMessage("Profile updated.")
       setActiveSheet(null)
     } catch (err) {

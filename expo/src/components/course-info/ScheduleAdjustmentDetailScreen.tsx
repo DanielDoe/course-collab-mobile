@@ -19,6 +19,7 @@ import {
   type SlotHeatmapCell,
   type TopMeetingWindow,
 } from "../../lib/schedule-adjustment-api"
+import { scheduleAdjustmentMatchesSection } from "../../lib/schedule-adjustment/section-scope"
 import {
   formatPollColumnLabel,
   formatTime12h,
@@ -70,6 +71,11 @@ export function ScheduleAdjustmentDetailScreen({ requestId }: { requestId: numbe
         scheduleAdjustmentApi.getDetail(session, requestId),
         scheduleAdjustmentApi.getAvailabilityGrid(session, requestId),
       ])
+      if (!scheduleAdjustmentMatchesSection(d.request?.section_code, session.section)) {
+        setDetail(null)
+        setError("This schedule adjustment belongs to another section.")
+        return
+      }
       setDetail(d)
       setGridDays(g.candidateDays ?? [])
       setGridTimes(g.timeSlots ?? [])

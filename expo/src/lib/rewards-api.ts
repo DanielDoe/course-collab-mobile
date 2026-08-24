@@ -3,6 +3,9 @@ import { API_BASE_URL } from "../constants"
 import { assertProductionHttpsUrl, createApiAbortSignal } from "./http"
 import { persistHttpCookiesFromResponse } from "./student-http-cookies"
 import { ApiError, studentAuthenticatedHeaders, studentAuthenticatedRequest } from "./student-api"
+import { studentContentPath } from "./student-content-context"
+import { attendanceLeaderboardForCurrentOffering } from "./attendance-leaderboard-scope"
+import { classroomPointsLeaderboardForCurrentOffering } from "./classroom-points-leaderboard-scope"
 
 function request<T>(session: StudentSession, path: string, init?: RequestInit): Promise<T> {
   return studentAuthenticatedRequest<T>(session, path, init)
@@ -70,6 +73,10 @@ export type ClassroomLeaderboardEntry = {
   total_points?: number | string
   award_count?: number
   is_current_user?: boolean
+  session?: string
+  section?: string
+  course_id?: number
+  academic_term_id?: number
 }
 
 export type AttendanceScore = {
@@ -107,6 +114,11 @@ export type AttendanceLeaderboardEntry = {
   total_points?: number
   current_streak?: number
   is_current_user?: boolean
+  section?: string
+  session?: string
+  course_id?: number
+  academic_term_id?: number
+  classes_attended?: number
 }
 
 export type TradeCenterPoints = {
@@ -164,19 +176,24 @@ export const rewardsApi = {
       rewardsPolicy?: { points_for_full_grade?: number }
     }>(
       session,
-      `/api/classroom-points?studentId=${encodeURIComponent(session.databaseId)}&session=${encodeURIComponent(session.section)}`,
+      studentContentPath(session, "/api/classroom-points"),
     ),
 
-  getClassroomLeaderboard: (session: StudentSession) =>
-    request<{ leaderboard?: ClassroomLeaderboardEntry[] }>(
+  getClassroomLeaderboard: async (session: StudentSession) => {
+    const res = await request<{ leaderboard?: ClassroomLeaderboardEntry[] }>(
       session,
-      `/api/classroom-points/leaderboard?studentId=${encodeURIComponent(session.databaseId)}&session=${encodeURIComponent(session.section)}`,
-    ),
+      studentContentPath(session, "/api/classroom-points/leaderboard"),
+    )
+    return {
+      ...res,
+      leaderboard: classroomPointsLeaderboardForCurrentOffering(res.leaderboard ?? [], session),
+    }
+  },
 
   getClassroomSubmissions: (session: StudentSession) =>
     request<ClassroomSubmissionsResponse>(
       session,
-      `/api/classroom-points/submissions?studentId=${encodeURIComponent(session.databaseId)}&session=${encodeURIComponent(session.section)}`,
+      studentContentPath(session, "/api/classroom-points/submissions"),
     ),
 
   submitClassroomCode: (
@@ -266,26 +283,58 @@ export const rewardsApi = {
   getAttendanceScore: (session: StudentSession) =>
     request<{ attendance?: AttendanceScore }>(
       session,
-      `/api/attendance/score?studentId=${encodeURIComponent(session.databaseId)}`,
+      studentContentPath(session, "/api/attendance/score"),
     ),
 
   getAttendanceStreaks: (session: StudentSession) =>
     request<{ streak?: AttendanceStreak }>(
       session,
-      `/api/attendance/streaks?studentId=${encodeURIComponent(session.databaseId)}`,
+      studentContentPath(session, "/api/attendance/streaks"),
     ),
 
-  getAttendanceRecords: (session: StudentSession) =>
-    request<{ records?: AttendanceRecord[] }>(
-      session,
-      `/api/attendance/records?studentId=${encodeURIComponent(session.databaseId)}`,
-    ),
+  getAttendanceRecords: async (session: StudentSession) => {
+    try {
+      return await request<{ records?: AttendanceRecord[] }>(
+        session,
+        studentContentPath(session, "/api/attendance/records"),
+      )
+    } catch (err) {
+      // Production treats the shared records route as instructor-first when
+      // student proof is missing. Term start also has no rows yet — don't crash.
+      if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
+        return { records: [] }
+      }
+      throw err
+    }
+  },
 
-  getAttendanceLeaderboard: (session: StudentSession, limit = 50) =>
-    request<{ leaderboard?: AttendanceLeaderboardEntry[]; currentStudent?: AttendanceLeaderboardEntry }>(
-      session,
-      `/api/attendance/leaderboard?section=${encodeURIComponent(session.section)}&limit=${limit}`,
-    ),
+  getAttendanceLeaderboard: async (session: StudentSession, limit = 50) => {
+    try {
+      const res = await request<{
+        leaderboard?: AttendanceLeaderboardEntry[]
+        currentStudent?: AttendanceLeaderboardEntry
+      }>(
+        session,
+        studentContentPath(session, "/api/attendance/leaderboard", {
+          section: session.section,
+          limit,
+        }),
+      )
+      const leaderboard = attendanceLeaderboardForCurrentOffering(res.leaderboard ?? [], session)
+      const currentStudent = res.currentStudent
+        ? attendanceLeaderboardForCurrentOffering([res.currentStudent], session)[0]
+        : undefined
+      return { ...res, leaderboard, currentStudent }
+    } catch (err) {
+      if (
+        err instanceof ApiError &&
+        (err.status === 401 || err.status === 403 || err.status === 404 || err.status === 500)
+      ) {
+        return { leaderboard: [] as AttendanceLeaderboardEntry[] }
+      }
+      throw err
+    }
+  },
 
   markAttendance: (
     session: StudentSession,

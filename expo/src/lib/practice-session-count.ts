@@ -9,7 +9,7 @@ export function resolvePracticeSessionQuestionCount(
 ): number {
   if (tier === "Scholar") return 0
 
-  const unlockedPool = topic.unlockedCount ?? topic.questionCount
+  const unlockedPool = practiceTopicUnlockedCount(topic, tier)
   const practiced = topic.completed
   const newInTopic = Math.max(0, unlockedPool - practiced)
   const pool = unlockedPool > 0 ? unlockedPool : newInTopic
@@ -17,11 +17,22 @@ export function resolvePracticeSessionQuestionCount(
   return Math.max(1, pool)
 }
 
-export function practiceTopicUnlockedCount(topic: TopicProgress): number {
-  return topic.unlockedCount ?? topic.questionCount
+export function practiceTopicUnlockedCount(topic: TopicProgress, tier?: MembershipTier): number {
+  if (tier === "Trailblazer") return topic.questionCount
+  if (tier === "Explorer") {
+    const fromApi = topic.unlockedCount
+    if (fromApi != null && fromApi > 0) return fromApi
+    if (topic.questionCount > 0) return Math.max(1, Math.ceil(topic.questionCount * 0.5))
+    return 0
+  }
+  return topic.unlockedCount ?? (tier === "Scholar" ? 0 : topic.questionCount)
 }
 
-export function isPracticeTopicLocked(topic: TopicProgress, canStartPractice: boolean): boolean {
+export function isPracticeTopicLocked(
+  topic: TopicProgress,
+  canStartPractice: boolean,
+  tier?: MembershipTier,
+): boolean {
   if (!canStartPractice) return true
-  return practiceTopicUnlockedCount(topic) <= 0
+  return practiceTopicUnlockedCount(topic, tier) <= 0
 }

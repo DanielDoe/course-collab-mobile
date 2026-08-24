@@ -1,16 +1,19 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 import { ActivityIndicator, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 import { AppAlert } from '../../lib/app-alert'
 import { Ionicons } from "@/components/icons/AppIcon"
 import { ApiError } from "../../lib/api"
-import { instructorApi, type InstructorSession } from "../../lib/instructor-api"
-import {
-  instructorCourseNotesApi,
-  type ModuleConfiguration,
-  type ModuleTopicRow,
-} from "../../lib/instructor-content-api"
+import { instructorCourseNotesApi } from "../../lib/instructor-content-api"
 import type { CourseDigitalNote } from "../../lib/digital-notes-api"
 import { useFacultyScope } from "../../hooks/useFacultyScope"
+import {
+  useDeleteFacultyCourseNote,
+  useFacultyCourseNotes,
+  useSaveFacultyCourseNote,
+} from "../../hooks/query/useFacultyCourseNotes"
+import { createTempNumericId } from "../../lib/query"
+import { QueryRefreshBanner } from "../query/QueryRefreshBanner"
+import { QuerySkeleton } from "../query/QuerySkeleton"
 import { useSuppressModuleSearchDock } from "../../context/ModuleSearchDockContext"
 import { useModuleTheme } from "../../lib/themed-module-shell"
 import { FacultyEmptyState } from "./faculty-shared"
@@ -90,15 +93,22 @@ export function FacultyCourseNotesScreen() {
 
   const [tab, setTab] = useState<Tab>("all")
   const [search, setSearch] = useState("")
-  const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
-  const [error, setError] = useState("")
-  const [notes, setNotes] = useState<CourseDigitalNote[]>([])
-  const [deletedNotes, setDeletedNotes] = useState<Array<CourseDigitalNote & { deletedAt?: string }>>([])
-  const [topics, setTopics] = useState<ModuleTopicRow[]>([])
-  const [config, setConfig] = useState<ModuleConfiguration | null>(null)
-  const [sessions, setSessions] = useState<InstructorSession[]>([])
   const [topicSession, setTopicSession] = useState("ALL")
+  const notesQuery = useFacultyCourseNotes(ready ? scope : null, topicSession)
+  const saveNoteMutation = useSaveFacultyCourseNote(scope, topicSession)
+  const deleteNoteMutation = useDeleteFacultyCourseNote(scope, topicSession)
+  const notes = notesQuery.notes
+  const deletedNotes = notesQuery.deletedNotes
+  const topics = notesQuery.topics
+  const config = notesQuery.config
+  const sessions = notesQuery.sessions
+  const loading = notesQuery.isInitialLoading
+  const refreshing = notesQuery.isRefreshing && !notesQuery.isInitialLoading
+  const error = notesQuery.error instanceof ApiError
+    ? notesQuery.error.message
+    : notesQuery.error
+      ? "Could not load course notes."
+      : ""
   const [editorOpen, setEditorOpen] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
   useSuppressModuleSearchDock(editorOpen || previewOpen)
@@ -117,31 +127,6 @@ export function FacultyCourseNotesScreen() {
   const [editorBaseline, setEditorBaseline] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [loadingEditor, setLoadingEditor] = useState(false)
-
-  const load = useCallback(async () => {
-    if (!scope) return
-    setError("")
-    const [notesRes, deletedRes, topicsRes, configRes, sessionsRes] = await Promise.all([
-      instructorCourseNotesApi.listNotes(scope),
-      instructorCourseNotesApi.listDeleted(scope),
-      instructorCourseNotesApi.listTopics(scope, topicSession),
-      instructorCourseNotesApi.getConfiguration(scope),
-      instructorApi.getSessions(scope).catch(() => ({ sessions: [] as InstructorSession[] })),
-    ])
-    setNotes(notesRes.notes ?? [])
-    setDeletedNotes(deletedRes.notes ?? [])
-    setTopics(topicsRes.topics ?? [])
-    setConfig(configRes)
-    setSessions(sessionsRes.sessions ?? [])
-  }, [scope, topicSession])
-
-  useEffect(() => {
-    if (!ready || !scope) return
-    setLoading(true)
-    load()
-      .catch((err) => setError(err instanceof ApiError ? err.message : "Could not load course notes."))
-      .finally(() => setLoading(false))
-  }, [ready, scope, load])
 
   const uniqueSessions = useMemo(() => {
     const seen = new Set<string>()
@@ -356,12 +341,11 @@ export function FacultyCourseNotesScreen() {
         isPublished,
       }
       if (editing) {
-        await instructorCourseNotesApi.updateNote(scope, editing.id, payload)
+        await saveNoteMutation.mutateAsync({ editingId: editing.id, payload })
       } else {
-        await instructorCourseNotesApi.createNote(scope, payload)
+        await saveNoteMutation.mutateAsync({ tempId: createTempNumericId(), payload })
       }
       closeEditor()
-      await load()
     } catch (err) {
       AppAlert.alert("Save failed", err instanceof ApiError ? err.message : "Try again.")
     } finally {
@@ -379,8 +363,7 @@ export function FacultyCourseNotesScreen() {
         onPress: () => {
           void (async () => {
             try {
-              await instructorCourseNotesApi.deleteNote(scope, note.id)
-              await load()
+              await deleteNoteMutation.mutateAsync(note)
             } catch (err) {
               AppAlert.alert("Delete failed", err instanceof ApiError ? err.message : "Try again.")
             }
@@ -401,9 +384,8 @@ export function FacultyCourseNotesScreen() {
           void (async () => {
             if (!scope) return
             try {
-              await instructorCourseNotesApi.deleteNote(scope, editing.id)
+              await deleteNoteMutation.mutateAsync(editing)
               closeEditor()
-              await load()
             } catch (err) {
               AppAlert.alert("Delete failed", err instanceof ApiError ? err.message : "Try again.")
             }
@@ -417,7 +399,7 @@ export function FacultyCourseNotesScreen() {
     if (!scope) return
     try {
       await instructorCourseNotesApi.toggleTopic(scope, topicName, session, isAvailable)
-      await load()
+      await notesQuery.refetch()
     } catch (err) {
       AppAlert.alert("Update failed", err instanceof ApiError ? err.message : "Try again.")
     }
@@ -451,6 +433,11 @@ export function FacultyCourseNotesScreen() {
           />
         ) : null}
 
+        <QueryRefreshBanner
+          visible={notesQuery.refreshFailed}
+          onRetry={() => void notesQuery.refetch()}
+        />
+
         {error ? (
           <View style={[localStyles.errorBox, { backgroundColor: `${tokens.danger}14` }]}>
             <Text style={[type.caption, { color: tokens.danger }]}>{error}</Text>
@@ -459,9 +446,7 @@ export function FacultyCourseNotesScreen() {
       </FacultyModuleStickyHeader>
 
       {loading ? (
-        <View style={localStyles.loadingBox}>
-          <ActivityIndicator color={tokens.accent} />
-        </View>
+        <QuerySkeleton />
       ) : (
         <ScrollView
           style={moduleStyles.scroll}
@@ -474,12 +459,7 @@ export function FacultyCourseNotesScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={() => {
-                setRefreshing(true)
-                load()
-                  .catch((err) =>
-                    setError(err instanceof ApiError ? err.message : "Could not refresh course notes."),
-                  )
-                  .finally(() => setRefreshing(false))
+                void notesQuery.refetch()
               }}
             />
           }
@@ -574,7 +554,9 @@ export function FacultyCourseNotesScreen() {
             <FacultyCourseNotesDeletedPanel
               scope={scope}
               notes={deletedNotes}
-              onChanged={load}
+              onChanged={async () => {
+                await notesQuery.refetch()
+              }}
               onPreview={openDeletedPreview}
             />
           ) : null}

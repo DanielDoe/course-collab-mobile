@@ -21,7 +21,7 @@ import {
 import { CommGroupedList, CommSectionFooter } from "../faculty/faculty-communication-ui"
 import { FacultyStatusPill } from "../faculty/faculty-shared"
 import { ModuleSectionHeader } from "../modules/ModuleScreen"
-import { CollabScreenTitle } from "./collab-nav"
+import { CollabFlowHeader } from "./collab-nav"
 import { useNotificationModuleRefresh } from "../../lib/notifications/notification-events"
 
 function useStudentSession(): StudentSession | null {
@@ -137,16 +137,22 @@ export function GroupDetailScreen() {
 
   if (loading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color={native.tint} />
+      <View style={[styles.screen, { backgroundColor: native.groupedBackground }]}>
+        <CollabFlowHeader title="Group" fallbackHref="/module/groups" />
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={native.tint} />
+        </View>
       </View>
     )
   }
 
   if (!group) {
     return (
-      <View style={styles.center}>
-        <Text style={styles.errorText}>{error || "Group not found."}</Text>
+      <View style={[styles.screen, { backgroundColor: native.groupedBackground }]}>
+        <CollabFlowHeader title="Group" fallbackHref="/module/groups" />
+        <View style={styles.center}>
+          <Text style={styles.errorText}>{error || "Group not found."}</Text>
+        </View>
       </View>
     )
   }
@@ -155,11 +161,16 @@ export function GroupDetailScreen() {
   const members = group.members ?? []
 
   return (
-    <ScrollView
-      style={styles.scroll}
-      contentContainerStyle={[styles.content, scrollPad]}
-    >
-      <CollabScreenTitle title={group.name} subtitle={`Led by ${group.leader_name ?? "—"}`} />
+    <View style={[styles.screen, { backgroundColor: native.groupedBackground }]}>
+      <CollabFlowHeader
+        title={group.name}
+        subtitle={group.leader_name ? `Led by ${group.leader_name}` : "Course group"}
+        fallbackHref="/module/groups"
+      />
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[styles.content, { paddingBottom: scrollPad.paddingBottom }]}
+      >
 
       <CommGroupedList>
         <View style={styles.summaryRow}>
@@ -218,12 +229,14 @@ export function GroupDetailScreen() {
 
       <CommSectionFooter>Group leaders manage members and project submissions.</CommSectionFooter>
     </ScrollView>
+    </View>
   )
 }
 
 const styles = StyleSheet.create({
-  scroll: { flex: 1, backgroundColor: NATIVE.groupedBackground },
-  center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: NATIVE.groupedBackground },
+  screen: { flex: 1 },
+  scroll: { flex: 1 },
+  center: { flex: 1, alignItems: "center", justifyContent: "center" },
   content: { padding: NATIVE.pagePadding, gap: 12 },
   errorText: { ...nativeType.destructive },
   summaryRow: {

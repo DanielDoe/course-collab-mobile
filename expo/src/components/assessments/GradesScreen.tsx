@@ -1,10 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useMemo, useState } from "react"
 import { Pressable, StyleSheet, Text, View } from "react-native"
 import { Ionicons } from "@/components/icons/AppIcon"
 import type { Ionicons as IoniconsType } from "@expo/vector-icons"
 import { ModuleScreen } from "../modules/ModuleScreen"
+import { useStudentGrades } from "../../hooks/query/useStudentGrades"
+import { QueryRefreshBanner } from "../query/QueryRefreshBanner"
+import { QuerySkeleton } from "../query/QuerySkeleton"
 import { useSession } from "../../context/SessionProvider"
-import { ApiError, studentApi } from "../../lib/student-api"
+import { ApiError } from "../../lib/student-api"
 import type { StudentSession } from "../../lib/session"
 import { NATIVE } from "../../constants/faculty-native-theme"
 import { useAppThemeTokens } from "../../context/AppearanceProvider"
@@ -134,35 +137,21 @@ export function GradesScreen() {
   const session = useStudentSession()
   const SN = useThemedStudentNative()
   const type = useNativeType()
-  const [payload, setPayload] = useState<StudentGradesResponse | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
-  const [error, setError] = useState("")
+  const gradesQuery = useStudentGrades(session)
+  const payload = gradesQuery.payload
+  const loading = gradesQuery.isInitialLoading
+  const refreshing = gradesQuery.isRefreshing && !gradesQuery.isInitialLoading
+  const error = gradesQuery.error instanceof ApiError
+    ? gradesQuery.error.message
+    : gradesQuery.error
+      ? "Failed to load grades."
+      : ""
   const [selectedCategory, setSelectedCategory] = useState<GradeCategoryView | null>(null)
   const [gradeLens, setGradeLens] = useState<"pending" | "final">("pending")
 
-  const load = useCallback(async () => {
-    if (!session) return
-    setError("")
-    try {
-      const data = await studentApi.getGrades(session)
-      setPayload(data)
-    } catch (err) {
-      setPayload(null)
-      setError(err instanceof ApiError ? err.message : "Failed to load grades.")
-    }
-  }, [session])
-
-  useEffect(() => {
-    setLoading(true)
-    load().finally(() => setLoading(false))
-  }, [load])
-
   const onRefresh = useCallback(async () => {
-    setRefreshing(true)
-    await load()
-    setRefreshing(false)
-  }, [load])
+    await gradesQuery.refetch()
+  }, [gradesQuery.refetch])
 
   useNotificationModuleRefresh(["grades", "assessments"], onRefresh)
 
@@ -205,7 +194,11 @@ export function GradesScreen() {
   )
 
   if (loading && !payload) {
-    return <ModuleScreen loading>{null}</ModuleScreen>
+    return (
+      <ModuleScreen loading={false}>
+        <QuerySkeleton />
+      </ModuleScreen>
+    )
   }
 
   if (!payload || !display || !heroDisplay) {
@@ -220,6 +213,7 @@ export function GradesScreen() {
 
   return (
     <ModuleScreen loading={false} refreshing={refreshing} onRefresh={onRefresh} error={error}>
+      <QueryRefreshBanner visible={gradesQuery.refreshFailed} onRetry={() => void onRefresh()} />
       <GradeHeroCard
         totalScore={heroDisplay.totalScore}
         letterLabel={heroDisplay.letterLabel}

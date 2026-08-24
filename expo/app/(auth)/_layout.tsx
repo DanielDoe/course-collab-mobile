@@ -1,3 +1,4 @@
+import { Platform } from "react-native"
 import { Redirect, Stack, usePathname } from "expo-router"
 import { useSession } from "../../src/context/SessionProvider"
 import { ONBOARDING_AUTH_ROUTES } from "../../src/lib/onboarding"
@@ -5,6 +6,7 @@ import { normalizeRoutePathname } from "../../src/lib/navigation-reset"
 
 const AUTH_ALLOWED_WITH_SESSION = new Set([
   "/signing-in",
+  "/student-select-course",
   "/appearance-setup",
   "/change-password",
   ...ONBOARDING_AUTH_ROUTES,
@@ -18,5 +20,14 @@ export default function AuthLayout() {
     return <Redirect href="/(auth)/signing-in" />
   }
 
-  return <Stack screenOptions={{ headerShown: false, animation: "slide_from_right" }} />
+  return (
+    <Stack
+      screenOptions={{
+        headerShown: false,
+        animation: "slide_from_right",
+        gestureEnabled: true,
+        fullScreenGestureEnabled: Platform.OS === "ios",
+      }}
+    />
+  )
 }

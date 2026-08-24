@@ -1,11 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { ActivityIndicator, AppState, RefreshControl, StyleSheet, Text, View } from "react-native"
+import { AppState, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native"
 import { ScrollView } from "react-native-gesture-handler"
 import { Ionicons } from "@/components/icons/AppIcon"
+import { useRouter } from "expo-router"
 import { useSession } from "../../context/SessionProvider"
 import { ApiError } from "../../lib/student-api"
 import type { StudentSession } from "../../lib/session"
-import { courseInfoApi, type CalendarEvent } from "../../lib/course-info-api"
+import { type CalendarEvent } from "../../lib/course-info-api"
+import { useStudentCalendar } from "../../hooks/query/useStudentCalendar"
+import { QueryRefreshBanner } from "../query/QueryRefreshBanner"
+import { QuerySkeleton } from "../query/QuerySkeleton"
 import {
   addMonths,
   calendarEventColors,
@@ -18,8 +22,11 @@ import {
   startOfMonth,
   syncClassMeetingReminders,
   syncStudySessionReminders,
-  initClassReminderNotifications,
-  type ClassSchedulePayload} from "../../lib/calendar"
+  initClassReminderNotifications} from "../../lib/calendar"
+import {
+  isStudySessionEvent,
+  resolveStudySessionRoute,
+} from "../../lib/calendar/study-session-navigation"
 import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
 import { useModuleScrollContentPadding } from "../../context/ChromeInsetContext"
 import { useModuleContentStyle } from "../../lib/responsive-layout"
@@ -45,11 +52,18 @@ function filterDayEvents(events: CalendarEvent[], filter: AgendaFilter): Calenda
   return events
 }
 
-function AgendaEventRow({ event }: { event: CalendarEvent }) {
+function AgendaEventRow({
+  event,
+  onStudy,
+}: {
+  event: CalendarEvent
+  onStudy?: (event: CalendarEvent) => void
+}) {
   const tokens = useAppThemeTokens()
   const native = useThemedNative()
   const type = useNativeType()
   const config = eventTypeConfig(event, calendarEventColors(tokens))
+  const showStudyAction = isStudySessionEvent(event)
 
   return (
     <View style={[styles.agendaRow, { borderBottomColor: native.separator }]}>
@@ -69,13 +83,32 @@ function AgendaEventRow({ event }: { event: CalendarEvent }) {
           </Text>
         ) : null}
       </View>
-      <StatusBadge label={config.label} tone="purple" />
+      {showStudyAction ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Start study session"
+          onPress={() => onStudy?.(event)}
+          style={({ pressed }) => [
+            styles.studyBtn,
+            {
+              backgroundColor: `${config.color}18`,
+              borderColor: config.color,
+              opacity: pressed ? 0.85 : 1,
+            },
+          ]}
+        >
+          <Text style={[styles.studyBtnLabel, { color: config.color }]}>Study</Text>
+        </Pressable>
+      ) : (
+        <StatusBadge label={config.label} tone="purple" />
+      )}
     </View>
   )
 }
 
 export function CalendarScreen() {
   const session = useStudentSession()
+  const router = useRouter()
   const native = useThemedNative()
   const tokens = useAppThemeTokens()
   const type = useNativeType()
@@ -83,13 +116,7 @@ export function CalendarScreen() {
   const moduleContentStyle = useModuleContentStyle()
   const [month, setMonth] = useState(() => startOfMonth(new Date()))
   const [selectedDate, setSelectedDate] = useState(() => new Date())
-  const [personalEvents, setPersonalEvents] = useState<CalendarEvent[]>([])
-  const [classMeetings, setClassMeetings] = useState<CalendarEvent[]>([])
-  const [classSchedule, setClassSchedule] = useState<ClassSchedulePayload>({ hasSchedule: false })
   const [agendaFilter, setAgendaFilter] = useState<AgendaFilter>("all")
-  const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
-  const [error, setError] = useState("")
 
   const range = useMemo(() => {
     const start = startOfMonth(month)
@@ -97,36 +124,25 @@ export function CalendarScreen() {
     return { startDate: start, endDate: end }
   }, [month])
 
-  const load = useCallback(async () => {
-    if (!session) return
-    setError("")
-    try {
-      const [eventsData, scheduleData] = await Promise.all([
-        courseInfoApi.getCalendarEvents(session, range),
-        courseInfoApi.getClassSchedule(session, range),
-      ])
-      setPersonalEvents(eventsData)
-      setClassMeetings((scheduleData.events ?? []) as CalendarEvent[])
-      setClassSchedule(scheduleData)
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to load calendar.")
-    }
-  }, [session, range])
+  const calendarQuery = useStudentCalendar(session, range)
+  const personalEvents = calendarQuery.personalEvents
+  const classMeetings = calendarQuery.classMeetings as CalendarEvent[]
+  const classSchedule = calendarQuery.classSchedule
+  const loading = calendarQuery.isInitialLoading
+  const refreshing = calendarQuery.isRefreshing && !calendarQuery.isInitialLoading
+  const error = calendarQuery.error instanceof ApiError
+    ? calendarQuery.error.message
+    : calendarQuery.error
+      ? "Failed to load calendar."
+      : ""
 
   useEffect(() => {
     void initClassReminderNotifications()
   }, [])
 
-  useEffect(() => {
-    setLoading(true)
-    load().finally(() => setLoading(false))
-  }, [load])
-
   const onRefresh = useCallback(async () => {
-    setRefreshing(true)
-    await load()
-    setRefreshing(false)
-  }, [load])
+    await calendarQuery.refetch()
+  }, [calendarQuery.refetch])
 
   useNotificationModuleRefresh("calendar", onRefresh)
 
@@ -195,6 +211,13 @@ export function CalendarScreen() {
     [],
   )
 
+  const openStudySession = useCallback(
+    (event: CalendarEvent) => {
+      router.push(resolveStudySessionRoute(event) as never)
+    },
+    [router],
+  )
+
   function renderAgendaPage(filter: AgendaFilter) {
     const selectedEvents = filteredByTab[filter]
     if (selectedEvents.length === 0) {
@@ -216,7 +239,7 @@ export function CalendarScreen() {
     return (
       <View style={[styles.agendaCard, { backgroundColor: native.secondaryGrouped, borderColor: native.separator }]}>
         {selectedEvents.map((event) => (
-          <AgendaEventRow key={`${event.id}-${event.start_time}`} event={event} />
+          <AgendaEventRow key={`${event.id}-${event.start_time}`} event={event} onStudy={openStudySession} />
         ))}
       </View>
     )
@@ -241,6 +264,7 @@ export function CalendarScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={tokens.accent} />
         }
       >
+        <QueryRefreshBanner visible={calendarQuery.refreshFailed} onRetry={() => void onRefresh()} />
         {error ? (
           <View style={[styles.errorBox, styles.section, { backgroundColor: `${tokens.danger}18` }]}>
             <Text style={[type.destructive, styles.errorText]}>{error}</Text>
@@ -248,10 +272,7 @@ export function CalendarScreen() {
         ) : null}
 
         {loading && !refreshing ? (
-          <View style={styles.loadingBox}>
-            <ActivityIndicator size="large" color={tokens.accent} />
-            <Text style={[type.caption, { color: native.secondaryLabel }]}>Loading calendar…</Text>
-          </View>
+          <QuerySkeleton />
         ) : (
           <>
             <View style={styles.section}>
@@ -314,12 +335,6 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingHorizontal: NATIVE.pagePadding,
   },
-  loadingBox: {
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 10,
-    paddingVertical: 48,
-  },
   errorBox: { padding: 12, borderRadius: NATIVE.sectionRadius },
   errorText: { fontSize: 14, lineHeight: 20 },
   agendaHead: { gap: 2 },
@@ -340,4 +355,14 @@ const styles = StyleSheet.create({
   agendaBody: { flex: 1, gap: 3 },
   agendaTop: { flexDirection: "row", alignItems: "center", gap: 6 },
   agendaTitle: { flex: 1 },
-  agendaDesc: { lineHeight: 18, marginTop: 2 }})
+  agendaDesc: { lineHeight: 18, marginTop: 2 },
+  studyBtn: {
+    alignSelf: "flex-start",
+    marginTop: 2,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  studyBtnLabel: { fontSize: 13, fontWeight: "700" },
+})

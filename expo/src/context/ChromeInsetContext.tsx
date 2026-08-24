@@ -38,6 +38,27 @@ export function useChromeBottomInset(): number {
 /** Breathing room between floating top chrome and the first content row. */
 export const CHROME_CONTENT_TOP_GAP = 16
 
+/** Matches dashboard clearance under floating Liquid Glass nav chrome. */
+export const CHROME_FLOATING_CONTENT_EXTRA_GAP = 8
+
+export function floatingChromeSpacerHeight(
+  chromeTop: number,
+  contentGap: number = CHROME_CONTENT_TOP_GAP,
+  extraGap: number = CHROME_FLOATING_CONTENT_EXTRA_GAP,
+): number {
+  if (chromeTop <= 0) return 0
+  return chromeTop + contentGap + extraGap
+}
+
+/** Height for a top spacer `<View />` when nav chrome floats over module scroll content. */
+export function useFloatingChromeSpacerHeight(
+  contentGap: number = CHROME_CONTENT_TOP_GAP,
+  extraGap: number = CHROME_FLOATING_CONTENT_EXTRA_GAP,
+): number {
+  const chromeTop = useChromeTopInset()
+  return floatingChromeSpacerHeight(chromeTop, contentGap, extraGap)
+}
+
 /** Scroll content padding when top/bottom chrome floats over the page. */
 export function useChromeScrollPadding(extraBottom = 24, extraTop = CHROME_CONTENT_TOP_GAP) {
   const insets = useSafeAreaInsets()
@@ -62,6 +83,9 @@ export function useModuleScrollContentPadding(extraBottom = 24, extraTop = CHROM
   const chromeBottom = useChromeBottomInset()
   return {
     paddingBottom: insets.bottom + extraBottom + chromeBottom,
-    paddingTop: chromeTop > 0 ? chromeTop + extraTop : extraTop,
+    paddingTop:
+      chromeTop > 0
+        ? chromeTop + extraTop + CHROME_FLOATING_CONTENT_EXTRA_GAP
+        : extraTop,
   }
 }

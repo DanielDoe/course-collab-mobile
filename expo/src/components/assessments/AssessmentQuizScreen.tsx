@@ -548,15 +548,40 @@ export function AssessmentQuizScreen({ quizId, assessmentType, takeAction }: Pro
           onBackPress={leaveQuiz}
           fallbackHref={`/assessment/${quizId}?type=${assessmentType}`}
         />
-        <View style={[styles.errorRoot, { paddingBottom: insets.bottom + 16 }]}>
-          <Ionicons name="alert-circle-outline" size={48} color={tokens.danger} />
-          <Text style={[styles.errorTitle, { color: tokens.text }]}>{loadError}</Text>
-          <Pressable style={[styles.primaryBtn, { backgroundColor: tokens.accent }]} onPress={leaveQuiz}>
-            <Text style={styles.primaryBtnText}>Go back</Text>
-          </Pressable>
-          <Pressable onPress={() => void bootstrap()} hitSlop={8}>
-            <Text style={[styles.retryLink, { color: tokens.accent }]}>Try again</Text>
-          </Pressable>
+        <View style={[styles.errorRoot, { paddingBottom: insets.bottom + 24 }]}>
+          <View style={styles.errorCard}>
+            <View
+              style={[
+                styles.errorIconWrap,
+                { backgroundColor: hexToRgba(tokens.danger, tokens.isDark ? 0.2 : 0.1) },
+              ]}
+            >
+              <Ionicons name="alert-circle-outline" size={32} color={tokens.danger} />
+            </View>
+            <Text style={[styles.errorTitle, { color: tokens.text }]}>{loadError}</Text>
+            <View style={styles.errorActions}>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.errorPrimaryBtn,
+                  { backgroundColor: tokens.accent, opacity: pressed ? 0.88 : 1 },
+                ]}
+                onPress={leaveQuiz}
+                accessibilityRole="button"
+              >
+                <Text style={styles.primaryBtnText}>Go back</Text>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.errorSecondaryBtn,
+                  { borderColor: tokens.border, opacity: pressed ? 0.78 : 1 },
+                ]}
+                onPress={() => void bootstrap()}
+                accessibilityRole="button"
+              >
+                <Text style={[styles.errorSecondaryBtnText, { color: tokens.accent }]}>Try again</Text>
+              </Pressable>
+            </View>
+          </View>
         </View>
       </View>
     )
@@ -1046,9 +1071,37 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
   loadingText: { fontSize: 14 },
-  errorRoot: { flex: 1, paddingHorizontal: 24, alignItems: "center", justifyContent: "center", gap: 16 },
-  errorTitle: { fontSize: 16, textAlign: "center", lineHeight: 22 },
-  retryLink: { fontSize: 15, fontWeight: "600", marginTop: 8 },
+  errorRoot: { flex: 1, paddingHorizontal: 24, alignItems: "center", justifyContent: "center" },
+  errorCard: { width: "100%", maxWidth: 360, alignItems: "center", gap: 16 },
+  errorIconWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  errorTitle: { fontSize: 17, fontWeight: "600", textAlign: "center", lineHeight: 24 },
+  errorActions: { width: "100%", gap: 10, marginTop: 4 },
+  errorPrimaryBtn: {
+    width: "100%",
+    minHeight: 48,
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  errorSecondaryBtn: {
+    width: "100%",
+    minHeight: 48,
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  errorSecondaryBtnText: { fontSize: 15, fontWeight: "600" },
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -1189,8 +1242,10 @@ const styles = StyleSheet.create({
   },
   navBtnText: { fontSize: 14, fontWeight: "600" },
   primaryBtn: {
+    alignSelf: "stretch",
     borderRadius: 12,
     minHeight: 46,
+    paddingHorizontal: 20,
     paddingVertical: 12,
     alignItems: "center",
     justifyContent: "center",

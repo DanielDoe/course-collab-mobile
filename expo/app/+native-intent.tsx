@@ -6,6 +6,11 @@ import { isAllowedDeepLinkHost } from "../src/lib/trusted-origins"
 
 const CUSTOM_SCHEMES = ["coursecollab://", "com.coursecollab.app://"]
 
+/** Expo dev-client launch links carry the Metro URL in `?url=` — not an app route. */
+function isExpoDevelopmentClientPath(path: string): boolean {
+  return /expo-development-client(?:\/|\?|$)/i.test(path)
+}
+
 export function redirectSystemPath({
   path,
 }: {
@@ -14,6 +19,7 @@ export function redirectSystemPath({
 }): string {
   if (!path) return "/"
   if (/^(javascript|data|file|blob|vbsscript):/i.test(path)) return "/"
+  if (isExpoDevelopmentClientPath(path)) return "/"
 
   if (path.startsWith("/")) {
     return hardenInboundPath(path)
@@ -22,6 +28,7 @@ export function redirectSystemPath({
   for (const scheme of CUSTOM_SCHEMES) {
     if (path.startsWith(scheme)) {
       const withoutScheme = path.slice(scheme.length)
+      if (isExpoDevelopmentClientPath(withoutScheme)) return "/"
       const route = withoutScheme.replace(/^\/+/, "")
       return hardenInboundPath(route ? `/${route}` : "/")
     }

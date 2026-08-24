@@ -35,6 +35,7 @@ import {
   hasBreakdownChartData,
   hasScoreTrendChartData,
 } from "./faculty-chart-html"
+import { sanitizeFacultyAttendanceAnalytics } from "../../lib/faculty-attendance-utils"
 import { useFacultyScope } from "../../hooks/useFacultyScope"
 import { NATIVE } from "../../constants/faculty-native-theme"
 import { FacultyChartCard } from "./FacultyChartCard"
@@ -135,9 +136,18 @@ export function FacultyStudentProgressScreen() {
     [students],
   )
 
+  const scopedAttendance = useMemo(
+    () =>
+      sanitizeFacultyAttendanceAnalytics(attendance, {
+        sectionCode: sessionFilter === "ALL" ? "ALL" : sessionFilter,
+        courseSessionCodes: sessions.map((s) => s.code),
+      }),
+    [attendance, sessionFilter, sessions],
+  )
+
   const atRiskRows = useMemo(
-    () => buildAtRiskRows(attendance?.flaggedStudents, attendance?.chronicAbsentees, lowPractice),
-    [attendance, lowPractice],
+    () => buildAtRiskRows(scopedAttendance?.flaggedStudents, scopedAttendance?.chronicAbsentees, lowPractice),
+    [scopedAttendance, lowPractice],
   )
 
   const filteredAtRisk = useMemo(() => filterAtRiskRows(atRiskRows, search), [atRiskRows, search])

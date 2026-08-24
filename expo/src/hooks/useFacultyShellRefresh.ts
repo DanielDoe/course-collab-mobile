@@ -24,6 +24,7 @@ import {
   facultyPickerItemMatchesSelection,
   stashFacultyCoursesForSelection,
 } from "../lib/faculty-post-login"
+import { resolveFacultyStoredCourse } from "../lib/faculty-section-scope"
 import type { FacultySession } from "../lib/session"
 import { setAppBadgeCount } from "../lib/notifications/notification-service"
 
@@ -48,21 +49,12 @@ export function useFacultyShellRefresh(session: FacultySession) {
       let course = courseOverride ?? selectedCourse
       if ((!course || course.id <= 0) && nextCourses.length > 0) {
         const storedId = await getStoredFacultyCourseId(session.id)
-        const matches = storedId != null ? nextCourses.filter((c) => c.id === storedId) : []
-        if (matches.length === 1) {
-          course = matches[0]!
-        } else if (matches.length > 1) {
-          const storedSessionCode =
-            storedId != null ? await getStoredFacultySessionCode(session.id, storedId) : null
-          course =
-            (storedSessionCode
-              ? matches.find((item) => item.session_code === storedSessionCode)
-              : null) ??
-            matches[0] ??
-            null
-        } else {
-          course = null
-        }
+        const storedSessionCode =
+          storedId != null ? await getStoredFacultySessionCode(session.id, storedId) : null
+        course =
+          storedId != null
+            ? resolveFacultyStoredCourse(nextCourses, storedId, storedSessionCode)
+            : null
         if (!course && nextCourses.length === 1) course = nextCourses[0]!
         if (course) setSelectedCourse(course)
       }

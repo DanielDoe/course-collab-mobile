@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react"
-import { AppState, type AppStateStatus } from "react-native"
+import { AppState, InteractionManager, type AppStateStatus } from "react-native"
 import { useSession } from "./SessionProvider"
 import { messagesAuthFromSession } from "../lib/messages-api"
 import { presenceApi } from "../lib/presence-api"
@@ -104,10 +104,15 @@ export function PresenceSelfProvider({ children }: { children: ReactNode }) {
       setManualStatus(null)
       return
     }
-    void refresh()
-    void heartbeat()
+    const task = InteractionManager.runAfterInteractions(() => {
+      void refresh()
+      void heartbeat()
+    })
     const id = setInterval(() => void heartbeat(), HEARTBEAT_MS)
-    return () => clearInterval(id)
+    return () => {
+      task.cancel()
+      clearInterval(id)
+    }
   }, [auth, refresh, heartbeat])
 
   useEffect(() => {

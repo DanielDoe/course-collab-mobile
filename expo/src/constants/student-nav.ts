@@ -57,7 +57,7 @@ export const STUDENT_NAV_GROUPS: StudentNavGroup[] = [
       { id: "notes", label: "My Notes", route: "/module/notes", icon: "journal-outline" },
       { id: "flashcards", label: "Flashcards", route: "/module/flashcards", icon: "layers-outline" },
       { id: "ai-notetaker", label: "AI Notetaker", route: "/module/ai-notetaker", icon: "mic-outline", locked: true, minTier: "Explorer" },
-      { id: "practice", label: "Practice Hub", route: "/module/practice", icon: "fitness-outline" },
+      { id: "practice", label: "Practice Hub", route: "/module/practice", icon: "fitness-outline", locked: true, minTier: "Explorer" },
       { id: "ai-tutor", label: "Cora Assistant", route: "/module/ai-tutor", icon: "chatbubble-ellipses-outline", locked: true, minTier: "Explorer" },
       { id: "codebench", label: "CodeBench IDE", route: "/module/codebench", icon: "code-slash-outline", locked: true, minTier: "Trailblazer" },
       { id: "codebench-more", label: "Analytics & More", route: "/module/codebench-more", icon: "bar-chart-outline", locked: true, minTier: "Trailblazer" },

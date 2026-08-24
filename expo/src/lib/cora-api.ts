@@ -1,7 +1,6 @@
 import { API_BASE_URL } from "../constants"
-import { mfaTrustRequestHeadersForStudent } from "./mfa-device-trust"
-import { mergeCookieHeaders, persistHttpCookiesFromResponse, studentHttpCookieHeader } from "./student-http-cookies"
-import { ApiError } from "./student-api"
+import { persistHttpCookiesFromResponse } from "./student-http-cookies"
+import { ApiError, studentAuthenticatedHeaders } from "./student-api"
 import type { StudentSession } from "./session"
 import type { CoraMode, CoraProblem, CoraSessionResponse } from "./cora-types"
 import type { PreparedCoraRequest } from "./cora-rbac/prepare-request"
@@ -12,15 +11,7 @@ import {
 } from "./classroom-submission"
 
 async function coraHeaders(session: StudentSession): Promise<HeadersInit> {
-  const headers: Record<string, string> = {
-    Accept: "application/json",
-    "Content-Type": "application/json",
-    "x-student-id": session.databaseId,
-  }
-  const jarCookie = await studentHttpCookieHeader()
-  const trust = await mfaTrustRequestHeadersForStudent(session)
-  Object.assign(headers, mergeCookieHeaders(trust.Cookie, jarCookie))
-  return headers
+  return studentAuthenticatedHeaders(session)
 }
 
 async function coraRequest<T>(

@@ -42,6 +42,7 @@ export {
   filterStudentContextForCora,
   contextSourcesForRole,
   contextSourceLabels,
+  leastContextSourcesForRole,
 } from "./context-policy"
 
 export {

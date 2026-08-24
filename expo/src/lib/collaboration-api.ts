@@ -1,6 +1,7 @@
 import type { StudentSession } from "./session"
 import { normalizePlaygroundQuestions } from "./playground-question-utils"
 import { studentAuthenticatedRequest } from "./student-api"
+import { studentContentPath, studentProjectsListPath } from "./student-content-context"
 
 function request<T>(session: StudentSession, path: string, init?: RequestInit): Promise<T> {
   return studentAuthenticatedRequest<T>(session, path, init)
@@ -333,9 +334,10 @@ export const collaborationApi = {
 
   // ── Groups ──
   getGroups: (session: StudentSession, status?: string) => {
-    const q = new URLSearchParams({ session: session.section })
-    if (status) q.set("status", status)
-    return request<{ groups?: GroupRecord[] }>(session, `/api/groups?${q.toString()}`)
+    return request<{ groups?: GroupRecord[] }>(
+      session,
+      studentContentPath(session, "/api/groups", status ? { status } : undefined),
+    )
   },
 
   getGroup: (session: StudentSession, groupId: number) =>
@@ -382,7 +384,7 @@ export const collaborationApi = {
   getGroupsDiscover: (session: StudentSession) =>
     request<{ openGroups?: GroupRecord[]; data?: DiscoverData }>(
       session,
-      `/api/groups/requests/discover?session=${encodeURIComponent(session.section)}`,
+      studentContentPath(session, "/api/groups/requests/discover"),
     ).then((body) => ({
       openGroups: body.openGroups ?? body.data?.openGroups ?? [],
       studentsWithoutGroup: body.data?.studentsWithoutGroup ?? [],
@@ -407,7 +409,7 @@ export const collaborationApi = {
   getProjects: (session: StudentSession) =>
     request<{ projects?: ProjectRecord[] }>(
       session,
-      `/api/projects/list?session=${encodeURIComponent(session.section)}`,
+      studentProjectsListPath(session),
     ),
 
   getProject: (session: StudentSession, projectId: number) =>
@@ -492,20 +494,23 @@ export const collaborationApi = {
   getPlaygroundCredits: (session: StudentSession) =>
     request<PlaygroundCredits>(
       session,
-      `/api/playground/credits?studentId=${encodeURIComponent(session.databaseId)}`,
+      studentContentPath(session, "/api/playground/credits"),
     ),
 
   getPlaygroundPersonal: (session: StudentSession) =>
     request<PlaygroundPersonalStats>(
       session,
-      `/api/playground/personal?studentId=${encodeURIComponent(session.databaseId)}`,
+      studentContentPath(session, "/api/playground/personal"),
     ),
 
   getPlaygroundPolicy: (session: StudentSession) =>
-    request<PlaygroundPolicyResponse>(session, "/api/playground/policy"),
+    request<PlaygroundPolicyResponse>(session, studentContentPath(session, "/api/playground/policy")),
 
   getPlaygroundPracticeSets: (session: StudentSession) =>
-    request<{ practiceSets?: PlaygroundPracticeSet[] }>(session, "/api/playground/practice-sets"),
+    request<{ practiceSets?: PlaygroundPracticeSet[] }>(
+      session,
+      studentContentPath(session, "/api/playground/practice-sets"),
+    ),
 
   joinPlayground: (
     session: StudentSession,

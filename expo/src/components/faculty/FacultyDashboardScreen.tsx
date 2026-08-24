@@ -1,6 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useMemo } from "react"
 import {
-  ActivityIndicator,
   Platform,
   Pressable,
   RefreshControl,
@@ -12,12 +11,7 @@ import { Ionicons } from "@/components/icons/AppIcon"
 import { useRouter } from "expo-router"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { ApiError } from "../../lib/api"
-import {
-  formatFacultyRelativeTime,
-  instructorApi,
-  type InstructorDashboardCharts,
-  type InstructorDashboardStats,
-  type InstructorRecentActivity} from "../../lib/instructor-api"
+import { formatFacultyRelativeTime } from "../../lib/instructor-api"
 import { useFacultyShell } from "../../context/FacultyShellContext"
 import { useFacultyScope } from "../../hooks/useFacultyScope"
 import { NATIVE, SYSTEM } from "../../constants/faculty-native-theme"
@@ -34,9 +28,9 @@ import { FacultyKpiGrid } from "./FacultyKpiGrid"
 import { activityBelongsToCourse } from "../../lib/faculty-assessment-utils"
 import { FacultyEmptyState, FacultyListRow, FacultySectionCard, NativeCountBadge } from "./faculty-shared"
 import { DashboardWelcomeCard } from "../dashboard/DashboardWelcomeCard"
-import { consumeFacultyDashboardBootstrap } from "../../lib/app-bootstrap-cache"
-import { ensureAppBootstrap } from "../../lib/post-login-bootstrap"
-import { fetchInstructorDashboardStats } from "../../lib/faculty-dashboard-stats"
+import { useFacultyDashboard } from "../../hooks/query/useFacultyDashboard"
+import { QueryRefreshBanner } from "../query/QueryRefreshBanner"
+import { QuerySkeleton } from "../query/QuerySkeleton"
 import { FACULTY_CHART_COLORS } from "../../lib/faculty-dashboard-theme"
 import { useModuleTheme } from "../../lib/themed-module-shell"
 import { useDashboardContentStyle, useChartContentWidth, useKpiGridCardStyle } from "../../lib/responsive-layout"
@@ -56,69 +50,18 @@ export function FacultyDashboardScreen() {
   const { session, course, scope, ready } = useFacultyScope()
   const { badges, openCoursePicker, refreshFacultyData } = useFacultyShell()
 
-  const [stats, setStats] = useState<InstructorDashboardStats | null>(null)
-  const [charts, setCharts] = useState<InstructorDashboardCharts | null>(null)
-  const [activity, setActivity] = useState<InstructorRecentActivity[]>([])
-  const [loading, setLoading] = useState(true)
-  const [chartsLoading, setChartsLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
-  const [error, setError] = useState("")
-
-  const load = useCallback(async () => {
-    if (!scope || !session) return
-    setError("")
-
-    await ensureAppBootstrap(session)
-
-    const cached = consumeFacultyDashboardBootstrap()
-    if (
-      cached &&
-      cached.courseId === scope.courseId &&
-      (cached.academicTermId ?? null) === (scope.academicTermId ?? null) &&
-      (cached.sessionCode ?? null) === (scope.sessionCode ?? null)
-    ) {
-      setStats(cached.stats)
-      setCharts(cached.charts)
-      setActivity(cached.activity)
-      setChartsLoading(false)
-      return
-    }
-
-    try {
-      const [nextStats, nextCharts, nextActivity] = await Promise.all([
-        fetchInstructorDashboardStats(scope),
-        instructorApi.getDashboardCharts(scope),
-        instructorApi.getRecentActivity(scope),
-      ])
-      setStats(nextStats)
-      setCharts(nextCharts)
-      setActivity(nextActivity.slice(0, 8))
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not load dashboard.")
-    } finally {
-      setChartsLoading(false)
-    }
-  }, [scope, session])
-
-  useEffect(() => {
-    if (!ready) {
-      setLoading(false)
-      return
-    }
-    setLoading(true)
-    setChartsLoading(true)
-    load().finally(() => setLoading(false))
-  }, [ready, load])
+  const dash = useFacultyDashboard(ready ? scope : null)
+  const stats = dash.stats
+  const charts = dash.charts
+  const activity = dash.activity
+  const loading = dash.isInitialLoading
+  const chartsLoading = dash.isInitialLoading
+  const refreshing = dash.isRefreshing && !dash.isInitialLoading
+  const error = dash.error instanceof ApiError ? dash.error.message : dash.error ? "Could not load dashboard." : ""
 
   const handleRefresh = useCallback(async () => {
-    setRefreshing(true)
-    setChartsLoading(true)
-    try {
-      await Promise.all([load(), refreshFacultyData?.(undefined, { force: true })])
-    } finally {
-      setRefreshing(false)
-    }
-  }, [load, refreshFacultyData])
+    await Promise.all([dash.refetch(), refreshFacultyData?.(undefined, { force: true })])
+  }, [dash.refetch, refreshFacultyData])
 
   useNotificationModuleRefresh("dashboard", handleRefresh)
 
@@ -182,11 +125,10 @@ export function FacultyDashboardScreen() {
         badge={course?.course_code ?? undefined}
       />
 
+      <QueryRefreshBanner visible={dash.refreshFailed} onRetry={() => void handleRefresh()} />
+
       {loading ? (
-        <View style={styles.loadingBox}>
-          <ActivityIndicator size="large" color={tokens.accent} />
-          <Text style={[type.caption, styles.loadingText, { color: native.secondaryLabel }]}>Loading course dashboard…</Text>
-        </View>
+        <QuerySkeleton rows={6} />
       ) : !stats ? (
         <View style={styles.loadingBox}>
           {error ? (

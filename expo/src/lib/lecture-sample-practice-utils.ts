@@ -1,8 +1,31 @@
 import { normalizeQuestionMedia, repairLatexDamagedByJsonEscapes, type QuestionMedia } from "./classroom-submission"
 import { rawLooksLikeWorkspaceQuestion } from "./lecture-workspace-utils"
-import type { LectureSamplePracticeConfig, LectureSamplePracticeQuestion } from "./lecture-types"
+import type {
+  LectureSamplePracticeConfig,
+  LectureSamplePracticeEvaluateResult,
+  LectureSamplePracticeQuestion,
+  LectureSamplePracticeStudentState,
+} from "./lecture-types"
+import {
+  normalizeGradableSubquestionAnswers,
+  normalizeStructuredOptions,
+  subquestionOptionLabels,
+} from "./lecture-sample-practice-grading"
+
+export {
+  formatMcqSubquestionCorrectAnswer,
+  isMcqSubquestionCorrect,
+  isMcqSubquestionOptionCorrect,
+  normalizeStructuredOptions,
+  resolveMcqCorrectLetter,
+  subquestionOptionLabels,
+} from "./lecture-sample-practice-grading"
 
 const LETTERS = ["A", "B", "C", "D", "E", "F"] as const
+
+function normalizeGradableSubquestions(subs: MultiPartSubQuestion[]): MultiPartSubQuestion[] {
+  return subs.map((sq) => normalizeGradableSubquestionAnswers(sq))
+}
 
 export type MultiPartSubOption = { id: string; text: string }
 
@@ -11,7 +34,7 @@ export type MultiPartSubQuestion = {
   type: string
   points?: number
   prompt: string
-  options: MultiPartSubOption[] | string[]
+  options: MultiPartSubOption[]
   correct_answer?: string
   correct_answers?: string[]
   explanation?: string
@@ -19,6 +42,54 @@ export type MultiPartSubQuestion = {
 
 function repairOptionText(text: string): string {
   return repairLatexDamagedByJsonEscapes(text)
+}
+
+function legacyOptionsFromColumns(o: Record<string, unknown>): string[] | undefined {
+  const cols = ["option_a", "option_b", "option_c", "option_d", "option_e"] as const
+  const texts = cols.map((key) => String(o[key] ?? "").trim()).filter(Boolean)
+  return texts.length > 0 ? texts : undefined
+}
+
+function buildSubquestionsFromTopLevelMcq(o: Record<string, unknown>): unknown[] | undefined {
+  const existing = o.subquestions ?? o.sub_questions
+  if (Array.isArray(existing) && existing.length > 0) return undefined
+
+  const qType = String(o.question_type ?? "mcq").toLowerCase()
+  if (!["mcq", "true_false", "select_all"].includes(qType)) return undefined
+
+  const legacy = legacyOptionsFromColumns(o)
+  const options = legacy ?? o.options
+  const hasOptions =
+    options != null &&
+    (typeof options === "string"
+      ? options.trim().length > 0
+      : Array.isArray(options)
+        ? options.length > 0
+        : typeof options === "object")
+
+  if (!hasOptions) return undefined
+
+  const prompt = String(o.question_text ?? o.prompt ?? "").trim()
+  return [
+    {
+      id: "a",
+      type: qType === "true_false" ? "mcq" : qType,
+      points: typeof o.points === "number" ? o.points : Number(o.points) || 1,
+      prompt: prompt || "Select the best answer.",
+      options,
+      correct_answer: typeof o.correct_answer === "string" ? o.correct_answer.trim() : undefined,
+      correct_answers: Array.isArray(o.correct_answers)
+        ? o.correct_answers.map((x) => String(x).trim()).filter(Boolean)
+        : undefined,
+      explanation: typeof o.explanation === "string" ? o.explanation : undefined,
+    },
+  ]
+}
+
+function extractSubquestionsRaw(o: Record<string, unknown>): unknown {
+  const built = buildSubquestionsFromTopLevelMcq(o)
+  if (built) return built
+  return o.subquestions ?? o.sub_questions
 }
 
 export function parseSubquestions(raw: unknown): MultiPartSubQuestion[] {
@@ -41,30 +112,12 @@ export function parseSubquestions(raw: unknown): MultiPartSubQuestion[] {
     const prompt = repairOptionText(String(o.prompt ?? "").trim())
     if (!id || !prompt) continue
 
-    let options: MultiPartSubOption[] = []
-    if (Array.isArray(o.options)) {
-      options = o.options.map((opt, idx) => {
-        if (typeof opt === "string") {
-          return { id: LETTERS[idx] ?? String(idx + 1), text: repairOptionText(opt) }
-        }
-        if (opt && typeof opt === "object") {
-          const oo = opt as Record<string, unknown>
-          return {
-            id: String(oo.id ?? LETTERS[idx] ?? idx + 1).trim(),
-            text: repairOptionText(String(oo.text ?? oo.option_text ?? "").trim()),
-          }
-        }
-        return { id: LETTERS[idx] ?? String(idx + 1), text: repairOptionText(String(opt)) }
-      })
-    } else if (o.options && typeof o.options === "object") {
-      const rec = o.options as Record<string, unknown>
-      options = Object.keys(rec)
-        .sort()
-        .map((key) => ({
-          id: key.trim().toUpperCase(),
-          text: repairOptionText(String(rec[key] ?? "").trim()),
-        }))
-    }
+    const options = normalizeStructuredOptions(o.options)
+      .map((opt) => ({
+        id: opt.id.trim().toUpperCase() || opt.id,
+        text: repairOptionText(opt.text),
+      }))
+      .filter((opt) => opt.text.length > 0)
 
     parsed.push({
       id,
@@ -72,10 +125,9 @@ export function parseSubquestions(raw: unknown): MultiPartSubQuestion[] {
       points: typeof o.points === "number" ? o.points : Number(o.points) || 1,
       prompt,
       options,
-      correct_answer:
-        typeof o.correct_answer === "string" ? o.correct_answer.trim().toUpperCase() : undefined,
+      correct_answer: typeof o.correct_answer === "string" ? o.correct_answer.trim() : undefined,
       correct_answers: Array.isArray(o.correct_answers)
-        ? o.correct_answers.map((x) => String(x).trim().toUpperCase())
+        ? o.correct_answers.map((x) => String(x).trim()).filter(Boolean)
         : undefined,
       explanation: typeof o.explanation === "string" ? o.explanation : undefined,
     })
@@ -91,30 +143,66 @@ export function getGradableSubquestions(raw: unknown): MultiPartSubQuestion[] {
   })
 }
 
-export function subquestionOptionLabels(sq: MultiPartSubQuestion): { letter: string; text: string }[] {
-  return sq.options.map((opt, i) => {
-    if (typeof opt === "string") {
-      return { letter: LETTERS[i] ?? String(i + 1), text: opt }
-    }
-    return { letter: opt.id || LETTERS[i] || String(i + 1), text: opt.text }
-  })
+function normalizeComparableSampleText(text: string): string {
+  return text
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, " ")
+}
+
+export function isGenericSamplePracticePartPrompt(prompt: string, type?: string): boolean {
+  const p = normalizeComparableSampleText(prompt)
+  if (!p) return true
+  const t = (type ?? "").toLowerCase()
+  if (t === "select_all" && (p.startsWith("select all") || p === "select all that apply.")) {
+    return true
+  }
+  if (t === "true_false" && (p.includes("true or false") || p.includes("above statement"))) {
+    return true
+  }
+  return false
+}
+
+export function samplePracticePromptDiffersFromStem(question: {
+  question_text: string
+  subquestions: MultiPartSubQuestion[]
+}): boolean {
+  const gradable = getGradableSubquestions(question.subquestions)
+  if (gradable.length !== 1) return gradable.length > 1
+  const sq = gradable[0]
+  const stem = question.question_text.trim()
+  const prompt = sq.prompt.trim()
+  if (!prompt) return false
+  if (!stem) return true
+  if (normalizeComparableSampleText(prompt) === normalizeComparableSampleText(stem)) return false
+  if (isGenericSamplePracticePartPrompt(prompt, sq.type)) return false
+  return true
+}
+
+export function syncSamplePracticeQuestionPrompts(
+  question: LectureSamplePracticeQuestion,
+): LectureSamplePracticeQuestion {
+  if (samplePracticePromptDiffersFromStem(question)) return question
+  const gradable = getGradableSubquestions(question.subquestions)
+  if (gradable.length !== 1) return question
+  const sq = gradable[0]
+  const stem = question.question_text.trim()
+  return {
+    ...question,
+    subquestions: question.subquestions.map((s) =>
+      s.id === sq.id ? { ...s, prompt: stem } : s,
+    ),
+  }
 }
 
 export function subquestionOptionsToText(options: MultiPartSubQuestion["options"] | undefined): string {
-  return subquestionOptionLabels({ id: "a", type: "mcq", prompt: "", options: options ?? [] })
+  return subquestionOptionLabels({ options: options ?? [] })
     .map((opt) => opt.text)
     .join("\n")
 }
 
 export function subquestionOptionsFromText(text: string): MultiPartSubOption[] {
-  const lines = text
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean)
-  return lines.map((line, index) => ({
-    id: LETTERS[index] ?? String(index + 1),
-    text: line,
-  }))
+  return normalizeStructuredOptions(text)
 }
 
 function parseQuestionMedia(raw: unknown): QuestionMedia | undefined {
@@ -131,19 +219,68 @@ export function normalizeSamplePracticeQuestion(
   const id =
     typeof o.id === "string" && o.id.trim() ? o.id.trim() : `q${fallbackIndex + 1}`
   const title = String(o.title ?? o.question_text ?? `Question ${fallbackIndex + 1}`).trim()
-  const question_text = String(o.question_text ?? title).trim()
-  if (!question_text) return null
-
-  const gradable = getGradableSubquestions(o.subquestions ?? o.sub_questions)
+  const stem = String(o.question_text ?? title).trim()
   const question_media = parseQuestionMedia(o.question_media)
+
+  const flatOptions = normalizeStructuredOptions(o.options)
+  if (flatOptions.length >= 2) {
+    const questionType = String(o.question_type ?? "mcq").toLowerCase() as LectureSamplePracticeQuestion["question_type"]
+    const normalized = normalizeGradableSubquestionAnswers({
+      id: "a",
+      type: questionType,
+      prompt: stem,
+      options: flatOptions,
+      correct_answer: typeof o.correct_answer === "string" ? o.correct_answer : undefined,
+      correct_answers: Array.isArray(o.correct_answers)
+        ? o.correct_answers.map((x) => String(x).trim()).filter(Boolean)
+        : undefined,
+    })
+    if (!stem) return null
+    return {
+      id,
+      title,
+      topic: typeof o.topic === "string" ? o.topic : undefined,
+      difficulty: typeof o.difficulty === "string" ? o.difficulty : undefined,
+      points: typeof o.points === "number" ? o.points : Number(o.points) || undefined,
+      question_type:
+        questionType === "select_all" || questionType === "true_false" ? questionType : "mcq",
+      question_text: stem,
+      options: normalized.options,
+      correct_answer: normalized.correct_answer,
+      correct_answers: normalized.correct_answers,
+      explanation: typeof o.explanation === "string" ? o.explanation : undefined,
+      question_media,
+    }
+  }
+
+  const gradable = normalizeGradableSubquestions(getGradableSubquestions(extractSubquestionsRaw(o)))
+  if (gradable.length === 0) return null
+  const sq = gradable[0]
+  const normalized = normalizeGradableSubquestionAnswers(sq)
+  const questionType = String(o.question_type ?? sq.type ?? "mcq").toLowerCase() as LectureSamplePracticeQuestion["question_type"]
+  const prompt = sq.prompt.trim()
+  const stemNorm = stem.trim()
+  let question_text = stemNorm
+  if (prompt && normalizeComparableSampleText(prompt) !== normalizeComparableSampleText(stemNorm)) {
+    if (!isGenericSamplePracticePartPrompt(prompt, sq.type)) {
+      question_text = stemNorm ? `${stemNorm}\n\n${prompt}` : prompt
+    }
+  }
+  if (!question_text) return null
 
   return {
     id,
     title,
     topic: typeof o.topic === "string" ? o.topic : undefined,
     difficulty: typeof o.difficulty === "string" ? o.difficulty : undefined,
+    points: typeof o.points === "number" ? o.points : Number(o.points) || sq.points || 1,
+    question_type:
+      questionType === "select_all" || questionType === "true_false" ? questionType : "mcq",
     question_text,
-    subquestions: gradable,
+    options: normalized.options,
+    correct_answer: normalized.correct_answer,
+    correct_answers: normalized.correct_answers,
+    explanation: normalized.explanation ?? sq.explanation,
     question_media,
   }
 }
@@ -195,11 +332,36 @@ export function parseLectureSamplePractice(raw: unknown): LectureSamplePracticeC
 /** Parse student GET /sample-practice responses (config wrapper + bare questions). */
 export function parseLectureSamplePracticeStudentApiResponse(
   raw: unknown,
-): LectureSamplePracticeConfig {
+): LectureSamplePracticeStudentState {
   if (raw == null || typeof raw !== "object") {
-    return { enabled: false, button_label: "Sample Practice", questions: [] }
+    return { enabled: false, button_label: "Sample Practice", questions: [], attempts: [] }
   }
-  return parseLectureSamplePractice(raw)
+  const record = raw as Record<string, unknown>
+  const config = parseLectureSamplePractice(raw)
+  const attemptsRaw = record.attempts
+  const attempts = Array.isArray(attemptsRaw)
+    ? attemptsRaw
+        .map((row) => {
+          if (!row || typeof row !== "object") return null
+          const attempt = row as Record<string, unknown>
+          const questionId = String(attempt.question_id ?? "").trim()
+          if (!questionId) return null
+          return {
+            question_id: questionId,
+            is_correct: Boolean(attempt.is_correct),
+            score_percentage: Number(attempt.score_percentage ?? 0),
+            student_answer: attempt.student_answer,
+            completed_at:
+              typeof attempt.completed_at === "string" ? attempt.completed_at : undefined,
+            result:
+              attempt.result && typeof attempt.result === "object"
+                ? (attempt.result as LectureSamplePracticeEvaluateResult)
+                : undefined,
+          }
+        })
+        .filter((row): row is NonNullable<typeof row> => row != null)
+    : []
+  return { ...config, attempts }
 }
 
 export function rawLooksLikeSamplePracticeQuestion(raw: unknown): boolean {
@@ -209,6 +371,11 @@ export function rawLooksLikeSamplePracticeQuestion(raw: unknown): boolean {
   if (Array.isArray(subQs) && subQs.length > 0) return true
   if (o.category != null || o.step_by_step_solution != null || o.instructor_solution_workspace != null) {
     return false
+  }
+  const qType = String(o.question_type ?? "mcq").toLowerCase()
+  if (["mcq", "true_false", "select_all"].includes(qType)) {
+    if (o.options != null) return true
+    if (legacyOptionsFromColumns(o)) return true
   }
   return false
 }

@@ -18,7 +18,6 @@ import {
   letterGradeFromScore,
   presentationStatusLabel,
   PROJECT_LECTURE_DAYS,
-  projectModuleSessionCodes,
   filterRowsToCourseSessions,
   buildProjectScores,
   type ProjectScoreRow,
@@ -306,7 +305,7 @@ export function FacultyProjectPresentationConfigPanel({
   const [editing, setEditing] = useState<PresentationConfig | "new" | null>(null)
   const [saving, setSaving] = useState(false)
   const [draft, setDraft] = useState({
-    session: sessionCodes[0] ?? projectModuleSessionCodes()[0] ?? "",
+    session: scope?.sessionCode ?? sessionCodes[0] ?? "",
     presentationStartDate: "",
     presentationEndDate: "",
     lectureDays: [] as string[],
@@ -343,7 +342,12 @@ export function FacultyProjectPresentationConfigPanel({
   }
 
   function startNew() {
-    const available = sessionCodes.length > 0 ? sessionCodes : projectModuleSessionCodes()
+    const available =
+      sessionCodes.length > 0
+        ? sessionCodes
+        : scope.sessionCode
+          ? [scope.sessionCode]
+          : []
     const unused = available.find((code) => !configs.some((c) => c.session === code))
     if (!unused) {
       AppAlert.alert("All sessions configured", "Every available section already has a presentation window.")

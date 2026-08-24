@@ -19,6 +19,7 @@ import { useNotificationModuleRefresh } from "../../lib/notifications/notificati
 import { SignatureListCard } from "../theme/SignatureListCard"
 import { TabbedModuleLayout, signatureListStyles } from "../theme/TabbedModuleLayout"
 import { ClassroomPointsLeaderboardPodium } from "./ClassroomPointsLeaderboardPodium"
+import { classroomPointsLeaderboardForCurrentOffering } from "../../lib/classroom-points-leaderboard-scope"
 
 function useStudentSession(): StudentSession | null {
   const { session } = useSession()
@@ -182,10 +183,13 @@ export function ClassroomPointsScreen() {
   }, [submissions, pendingSubmissions, search])
 
   const filteredLeaderboard = useMemo(() => {
+    const awarded = session
+      ? classroomPointsLeaderboardForCurrentOffering(leaderboard, session)
+      : classroomPointsLeaderboardForCurrentOffering(leaderboard)
     const q = search.trim().toLowerCase()
-    if (!q) return leaderboard
-    return leaderboard.filter((entry) => (entry.full_name ?? "Student").toLowerCase().includes(q))
-  }, [leaderboard, search])
+    if (!q) return awarded
+    return awarded.filter((entry) => (entry.full_name ?? "Student").toLowerCase().includes(q))
+  }, [leaderboard, search, session])
 
   function openPointDetail(item: ClassroomPointRecord) {
     router.push(`/rewards/classroom-point/${item.id}`)

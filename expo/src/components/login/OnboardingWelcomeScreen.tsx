@@ -8,7 +8,7 @@ import {
   onboardingStepsForPortal,
   type OnboardingStepId,
 } from "../../lib/onboarding"
-import { navigatePostSignIn, replaceAuthRoute } from "../../lib/navigation-reset"
+import { advanceAuthOnboarding, replaceAuthRoute } from "../../lib/navigation-reset"
 import { LoginButton } from "./LoginButton"
 import { OnboardingShell } from "./onboarding-ui"
 import { useLoginTheme } from "./login-theme"
@@ -24,8 +24,8 @@ const STEP_CARDS: Record<
   },
   terms: {
     icon: "document-text-outline",
-    label: "Terms of Service",
-    description: "How you may use CourseCollab",
+    label: "Terms & Policies",
+    description: "Terms of Service, Privacy Policy, and AI Use & Data — one acceptance",
   },
   privacy: {
     icon: "shield-checkmark-outline",
@@ -76,7 +76,7 @@ export function OnboardingWelcomeScreen() {
     setContinuing(true)
     try {
       const next = await completeOnboardingStepAndResolveNext(session, "welcome")
-      navigatePostSignIn(router, next)
+      advanceAuthOnboarding(router, next)
     } finally {
       setContinuing(false)
     }
@@ -91,7 +91,7 @@ export function OnboardingWelcomeScreen() {
       pillLabel="Getting started"
       icon="hand-left-outline"
       title={firstName ? `Welcome, ${firstName}` : "Welcome to CourseCollab"}
-      subtitle="Before your dashboard, we'll walk through legal disclosures, AI settings, and a few preferences. This takes about two minutes."
+      subtitle="Before your dashboard, we'll walk through legal agreements, AI settings, and a few preferences."
       scrollable
       footer={
         <LoginButton

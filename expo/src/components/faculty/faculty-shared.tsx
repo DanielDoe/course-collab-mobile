@@ -103,6 +103,7 @@ export function FacultySectionCard({
   children,
   action,
   flush,
+  contentPadding = 16,
   theme = FACULTY_THEME,
 }: {
   title: string
@@ -112,6 +113,7 @@ export function FacultySectionCard({
   children: ReactNode
   action?: ReactNode
   flush?: boolean
+  contentPadding?: number
   theme?: ModuleTheme
 }) {
   const native = useThemedNative()
@@ -123,7 +125,16 @@ export function FacultySectionCard({
 
   return (
     <View style={[styles.card, tokens.cardShadow, { backgroundColor: native.secondaryGrouped }]}>
-      <View style={[styles.cardHead, { borderBottomColor: native.separator }]}>
+      <View
+        style={[
+          styles.cardHead,
+          {
+            borderBottomColor: native.separator,
+            paddingHorizontal: contentPadding,
+            paddingTop: contentPadding,
+          },
+        ]}
+      >
         {iconThumb ? (
           <SolidListThumbTile thumb={iconThumb} icon={icon} size="compact" />
         ) : (
@@ -134,7 +145,15 @@ export function FacultySectionCard({
         <Text style={[type.callout, styles.cardTitle, { color: native.label }]}>{title}</Text>
         {action}
       </View>
-      <View style={[styles.cardBody, flush && styles.cardBodyFlush]}>{children}</View>
+      <View
+        style={[
+          styles.cardBody,
+          flush && styles.cardBodyFlush,
+          !flush && { padding: contentPadding },
+        ]}
+      >
+        {children}
+      </View>
     </View>
   )
 }
@@ -203,10 +222,13 @@ export function FacultyEmptyState({
   icon,
   title,
   body,
+  action,
 }: {
   icon: keyof typeof Ionicons.glyphMap
   title: string
   body: string
+  /** Optional recovery control, e.g. clearing a search that matched nothing. */
+  action?: ReactNode
 }) {
   const native = useThemedNative()
   const type = useNativeType()
@@ -218,6 +240,7 @@ export function FacultyEmptyState({
       </View>
       <Text style={[type.sheetTitle, styles.emptyTitle]}>{title}</Text>
       <Text style={[type.secondary, styles.emptyBody]}>{body}</Text>
+      {action ? <View style={styles.emptyAction}>{action}</View> : null}
     </View>
   )
 }
@@ -313,6 +336,7 @@ export function FacultyListRow({
 
 const styles = StyleSheet.create({
   card: {
+    width: "100%",
     borderRadius: NATIVE.sectionRadius,
     overflow: "hidden",
   },
@@ -378,6 +402,9 @@ const styles = StyleSheet.create({
   emptyBody: {
     lineHeight: 21,
     textAlign: "center",
+  },
+  emptyAction: {
+    paddingTop: 6,
   },
   webBanner: {
     flexDirection: "row",

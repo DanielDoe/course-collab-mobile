@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
-  ActivityIndicator,
   RefreshControl,
   StyleSheet,
   Text,
@@ -9,7 +8,6 @@ import {
 import { useFocusEffect, useRouter } from "expo-router"
 import { useSession } from "../../context/SessionProvider"
 import {
-  messagesApi,
   messagesAuthFromSession,
   type ThreadSummary,
 } from "../../lib/messages-api"
@@ -19,7 +17,7 @@ import { onMessagesRefresh } from "../../lib/notifications/notification-events"
 import { usePresenceTracking } from "../../hooks/usePresenceTracking"
 import { useModuleTheme } from "../../lib/themed-module-shell"
 import { FACULTY_COMMUNICATION_COLOR } from "../../lib/faculty-communication-theme"
-import { useChromeTopInset, useChromeBottomInset } from "../../context/ChromeInsetContext"
+import { useChromeTopInset, useModuleScrollContentPadding } from "../../context/ChromeInsetContext"
 import { CommEmptyState } from "../faculty/faculty-communication-ui"
 import { AppErrorNotice } from "../errors/AppErrorNotice"
 import {
@@ -31,7 +29,9 @@ import { messagePreviewText } from "../../lib/messages-html"
 import { MessageThreadRow } from "./messages-ui"
 import { MessagesComposeModal } from "./MessagesComposeModal"
 import { ModuleFlashList } from "../ModuleFlashList"
-import { useSafeAreaInsets } from "react-native-safe-area-context"
+import { useMessagesInbox } from "../../hooks/query/useMessagesInbox"
+import { QueryRefreshBanner } from "../query/QueryRefreshBanner"
+import { QuerySkeleton } from "../query/QuerySkeleton"
 
 type StatusFilter = "all" | "unread"
 type RoleFilter = "all" | "faculty" | "students"
@@ -52,19 +52,20 @@ export function MessagesInboxScreen() {
     ],
   )
   const router = useRouter()
-  const insets = useSafeAreaInsets()
   const { styles: moduleStyles, type } = useModuleTheme()
   const chromeTop = useChromeTopInset()
-  const chromeBottom = useChromeBottomInset()
-  // Floating chrome: clear the overlay header, then add the intentional gap.
-  // Stacked chrome: header already occupies layout — only the intentional gap.
-  // Never add safe-area top here; the header owns that inset.
-  const listTopPad = (chromeTop > 0 ? chromeTop : 0) + MESSAGES_HEADER_TO_LIST_GAP
-  const listBottomPad = insets.bottom + MESSAGES_LIST_BOTTOM_EXTRA + chromeBottom
-  const [threads, setThreads] = useState<ThreadSummary[]>([])
-  const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
-  const [error, setError] = useState<ApiErrorPresentation | null>(null)
+  const scrollPad = useModuleScrollContentPadding(MESSAGES_LIST_BOTTOM_EXTRA, MESSAGES_HEADER_TO_LIST_GAP)
+  const inboxQuery = useMessagesInbox(auth)
+  const threads = inboxQuery.threads
+  const setThreads = inboxQuery.setThreads
+  const loading = inboxQuery.isInitialLoading
+  const refreshing = inboxQuery.isRefreshing && !inboxQuery.isInitialLoading
+  const error = inboxQuery.error
+    ? presentApiError(inboxQuery.error, {
+        feature: "Messages",
+        fallbackMessage: "Could not load your conversations.",
+      })
+    : null
   const [search, setSearch] = useState("")
   const [composeOpen, setComposeOpen] = useState(false)
   const [filterSheetOpen, setFilterSheetOpen] = useState(false)
@@ -79,13 +80,8 @@ export function MessagesInboxScreen() {
   const { getStatus } = usePresenceTracking(presenceParticipants)
 
   const load = useCallback(async () => {
-    if (!auth) return
-    setError(null)
-    const data = await messagesApi.listThreads(auth)
-    const nextThreads = data.threads ?? []
-    reconcileLocalThreadReadState(nextThreads)
-    setThreads(applyLocalThreadStateToThreads(nextThreads))
-  }, [auth])
+    await inboxQuery.refetch()
+  }, [inboxQuery.refetch])
 
   useFocusEffect(
     useCallback(() => {
@@ -94,34 +90,9 @@ export function MessagesInboxScreen() {
         skipNextFocusRefresh.current = false
         return
       }
-      void load().catch((err) => {
-        setError(
-          presentApiError(err, {
-            feature: "Messages",
-            fallbackMessage: "Could not load your conversations.",
-          }),
-        )
-      })
+      void load()
     }, [auth, load]),
   )
-
-  useEffect(() => {
-    if (!auth) {
-      setLoading(false)
-      return
-    }
-    setLoading(true)
-    load()
-      .catch((err) => {
-        setError(
-          presentApiError(err, {
-            feature: "Messages",
-            fallbackMessage: "Could not load your conversations.",
-          }),
-        )
-      })
-      .finally(() => setLoading(false))
-  }, [auth, load])
 
   useEffect(() => {
     return onMessagesRefresh((payload) => {
@@ -134,31 +105,12 @@ export function MessagesInboxScreen() {
           ),
         )
       }
-      void load().catch((err) => {
-        setError(
-          presentApiError(err, {
-            feature: "Messages",
-            fallbackMessage: "Could not load your conversations.",
-          }),
-        )
-      })
+      void load()
     })
-  }, [load])
+  }, [load, setThreads])
 
   async function handleRefresh() {
-    setRefreshing(true)
-    try {
-      await load()
-    } catch (err) {
-      setError(
-        presentApiError(err, {
-          feature: "Messages",
-          fallbackMessage: "Could not refresh your inbox.",
-        }),
-      )
-    } finally {
-      setRefreshing(false)
-    }
+    await load()
   }
 
   const filterGroups = useMemo<StudentFilterGroup[]>(
@@ -224,7 +176,7 @@ export function MessagesInboxScreen() {
 
   const listHeader = useMemo(
     () => (
-      <View style={{ paddingTop: listTopPad }}>
+      <View>
         {unreadTotal > 0 && !showBlockingError ? (
           <Text style={[type.caption, styles.unreadNote, { color: FACULTY_COMMUNICATION_COLOR.link }]}>
             {unreadTotal} unread conversation{unreadTotal === 1 ? "" : "s"}
@@ -241,7 +193,7 @@ export function MessagesInboxScreen() {
         ) : null}
       </View>
     ),
-    [error, handleRefresh, listTopPad, showBlockingError, type.caption, unreadTotal],
+    [error, handleRefresh, showBlockingError, type.caption, unreadTotal],
   )
 
   const renderThreadRow = useCallback(
@@ -284,6 +236,7 @@ export function MessagesInboxScreen() {
           icon: "add",
         }}
       />
+      <QueryRefreshBanner visible={inboxQuery.refreshFailed} onRetry={() => void handleRefresh()} />
 
       <StudentGroupedFilterSheet
         visible={filterSheetOpen}
@@ -304,7 +257,7 @@ export function MessagesInboxScreen() {
         extraData={{ filteredLength: filtered.length, unreadTotal }}
         contentContainerStyle={[
           styles.content,
-          { paddingBottom: listBottomPad },
+          scrollPad,
           // Only grow when empty/loading — otherwise FlashList paints a tall empty card.
           (loading || showBlockingError || filtered.length === 0) && styles.contentGrow,
           showBlockingError && styles.contentBlockingError,
@@ -316,9 +269,7 @@ export function MessagesInboxScreen() {
         ListHeaderComponent={listHeader}
         ListEmptyComponent={
           loading ? (
-            <View style={styles.loadingBox}>
-              <ActivityIndicator size="large" color={FACULTY_COMMUNICATION_COLOR.link} />
-            </View>
+            <QuerySkeleton />
           ) : showBlockingError && error ? (
             <View style={styles.blockingErrorWrap}>
               <AppErrorNotice

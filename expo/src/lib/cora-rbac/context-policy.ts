@@ -27,3 +27,13 @@ export function contextSourcesForRole(role: CoraRole): CoraContextSource[] {
 export function contextSourceLabels(sources: CoraContextSource[]): string[] {
   return sources.map((s) => s.replace(/_/g, " "))
 }
+
+/**
+ * Least-context retrieval: only the sources this role may use.
+ * Never merge another role's architecture, admin APIs, or schemas.
+ */
+export function leastContextSourcesForRole(role: CoraRole, needed?: CoraContextSource[]): CoraContextSource[] {
+  const allowed = new Set(CORA_CONTEXT_SOURCES[role])
+  if (!needed?.length) return CORA_CONTEXT_SOURCES[role]
+  return needed.filter((source) => allowed.has(source))
+}

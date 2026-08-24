@@ -1,5 +1,5 @@
 import { router as rootRouter, type Router } from "expo-router"
-import { ONBOARDING_AUTH_ROUTES } from "./onboarding"
+import { ONBOARDING_AUTH_ROUTES } from "./onboarding-logic"
 import type { AppSession } from "./session"
 
 const AUTH_ROUTES = new Set([
@@ -57,6 +57,11 @@ export function replaceAuthRoute(_router: Router, href: string) {
   rootRouter.replace(toAuthHref(href) as never)
 }
 
+/** Push onto the auth stack so native swipe-back can return to the previous auth screen. */
+export function pushAuthRoute(_router: Router, href: string) {
+  rootRouter.push(toAuthHref(href) as never)
+}
+
 /** Enter the main app stack after sign-in — always uses root router. */
 export function resetToAppRoute(_router: Router, href: string) {
   rootRouter.replace(toAppHref(href) as never)
@@ -66,6 +71,18 @@ export function resetToAppRoute(_router: Router, href: string) {
 export function navigatePostSignIn(_router: Router, href: string) {
   if (AUTH_ROUTES.has(href)) {
     replaceAuthRoute(_router, href)
+    return
+  }
+  resetToAppRoute(_router, href)
+}
+
+/**
+ * Advance forward within auth onboarding — push (not replace) so iOS/Android can
+ * swipe back through welcome → terms → cora → appearance.
+ */
+export function advanceAuthOnboarding(_router: Router, href: string) {
+  if (AUTH_ROUTES.has(href)) {
+    pushAuthRoute(_router, href)
     return
   }
   resetToAppRoute(_router, href)

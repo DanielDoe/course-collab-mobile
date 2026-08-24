@@ -1,0 +1,27 @@
+appId: com.coursecollab.app
+---
+# Answer visible true/false questions near bottom of list (Q11–13).
+- tapOn: "11, Application software manages the hardware of a computer., Introduction to Programming"
+- tapOn: "B, False"
+- tapOn: "Submit answer"
+- extendedWaitUntil:
+    visible: "Correct — nice work."
+    timeout: 30000
+- takeScreenshot: sample-practice-q11-correct
+
+- tapOn: "12, Debugging guarantees that a program is entirely free from errors., Introduction to Programming"
+- tapOn: "B, False"
+- tapOn: "Submit answer"
+- extendedWaitUntil:
+    visible: "Correct — nice work."
+    timeout: 30000
+- takeScreenshot: sample-practice-q12-correct
+
+- tapOn: "13, Machine language programs are composed entirely of binary numbers., Introduction to Programming"
+- tapOn: "A, True"
+- tapOn: "Submit answer"
+- extendedWaitUntil:
+    visible: "Correct — nice work."
+    timeout: 30000
+- takeScreenshot: sample-practice-q13-correct
+- assertNotVisible: "Could not check your answer."

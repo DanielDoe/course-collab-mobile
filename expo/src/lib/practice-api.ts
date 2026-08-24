@@ -10,30 +10,13 @@ import {
 } from "./practice-leaderboard-normalize"
 import type { StudentSession } from "./session"
 import { studentAuthenticatedRequest } from "./student-api"
+import { studentContentFields, studentContentPath } from "./student-content-context"
 import type { PracticeQuestion } from "./practice-session"
 
 const PRACTICE_LEADERBOARD_LIMIT = 100
 
-function practiceContextQuery(
-  session: StudentSession,
-  extra?: Record<string, string | number | undefined>,
-): string {
-  const params = new URLSearchParams({
-    studentId: session.databaseId,
-  })
-  if (session.section) params.set("session", session.section)
-  if (session.courseId != null && Number.isFinite(session.courseId)) {
-    params.set("courseId", String(session.courseId))
-  }
-  for (const [key, value] of Object.entries(extra ?? {})) {
-    if (value != null && value !== "") params.set(key, String(value))
-  }
-  return params.toString()
-}
-
 function practicePath(session: StudentSession, path: string, extra?: Record<string, string | number | undefined>): string {
-  const qs = practiceContextQuery(session, extra)
-  return path.includes("?") ? `${path}&${qs}` : `${path}?${qs}`
+  return studentContentPath(session, path, extra)
 }
 
 export type PracticeAccess = {
@@ -172,17 +155,21 @@ export const practiceApi = {
       fullTopic?: boolean
     },
   ) =>
-    studentAuthenticatedRequest<PracticeGenerateResponse>(session, "/api/practice/generate", {
-      method: "POST",
-      body: JSON.stringify({
-        studentId: Number(session.databaseId),
-        topics: payload.topics,
-        count: payload.count,
-        difficulty: payload.difficulty,
-        courseId: payload.courseId ?? session.courseId,
-        fullTopic: payload.fullTopic === true,
-      }),
-    }),
+    studentAuthenticatedRequest<PracticeGenerateResponse>(
+      session,
+      studentContentPath(session, "/api/practice/generate"),
+      {
+        method: "POST",
+        body: JSON.stringify({
+          ...studentContentFields(session),
+          topics: payload.topics,
+          count: payload.count,
+          difficulty: payload.difficulty,
+          courseId: payload.courseId ?? session.courseId,
+          fullTopic: payload.fullTopic === true,
+        }),
+      },
+    ),
 
   evaluate: (
     session: StudentSession,
@@ -194,12 +181,21 @@ export const practiceApi = {
       responseTimeMs: number
       xpEarned: number
       difficulty: string
+      mcqEarnedFraction?: number
     },
-  ) =>
-    studentAuthenticatedRequest<EvaluateResult>(session, "/api/practice/evaluate", {
+  ) => {
+    const body: Record<string, unknown> = { ...payload }
+    if (
+      payload.mcqEarnedFraction != null &&
+      Number.isFinite(payload.mcqEarnedFraction)
+    ) {
+      body.mcqEarnedFraction = Math.max(0, Math.min(1, payload.mcqEarnedFraction))
+    }
+    return studentAuthenticatedRequest<EvaluateResult>(session, "/api/practice/evaluate", {
       method: "POST",
-      body: JSON.stringify(payload),
-    }),
+      body: JSON.stringify(body),
+    })
+  },
 
   submit: (session: StudentSession, attemptId: number) =>
     studentAuthenticatedRequest<SubmitPracticeResult>(session, "/api/student/practice/submit", {

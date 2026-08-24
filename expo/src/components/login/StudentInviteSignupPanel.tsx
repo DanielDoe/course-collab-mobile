@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native"
 import { ApiError, api, type SessionOption } from "../../lib/api"
 import {
@@ -10,16 +10,17 @@ import {
 import { AccessRequestStatusScreen } from "../auth/AccessRequestStatusScreen"
 import { ErrorBanner, InfoBanner, LoginFieldGroup } from "./LoginCard"
 import { LoginButton, LoginField } from "./LoginButton"
-import { LoginBackLink, LoginPortalHeader, LoginPortalStack } from "./login-chrome"
+import { LoginBackLink, LoginPortalHeader, LoginPortalStack, type RegisterAuthPanelBack } from "./login-chrome"
 import { LoginSelect } from "./LoginSelect"
 import { useLoginTheme } from "./login-theme"
 
 type Props = {
   token: string
   onBack?: () => void
+  registerPanelBack?: RegisterAuthPanelBack
 }
 
-export function StudentInviteSignupPanel({ token, onBack }: Props) {
+export function StudentInviteSignupPanel({ token, onBack, registerPanelBack }: Props) {
   const { LOGIN, loginType } = useLoginTheme()
 
   const [loadingInvite, setLoadingInvite] = useState(true)
@@ -34,6 +35,19 @@ export function StudentInviteSignupPanel({ token, onBack }: Props) {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState("")
   const [accessStatus, setAccessStatus] = useState<AccessLifecyclePayload | null>(null)
+
+  const handlePanelBack = useCallback((): boolean => {
+    if (accessStatus) {
+      setAccessStatus(null)
+      return true
+    }
+    return false
+  }, [accessStatus])
+
+  useEffect(() => {
+    registerPanelBack?.(handlePanelBack)
+    return () => registerPanelBack?.(null)
+  }, [handlePanelBack, registerPanelBack])
 
   useEffect(() => {
     let mounted = true

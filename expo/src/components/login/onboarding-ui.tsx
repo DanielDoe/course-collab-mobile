@@ -218,6 +218,7 @@ type OnboardingLegalContentProps = {
   error?: string | null
   source?: "network" | "cache" | "fallback" | null
   onRetry?: () => void
+  showTitle?: boolean
 }
 
 export function OnboardingLegalContent({
@@ -226,6 +227,7 @@ export function OnboardingLegalContent({
   error,
   onRetry,
   source,
+  showTitle = false,
 }: OnboardingLegalContentProps) {
   const { LOGIN, loginType } = useLoginTheme()
 
@@ -261,6 +263,11 @@ export function OnboardingLegalContent({
 
   return (
     <View style={styles.legalRoot}>
+      {showTitle ? (
+        <Text style={[loginType.heroTitle, styles.documentTitle, { color: LOGIN.label }]}>
+          {document.title}
+        </Text>
+      ) : null}
       {loading ? (
         <View style={[styles.refreshBanner, { backgroundColor: LOGIN.soft, borderColor: LOGIN.softBorder }]}>
           <ActivityIndicator color={LOGIN.purple} size="small" />
@@ -374,7 +381,7 @@ export function OnboardingLegalStepLayout({
   title,
   subtitle,
   icon,
-  document,
+  documents,
   loading,
   error,
   source,
@@ -390,7 +397,7 @@ export function OnboardingLegalStepLayout({
   title: string
   subtitle: string
   icon: keyof typeof Ionicons.glyphMap
-  document: LegalDocument | null
+  documents: readonly LegalDocument[]
   loading?: boolean
   error?: string | null
   source?: "network" | "cache" | "fallback" | null
@@ -410,6 +417,8 @@ export function OnboardingLegalStepLayout({
   const [contentHeight, setContentHeight] = useState(0)
   const [viewportHeight, setViewportHeight] = useState(0)
   const scrollRef = useRef<ScrollView>(null)
+  const documentsKey = documents.map((doc) => `${doc.id ?? doc.title}:${doc.updated}`).join("|")
+  const stacked = documents.length > 1
 
   const scrollEndThreshold = 160
   const scrollBottomPad = 24
@@ -457,7 +466,7 @@ export function OnboardingLegalStepLayout({
     setScrolledToEnd(false)
     setChecked(false)
     scrollRef.current?.scrollTo({ y: 0, animated: false })
-  }, [stepId, document?.updated])
+  }, [stepId, documentsKey])
 
   const scrollHint = useMemo(() => {
     if (!canAccept && !loading) {
@@ -530,13 +539,28 @@ export function OnboardingLegalStepLayout({
               <Text style={[loginType.heroSubtitle, styles.subtitle]}>{subtitle}</Text>
             </View>
 
-            <OnboardingLegalContent
-              document={document}
-              loading={loading}
-              error={error}
-              source={source}
-              onRetry={onRetry}
-            />
+            {stacked ? (
+              <View style={[styles.metaCard, { backgroundColor: LOGIN.fill, borderColor: LOGIN.separator }]}>
+                <Text style={[loginType.info, { color: LOGIN.secondaryLabel }]}>This agreement includes</Text>
+                {documents.map((doc) => (
+                  <Text key={doc.id ?? doc.title} style={[loginType.body, { color: LOGIN.label }]}>
+                    • {doc.title}
+                  </Text>
+                ))}
+              </View>
+            ) : null}
+
+            {documents.map((document, index) => (
+              <OnboardingLegalContent
+                key={document.id ?? document.title}
+                document={document}
+                showTitle={stacked}
+                loading={index === 0 ? loading : false}
+                error={index === 0 ? error : null}
+                source={index === 0 ? source : "network"}
+                onRetry={index === 0 ? onRetry : undefined}
+              />
+            ))}
           </View>
         </ScrollView>
       </View>
@@ -612,6 +636,7 @@ const styles = StyleSheet.create({
   pillText: { fontSize: 12, fontWeight: "600" },
   title: { textAlign: "center" },
   subtitle: { textAlign: "center", paddingHorizontal: 8 },
+  documentTitle: { fontSize: 22, lineHeight: 28, paddingHorizontal: 4 },
   legalRoot: { gap: 16 },
   metaCard: {
     borderRadius: NATIVE.sectionRadius,

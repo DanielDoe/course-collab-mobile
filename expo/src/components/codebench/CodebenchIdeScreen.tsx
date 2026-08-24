@@ -9,6 +9,7 @@ import { useSession } from "../../context/SessionProvider"
 import { useStudentShell } from "../../context/StudentShellContext"
 import { hasNavAccess } from "../../constants/student-nav"
 import { prepareCoraRequest } from "../../lib/cora-rbac"
+import { filterCoraOutput } from "../../lib/cora-security/output-filter"
 import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
 import { hexToRgba } from "../../constants/app-themes"
 import { NATIVE } from "../../constants/faculty-native-theme"
@@ -22,8 +23,11 @@ import {
 import { codebenchApi,
   type ClassroomAssignmentOption,
   type CodebenchEvaluateQuestion,
+  type DailyChallenge,
 } from "../../lib/codebench-api"
 import { CODEBENCH_CPP_WALKTHROUGH_SAMPLE } from "../../lib/codebench-samples"
+import { consumePendingDailyChallenge } from "../../lib/codebench-daily-challenge-pending"
+import { formatDailyChallengeProblem } from "../../lib/codebench-daily-challenge-problem"
 import { enrichReplaySteps, type CodeReplayStep } from "../../lib/codebench-replay"
 import {
   awardCodebenchXp,
@@ -54,6 +58,7 @@ import { MarkdownContentWebView } from "../course-info/MarkdownContentWebView"
 import { StudentThemedLocked } from "../student/student-themed-hero"
 import { GlassBottomSheetModal } from "../theme/GlassBottomSheetModal"
 import { GlassSheetHandle } from "../theme/GlassActionSheetMenu"
+import { useAuthNestedBack } from "../navigation/useAuthNestedBack"
 
 type ToolId =
   | "explain"
@@ -65,7 +70,7 @@ type ToolId =
   | "practice"
   | "evaluate"
 
-type PanelMode = "ready" | "result" | "walkthrough" | "tutor" | "practice" | "evaluate" | "xp"
+type PanelMode = "idle" | "ready" | "result" | "walkthrough" | "tutor" | "practice" | "evaluate" | "xp"
 
 type TutorMessage = { role: "user" | "assistant"; content: string }
 type SheetKind = "language" | "mode" | "cora-tool" | "assignment" | null
@@ -158,12 +163,14 @@ export function CodebenchIdeScreen() {
   const [tutorInput, setTutorInput] = useState("")
   const [tutorMessages, setTutorMessages] = useState<TutorMessage[]>([])
   const [practiceProblem, setPracticeProblem] = useState("")
+  const [activeDailyChallenge, setActiveDailyChallenge] = useState<DailyChallenge | null>(null)
   const [evalQuestions, setEvalQuestions] = useState<CodebenchEvaluateQuestion[]>([])
   const [evalIndex, setEvalIndex] = useState(0)
   const [evalAnswers, setEvalAnswers] = useState<string[]>([])
   const [assignments, setAssignments] = useState<ClassroomAssignmentOption[]>([])
   const [assignmentId, setAssignmentId] = useState("practice")
   const bootTool = useRef(typeof params.tool === "string" ? params.tool : "")
+  const toolRunEpoch = useRef(0)
 
   const language = getCodebenchLanguage(languageId)
   const code = codeByLang[languageId] ?? language.defaultCode
@@ -185,6 +192,41 @@ export function CodebenchIdeScreen() {
           ),
       ),
     [tutorMessages],
+  )
+
+  const inlineExpandedActive = useMemo(() => {
+    if (!aiExpanded) return false
+    if (panel === "idle" || panel === "tutor" || panel === "walkthrough") return false
+    if (FULLSCREEN_AI_PANELS.has(panel)) return false
+    return true
+  }, [aiExpanded, panel])
+
+  const collapseAiPanel = useCallback(() => setAiExpanded(false), [])
+
+  const closeAiPanel = useCallback(() => {
+    // Invalidate any tool request still in flight so its result cannot reopen the panel.
+    toolRunEpoch.current += 1
+    setAiExpanded(false)
+    setPracticeProblem("")
+    setActiveDailyChallenge(null)
+    setPanel("idle")
+  }, [])
+
+  /** Dismiss back to the editor, cancelling any tool result that has not landed yet. */
+  const dismissAiPanel = useCallback(() => {
+    toolRunEpoch.current += 1
+    setAiExpanded(false)
+    setPanel("ready")
+  }, [])
+
+  const handleInlineExpandedBack = useCallback(() => {
+    collapseAiPanel()
+  }, [collapseAiPanel])
+
+  const inlineExpandedBackSwipe = useAuthNestedBack(
+    inlineExpandedActive,
+    handleInlineExpandedBack,
+    insets.top,
   )
 
   // IDE surface — high-contrast dark canvas for code, themed chrome around it
@@ -291,6 +333,7 @@ export function CodebenchIdeScreen() {
         setXp(await awardCodebenchXp("explain"))
       } catch (err) {
         AppAlert.alert("Walkthrough", err instanceof ApiError ? err.message : "Walkthrough failed.")
+        setAiExpanded(false)
         setPanel("ready")
       } finally {
         setBusy(false)
@@ -313,6 +356,8 @@ export function CodebenchIdeScreen() {
         return
       }
       if (!requireCode()) return
+      const epoch = toolRunEpoch.current
+      const dismissed = () => toolRunEpoch.current !== epoch
       setAiExpanded(true)
       setBusy(true)
       try {
@@ -331,10 +376,28 @@ export function CodebenchIdeScreen() {
             isProblemGeneration: true,
             prepared,
           })
+          if (dismissed()) return
           if (res.accessDenied || res.rbacBlocked) {
             throw new ApiError(res.blockReason ?? "Trailblazer membership required.", 403)
           }
-          setPracticeProblem(res.response?.trim() || "Could not generate a practice problem.")
+          if (res.error?.trim()) {
+            throw new ApiError(res.error.trim(), 500)
+          }
+          // Under an active attempt Cora refuses to generate practice. Say so instead
+          // of rendering the refusal text as if it were the problem statement.
+          if (res.examBlocked || res.assessmentIntegrity) {
+            throw new ApiError(
+              res.response?.trim() ||
+                "Practice problems are paused while you have an assessment attempt in progress.",
+              403,
+            )
+          }
+          const generated = filterCoraOutput(res.response ?? "").text.trim()
+          if (!generated) {
+            throw new ApiError("No practice problem was generated. Try again with more complete code.", 500)
+          }
+          setActiveDailyChallenge(null)
+          setPracticeProblem(generated)
           setPanel("practice")
           setXp(await awardCodebenchXp("practice"))
           return
@@ -342,6 +405,7 @@ export function CodebenchIdeScreen() {
 
         if (tool === "evaluate") {
           const res = await codebenchApi.evaluate(session, toolPayload)
+          if (dismissed()) return
           const questions = res.questions ?? []
           if (questions.length === 0) throw new ApiError("No evaluation questions returned.", 500)
           setEvalQuestions(questions)
@@ -357,13 +421,16 @@ export function CodebenchIdeScreen() {
         else if (tool === "improve") data = await codebenchApi.improve(session, toolPayload)
         else data = await codebenchApi.pseudocode(session, toolPayload)
 
+        if (dismissed()) return
         if (data.accessDenied) throw new ApiError("Trailblazer membership required.", 403)
         setResultTitle(CORA_TOOLS.find((t) => t.id === tool)?.label ?? "Result")
         setResultBody(formatToolResult(tool, data))
         setPanel("result")
         setXp(await awardCodebenchXp(tool === "pseudocode" ? "pseudocode" : tool))
       } catch (err) {
+        if (dismissed()) return
         AppAlert.alert("CodeBench", err instanceof ApiError ? err.message : "Request failed.")
+        setAiExpanded(false)
       } finally {
         setBusy(false)
       }
@@ -372,7 +439,20 @@ export function CodebenchIdeScreen() {
   )
 
   useEffect(() => {
-    if (!ready || isLocked || !bootTool.current) return
+    if (!ready || isLocked) return
+
+    const pendingDailyChallenge = consumePendingDailyChallenge()
+    if (pendingDailyChallenge) {
+      bootTool.current = ""
+      setActiveDailyChallenge(pendingDailyChallenge)
+      setPracticeProblem(formatDailyChallengeProblem(pendingDailyChallenge))
+      setPanel("practice")
+      setAiExpanded(true)
+      setBusy(false)
+      return
+    }
+
+    if (!bootTool.current) return
     const tool = bootTool.current as ToolId
     bootTool.current = ""
     if (CORA_TOOLS.some((t) => t.id === tool)) void runTool(tool)
@@ -440,15 +520,33 @@ export function CodebenchIdeScreen() {
     if (!requireCode()) return
     setBusy(true)
     try {
-      await codebenchApi.submitPractice(session, {
-        code,
-        problem: practiceProblem.slice(0, 2000),
-        feedback: "Submitted from native CodeBench IDE",
-      })
+      if (activeDailyChallenge) {
+        await codebenchApi.submitDailyChallenge(session, {
+          code,
+          challengeId: activeDailyChallenge.id,
+          challengeTitle: activeDailyChallenge.title,
+          challengeDescription: activeDailyChallenge.description,
+          score: 0,
+          feedback: "Submitted from native CodeBench IDE",
+        })
+      } else {
+        await codebenchApi.submitPractice(session, {
+          code,
+          problem: practiceProblem.slice(0, 2000),
+          feedback: "Submitted from native CodeBench IDE",
+        })
+      }
       await saveCodebenchLatestCode(code)
       await codebenchApi.recordStreak(session).catch(() => null)
       setXp(await awardCodebenchXp("submit"))
-      AppAlert.alert("Submitted", "Practice attempt recorded.")
+      AppAlert.alert(
+        "Submitted",
+        activeDailyChallenge
+          ? "Daily challenge submitted. Points are pending instructor approval."
+          : "Practice attempt recorded.",
+      )
+      setActiveDailyChallenge(null)
+      setAiExpanded(false)
       setPanel("ready")
     } catch (err) {
       AppAlert.alert("Submit failed", err instanceof ApiError ? err.message : "Try again.")
@@ -551,16 +649,10 @@ export function CodebenchIdeScreen() {
 
   const aiPanelFullscreen = aiExpanded && FULLSCREEN_AI_PANELS.has(panel)
   const hideAiPanel =
+    panel === "idle" ||
     (panel === "tutor" && aiExpanded) ||
     (panel === "walkthrough" && aiExpanded) ||
     aiPanelFullscreen
-
-  const closeAiPanel = () => {
-    setAiExpanded(false)
-    setPanel("ready")
-  }
-
-  const collapseAiPanel = () => setAiExpanded(false)
 
   const evaluateFooter = (
     <View style={[styles.evalActions, aiPanelFullscreen && styles.evalActionsFullscreen]}>
@@ -682,6 +774,7 @@ export function CodebenchIdeScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: ide.canvas }]}>
+      {inlineExpandedBackSwipe}
       <KeyboardAvoidingView
         style={[styles.flex, { paddingTop: insets.top }]}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -742,7 +835,10 @@ export function CodebenchIdeScreen() {
           </Pressable>
 
           <Pressable
-            onPress={() => setSheet("cora-tool")}
+            onPress={() => {
+              if (panel === "idle") setPanel("ready")
+              setSheet("cora-tool")
+            }}
             style={[styles.sheetTrigger, { backgroundColor: ide.panel, borderColor: ide.border, maxWidth: compactPhone ? 96 : 118 }]}
           >
             <CoraBrand size="xs" />
@@ -866,7 +962,9 @@ export function CodebenchIdeScreen() {
                   {busy
                     ? "Tracing your code step by step"
                     : panel === "ready"
-                      ? "Choose a Cora tool from the toolbar, or walk through your code below."
+                      ? aiExpanded
+                        ? "Full screen · swipe from the left edge or tap collapse to return to the editor"
+                        : "Choose a Cora tool from the toolbar, or walk through your code below."
                       : aiExpanded
                         ? "Full screen · tap collapse to return to the editor"
                         : "Results stay here while you edit"}
@@ -877,10 +975,10 @@ export function CodebenchIdeScreen() {
                 </Text>
               ) : null}
             </View>
-            {panel !== "ready" ? (
+            {(aiExpanded && panel === "ready") || panel !== "ready" ? (
               <View style={styles.aiHeadActions}>
                 <Pressable
-                  onPress={() => setAiExpanded((v) => !v)}
+                  onPress={() => (aiExpanded ? collapseAiPanel() : setAiExpanded(true))}
                   hitSlop={8}
                   style={[styles.aiClose, { backgroundColor: native.fill }]}
                   accessibilityLabel={aiExpanded ? "Collapse AI assistant" : "Expand AI assistant"}
@@ -893,8 +991,11 @@ export function CodebenchIdeScreen() {
                 </Pressable>
                 <Pressable
                   onPress={() => {
-                    setAiExpanded(false)
-                    setPanel("ready")
+                    if (panel === "ready") {
+                      closeAiPanel()
+                      return
+                    }
+                    dismissAiPanel()
                   }}
                   hitSlop={8}
                   style={styles.aiClose}
@@ -992,7 +1093,13 @@ export function CodebenchIdeScreen() {
                 style={[styles.aiScroll, aiExpanded ? styles.aiScrollExpanded : styles.aiScrollCollapsed]}
                 contentContainerStyle={{ paddingBottom: 8 }}
               >
-                <MarkdownContentWebView markdown={practiceProblem} embedded />
+                {practiceProblem.trim() ? (
+                  <MarkdownContentWebView markdown={practiceProblem} embedded />
+                ) : (
+                  <Text style={[type.body, { color: native.secondaryLabel, paddingHorizontal: 4, paddingTop: 8 }]}>
+                    No practice problem was generated. Close this panel and try again with more complete code.
+                  </Text>
+                )}
               </ScrollView>
               <Pressable
                 onPress={() => void submitPractice()}
@@ -1042,10 +1149,7 @@ export function CodebenchIdeScreen() {
           expanded
           fullscreen
           onCollapse={() => setAiExpanded(false)}
-          onClose={() => {
-            setAiExpanded(false)
-            setPanel("ready")
-          }}
+          onClose={dismissAiPanel}
           onSend={async (payload) => {
             await sendTutor({
               message: payload.message,
@@ -1095,7 +1199,13 @@ export function CodebenchIdeScreen() {
             </Pressable>
           }
         >
-          <MarkdownContentWebView markdown={practiceProblem} embedded />
+          {practiceProblem.trim() ? (
+            <MarkdownContentWebView markdown={practiceProblem} embedded />
+          ) : (
+            <Text style={[type.body, { color: native.secondaryLabel, paddingHorizontal: 16, paddingTop: 12 }]}>
+              No practice problem was generated. Close this panel and try again with more complete code.
+            </Text>
+          )}
         </CodebenchAiFullscreenShell>
       ) : null}
 

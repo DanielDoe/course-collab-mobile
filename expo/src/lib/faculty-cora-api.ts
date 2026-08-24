@@ -20,6 +20,9 @@ import { buildFacultyCoraAssistantOfflineChatReply } from "./faculty-cora-assist
 import type { CoraAccessEnvelope } from "./cora-rbac"
 import type { PreparedCoraRequest } from "./cora-rbac/prepare-request"
 import { parseCoraChatMeta } from "./cora/models"
+import { observeHttpResponse } from "./perf/http"
+import { coraTurnFromResponse, logCoraTurn } from "./perf/cora"
+import { applyCoraOutputGate, evaluateCoraSecurityTurn } from "./cora-security"
 
 export type FacultyCoraInsight = {
   id: string
@@ -110,6 +113,7 @@ async function instructorCoraRequest<T>(
     })
   }
 
+  const startedAt = Date.now()
   const response = await fetch(url, {
     ...init,
     headers,
@@ -118,6 +122,29 @@ async function instructorCoraRequest<T>(
   })
   let body: unknown = null
   const text = await response.text()
+  observeHttpResponse({
+    method: init?.method ?? "GET",
+    path,
+    status: response.status,
+    startedAt,
+    payloadBytes: text.length,
+  })
+  if (path.includes("/cora/chat")) {
+    const parsed = (() => {
+      try {
+        return JSON.parse(text) as Record<string, unknown>
+      } catch {
+        return null
+      }
+    })()
+    logCoraTurn({
+      route: path.split("?")[0] ?? path,
+      durationMs: Date.now() - startedAt,
+      status: response.status,
+      payloadBytes: text.length,
+      ...coraTurnFromResponse(parsed),
+    })
+  }
   if (text) {
     try {
       body = JSON.parse(text)
@@ -191,6 +218,16 @@ export const facultyCoraApi = {
         role: m.role,
         content: m.content,
       }))
+      const security = evaluateCoraSecurityTurn(
+        { actor: "faculty", message: payload.message, history },
+        rbac?.prepared?.identity,
+      )
+      if (security.action !== "allow" && security.reply) {
+        return {
+          reply: applyCoraOutputGate(security.reply, "faculty", rbac?.prepared?.identity),
+          restricted: true,
+        }
+      }
       const raw = await instructorCoraRequest<FacultyCoraChatResponse>(
         "/api/instructor/cora/chat",
         scope,
@@ -213,6 +250,7 @@ export const facultyCoraApi = {
       const meta = parseCoraChatMeta(raw as unknown as Record<string, unknown>)
       return {
         ...raw,
+        reply: applyCoraOutputGate(raw.reply ?? "", "faculty", rbac?.prepared?.identity),
         profile: meta.profile,
         publicMode: meta.publicMode,
         routing: meta.routing,

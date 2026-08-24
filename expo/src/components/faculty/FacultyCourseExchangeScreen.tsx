@@ -40,9 +40,11 @@ import {
   parseCourseExchangeTabParam,
   parseExchangeProvenance,
   pickPreferredDestinationCourseId,
+  resolveExchangeDestinationSessionId,
 } from "../../lib/course-exchange-shared"
 import { FACULTY_COURSE_EXCHANGE_COLOR } from "../../lib/faculty-course-exchange-theme"
 import { instructorApi } from "../../lib/instructor-api"
+import { filterGroupsProjectsForOwnSession } from "../../lib/course-exchange/groups-projects-session-policy"
 import { useFacultyScope } from "../../hooks/useFacultyScope"
 import { useFacultyShell } from "../../context/FacultyShellContext"
 import { FacultyEmptyState } from "./faculty-shared"
@@ -369,6 +371,14 @@ export function FacultyCourseExchangeScreen() {
     return pickPreferredDestinationCourseId(destinationOptions, discoverCourse.courseCode, institutionHint)
   }, [discoverCourse, destinationOptions, institutionHint])
 
+  function filterModulesForDestination(
+    modules: CourseExchangeModule[],
+    destinationCourseId?: number | null,
+  ): CourseExchangeModule[] {
+    const dest = destinationOptions.find((c) => c.course_id === destinationCourseId)
+    return filterGroupsProjectsForOwnSession(modules, dest?.course_code ?? null).modules
+  }
+
   function openDiscoverCourse(row: DiscoverableCourse) {
     setDiscoverCourse(row)
   }
@@ -424,11 +434,21 @@ export function FacultyCourseExchangeScreen() {
     if (!scope || !discoverCourse) return
     setActing(true)
     try {
+      const destinationSessionId = resolveExchangeDestinationSessionId(
+        payload.destinationCourseId,
+        sessions,
+        {
+          courseId: scope.courseId,
+          sessionId: scope.sessionId,
+          sessionCode: scope.sessionCode,
+        },
+      )
       const data = await instructorApi.createCourseExchangeRequest(scope, {
         sourceCourseId: discoverCourse.courseId,
         purpose: payload.purpose,
         requestedModules: payload.modules,
         destinationCourseId: payload.destinationCourseId,
+        destinationSessionId,
       })
       const imported = Boolean(data.request?.imported || data.request?.autoApproved)
       AppAlert.alert(
@@ -451,7 +471,11 @@ export function FacultyCourseExchangeScreen() {
     if (!scope || !detailRequest) return
     setActing(true)
     try {
-      const data = await instructorApi.approveCourseExchangeRequest(scope, detailRequest.id, modules)
+      const data = await instructorApi.approveCourseExchangeRequest(
+        scope,
+        detailRequest.id,
+        filterModulesForDestination(modules, detailRequest.destination_course_id),
+      )
       AppAlert.alert(
         data.imported ? "Approved and imported" : "Approved",
         data.imported
@@ -486,7 +510,17 @@ export function FacultyCourseExchangeScreen() {
     if (!scope || !importRequest) return
     setActing(true)
     try {
-      const data = await instructorApi.executeCourseExchangeCopy(scope, importRequest.id, payload)
+      const destinationSessionId =
+        payload.destinationSessionId ??
+        resolveExchangeDestinationSessionId(payload.destinationCourseId, sessions, {
+          courseId: scope.courseId,
+          sessionId: scope.sessionId,
+          sessionCode: scope.sessionCode,
+        })
+      const data = await instructorApi.executeCourseExchangeCopy(scope, importRequest.id, {
+        destinationCourseId: payload.destinationCourseId,
+        destinationSessionId,
+      })
       const provenance = parseExchangeProvenance(data.attribution)
       AppAlert.alert(
         "Course copied successfully",
@@ -509,7 +543,11 @@ export function FacultyCourseExchangeScreen() {
     if (!scope || !detailRequest) return
     setActing(true)
     try {
-      const data = await instructorApi.supplementCourseExchangeRequest(scope, detailRequest.id, modules)
+      const data = await instructorApi.supplementCourseExchangeRequest(
+        scope,
+        detailRequest.id,
+        filterModulesForDestination(modules, detailRequest.destination_course_id),
+      )
       AppAlert.alert(
         data.needsApproval ? "Approval requested" : "Modules imported",
         data.needsApproval

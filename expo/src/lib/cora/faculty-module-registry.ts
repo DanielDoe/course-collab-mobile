@@ -917,7 +917,6 @@ export const DEFAULT_FACULTY_CAPABILITY_MODULES: FacultyCoraModuleId[] = [
   "messages",
   "results",
   "student-progress",
-  "course-settings",
 ]
 
 export function buildFacultyCapabilityPacket(

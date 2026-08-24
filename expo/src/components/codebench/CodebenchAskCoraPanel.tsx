@@ -32,6 +32,7 @@ import {
 } from "../ai-tutor/cora-chat-bubble-theme"
 import { CodebenchCoraAttachMenu, type CodebenchCoraAttachAction } from "./CodebenchCoraAttachMenu"
 import { ComposerSendButton } from "../theme/ComposerSendButton"
+import { IosEdgeBackSwipe } from "../navigation/IosEdgeBackSwipe"
 
 export type CodebenchTutorMessage = { role: "user" | "assistant"; content: string }
 
@@ -486,6 +487,7 @@ export function CodebenchAskCoraPanel({
           behavior={Platform.OS === "ios" ? "padding" : undefined}
         >
           <LinearGradient colors={[...ambientColors]} style={StyleSheet.absoluteFill} />
+          <IosEdgeBackSwipe onBack={onCollapse ?? onClose ?? (() => {})} topInset={insets.top} />
           <View style={[styles.fullscreenFrame, { paddingTop: insets.top }]}>
             {header}
             <View style={[styles.root, styles.rootExpanded]}>{body}</View>

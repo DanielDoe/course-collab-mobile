@@ -1,15 +1,22 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useMemo, useState } from "react"
 import { StyleSheet, View } from "react-native"
 import { useRouter } from "expo-router"
 import { ModuleScreen } from "../modules/ModuleScreen"
 import { StudentFilterSheet, StudentSearchToolbar } from "../student/student-search-toolbar"
+import { FacultyEmptyState } from "../faculty/faculty-shared"
+import { AppButton } from "../theme/AppButton"
 import { LectureListCard } from "./LectureListCard"
 import { useSession } from "../../context/SessionProvider"
-import { ApiError, studentApi, type LectureItem } from "../../lib/student-api"
+import { ApiError, type LectureItem } from "../../lib/student-api"
 import { useNotificationModuleRefresh } from "../../lib/notifications/notification-events"
 import type { StudentSession } from "../../lib/session"
+import { useStudentLectures } from "../../hooks/query/useStudentLectures"
+import { QueryRefreshBanner } from "../query/QueryRefreshBanner"
+import { QuerySkeleton } from "../query/QuerySkeleton"
 import {
   formatCourseLabel,
+  lectureDisplayTitle,
+  lectureListDisplayTitle,
   matchesLectureFilter,
   type LectureFilter,
 } from "./lecture-list-utils"
@@ -43,36 +50,20 @@ export function LecturesScreen() {
   const router = useRouter()
   const courseLabel = formatCourseLabel(session)
 
-  const [lectures, setLectures] = useState<LectureItem[]>([])
-  const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
-  const [error, setError] = useState("")
+  const listQuery = useStudentLectures(session)
+  const lectures = listQuery.lectures
+  const loading = listQuery.isInitialLoading
+  const refreshing = listQuery.isRefreshing && !listQuery.isInitialLoading
+  const error = listQuery.error instanceof ApiError ? listQuery.error.message : listQuery.error ? "Failed to load lectures." : ""
   const [search, setSearch] = useState("")
   const [filter, setFilter] = useState<LectureFilter>("all")
   const [filterSheetOpen, setFilterSheetOpen] = useState(false)
 
-  const load = useCallback(async () => {
-    if (!session) return
-    setError("")
-    try {
-      const data = await studentApi.getLectures(session)
-      setLectures(data.lectures ?? [])
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to load lectures.")
-    }
-  }, [session])
-
-  useEffect(() => {
-    if (!session) return
-    setLoading(true)
-    load().finally(() => setLoading(false))
-  }, [session, load])
+  const isFiltering = search.trim().length > 0 || filter !== "all"
 
   const onRefresh = useCallback(async () => {
-    setRefreshing(true)
-    await load()
-    setRefreshing(false)
-  }, [load])
+    await listQuery.refetch()
+  }, [listQuery.refetch])
 
   useNotificationModuleRefresh("lectures", onRefresh)
 
@@ -83,6 +74,8 @@ export function LecturesScreen() {
       if (!q) return true
       return (
         lecture.title.toLowerCase().includes(q) ||
+        lectureDisplayTitle(lecture).toLowerCase().includes(q) ||
+        lectureListDisplayTitle(lecture, lectures).toLowerCase().includes(q) ||
         String(lecture.week).includes(q) ||
         courseLabel.toLowerCase().includes(q)
       )
@@ -95,12 +88,14 @@ export function LecturesScreen() {
 
   return (
     <ModuleScreen
-      loading={loading}
+      loading={false}
       refreshing={refreshing}
       onRefresh={onRefresh}
       error={error}
-      empty={!loading && filtered.length === 0}
-      emptyTitle={search.trim() || filter !== "all" ? "No matching lectures" : "No lectures posted"}
+      /* A filtered miss keeps the toolbar mounted so the search can be cleared;
+         ModuleScreen's empty state would replace it and trap the student. */
+      empty={!loading && filtered.length === 0 && !isFiltering}
+      emptyTitle="No lectures posted"
     >
       <StudentSearchToolbar
         value={search}
@@ -124,17 +119,43 @@ export function LecturesScreen() {
         onClose={() => setFilterSheetOpen(false)}
       />
 
-      <View style={styles.list}>
-        {filtered.map((lecture, index) => (
-          <LectureListCard
-            key={lecture.id}
-            lecture={lecture}
-            courseLabel={courseLabel}
-            index={index}
-            onPress={() => openSlides(lecture)}
-          />
-        ))}
-      </View>
+      <QueryRefreshBanner visible={listQuery.refreshFailed} onRetry={() => void onRefresh()} />
+      {loading ? (
+        <QuerySkeleton />
+      ) : filtered.length === 0 ? (
+        <FacultyEmptyState
+          icon="search-outline"
+          title="No matching lectures"
+          body="Nothing matches your search or filter."
+          action={
+            <AppButton
+              label="Clear search"
+              variant="secondary"
+              size="sm"
+              fullWidth={false}
+              icon="close-circle-outline"
+              iconPosition="left"
+              onPress={() => {
+                setSearch("")
+                setFilter("all")
+              }}
+            />
+          }
+        />
+      ) : (
+        <View style={styles.list}>
+          {filtered.map((lecture, index) => (
+            <LectureListCard
+              key={lecture.id}
+              lecture={lecture}
+              courseLabel={courseLabel}
+              index={index}
+              siblings={filtered}
+              onPress={() => openSlides(lecture)}
+            />
+          ))}
+        </View>
+      )}
     </ModuleScreen>
   )
 }

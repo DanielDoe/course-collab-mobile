@@ -11,6 +11,8 @@ export type StudentAuthSession = {
   id?: string
   authIdentifier?: string
   email?: string
+  courseId?: number
+  academicTermId?: number
 }
 
 export function flattenRequestHeaders(init?: HeadersInit): Record<string, string> {

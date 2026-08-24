@@ -8,7 +8,8 @@ import type {
 } from "../types/dashboard"
 import { parseMembershipTier } from "./membership-tier"
 import type { StudentSession } from "./session"
-import { studentAuthenticatedRequest, type QuizListRolloverPolicy } from "./student-api"
+import { ApiError, studentAuthenticatedRequest, type QuizListRolloverPolicy } from "./student-api"
+import { studentContentPath } from "./student-content-context"
 import {
   buildStudentDashboardFromRaw,
   type DashboardRawData,
@@ -29,51 +30,76 @@ function markUnavailable(
   if (result.status === "rejected") unavailable[source] = true
 }
 
+/** Dual-role auth misses and empty-term 500s are 0, not a failed widget. */
+function emptyIfSoftMiss<T>(promise: Promise<T>, empty: T): Promise<T> {
+  return promise.catch((err) => {
+    if (
+      err instanceof ApiError &&
+      (err.status === 401 || err.status === 403 || err.status === 404 || err.status === 500)
+    ) {
+      return empty
+    }
+    throw err
+  })
+}
+
 async function fetchStudentDashboardRawData(session: StudentSession): Promise<DashboardRawData> {
-  const enc = encodeURIComponent
-  const databaseId = session.databaseId
-  const homeworkStudentId = session.id || databaseId
-  const section = session.section
+  const homeworkStudentId = session.id || session.databaseId
 
   const results = await Promise.allSettled([
-    studentAuthenticatedRequest<GradePayload>(
-      session,
-      `/api/grades/student?studentId=${enc(databaseId)}&session=${enc(section)}&recalculate=true`,
+    emptyIfSoftMiss(
+      studentAuthenticatedRequest<GradePayload>(
+        session,
+        studentContentPath(session, "/api/grades/student"),
+      ),
+      {},
     ),
-    studentAuthenticatedRequest<{ quizHistory?: NonNullable<DashboardRawData["quizHistory"]> }>(
-      session,
-      `/api/student/quiz-history?studentId=${enc(databaseId)}`,
+    emptyIfSoftMiss(
+      studentAuthenticatedRequest<{ quizHistory?: NonNullable<DashboardRawData["quizHistory"]> }>(
+        session,
+        studentContentPath(session, "/api/student/quiz-history"),
+      ),
+      { quizHistory: [] },
     ),
-    homeworkStudentId && section
+    homeworkStudentId
       ? studentAuthenticatedRequest<{
           homeworkHistory?: NonNullable<DashboardRawData["homeworkHistory"]>
           stats?: { overdue?: number; pending?: number }
         }>(
           session,
-          `/api/student/homework-history?studentId=${enc(homeworkStudentId)}&session=${enc(section)}`,
+          studentContentPath(session, "/api/student/homework-history", {
+            studentId: homeworkStudentId,
+          }),
         )
       : Promise.resolve(null),
-    studentAuthenticatedRequest<{ attendance?: Record<string, number> }>(
-      session,
-      `/api/attendance/score?studentId=${enc(databaseId)}`,
+    emptyIfSoftMiss(
+      studentAuthenticatedRequest<{ attendance?: Record<string, number> }>(
+        session,
+        studentContentPath(session, "/api/attendance/score"),
+      ),
+      { attendance: {} },
     ),
-    studentAuthenticatedRequest<{ streak?: { currentStreak?: number } }>(
-      session,
-      `/api/attendance/streaks?studentId=${enc(databaseId)}`,
+    emptyIfSoftMiss(
+      studentAuthenticatedRequest<{ streak?: { currentStreak?: number } }>(
+        session,
+        studentContentPath(session, "/api/attendance/streaks"),
+      ),
+      { streak: { currentStreak: 0 } },
     ),
     studentAuthenticatedRequest<{ quizzes?: { available_until?: string }[]; rollover_policy?: QuizListRolloverPolicy }>(
       session,
-      `/api/student/quizzes?studentDatabaseId=${enc(databaseId)}&assessmentType=quiz`,
+      studentContentPath(session, "/api/student/quizzes", { assessmentType: "quiz" }),
     ),
     studentAuthenticatedRequest<{ finals?: { status?: string }[] }>(
       session,
-      `/api/student/finals?session=${enc(section)}&studentId=${enc(homeworkStudentId)}`,
+      studentContentPath(session, "/api/student/finals", { studentId: homeworkStudentId }),
     ),
-    studentAuthenticatedRequest<{ summary?: { total_points?: number | string } }>(
-      session,
-      section && section !== "ALL"
-        ? `/api/classroom-points?studentId=${enc(databaseId)}&session=${enc(section)}`
-        : `/api/classroom-points?studentId=${enc(databaseId)}`,
+    emptyIfSoftMiss(
+      studentAuthenticatedRequest<{ summary?: { total_points?: number | string } }>(
+        session,
+        studentContentPath(session, "/api/classroom-points"),
+      ),
+      { summary: { total_points: 0 } },
     ),
   ])
 
@@ -96,10 +122,6 @@ async function fetchStudentDashboardRawData(session: StudentSession): Promise<Da
   markUnavailable(unavailable, "streaks", streaksResult)
   markUnavailable(unavailable, "finals", finalsResult)
   markUnavailable(unavailable, "points", pointsResult)
-
-  if (!results.some((result) => result.status === "fulfilled")) {
-    throw new Error("Could not load dashboard data.")
-  }
 
   const gradePayload = settledValue(gradeResult)
   const quizPayload = settledValue(quizResult)

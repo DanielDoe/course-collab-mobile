@@ -1,3 +1,4 @@
+import { attendanceDisplayPercent } from "./attendance-leaderboard-scope"
 import type {
   AttendanceStudentSummary,
   InstructorProgressReviewRow,
@@ -83,7 +84,7 @@ export function buildAtRiskRows(
       reason: "Attendance flag",
       detail:
         student.attendance_percentage != null
-          ? `${Math.round(student.attendance_percentage)}% attendance`
+          ? `${attendanceDisplayPercent(student.attendance_percentage)}% attendance`
           : undefined,
       tone: "danger",
       kind: "attendance_flag",

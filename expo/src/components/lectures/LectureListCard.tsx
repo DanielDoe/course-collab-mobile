@@ -9,16 +9,19 @@ import { lectureSolidThumb, lectureStatusAccent } from "../../lib/lecture-list-t
 import { SolidListThumbTile } from "../theme/SolidListThumbTile"
 import {
   clampProgress,
+  lectureListDisplayTitle,
   lectureStatusLabel,
   lectureTitleIncludesCourse,
   resolveLectureCardKind,
   type LectureCardKind,
+  type LectureTitleFields,
 } from "./lecture-list-utils"
 
 type Props = {
   lecture: LectureItem
   courseLabel: string
   index: number
+  siblings?: readonly LectureTitleFields[]
   onPress: () => void
 }
 
@@ -33,7 +36,7 @@ function statusIcon(kind: LectureCardKind): keyof typeof Ionicons.glyphMap {
   return "ellipse"
 }
 
-export function LectureListCard({ lecture, courseLabel, index, onPress }: Props) {
+export function LectureListCard({ lecture, courseLabel, index, siblings = [], onPress }: Props) {
   const native = useThemedNative()
   const tokens = useAppThemeTokens()
   const type = useNativeType()
@@ -43,6 +46,7 @@ export function LectureListCard({ lecture, courseLabel, index, onPress }: Props)
   const statusColor = lectureStatusAccent(kind, solidThumb)
   const locked = kind === "locked"
   const showProgress = kind === "in_progress"
+  const displayTitle = lectureListDisplayTitle(lecture, siblings)
 
   return (
     <Pressable
@@ -59,15 +63,15 @@ export function LectureListCard({ lecture, courseLabel, index, onPress }: Props)
       onPress={onPress}
       accessibilityRole="button"
       accessibilityState={{ disabled: locked }}
-      accessibilityLabel={`${lecture.title}, ${lectureStatusLabel(kind)}, ${progress} percent viewed`}
+      accessibilityLabel={`${displayTitle}, ${lectureStatusLabel(kind)}, ${progress} percent viewed`}
     >
       <SolidListThumbTile thumb={solidThumb} icon={thumbIcon(kind)} />
 
       <View style={styles.copy}>
         <Text style={[type.bodyEmphasis, styles.title, { color: native.label }]} numberOfLines={2}>
-          {lecture.title}
+          {displayTitle}
         </Text>
-        {lectureTitleIncludesCourse(lecture.title, courseLabel) ? null : (
+        {lectureTitleIncludesCourse(displayTitle, courseLabel) ? null : (
           <Text style={[type.caption, styles.course, { color: native.secondaryLabel }]} numberOfLines={1}>
             {courseLabel}
           </Text>

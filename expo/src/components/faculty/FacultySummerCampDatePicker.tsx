@@ -29,9 +29,16 @@ type Props = {
   value: string
   onChange: (iso: string) => void
   accessibilityLabel: string
+  /** Upcoming deadlines start at the current year instead of showing older years. */
+  yearPolicy?: "historical" | "upcoming"
 }
 
-export function FacultySummerCampDatePicker({ value, onChange, accessibilityLabel }: Props) {
+export function FacultySummerCampDatePicker({
+  value,
+  onChange,
+  accessibilityLabel,
+  yearPolicy = "historical",
+}: Props) {
   const native = useThemedNative()
   const type = useNativeType()
   const [parts, setParts] = useState(() => splitCampIsoDate(value))
@@ -41,8 +48,11 @@ export function FacultySummerCampDatePicker({ value, onChange, accessibilityLabe
   }, [value])
 
   const yearOptions = useMemo(
-    () => campDatePickerYears().map((year) => ({ value: year, label: year })),
-    [],
+    () =>
+      campDatePickerYears(undefined, yearPolicy === "upcoming" ? { pastYears: 0 } : undefined).map(
+        (year) => ({ value: year, label: year }),
+      ),
+    [yearPolicy],
   )
   const dayCount = parts.year && parts.month ? daysInCalendarMonth(Number(parts.year), Number(parts.month)) : 31
   const dayOptions = useMemo(

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react"
-import { ActivityIndicator, Image, Linking, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { CachedRemoteImage } from "../media/CachedRemoteImage"
 import { AppAlert } from '../../lib/app-alert'
 import { Ionicons } from "@/components/icons/AppIcon"
 import * as DocumentPicker from "expo-document-picker"
@@ -856,7 +857,7 @@ export function CourseEvaluationScreen() {
                     ]}
                   >
                     {isImage ? (
-                      <Image source={{ uri }} style={styles.thumb} />
+                      <CachedRemoteImage uri={uri} variant="thumbnail" style={styles.thumb} />
                     ) : (
                       <View style={[styles.fileIcon, { backgroundColor: theme.soft }]}>
                         <Ionicons name="document-text-outline" size={18} color={theme.primary} />
@@ -1058,7 +1059,7 @@ export function CourseEvaluationScreen() {
                 ]}
               >
                 {file.mime.startsWith("image/") ? (
-                  <Image source={{ uri: file.uri }} style={styles.thumb} />
+                  <CachedRemoteImage uri={file.uri} variant="thumbnail" style={styles.thumb} />
                 ) : (
                   <View style={[styles.fileIcon, { backgroundColor: theme.soft }]}>
                     <Ionicons name="document-text-outline" size={18} color={theme.primary} />

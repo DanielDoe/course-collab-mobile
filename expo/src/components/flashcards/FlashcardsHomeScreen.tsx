@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useMemo, useState } from "react"
 import { ActivityIndicator, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
 import { AppAlert } from '../../lib/app-alert'
 import { ScrollView } from "react-native-gesture-handler"
@@ -9,12 +9,17 @@ import { useSession } from "../../context/SessionProvider"
 import { ApiError, formatStudentModuleError } from "../../lib/student-api"
 import type { StudentSession } from "../../lib/session"
 import {
-  flashcardsApi,
   FLASHCARD_DAILY_GOAL,
   type FlashcardDeck,
   type FlashcardGamificationProfile,
-  type FlashcardTierAccess,
 } from "../../lib/flashcards-api"
+import {
+  prepareTempDeckId,
+  useCreateStudentFlashcardDeck,
+  useStudentFlashcardDecks,
+} from "../../hooks/query/useStudentFlashcards"
+import { QueryRefreshBanner } from "../query/QueryRefreshBanner"
+import { QuerySkeleton } from "../query/QuerySkeleton"
 import { COMM_SYSTEM } from "../../constants/faculty-communication-theme"
 import { NATIVE } from "../../constants/faculty-native-theme"
 import { PillSwipeTabs } from "../theme/PillSwipeTabs"
@@ -34,12 +39,10 @@ import { useModuleContentStyle } from "../../lib/responsive-layout"
 import { useStudentShell } from "../../context/StudentShellContext"
 import { useNotificationModuleRefresh } from "../../lib/notifications/notification-events"
 import {
-  flashcardDeckAccessMeta,
   flashcardDeckAccessMetaForAccess,
-  flashcardUpgradeMessage,
   flashcardUpgradeMessageForAccess,
-  isFlashcardDeckStudyLocked,
   isFlashcardDeckStudyLockedForAccess,
+  resolveFlashcardTierAccess,
 } from "../../lib/flashcard-access"
 
 type Tab = "all" | "course" | "mine" | "stats"
@@ -109,71 +112,26 @@ export function FlashcardsHomeScreen() {
 
   const [tab, setTab] = useState<Tab>("all")
   const [search, setSearch] = useState("")
-  const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
-  const [creating, setCreating] = useState(false)
-  const [error, setError] = useState("")
-  const [courseDecks, setCourseDecks] = useState<FlashcardDeck[]>([])
-  const [myDecks, setMyDecks] = useState<FlashcardDeck[]>([])
-  const [profile, setProfile] = useState<FlashcardGamificationProfile | null>(null)
-  const [deckMastery, setDeckMastery] = useState<Record<string, { pct: number }>>({})
-  const [leaderboard, setLeaderboard] = useState<
-    Array<{ rank: number; displayName: string; cardsMastered: number; isCurrentUser: boolean }>
-  >([])
-  const [courseTierAccess, setCourseTierAccess] = useState<FlashcardTierAccess | null>(null)
+  const decksQuery = useStudentFlashcardDecks(session)
+  const createDeckMutation = useCreateStudentFlashcardDeck(session)
+  const courseDecks = decksQuery.courseDecks
+  const myDecks = decksQuery.myDecks
+  const courseTierAccess = decksQuery.studySettings?.tierAccess ?? null
+  const profile = decksQuery.profile
+  const deckMastery = decksQuery.deckMastery
+  const leaderboard = decksQuery.leaderboard
+  const loading = decksQuery.isInitialLoading
+  const refreshing = decksQuery.isRefreshing && !decksQuery.isInitialLoading
+  const creating = createDeckMutation.isPending
+  const error = decksQuery.error ? formatStudentModuleError(decksQuery.error, "Could not load flashcards.") : ""
 
-  const load = useCallback(async () => {
-    if (!session) return
-    setError("")
-    const [decksRes, gamRes] = await Promise.all([
-      flashcardsApi.listDecks(session),
-      flashcardsApi.getGamification(session).catch(() => null),
-    ])
-    setCourseDecks(decksRes.courseDecks ?? [])
-    setMyDecks(decksRes.myDecks ?? [])
-    if (gamRes) {
-      setProfile(gamRes.profile)
-      setDeckMastery(gamRes.deckMastery ?? {})
-      setLeaderboard(gamRes.leaderboard ?? [])
-    }
-
-    const sampleDeck = (decksRes.courseDecks ?? []).find((deck) => deck.cardCount > 0)
-    if (sampleDeck) {
-      try {
-        const deckRes = await flashcardsApi.getDeck(session, sampleDeck.id)
-        setCourseTierAccess(deckRes.studySettings?.tierAccess ?? null)
-      } catch {
-        setCourseTierAccess(null)
-      }
-    } else {
-      setCourseTierAccess(null)
-    }
-  }, [session])
-
-  useNotificationModuleRefresh("flashcards", load)
-
-  useEffect(() => {
-    if (!session) return
-    setLoading(true)
-    load()
-      .catch((err) => {
-        if (__DEV__) console.error("[Flashcards] load failed", err)
-        setError(formatStudentModuleError(err, "Could not load flashcards."))
-      })
-      .finally(() => setLoading(false))
-  }, [session, load])
+  useNotificationModuleRefresh("flashcards", () => {
+    void decksQuery.refetch()
+  })
 
   const onRefresh = useCallback(async () => {
-    setRefreshing(true)
-    try {
-      await load()
-    } catch (err) {
-      if (__DEV__) console.error("[Flashcards] refresh failed", err)
-      setError(formatStudentModuleError(err, "Refresh failed."))
-    } finally {
-      setRefreshing(false)
-    }
-  }, [load])
+    await decksQuery.refetch()
+  }, [decksQuery])
 
   const allDecks = useMemo(() => [...courseDecks, ...myDecks], [courseDecks, myDecks])
 
@@ -195,29 +153,34 @@ export function FlashcardsHomeScreen() {
 
   async function createDeck() {
     if (!session || creating) return
-    setCreating(true)
+    const tempId = prepareTempDeckId()
+    router.push(`/flashcards/${tempId}/edit`)
     try {
-      const res = await flashcardsApi.createDeck(session, { title: "Untitled deck" })
-      router.push(`/flashcards/${res.deck.id}/edit`)
+      const res = await createDeckMutation.mutateAsync({ tempId, title: "Untitled deck" })
+      if (res.deck?.id && res.deck.id !== tempId) {
+        router.replace(`/flashcards/${res.deck.id}/edit`)
+      }
     } catch (err) {
       AppAlert.alert("Create failed", err instanceof ApiError ? err.message : "Try again.")
-    } finally {
-      setCreating(false)
     }
   }
+
+  const resolvedTierAccess = resolveFlashcardTierAccess(
+    membershipTier,
+    membershipTierLoaded,
+    courseTierAccess,
+  )
 
   function deckStudyLocked(deck: FlashcardDeck): boolean {
     if (!membershipTierLoaded || deck.cardCount <= 0) return false
     if (deck.deckKind === "student") return false
-    if (courseTierAccess) return isFlashcardDeckStudyLockedForAccess(deck.cardCount, courseTierAccess)
-    return isFlashcardDeckStudyLocked(membershipTier, deck.cardCount)
+    return isFlashcardDeckStudyLockedForAccess(deck.cardCount, resolvedTierAccess)
   }
 
   function deckAccessMeta(deck: FlashcardDeck): string | null {
     if (!membershipTierLoaded || deck.cardCount <= 0) return null
     if (deck.deckKind === "student") return null
-    if (courseTierAccess) return flashcardDeckAccessMetaForAccess(deck.cardCount, courseTierAccess)
-    return flashcardDeckAccessMeta(membershipTier, deck.cardCount)
+    return flashcardDeckAccessMetaForAccess(deck.cardCount, resolvedTierAccess)
   }
 
   function openDeck(deck: FlashcardDeck) {
@@ -233,9 +196,7 @@ export function FlashcardsHomeScreen() {
     if (deckStudyLocked(deck)) {
       AppAlert.alert(
         "Flashcards locked",
-        courseTierAccess
-          ? flashcardUpgradeMessageForAccess(courseTierAccess)
-          : flashcardUpgradeMessage(membershipTier),
+        flashcardUpgradeMessageForAccess(resolvedTierAccess),
         [
           { text: "Not now", style: "cancel" },
           { text: "View plans", onPress: () => router.push("/membership" as never) },
@@ -327,11 +288,10 @@ export function FlashcardsHomeScreen() {
   }
 
   function renderDeckPage(source: DeckSource) {
-    if (loading && !refreshing) {
+    if (loading) {
       return (
         <View style={styles.pageCenter}>
-          <ActivityIndicator size="large" color={tokens.accent} />
-          <Text style={[type.caption, { color: SN.secondaryLabel }]}>Loading flashcards…</Text>
+          <QuerySkeleton />
         </View>
       )
     }

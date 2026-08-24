@@ -21,11 +21,13 @@ import { useStudentShell } from "../../context/StudentShellContext"
 import { AppErrorScreen } from "../errors/AppErrorScreen"
 import { ApiError } from "../../lib/api"
 import { codebenchFailureMessage } from "../../lib/codebench-progress"
+import { QueryRefreshBanner } from "../query/QueryRefreshBanner"
 import {
   codebenchApi,
   type CodebenchLeaderboardEntry,
   type DailyChallenge,
 } from "../../lib/codebench-api"
+import { stashPendingDailyChallenge } from "../../lib/codebench-daily-challenge-pending"
 import type { StudentSession } from "../../lib/session"
 import {
   adaptThumbPaletteForAppearance,
@@ -449,6 +451,7 @@ export function CodebenchScreen() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState("")
+  const [statsNotice, setStatsNotice] = useState("")
   const [streakDays, setStreakDays] = useState(0)
   const [badgeCount, setBadgeCount] = useState(0)
   const [badges, setBadges] = useState<Record<string, boolean>>({})
@@ -499,7 +502,10 @@ export function CodebenchScreen() {
       setSubmissionCount(subs.length)
       const xpSum = subs.reduce((sum, s) => sum + Number(s.points_awarded ?? 0), 0)
       setTotalXp(Math.round(xpSum))
-      setError(codebenchFailureMessage(failed))
+      // A missing stat should not hide the editor and challenges behind an error
+      // screen, so surface it as a banner and keep the hub usable.
+      setStatsNotice(codebenchFailureMessage(failed))
+      setError("")
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Failed to load your CodeBench progress.")
     }
@@ -527,6 +533,12 @@ export function CodebenchScreen() {
     await loadProgress()
     setRefreshing(false)
   }, [loadProgress])
+
+  const openDailyChallenge = () => {
+    if (!dailyChallenge) return
+    stashPendingDailyChallenge(dailyChallenge)
+    openIde("practice")
+  }
 
   const openIde = (tool?: string) => {
     if (membershipTierLoaded && !hasNavAccess(membershipTier, "Trailblazer")) {
@@ -605,13 +617,18 @@ export function CodebenchScreen() {
         />
       ) : (
         <>
+          <QueryRefreshBanner
+            visible={Boolean(statsNotice)}
+            message={statsNotice}
+            onRetry={() => void onRefresh()}
+          />
           <KpiGrid streakDays={streakDays} badgeCount={badgeCount} totalXp={totalXp} />
 
           {dailyChallenge ? (
             <HubSection title="Daily Challenge">
               <ChallengeCard
                 challenge={dailyChallenge}
-                onPress={() => openIde("practice")}
+                onPress={openDailyChallenge}
               />
             </HubSection>
           ) : null}

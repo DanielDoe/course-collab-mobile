@@ -526,15 +526,12 @@ export function MembershipScreen() {
     if (!session) return
     setError("")
     try {
-      const tierPromise = membershipTierLoaded
-        ? Promise.resolve(membershipTier)
-        : fetchEffectiveMembershipTier(session)
       const [tier, planPricing, membershipPayload] = await Promise.all([
-        tierPromise,
+        fetchEffectiveMembershipTier(session, { syncStripe: true }),
         fetchMembershipPlanPricing(session.databaseId),
         studentApi.getMembership(session).catch(() => null),
       ])
-      if (tier && !membershipTierLoaded) {
+      if (tier) {
         setMembershipTier(tier)
         setMembershipTierLoaded(true)
       }
@@ -549,7 +546,7 @@ export function MembershipScreen() {
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Failed to load membership.")
     }
-  }, [membershipTier, membershipTierLoaded, session, setMembershipTier, setMembershipTierLoaded])
+  }, [membershipTier, session, setMembershipTier, setMembershipTierLoaded])
 
   useNotificationModuleRefresh("membership", load)
 

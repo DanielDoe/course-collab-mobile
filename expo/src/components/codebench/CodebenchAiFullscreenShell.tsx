@@ -6,6 +6,7 @@ import { useThemedNative } from "../../context/AppearanceProvider"
 import { useNativeType } from "../../lib/themed-module-theme"
 import { CoraBrand } from "../cora/CoraBrand"
 import { CoraThinkingIndicator } from "../ai-tutor/CoraThinkingIndicator"
+import { IosEdgeBackSwipe } from "../navigation/IosEdgeBackSwipe"
 
 type Props = {
   title: string
@@ -33,6 +34,7 @@ export function CodebenchAiFullscreenShell({
   return (
     <Modal visible animationType="fade" statusBarTranslucent presentationStyle="fullScreen">
       <View style={[styles.host, { backgroundColor: native.secondaryGrouped }]}>
+        <IosEdgeBackSwipe onBack={onCollapse} topInset={insets.top} />
         <View
           style={[
             styles.frame,

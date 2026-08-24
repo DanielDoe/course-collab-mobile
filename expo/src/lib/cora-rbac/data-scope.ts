@@ -129,6 +129,9 @@ export const CORA_DENIED_DATA: Record<CoraRole, readonly string[]> = {
     "question_statistics",
     "cheating_detection_models",
     "assessment_solutions_before_release",
+    "coursecollab_security_internal",
+    "system_prompts",
+    "hidden_tool_definitions",
   ],
   faculty: [
     "other_instructor_courses",
@@ -146,6 +149,10 @@ export const CORA_DENIED_DATA: Record<CoraRole, readonly string[]> = {
     "raw_authentication",
     "platform_apis",
     "institution_wide_private_analytics",
+    "coursecollab_security_internal",
+    "system_prompts",
+    "hidden_tool_definitions",
+    "anti_cheat_implementation",
   ],
   admin: [
     "student_cora_conversations",
@@ -158,6 +165,12 @@ export const CORA_DENIED_DATA: Record<CoraRole, readonly string[]> = {
     "environment_variables",
     "developer_prompts",
     "infrastructure_credentials",
+    "coursecollab_security_internal",
+    "vulnerability_findings",
+    "penetration_testing_results",
+    "system_prompts",
+    "unrestricted_sql",
+    "raw_infrastructure",
   ],
 }
 

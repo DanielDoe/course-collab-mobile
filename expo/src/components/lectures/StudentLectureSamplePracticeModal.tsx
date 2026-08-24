@@ -1,15 +1,18 @@
 import { Modal, ScrollView, StyleSheet } from "react-native"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
-import type { LectureSamplePracticeConfig } from "../../lib/lecture-types"
+import type { LectureSamplePracticeAttempt, LectureSamplePracticeConfig } from "../../lib/lecture-types"
+import type { StudentSession } from "../../lib/session"
 import { FacultySheetChrome, FacultySheetContainer } from "../faculty/faculty-collab-sheet-ui"
 import { StudentLectureSamplePracticePanel } from "./StudentLectureSamplePracticePanel"
 
 type Props = {
   visible: boolean
+  session: StudentSession
   lectureId: number
   studentDatabaseId: string
   courseLabel: string
   config: LectureSamplePracticeConfig
+  attempts?: LectureSamplePracticeAttempt[]
   expandedId: string | null
   reviewedIds: Set<string>
   onToggle: (questionId: string) => void
@@ -19,10 +22,12 @@ type Props = {
 
 export function StudentLectureSamplePracticeModal({
   visible,
+  session,
   lectureId,
   studentDatabaseId,
   courseLabel,
   config,
+  attempts = [],
   expandedId,
   reviewedIds,
   onToggle,
@@ -31,6 +36,7 @@ export function StudentLectureSamplePracticeModal({
 }: Props) {
   const insets = useSafeAreaInsets()
   const label = config.button_label?.trim() || "Sample Practice"
+  const attemptsByQuestionId = new Map(attempts.map((attempt) => [attempt.question_id, attempt]))
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
@@ -45,10 +51,12 @@ export function StudentLectureSamplePracticeModal({
         keyboardDismissMode="on-drag"
         >
           <StudentLectureSamplePracticePanel
+            session={session}
             lectureId={lectureId}
             studentDatabaseId={studentDatabaseId}
             courseLabel={courseLabel}
             config={config}
+            attemptsByQuestionId={attemptsByQuestionId}
             expandedId={expandedId}
             reviewedIds={reviewedIds}
             onToggle={onToggle}

@@ -13,6 +13,11 @@ import {
   type RosterStudent,
   type StudentDigitalNote,
 } from "../../lib/digital-notes-api"
+import {
+  useDeleteStudentNote,
+  useStudentNoteDetail,
+  useUpdateStudentNote,
+} from "../../hooks/query/useStudentNotes"
 import { noteBodyForEditor } from "../../lib/markdown-note-content"
 import { noteContentForSaveFromEditable } from "../../lib/digital-note-html-edit"
 import {
@@ -57,6 +62,10 @@ export function NoteEditorScreen() {
   const type = useNativeType()
 
   const [loading, setLoading] = useState(true)
+  const detailQuery = useStudentNoteDetail(session, noteId)
+  const updateNoteMutation = useUpdateStudentNote(session)
+  const deleteNoteMutation = useDeleteStudentNote(session)
+
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle")
   const [error, setError] = useState("")
   const [note, setNote] = useState<StudentDigitalNote | null>(null)
@@ -99,7 +108,7 @@ export function NoteEditorScreen() {
 
   const persistNote = useCallback(
     async (patch?: { title?: string; bodyText?: string; inkWorkspace?: CircuitWorkspace }) => {
-      if (!session || !note || readOnly || saveInFlightRef.current) return false
+      if (!session || !note || readOnly || saveInFlightRef.current || note.id < 0) return false
       saveInFlightRef.current = true
       setSaveStatus("saving")
       try {
@@ -107,7 +116,8 @@ export function NoteEditorScreen() {
           patch?.bodyText ??
           richEditorRef.current?.getHtmlForSave() ??
           noteContentForSaveFromEditable(bodyHtml, originalBodyRef.current)
-        const res = await digitalNotesApi.updateNote(session, note.id, {
+        const res = await updateNoteMutation.mutateAsync({
+          noteId: note.id,
           title: patch?.title ?? title,
           bodyText: payloadBody,
           inkWorkspace: patch?.inkWorkspace ?? inkWorkspace,
@@ -152,6 +162,20 @@ export function NoteEditorScreen() {
 
   const load = useCallback(async () => {
     if (!session || !Number.isFinite(noteId)) return
+    const cached = detailQuery.data?.note
+    if (cached) {
+      const rawBody = cached.bodyText ?? ""
+      const editorBody = noteBodyForEditor(rawBody)
+      originalBodyRef.current = editorBody
+      setNote(cached)
+      setTitle(cached.title)
+      setBodyHtml(editorBody)
+      setInkWorkspace(parseCircuitWorkspace(cached.inkWorkspace) ?? createEmptyWorkspace())
+      const loadedInk = parseCircuitWorkspace(cached.inkWorkspace)
+      if (workspaceHasContent(loadedInk) && !rawBody.trim()) setContentTab("ink")
+      if (noteId < 0 || !detailQuery.isFetching) return
+    }
+    if (noteId < 0) return
     const res = await digitalNotesApi.getNote(session, noteId)
     const rawBody = res.note.bodyText ?? ""
     const editorBody = noteBodyForEditor(rawBody)
@@ -164,15 +188,15 @@ export function NoteEditorScreen() {
     if (workspaceHasContent(loadedInk) && !rawBody.trim()) {
       setContentTab("ink")
     }
-  }, [session, noteId])
+  }, [session, noteId, detailQuery.data?.note, detailQuery.isFetching])
 
   useEffect(() => {
     if (!session || !Number.isFinite(noteId)) return
-    setLoading(true)
-    load()
-      .catch((err) => setError(err instanceof ApiError ? err.message : "Could not load note."))
-      .finally(() => setLoading(false))
-  }, [session, noteId, load])
+    if (detailQuery.data?.note) setLoading(false)
+    else if (noteId < 0) setLoading(Boolean(!detailQuery.data?.note))
+    else setLoading(detailQuery.isLoading && !detailQuery.data)
+    load().catch((err) => setError(err instanceof ApiError ? err.message : "Could not load note."))
+  }, [session, noteId, load, detailQuery.data?.note, detailQuery.isLoading])
 
   async function flushSave() {
     await persistNote()
@@ -204,7 +228,7 @@ export function NoteEditorScreen() {
 
   function confirmDelete() {
     if (!session || !note || readOnly) return
-    AppAlert.alert("Delete note?", "This cannot be undone.", [
+    AppAlert.alert("Delete note?", "You can undo this from the banner after deleting.", [
       { text: "Cancel", style: "cancel" },
       {
         text: "Delete",
@@ -212,7 +236,7 @@ export function NoteEditorScreen() {
         onPress: () => {
           void (async () => {
             try {
-              await digitalNotesApi.deleteNote(session, note.id)
+              deleteNoteMutation.mutate(note.id)
               router.back()
             } catch (err) {
               AppAlert.alert("Delete failed", err instanceof ApiError ? err.message : "Try again.")

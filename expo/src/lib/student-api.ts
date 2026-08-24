@@ -15,6 +15,9 @@ import { API_BASE_URL } from "../constants"
 import { extractApiErrorMessage } from "./api-error-message"
 import { reportMobileApiError } from "./system-log-client"
 import { assertProductionHttpsUrl, createApiAbortSignal, noteApiFailure, sanitizeLogValue } from "./http"
+import { isNonSessionExpiryUnauthorized } from "./session-expiry"
+import { observeHttpResponse } from "./perf/http"
+import { studentContentPath, studentProjectsListPath } from "./student-content-context"
 import { parseLectureWorkspaceStudentApiResponse } from "./lecture-workspace-utils"
 
 export class ApiError extends Error {
@@ -45,6 +48,12 @@ async function studentHeaders(session: StudentAuthSession): Promise<Record<strin
   }
   if (session.section) {
     headers["x-student-session"] = session.section
+  }
+  if (session.courseId != null && Number.isFinite(session.courseId)) {
+    headers["x-course-id"] = String(session.courseId)
+  }
+  if (session.academicTermId != null && Number.isFinite(session.academicTermId) && session.academicTermId > 0) {
+    headers["x-academic-term-id"] = String(session.academicTermId)
   }
   const jarCookie = await studentHttpCookieHeader()
   const trust = await mfaTrustRequestHeadersForStudent(session)
@@ -90,6 +99,7 @@ async function studentWorkspaceRequest<T>(
 ): Promise<T> {
   const url = `${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`
   assertProductionHttpsUrl(url)
+  const startedAt = Date.now()
   const response = await fetch(url, {
     credentials: "include",
     cache: "no-store",
@@ -99,6 +109,13 @@ async function studentWorkspaceRequest<T>(
 
   let body: unknown = null
   const text = await response.text()
+  observeHttpResponse({
+    method: "GET",
+    path,
+    status: response.status,
+    startedAt,
+    payloadBytes: text.length,
+  })
   if (text) {
     try {
       body = JSON.parse(text)
@@ -108,8 +125,8 @@ async function studentWorkspaceRequest<T>(
   }
 
   if (!response.ok) {
-    noteApiFailure(path, response.status)
     const message = extractApiErrorMessage(body, response.status, path)
+    noteApiFailure(path, response.status, message)
     throw new ApiError(message, response.status, body)
   }
 
@@ -130,6 +147,7 @@ async function studentRequest<T>(
     ...flattenRequestHeaders(init?.headers),
   }
   requireStudentSessionProof(headers)
+  const startedAt = Date.now()
   const response = await fetch(url, {
     ...init,
     credentials: "include",
@@ -139,6 +157,13 @@ async function studentRequest<T>(
 
   let body: unknown = null
   const text = await response.text()
+  observeHttpResponse({
+    method: init?.method ?? "GET",
+    path,
+    status: response.status,
+    startedAt,
+    payloadBytes: text.length,
+  })
   if (text) {
     try {
       body = JSON.parse(text)
@@ -148,13 +173,35 @@ async function studentRequest<T>(
   }
 
   if (!response.ok) {
-    noteApiFailure(path, response.status)
     const message = extractApiErrorMessage(body, response.status, path)
     // Known soft misses — don't dump LogBox overlays in __DEV__.
     const isExpectedClientMiss =
       ((response.status === 404 || response.status === 503) && path.includes("mobile-payment")) ||
       (response.status === 404 &&
-        (/^\/api\/announcements\/\d+/.test(path) || path.includes("/api/announcements/")))
+        (/^\/api\/announcements\/\d+/.test(path) || path.includes("/api/announcements/"))) ||
+      (response.status === 404 && path.includes("/api/practice/generate")) ||
+      (response.status === 401 && isNonSessionExpiryUnauthorized(path)) ||
+      ((response.status === 404 || response.status === 500) &&
+        (/\/api\/attendance\/(score|streaks|leaderboard)(\?|$)/.test(path) ||
+          path.includes("/api/attendance/score") ||
+          path.includes("/api/attendance/streaks") ||
+          path.includes("/api/attendance/leaderboard"))) ||
+      (path.includes("/api/classroom-points") &&
+        (response.status === 401 ||
+          response.status === 403 ||
+          response.status === 404 ||
+          response.status === 500 ||
+          response.status === 503)) ||
+      ((response.status === 404 || response.status === 500) &&
+        (path.includes("/api/grades/student") || path.includes("/api/student/quiz-history"))) ||
+      (response.status === 403 && path.includes("/api/practice/")) ||
+      (response.status === 404 &&
+        /\/api\/student\/lectures\/\d+(\/(?:viewer|content|workspace|sample-practice(?:\/evaluate)?))?(\?|$)/.test(
+          path.split("?")[0] ?? path,
+        ))
+    if (!isExpectedClientMiss) {
+      noteApiFailure(path, response.status, message)
+    }
     if (__DEV__ && !isExpectedClientMiss) {
       console.error("[CourseCollab API]", {
         status: response.status,
@@ -374,13 +421,13 @@ export const studentApi = {
   getQuizzes: (session: StudentSession, type: string) =>
     studentRequest<{ quizzes: QuizItem[]; rollover_policy?: QuizListRolloverPolicy }>(
       session,
-      `/api/student/quizzes?studentDatabaseId=${encodeURIComponent(session.databaseId)}&type=${encodeURIComponent(type)}`,
+      studentContentPath(session, "/api/student/quizzes", { type }),
     ),
 
   getAssessmentHistory: (session: StudentSession) =>
     studentRequest<{ history?: AssessmentHistoryItem[]; assessmentHistory?: AssessmentHistoryItem[] }>(
       session,
-      `/api/student/assessment-history?studentDatabaseId=${encodeURIComponent(session.databaseId)}&session=${encodeURIComponent(session.section)}`,
+      studentContentPath(session, "/api/student/assessment-history"),
     ),
 
   getQuizHistory: (session: StudentSession) =>
@@ -435,13 +482,13 @@ export const studentApi = {
   getLectures: (session: StudentSession) =>
     studentRequest<{ lectures: LectureItem[] }>(
       session,
-      `/api/student/lectures?studentId=${encodeURIComponent(session.id)}`,
+      studentContentPath(session, "/api/student/lectures"),
     ),
 
   getLectureById: (session: StudentSession, lectureId: number) =>
     studentRequest<{ lecture: StudentLectureDetail }>(
       session,
-      `/api/student/lectures/${lectureId}?studentId=${encodeURIComponent(session.id)}`,
+      studentContentPath(session, `/api/student/lectures/${lectureId}`),
     ),
 
   getLectureViewer: (session: StudentSession, lectureId: number) =>
@@ -452,13 +499,13 @@ export const studentApi = {
       deckUrl?: string | null
     }>(
       session,
-      `/api/student/lectures/${lectureId}/viewer?studentId=${encodeURIComponent(session.id)}`,
+      studentContentPath(session, `/api/student/lectures/${lectureId}/viewer`),
     ),
 
   getLectureContent: (session: StudentSession, lectureId: number) =>
     studentRequest<{ lecture?: StudentLectureDetail } & Record<string, unknown>>(
       session,
-      `/api/student/lectures/${lectureId}/content?studentId=${encodeURIComponent(session.id)}`,
+      studentContentPath(session, `/api/student/lectures/${lectureId}/content`),
     ),
 
   getLectureSamplePractice: (session: StudentSession, lectureId: number) =>
@@ -466,6 +513,49 @@ export const studentApi = {
       session,
       (params) => `/api/student/lectures/${lectureId}/sample-practice?${params.toString()}`,
     ),
+
+  evaluateLectureSamplePractice: async (
+    session: StudentSession,
+    lectureId: number,
+    questionId: string,
+    answer: string | string[],
+    options?: { mcqEarnedFraction?: number },
+  ) => {
+    type EvaluateResponse = {
+      result?: import("./lecture-types").LectureSamplePracticeEvaluateResult
+      engagement?: import("./lecture-types").LectureSamplePracticeEngagementResult
+      error?: string
+    }
+    const studentIds = [...new Set([session.id, session.databaseId].filter(Boolean))]
+    let lastError: unknown
+    for (const studentId of studentIds) {
+      try {
+        const body: Record<string, unknown> = { studentId, questionId, answer }
+        if (
+          options?.mcqEarnedFraction != null &&
+          Number.isFinite(options.mcqEarnedFraction)
+        ) {
+          body.mcqEarnedFraction = Math.max(0, Math.min(1, options.mcqEarnedFraction))
+        }
+        const data = await studentRequest<EvaluateResponse>(
+          session,
+          studentContentPath(session, `/api/student/lectures/${lectureId}/sample-practice/evaluate`),
+          {
+            method: "POST",
+            body: JSON.stringify(body),
+          },
+        )
+        if (!data.result) {
+          throw new ApiError("Could not evaluate your answer.", 500, data)
+        }
+        return data
+      } catch (err) {
+        lastError = err
+      }
+    }
+    if (lastError instanceof ApiError) throw lastError
+    throw new ApiError("Could not evaluate your answer.", 0, lastError)
+  },
 
   getLectureWorkspace: async (session: StudentSession, lectureId: number) => {
     type WorkspaceResponse = {
@@ -524,6 +614,20 @@ export const studentApi = {
       },
     ),
 
+  /** Explicitly mark a lecture done (or undo it) regardless of slide tracking. */
+  setLectureCompleted: (session: StudentSession, lectureId: number, completed: boolean) =>
+    studentRequest<{ status?: string; progress_percentage?: number }>(
+      session,
+      `/api/student/lectures/${lectureId}/progress`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          studentId: session.id,
+          mark_completed: completed,
+        }),
+      },
+    ),
+
   getAnnouncements: (session: StudentSession) =>
     studentRequest<{ announcements: Announcement[] }>(
       session,
@@ -578,13 +682,13 @@ export const studentApi = {
   getSyllabus: (session: StudentSession) =>
     studentRequest<Record<string, unknown>>(
       session,
-      `/api/student/syllabus?studentId=${encodeURIComponent(session.databaseId)}`,
+      studentContentPath(session, "/api/student/syllabus"),
     ),
 
   getCoursePolicies: (session: StudentSession) =>
     studentRequest<Record<string, unknown>>(
       session,
-      `/api/student/course-assessment-governance?studentId=${encodeURIComponent(session.databaseId)}`,
+      studentContentPath(session, "/api/student/course-assessment-governance"),
     ),
 
   getProfile: (session: StudentSession) =>
@@ -798,34 +902,42 @@ export const studentApi = {
       }),
     }),
 
-  getAttendanceRecords: (session: StudentSession) =>
-    studentRequest<Record<string, unknown>>(
-      session,
-      `/api/attendance/records?studentId=${encodeURIComponent(session.databaseId)}`,
-    ),
+  getAttendanceRecords: async (session: StudentSession) => {
+    try {
+      return await studentRequest<Record<string, unknown>>(
+        session,
+        studentContentPath(session, "/api/attendance/records"),
+      )
+    } catch (err) {
+      if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
+        return { records: [] }
+      }
+      throw err
+    }
+  },
 
   getAttendanceScore: (session: StudentSession) =>
     studentRequest<Record<string, unknown>>(
       session,
-      `/api/attendance/score?studentId=${encodeURIComponent(session.databaseId)}`,
+      studentContentPath(session, "/api/attendance/score"),
     ),
 
   getAttendanceStreaks: (session: StudentSession) =>
     studentRequest<Record<string, unknown>>(
       session,
-      `/api/attendance/streaks?studentId=${encodeURIComponent(session.databaseId)}`,
+      studentContentPath(session, "/api/attendance/streaks"),
     ),
 
   getClassroomPoints: (session: StudentSession) =>
     studentRequest<Record<string, unknown>>(
       session,
-      `/api/classroom-points?studentId=${encodeURIComponent(session.databaseId)}&session=${encodeURIComponent(session.section)}`,
+      studentContentPath(session, "/api/classroom-points"),
     ),
 
   getClassroomPointsLeaderboard: (session: StudentSession) =>
     studentRequest<Record<string, unknown>>(
       session,
-      `/api/classroom-points/leaderboard?studentId=${encodeURIComponent(session.databaseId)}&session=${encodeURIComponent(session.section)}`,
+      studentContentPath(session, "/api/classroom-points/leaderboard"),
     ),
 
   getTradeCenterPoints: (session: StudentSession) =>
@@ -843,13 +955,13 @@ export const studentApi = {
   getGroups: (session: StudentSession) =>
     studentRequest<{ groups?: Record<string, unknown>[] }>(
       session,
-      `/api/groups?studentId=${encodeURIComponent(session.databaseId)}`,
+      studentContentPath(session, "/api/groups"),
     ),
 
   getProjects: (session: StudentSession) =>
     studentRequest<{ projects?: Record<string, unknown>[] }>(
       session,
-      `/api/projects/list?studentId=${encodeURIComponent(session.databaseId)}`,
+      studentProjectsListPath(session),
     ),
 
   getCalendarEvents: (

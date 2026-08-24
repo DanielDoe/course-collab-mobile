@@ -15,9 +15,17 @@ import {
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { useThemedNative } from "../../context/AppearanceProvider"
-import { useChromeTopInset, useModuleScrollContentPadding } from "../../context/ChromeInsetContext"
+import {
+  CHROME_CONTENT_TOP_GAP,
+  CHROME_FLOATING_CONTENT_EXTRA_GAP,
+  floatingChromeSpacerHeight,
+  useChromeTopInset,
+  useModuleScrollContentPadding,
+} from "../../context/ChromeInsetContext"
+import { useGlassChromeActive } from "../theme/GlassSurface"
+import { floatingTopChromeInset, useStableTopSafeInset } from "../shell/shell-shared"
 import { NATIVE } from "../../constants/faculty-native-theme"
-import { useModuleContentStyle } from "../../lib/responsive-layout"
+import { useModuleContentStyle, useModulePageLayout } from "../../lib/responsive-layout"
 import { useNativeType } from "../../lib/themed-module-theme"
 import { solidListThumb, type SolidListThumb } from "../../lib/solid-list-thumb"
 import { SolidListThumbTile } from "../theme/SolidListThumbTile"
@@ -67,9 +75,19 @@ export function ModuleScreen({
   const insets = useSafeAreaInsets()
   const native = useThemedNative()
   const chromeTop = useChromeTopInset()
-  const scrollPad = useModuleScrollContentPadding()
+  const glassChromeActive = useGlassChromeActive()
+  const topSafeInset = useStableTopSafeInset()
+  const scrollPad = useModuleScrollContentPadding(36)
+  const effectiveChromeTop =
+    chromeTop > 0 ? chromeTop : glassChromeActive ? floatingTopChromeInset(topSafeInset) : 0
+  const floatingSpacerHeight = floatingChromeSpacerHeight(
+    effectiveChromeTop,
+    CHROME_CONTENT_TOP_GAP,
+    CHROME_FLOATING_CONTENT_EXTRA_GAP,
+  )
   const type = useNativeType()
   const moduleContentStyle = useModuleContentStyle()
+  const pageLayout = useModulePageLayout()
   const { height: windowHeight } = useWindowDimensions()
   const refreshEnabled = Boolean(onRefresh)
   const showBlockingLoad = Boolean(loading && refreshEnabled)
@@ -94,8 +112,15 @@ export function ModuleScreen({
       style={[styles.scroll, { backgroundColor: native.groupedBackground }]}
       contentContainerStyle={[
         styles.content,
-        scrollPad,
+        {
+          paddingBottom: scrollPad.paddingBottom,
+          paddingTop: floatingSpacerHeight > 0 ? 0 : scrollPad.paddingTop,
+        },
         moduleContentStyle,
+        {
+          paddingHorizontal: pageLayout.horizontalPadding,
+          gap: pageLayout.stackGap,
+        },
         contentStyle,
         refreshEnabled
           ? {
@@ -107,7 +132,7 @@ export function ModuleScreen({
           : null,
       ]}
       contentInsetAdjustmentBehavior={
-        disableTopInsetAdjustment || chromeTop > 0 ? "never" : "automatic"
+        disableTopInsetAdjustment || effectiveChromeTop > 0 ? "never" : "automatic"
       }
       automaticallyAdjustContentInsets={!disableTopInsetAdjustment}
       automaticallyAdjustsScrollIndicatorInsets={!disableTopInsetAdjustment}
@@ -119,14 +144,17 @@ export function ModuleScreen({
             refreshing={Boolean(refreshing) || showBlockingLoad}
             onRefresh={handleRefresh}
             tintColor={native.tint}
-            {...(chromeTop > 0 ? { progressViewOffset: chromeTop } : {})}
+            {...(effectiveChromeTop > 0 ? { progressViewOffset: effectiveChromeTop } : {})}
           />
         ) : undefined
       }
       showsVerticalScrollIndicator={false}
       {...keyboardDismissScrollProps}
     >
-      <DismissKeyboardView>
+      <DismissKeyboardView style={{ gap: pageLayout.stackGap }}>
+      {floatingSpacerHeight > 0 ? (
+        <View style={{ height: floatingSpacerHeight, width: "100%" }} />
+      ) : null}
       {error ? (
         <AppErrorScreen
           error={typeof error === "string" ? new Error(error) : error}
@@ -430,7 +458,7 @@ export function ModuleRow({
 
 const styles = StyleSheet.create({
   scroll: { flex: 1 },
-  content: { paddingHorizontal: NATIVE.pagePadding, gap: 12, flexGrow: 1 },
+  content: { flexGrow: 1 },
   center: {
     flex: 1,
     alignItems: "center",

@@ -255,6 +255,8 @@ export function normalizeLectureWorkspaceQuestion(
     question_media: parseQuestionMedia(o.question_media ?? o),
     step_by_step_solution: normalizeSolution(o.step_by_step_solution ?? o.solution),
     instructor_solution_workspace: parseInstructorSolutionWorkspace(o),
+    solution_unlocked: o.solution_unlocked === true,
+    solution_available: o.solution_available === true,
   }
 }
 
@@ -320,6 +322,8 @@ function normalizeLectureWorkspaceQuestionLenient(
     question_media: parseQuestionMedia(o.question_media),
     step_by_step_solution: normalizeSolution(o.step_by_step_solution ?? o.solution),
     instructor_solution_workspace: parseInstructorSolutionWorkspace(o),
+    solution_unlocked: o.solution_unlocked === true,
+    solution_available: o.solution_available === true,
   }
 }
 
@@ -355,7 +359,16 @@ export function parseLectureWorkspace(raw: unknown): LectureWorkspaceConfig {
   }
 }
 
+export function workspaceQuestionHasAuthoredSolution(question: LectureWorkspaceQuestion): boolean {
+  return question.step_by_step_solution.content.some((line) => line.trim().length > 0)
+}
+
+export function isWorkspaceSolutionUnlocked(question: LectureWorkspaceQuestion): boolean {
+  return question.solution_unlocked === true
+}
+
 export function solutionMarkdownFromQuestion(question: LectureWorkspaceQuestion): string {
+  if (!isWorkspaceSolutionUnlocked(question) && question.solution_available) return ""
   return question.step_by_step_solution.content.join("\n\n")
 }
 

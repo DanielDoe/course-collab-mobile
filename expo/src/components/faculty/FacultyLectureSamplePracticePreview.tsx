@@ -4,10 +4,7 @@ import { Ionicons } from "@/components/icons/AppIcon"
 import { hexToRgba } from "../../constants/app-themes"
 import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
 import type { LectureSamplePracticeQuestion } from "../../lib/lecture-types"
-import {
-  getGradableSubquestions,
-  subquestionOptionLabels,
-} from "../../lib/lecture-sample-practice-utils"
+import { subquestionOptionLabels } from "../../lib/lecture-sample-practice-utils"
 import { QuestionContentWebView, QuestionMediaView } from "../rewards/QuestionContent"
 
 /** Quiz-taker style preview for in-lecture sample practice — markdown, KaTeX, diagrams. */
@@ -20,9 +17,14 @@ export function FacultyLectureSamplePracticePreview({
   const native = useThemedNative()
   const [selectedLetter, setSelectedLetter] = useState("")
 
-  const gradable = getGradableSubquestions(question.subquestions)
-  const mcq = gradable[0]
-  const options = mcq ? subquestionOptionLabels(mcq) : []
+  const gradable = {
+    id: "a",
+    type: question.question_type,
+    prompt: question.question_text,
+    options: question.options,
+    correct_answer: question.correct_answer,
+  }
+  const options = subquestionOptionLabels(gradable)
 
   return (
     <View style={[styles.card, { backgroundColor: tokens.surface, borderColor: tokens.border }]}>
@@ -42,15 +44,6 @@ export function FacultyLectureSamplePracticePreview({
       {question.question_text.trim() ? (
         <View style={styles.questionBody}>
           <QuestionContentWebView text={question.question_text} embedded />
-        </View>
-      ) : null}
-
-      {mcq?.prompt.trim() ? (
-        <View style={styles.partBlock}>
-          <Text style={[styles.partLabel, { color: tokens.text }]}>
-            Part ({mcq.id.toUpperCase()})
-          </Text>
-          <QuestionContentWebView text={mcq.prompt} embedded compact />
         </View>
       ) : null}
 
@@ -129,8 +122,6 @@ const styles = StyleSheet.create({
   badgeText: { fontSize: 11, fontWeight: "700" },
   topic: { flex: 1, fontSize: 12, fontWeight: "600", textAlign: "right" },
   questionBody: { paddingHorizontal: 2 },
-  partBlock: { gap: 6 },
-  partLabel: { fontSize: 13, fontWeight: "700" },
   optionsStack: { gap: 8 },
   option: {
     flexDirection: "row",

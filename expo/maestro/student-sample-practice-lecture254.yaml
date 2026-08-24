@@ -1,0 +1,214 @@
+appId: com.coursecollab.app
+---
+# Lecture 254 (ELEG 130X L1) — sample practice grading + post-submit feedback smoke.
+# Verifies MCQ, select_all (checkboxes), and true/false against programmed answer keys.
+# Login: dmdoep01 / ELEG1301P01 via dev-eleg-student-login (PVAMU, courseId 5).
+# Reset attempts first if re-running: npx tsx scripts/reset-eleg1301-sample-practice-student.ts
+
+- stopApp
+- openLink: coursecollab://dev-eleg-student-login
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 120000
+
+- openLink: coursecollab:///lecture/1?lectureId=254
+- extendedWaitUntil:
+    visible: "Open lecture tools"
+    timeout: 120000
+- tapOn:
+    text: "Open lecture tools"
+- extendedWaitUntil:
+    visible: "Slide tools"
+    timeout: 30000
+- tapOn:
+    text: ".*Sample Practice.*"
+- extendedWaitUntil:
+    visible: "Sample Practice"
+    timeout: 60000
+
+# --- Q1 MCQ (correct B) when still unanswered ---
+- runFlow:
+    when:
+      visible: "B, A self-contained set of instructions to operate a computer"
+    commands:
+      - scrollUntilVisible:
+          element:
+            text: "B, A self-contained set of instructions to operate a computer"
+          direction: DOWN
+          timeout: 30000
+          speed: 40
+      - tapOn: "B, A self-contained set of instructions to operate a computer"
+      - tapOn:
+          text: "Submit answer"
+          below: "B, A self-contained set of instructions to operate a computer"
+      - scrollUntilVisible:
+          element:
+            text: "Correct — nice work."
+          direction: DOWN
+          timeout: 60000
+          speed: 40
+      - takeScreenshot: sample-practice-254-q1-correct
+
+# --- Q6 select_all (correct A,B,C,E — not D C++) ---
+- scrollUntilVisible:
+    element:
+      text: ".*early procedural programming languages.*"
+    direction: DOWN
+    timeout: 45000
+    speed: 40
+- tapOn: ".*early procedural programming languages.*"
+- runFlow:
+    when:
+      visible: "Submit answer"
+    commands:
+      - scrollUntilVisible:
+          element:
+            text: "A, FORTRAN"
+          direction: DOWN
+          timeout: 30000
+          speed: 40
+      - tapOn: "A, FORTRAN"
+      - tapOn: "B, ALGOL"
+      - tapOn: "C, COBOL"
+      - tapOn: "E, Pascal"
+      - takeScreenshot: sample-practice-254-q6-before-submit
+      - tapOn:
+          text: "Submit answer"
+          below: "E, Pascal"
+      - scrollUntilVisible:
+          element:
+            text: "Correct — nice work."
+          direction: DOWN
+          timeout: 60000
+          speed: 40
+      - takeScreenshot: sample-practice-254-q6-select-all-correct
+      - assertNotVisible: "Could not check your answer."
+
+# --- Q7 select_all wrong highlight (C is not correct) ---
+- scrollUntilVisible:
+    element:
+      text: ".*common programming mistakes.*"
+    direction: DOWN
+    timeout: 45000
+    speed: 40
+- tapOn: ".*common programming mistakes.*"
+- runFlow:
+    when:
+      visible: "Submit answer"
+    commands:
+      - scrollUntilVisible:
+          element:
+            text: "A, Not backing up code"
+          direction: DOWN
+          timeout: 30000
+          speed: 40
+      - tapOn: "A, Not backing up code"
+      - scrollUntilVisible:
+          element:
+            text: "B, Ignoring error messages"
+          direction: DOWN
+          timeout: 30000
+          speed: 40
+      - tapOn: "B, Ignoring error messages"
+      - scrollUntilVisible:
+          element:
+            text: "C, Testing frequently"
+          direction: DOWN
+          timeout: 30000
+          speed: 40
+      - tapOn: "C, Testing frequently"
+      - tapOn:
+          text: "Submit answer"
+          below: "C, Testing frequently"
+      - scrollUntilVisible:
+          element:
+            text: ".*Not quite.*|.*Partially correct.*"
+          direction: DOWN
+          timeout: 60000
+          speed: 40
+      - takeScreenshot: sample-practice-254-q7-wrong-highlight
+      - assertNotVisible: "Correct — nice work."
+
+# --- Q8 select_all full correct (A,B,D,E) ---
+- scrollUntilVisible:
+    element:
+      text: ".*problem solution documentation.*"
+    direction: DOWN
+    timeout: 45000
+    speed: 40
+- tapOn: ".*problem solution documentation.*"
+- runFlow:
+    when:
+      visible: "Submit answer"
+    commands:
+      - scrollUntilVisible:
+          element:
+            text: "A, Program description"
+          direction: DOWN
+          timeout: 30000
+          speed: 40
+      - tapOn: "A, Program description"
+      - scrollUntilVisible:
+          element:
+            text: "B, Algorithm changes"
+          direction: DOWN
+          timeout: 30000
+          speed: 40
+      - tapOn: "B, Algorithm changes"
+      - scrollUntilVisible:
+          element:
+            text: "D, Sample test runs"
+          direction: DOWN
+          timeout: 30000
+          speed: 40
+      - tapOn: "D, Sample test runs"
+      - scrollUntilVisible:
+          element:
+            text: "E, Users' manual"
+          direction: DOWN
+          timeout: 30000
+          speed: 40
+      - tapOn: "E, Users' manual"
+      - tapOn:
+          text: "Submit answer"
+          below: "E, Users' manual"
+      - scrollUntilVisible:
+          element:
+            text: "Correct — nice work."
+          direction: DOWN
+          timeout: 60000
+          speed: 40
+      - takeScreenshot: sample-practice-254-q8-select-all-correct
+
+# --- Q11 true/false (correct B = False) ---
+- scrollUntilVisible:
+    element:
+      text: ".*Application software manages the hardware.*"
+    direction: DOWN
+    timeout: 45000
+    speed: 40
+- tapOn: ".*Application software manages the hardware.*"
+- runFlow:
+    when:
+      visible: "Submit answer"
+    commands:
+      - scrollUntilVisible:
+          element:
+            text: "B, False"
+          direction: DOWN
+          timeout: 30000
+          speed: 40
+      - tapOn: "B, False"
+      - tapOn:
+          text: "Submit answer"
+          below: "B, False"
+      - scrollUntilVisible:
+          element:
+            text: "Correct — nice work."
+          direction: DOWN
+          timeout: 60000
+          speed: 40
+      - takeScreenshot: sample-practice-254-q11-tf-correct
+      - assertNotVisible: "Could not check your answer."
+
+- assertNotVisible: "Could not check your answer."

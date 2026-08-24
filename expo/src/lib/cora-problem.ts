@@ -1,5 +1,4 @@
 import type { LectureSamplePracticeQuestion, LectureWorkspaceQuestion } from "./lecture-types"
-import { getGradableSubquestions } from "./lecture-sample-practice-utils"
 import { normalizeImportedProblem, type CoraImportedProblem } from "./cora-api"
 import type { CoraDomain, CoraProblem, CoraSource } from "./cora-types"
 
@@ -114,24 +113,46 @@ export function buildWorkspaceCoraProblem(
   }
 }
 
+export function samplePracticeQuestionToImportedProblem(
+  lectureId: number,
+  question: LectureSamplePracticeQuestion,
+  studentDatabaseId: string,
+  result?: { explanation?: string | null } | null,
+): import("./cora-api").CoraImportedProblem {
+  const explanation =
+    result?.explanation?.trim() || question.explanation?.trim() || null
+  return {
+    source: "lecture_practice",
+    domain: "generic",
+    title: question.title,
+    topic: question.topic,
+    questionText: question.question_text.trim() || question.title,
+    questionType: question.question_type,
+    explanation,
+    referenceSteps: explanation ? [explanation] : undefined,
+    mediaUrl: question.question_media?.media_url ?? null,
+    questionMedia: question.question_media ?? null,
+    lectureId,
+    questionId: question.id,
+    studentDatabaseId,
+  }
+}
+
 export function buildSamplePracticeCoraProblem(
   lectureId: number,
   question: LectureSamplePracticeQuestion,
   studentDatabaseId: string,
 ): CoraProblem {
-  const mcq = getGradableSubquestions(question.subquestions)[0]
   const questionText =
-    mcq?.prompt.trim() ||
-    question.question_text.trim() ||
-    "Work through this example with Cora."
-  const explanation = mcq?.explanation?.trim()
+    question.question_text.trim() || "Work through this example with Cora."
+  const explanation = question.explanation?.trim()
   return {
     source: "sample_practice",
     domain: "circuit",
     title: question.title,
     topic: question.topic,
     questionText,
-    questionType: "mcq",
+    questionType: question.question_type,
     referenceSteps: explanation ? [explanation] : undefined,
     mediaUrl: question.question_media?.media_url ?? null,
     lectureId,

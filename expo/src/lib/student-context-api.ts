@@ -1,5 +1,5 @@
 import type { StudentSession } from "./session"
-import { ApiError } from "./student-api"
+import { ApiError, studentAuthenticatedHeaders } from "./student-api"
 import { API_BASE_URL } from "../constants"
 
 export type StudentMembershipTier = "Scholar" | "Explorer" | "Trailblazer"
@@ -83,10 +83,8 @@ export async function fetchStudentContext(
 ): Promise<StudentContextPayload> {
   const url = `${API_BASE_URL}/api/ai-tutor/student-context`
   const response = await fetch(url, {
-    headers: {
-      Accept: "application/json",
-      "x-student-id": session.databaseId,
-    },
+    credentials: "include",
+    headers: await studentAuthenticatedHeaders(session),
   })
 
   let body: unknown = null

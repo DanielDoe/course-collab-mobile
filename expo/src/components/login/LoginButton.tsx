@@ -101,8 +101,8 @@ export function LoginButton({
           borderRadius: APP_BUTTON_RADIUS,
           backgroundColor: fill,
         },
-        (disabled || loading) && styles.disabled,
-        pressed && styles.pressed,
+        (disabled || loading) && { backgroundColor: fill, opacity: 1 },
+        pressed && !disabled && !loading && styles.pressed,
       ]}
       disabled={disabled || loading}
       onPress={onPress}
@@ -117,13 +117,13 @@ export function LoginButton({
             style={[
               loginType.button,
               styles.buttonLabel,
-              { color: labelColor },
+              { color: disabled && !loading ? "#FFFFFF" : labelColor },
             ]}
           >
             {label}
           </Text>
           {icon ? (
-            <Ionicons name={icon} size={20} color={labelColor} />
+            <Ionicons name={icon} size={20} color={disabled && !loading ? "#FFFFFF" : labelColor} />
           ) : null}
         </>
       )}
@@ -283,7 +283,6 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingHorizontal: 20,
   },
-  disabled: { opacity: 0.55 },
   pressed: { opacity: 0.88 },
   buttonLabel: { color: "#ffffff" },
 })

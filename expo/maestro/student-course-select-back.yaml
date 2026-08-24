@@ -1,0 +1,88 @@
+appId: com.coursecollab.app
+---
+# Multi-enrollment login → course picker → back to credentials (button + swipe)
+
+- launchApp:
+    clearState: true
+    clearKeychain: true
+
+- runFlow:
+    when:
+      visible: "Open debugger to view warnings."
+    commands:
+      - tapOn:
+          text: "Dismiss"
+          optional: true
+
+- runFlow:
+    when:
+      visible: "Dashboard"
+    commands:
+      - tapOn: "Open account menu"
+      - extendedWaitUntil:
+          visible: "Sign out"
+          timeout: 10000
+      - tapOn: "Sign out"
+
+- runFlow:
+    when:
+      visible: "Continue with University"
+    commands:
+      - tapOn: "Continue with University"
+
+- runFlow:
+    when:
+      visible: "Not your school? Change university"
+    commands:
+      - tapOn: "Not your school? Change university"
+
+- extendedWaitUntil:
+    visible: "Choose Your University"
+    timeout: 30000
+
+- tapOn:
+    text: "University of Houston, University of Houston, UH · uh.edu"
+- tapOn: "Continue"
+
+- extendedWaitUntil:
+    visible: "Student Login"
+    timeout: 30000
+
+- tapOn: "Student ID or Email"
+- inputText: "alex.rivera@coursecollab.demo"
+- tapOn: "Password"
+- inputText: "Review26!"
+- tapOn: "Student Login"
+- tapOn: "Login"
+
+- extendedWaitUntil:
+    visible: "Select a Course"
+    timeout: 60000
+
+- assertVisible: "ECE 2202"
+- assertVisible: "Back to login"
+
+- tapOn: "Back to login"
+
+- extendedWaitUntil:
+    visible: "Student Login"
+    timeout: 15000
+
+- assertVisible: "Student ID or Email"
+
+# Sign in again, then test native edge swipe back
+- tapOn: "Login"
+
+- extendedWaitUntil:
+    visible: "Select a Course"
+    timeout: 60000
+
+- swipe:
+    direction: RIGHT
+    duration: 400
+
+- extendedWaitUntil:
+    visible: "Student Login"
+    timeout: 15000
+
+- assertVisible: "Student ID or Email"

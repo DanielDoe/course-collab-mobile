@@ -26,6 +26,7 @@ import {
 import { formatAssignmentDueLabel } from "../../lib/faculty-classroom-assignment-form"
 import { shortenTaskTitle, isSolutionAssignment, resolveAssignmentQuestionConfig } from "../../lib/classroom-submission"
 import { useFacultyScope } from "../../hooks/useFacultyScope"
+import { fetchFacultyTermSessions, rowMatchesFacultySection } from "../../lib/faculty-section-scope"
 import { useFacultyShell } from "../../context/FacultyShellContext"
 import { useNotificationModuleRefresh } from "../../lib/notifications/notification-events"
 import { semanticSoft } from "../../lib/themed-module-theme"
@@ -106,32 +107,44 @@ export function FacultyClassroomPointsScreen() {
   const load = useCallback(async () => {
     if (!scope) return
     setError("")
+    const sessionCode = scope.sessionCode?.trim() || undefined
     try {
-      const [pendingRows, practiceRows, approvedRows, summaryRows, assignmentRows, sessionRes] =
+      const [pendingRows, practiceRows, approvedRows, summaryRows, assignmentRows, sessionRows] =
         await Promise.all([
-          instructorApi.getClassroomPoints(scope, { status: "pending", limit: 150 }),
+          instructorApi.getClassroomPoints(scope, { status: "pending", limit: 150, session: sessionCode }),
           instructorApi.getPendingPracticePoints(scope),
-          instructorApi.getClassroomPoints(scope, { status: "approved", limit: 80 }),
-          instructorApi.getClassroomPointsSummary(scope),
-          instructorApi.getClassroomPointAssignments(scope),
-          instructorApi.getSessions(scope),
+          instructorApi.getClassroomPoints(scope, { status: "approved", limit: 80, session: sessionCode }),
+          instructorApi.getClassroomPointsSummary(scope, sessionCode),
+          instructorApi.getClassroomPointAssignments(scope, sessionCode),
+          fetchFacultyTermSessions(scope),
         ])
-      setPending(pendingRows)
-      setPracticePending(practiceRows)
-      setApproved(approvedRows)
-      setSummary(summaryRows)
-      setAssignments(assignmentRows)
-      setSessions(
-        (sessionRes.sessions ?? []).filter((s, i, arr) => {
-          const code = s.code?.trim()
-          if (!code) return false
-          return arr.findIndex((x) => x.code?.trim() === code) === i
-        }),
+      const scopedSummary = summaryRows.filter((row) =>
+        rowMatchesFacultySection(row, scope, sessionCode ?? "all"),
       )
+      const scopedPending = pendingRows.filter((row) =>
+        rowMatchesFacultySection(row, scope, sessionCode ?? "all"),
+      )
+      const scopedApproved = approvedRows.filter((row) =>
+        rowMatchesFacultySection(row, scope, sessionCode ?? "all"),
+      )
+      setPending(scopedPending)
+      setPracticePending(practiceRows)
+      setApproved(scopedApproved)
+      setSummary(scopedSummary)
+      setAssignments(assignmentRows)
+      setSessions(sessionRows)
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not load classroom points.")
     }
   }, [scope])
+
+  useEffect(() => {
+    if (!scope) return
+    setPending([])
+    setApproved([])
+    setSummary([])
+    setAssignments([])
+  }, [scope?.courseId, scope?.sessionId])
 
   useEffect(() => {
     if (!ready) {
