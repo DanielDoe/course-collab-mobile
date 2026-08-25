@@ -1,37 +1,87 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
-import { Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
-import { AppAlert } from '../../lib/app-alert'
-import { Ionicons } from "@/components/icons/AppIcon"
+import { useCallback, useEffect, useId, useMemo, useState } from "react"
+import { Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native"
+import { AppAlert } from "../../lib/app-alert"
 import { useSession } from "../../context/SessionProvider"
 import { useThemedNative } from "../../context/AppearanceProvider"
 import { ApiError } from "../../lib/student-api"
 import type { StudentSession } from "../../lib/session"
 import { useNotificationModuleRefresh } from "../../lib/notifications/notification-events"
 import { useNativeType } from "../../lib/themed-module-theme"
-import { CollabSearch } from "../collaboration/collab-shared"
 import { SignatureListCard } from "../theme/SignatureListCard"
 import { TabbedModuleLayout, signatureListStyles } from "../theme/TabbedModuleLayout"
+import { useModuleSearchDockRegistration, type ModuleSearchDockEntry } from "../../context/ModuleSearchDockContext"
 import {
   formatRelativeTime,
   rewardsApi,
   type AttendanceLeaderboardEntry,
   type AttendanceRecord,
   type AttendanceScore,
-  type AttendanceStreak} from "../../lib/rewards-api"
+  type AttendanceStreak,
+  type StudentAttendanceSessionItem,
+} from "../../lib/rewards-api"
 import {
   attendanceDisplayPercent,
   attendanceLeaderboardForCurrentOffering,
 } from "../../lib/attendance-leaderboard-scope"
 import { EmptyBlock, useRewardsTheme } from "./rewards-shared"
+import { AttendanceCheckInActionSheet } from "./AttendanceCheckInActionSheet"
 import { AttendanceLeaderboardPodium } from "./AttendanceLeaderboardPodium"
 import { AttendanceOverviewHero } from "./AttendanceOverviewHero"
+import { AttendanceSessionActionSheet } from "./AttendanceSessionActionSheet"
+import { StructuredSessionCheckIn } from "./StructuredSessionCheckIn"
+import { StudentAttendanceSessionList } from "./StudentAttendanceSessionList"
 
 function useStudentSession(): StudentSession | null {
   const { session } = useSession()
   return session?.portal === "student" ? session : null
 }
 
-type Tab = "overview" | "records" | "leaderboard"
+type Tab = "overview" | "sessions" | "records" | "leaderboard"
+
+/** Bottom search dock without touching TabbedModuleLayout chrome (which shifts the tab bar). */
+function AttendanceSearchDock({
+  tab,
+  search,
+  onChangeSearch,
+  onOpenCheckIn,
+}: {
+  tab: Tab
+  search: string
+  onChangeSearch: (value: string) => void
+  onOpenCheckIn: () => void
+}) {
+  const dockId = useId()
+  const placeholder =
+    tab === "sessions"
+      ? "Search class sessions…"
+      : tab === "records"
+        ? "Search attendance history…"
+        : tab === "leaderboard"
+          ? "Search rankings…"
+          : "Search attendance…"
+
+  const dockEntry = useMemo<ModuleSearchDockEntry | null>(() => {
+    if (tab === "overview") return null
+    return {
+      kind: "student",
+      props: {
+        value: search,
+        onChange: onChangeSearch,
+        placeholder,
+        showFilter: false,
+        placement: "dock",
+        trailingAction: {
+          onPress: onOpenCheckIn,
+          accessibilityLabel: "Check in",
+          icon: "add",
+        },
+      },
+    }
+  }, [tab, search, onChangeSearch, placeholder, onOpenCheckIn])
+
+  useModuleSearchDockRegistration(dockId, dockEntry)
+  return null
+}
 
 function RecordListCard({ record, index }: { record: AttendanceRecord; index: number }) {
   const theme = useRewardsTheme()
@@ -84,28 +134,43 @@ export function AttendanceScreen() {
   const [streak, setStreak] = useState<AttendanceStreak>({})
   const [records, setRecords] = useState<AttendanceRecord[]>([])
   const [leaderboard, setLeaderboard] = useState<AttendanceLeaderboardEntry[]>([])
+  const [scheduledSessions, setScheduledSessions] = useState<StudentAttendanceSessionItem[]>([])
+  const [sessionsLoading, setSessionsLoading] = useState(true)
+  const [checkInMenuOpen, setCheckInMenuOpen] = useState(false)
+  const [sessionSheetOpen, setSessionSheetOpen] = useState(false)
+  const [activeSession, setActiveSession] = useState<StudentAttendanceSessionItem | null>(null)
   const [checkInOpen, setCheckInOpen] = useState(false)
+  const [checkInSession, setCheckInSession] = useState<StudentAttendanceSessionItem | null>(null)
   const [sessionId, setSessionId] = useState("")
   const [code, setCode] = useState("")
   const [checkingIn, setCheckingIn] = useState(false)
   const [search, setSearch] = useState("")
 
+  const openSession = useMemo(
+    () => scheduledSessions.find((row) => row.canCheckIn) ?? null,
+    [scheduledSessions],
+  )
+
   const load = useCallback(async () => {
     if (!session) return
     try {
-      const [scoreData, streakData, recordsData, lbData] = await Promise.all([
+      const [scoreData, streakData, recordsData, lbData, sessionsData] = await Promise.all([
         rewardsApi.getAttendanceScore(session).catch(() => ({ attendance: {} })),
         rewardsApi.getAttendanceStreaks(session).catch(() => ({ streak: {} })),
         rewardsApi.getAttendanceRecords(session).catch(() => ({ records: [] })),
         rewardsApi.getAttendanceLeaderboard(session).catch(() => ({ leaderboard: [] })),
+        rewardsApi.getStudentAttendanceSessions(session).catch(() => ({ sessions: [] })),
       ])
       setScore(scoreData.attendance ?? {})
       setStreak(streakData.streak ?? {})
       setRecords(recordsData.records ?? [])
       setLeaderboard(lbData.leaderboard ?? [])
+      setScheduledSessions(sessionsData.sessions ?? [])
       setError("")
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Failed to load attendance.")
+    } finally {
+      setSessionsLoading(false)
     }
   }, [session])
 
@@ -114,6 +179,7 @@ export function AttendanceScreen() {
   useEffect(() => {
     if (!session) return
     setLoading(true)
+    setSessionsLoading(true)
     load().finally(() => setLoading(false))
   }, [session, load])
 
@@ -123,23 +189,20 @@ export function AttendanceScreen() {
     setRefreshing(false)
   }, [load])
 
-  const sortedRecords = useMemo(
-    () => {
-      const q = search.trim().toLowerCase()
-      const sorted = [...records].sort(
-        (a, b) =>
-          new Date(b.timestamp ?? b.startTime ?? 0).getTime() -
-          new Date(a.timestamp ?? a.startTime ?? 0).getTime(),
-      )
-      if (!q) return sorted
-      return sorted.filter(
-        (record) =>
-          (record.classTitle ?? "Class session").toLowerCase().includes(q) ||
-          (record.status ?? "").toLowerCase().includes(q),
-      )
-    },
-    [records, search],
-  )
+  const sortedRecords = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    const sorted = [...records].sort(
+      (a, b) =>
+        new Date(b.timestamp ?? b.startTime ?? 0).getTime() -
+        new Date(a.timestamp ?? a.startTime ?? 0).getTime(),
+    )
+    if (!q) return sorted
+    return sorted.filter(
+      (record) =>
+        (record.classTitle ?? "Class session").toLowerCase().includes(q) ||
+        (record.status ?? "").toLowerCase().includes(q),
+    )
+  }, [records, search])
 
   const filteredLeaderboard = useMemo(() => {
     const scoped = session ? attendanceLeaderboardForCurrentOffering(leaderboard, session) : []
@@ -148,20 +211,88 @@ export function AttendanceScreen() {
     return scoped.filter((entry) => (entry.full_name ?? "Student").toLowerCase().includes(q))
   }, [leaderboard, search, session])
 
+  const selfCheckInFromList = useCallback(
+    async (row: StudentAttendanceSessionItem) => {
+      if (!session || !row.canCheckIn) return
+      setCheckingIn(true)
+      try {
+        const result = await rewardsApi.selfCheckInStructured(session, row.id)
+        AppAlert.alert(
+          result.alreadyRecorded ? "Already checked in" : "Checked in",
+          result.sessionTitle ?? row.classTitle,
+        )
+        await load()
+      } catch (err) {
+        AppAlert.alert("Check-in failed", err instanceof ApiError ? err.message : "Could not mark attendance.")
+      } finally {
+        setCheckingIn(false)
+      }
+    },
+    [session, load],
+  )
+
+  const openCodeCheckIn = useCallback((row: StudentAttendanceSessionItem) => {
+    if (!row.canCheckIn) return
+    setCheckInSession(row)
+    setSessionId(String(row.id))
+    setCode("")
+    setCheckInOpen(true)
+  }, [])
+
+  const closeCheckInModal = useCallback(() => {
+    setCheckInOpen(false)
+    setCheckInSession(null)
+    setSessionId("")
+    setCode("")
+  }, [])
+
+  const openManualCheckIn = useCallback(() => {
+    setCheckInSession(null)
+    setSessionId("")
+    setCode("")
+    setCheckInOpen(true)
+  }, [])
+
+  const openSessionActions = useCallback((row: StudentAttendanceSessionItem) => {
+    setActiveSession(row)
+    setSessionSheetOpen(true)
+  }, [])
+
+  const openStructuredTodayActions = useCallback(
+    (row: { id: number; class_title?: string; start_time?: string; end_time?: string; my_status?: string | null }) => {
+      openSessionActions({
+        id: row.id,
+        classTitle: row.class_title ?? "Structured CourseCollab Session",
+        startTime: row.start_time ?? "",
+        endTime: row.end_time ?? "",
+        canCheckIn: !row.my_status,
+        checkInStatus: row.my_status ? "checked_in" : "open",
+        statusMessage: row.my_status ? "Already checked in" : "Self check-in available",
+        record: row.my_status ? { status: row.my_status, pointsEarned: 0 } : null,
+        selfCheckInEnabled: true,
+        sessionType: "STRUCTURED_COURSECOLLAB",
+      })
+    },
+    [openSessionActions],
+  )
+
   async function handleCheckIn() {
     if (!session) return
-    const sid = Number(sessionId.trim())
+    const sid = Number(checkInSession?.id ?? sessionId.trim())
     if (!sid || !code.trim()) {
-      AppAlert.alert("Missing info", "Enter the session ID and attendance code from your instructor.")
+      AppAlert.alert(
+        "Missing info",
+        checkInSession
+          ? "Enter the attendance code from your instructor."
+          : "Enter the session ID and attendance code from your instructor.",
+      )
       return
     }
     setCheckingIn(true)
     try {
       const result = await rewardsApi.markAttendance(session, { sessionId: sid, code: code.trim() })
       AppAlert.alert("Checked in", result.message ?? "Attendance recorded successfully.")
-      setCheckInOpen(false)
-      setSessionId("")
-      setCode("")
+      closeCheckInModal()
       await load()
     } catch (err) {
       AppAlert.alert("Check-in failed", err instanceof ApiError ? err.message : "Could not mark attendance.")
@@ -173,6 +304,7 @@ export function AttendanceScreen() {
   const tabs = useMemo(
     () => [
       { id: "overview" as const, label: "Overview", icon: "stats-chart-outline" as const },
+      { id: "sessions" as const, label: "Sessions", icon: "calendar-outline" as const },
       { id: "records" as const, label: "History", icon: "list-outline" as const },
       { id: "leaderboard" as const, label: "Ranks", icon: "podium-outline" as const },
     ],
@@ -180,7 +312,26 @@ export function AttendanceScreen() {
   )
 
   function renderOverviewPage() {
-    return <AttendanceOverviewHero score={score} streak={streak} records={records} />
+    if (!session) {
+      return <AttendanceOverviewHero score={score} streak={streak} records={records} />
+    }
+    return (
+      <View style={{ gap: 14 }}>
+        <StructuredSessionCheckIn session={session} onPress={openStructuredTodayActions} />
+        <AttendanceOverviewHero score={score} streak={streak} records={records} />
+      </View>
+    )
+  }
+
+  function renderSessionsPage() {
+    return (
+      <StudentAttendanceSessionList
+        sessions={scheduledSessions}
+        loading={sessionsLoading}
+        search={search}
+        onSessionPress={openSessionActions}
+      />
+    )
   }
 
   function renderRecordsPage() {
@@ -226,51 +377,76 @@ export function AttendanceScreen() {
 
   return (
     <>
+      <AttendanceSearchDock
+        tab={tab}
+        search={search}
+        onChangeSearch={setSearch}
+        onOpenCheckIn={() => setCheckInMenuOpen(true)}
+      />
       <TabbedModuleLayout
         tabs={tabs}
         tab={tab}
         onTabChange={setTab}
+        scrollableTabs
         loading={loading}
         refreshing={refreshing}
         onRefresh={() => void onRefresh()}
         error={error}
-        chrome={
-          <CollabSearch
-            value={search}
-            onChange={setSearch}
-            placeholder={
-              tab === "records"
-                ? "Search attendance history…"
-                : tab === "leaderboard"
-                  ? "Search rankings…"
-                  : "Search attendance…"
-            }
-            trailingAction={{
-              onPress: () => setCheckInOpen(true),
-              accessibilityLabel: "Check in with code",
-              icon: "add",
-            }}
-          />
-        }
-        pages={[renderOverviewPage(), renderRecordsPage(), renderLeaderboardPage()]}
+        pages={[renderOverviewPage(), renderSessionsPage(), renderRecordsPage(), renderLeaderboardPage()]}
       />
 
-      <Modal visible={checkInOpen} animationType="slide" transparent onRequestClose={() => setCheckInOpen(false)}>
+      <AttendanceCheckInActionSheet
+        visible={checkInMenuOpen}
+        onClose={() => setCheckInMenuOpen(false)}
+        openSession={openSession}
+        onSelfCheckIn={(row) => void selfCheckInFromList(row)}
+        onEnterCode={openCodeCheckIn}
+        onManualCode={openManualCheckIn}
+        onBrowseSessions={() => setTab("sessions")}
+      />
+
+      <AttendanceSessionActionSheet
+        visible={sessionSheetOpen}
+        session={activeSession}
+        onClose={() => {
+          setSessionSheetOpen(false)
+          setActiveSession(null)
+        }}
+        onSelfCheckIn={(row) => {
+          void selfCheckInFromList(row).then(() => load())
+        }}
+        onEnterCode={openCodeCheckIn}
+      />
+
+      <Modal visible={checkInOpen} animationType="slide" transparent onRequestClose={closeCheckInModal}>
         <View style={styles.modalBackdrop}>
           <View style={[styles.modalSheet, { backgroundColor: native.secondaryGrouped }]}>
             <Text style={type.sheetTitle}>Check in</Text>
-            <Text style={[type.secondary, styles.modalHint]}>
-              Enter the session ID and class code shown on your instructor’s screen.
-            </Text>
-            <Text style={[styles.inputLabel, { color: theme.primaryDark }]}>Session ID</Text>
-            <TextInput
-              style={[styles.field, { borderColor: native.separator, color: native.label }]}
-              value={sessionId}
-              onChangeText={setSessionId}
-              placeholder="e.g. 42"
-              placeholderTextColor={native.tertiaryLabel}
-              keyboardType="number-pad"
-            />
+            {checkInSession ? (
+              <>
+                <Text style={[type.bodyEmphasis, { color: native.label }]}>{checkInSession.classTitle}</Text>
+                <Text style={[type.secondary, styles.modalHint]}>
+                  Enter the attendance code shown on your instructor&apos;s screen.
+                </Text>
+              </>
+            ) : (
+              <Text style={[type.secondary, styles.modalHint]}>
+                Enter the session ID and class code shown on your instructor&apos;s screen.
+              </Text>
+            )}
+            {!checkInSession ? (
+              <>
+                <Text style={[styles.inputLabel, { color: theme.primaryDark }]}>Session ID</Text>
+                <TextInput
+                  style={[styles.field, { borderColor: native.separator, color: native.label }]}
+                  value={sessionId}
+                  onChangeText={setSessionId}
+                  placeholder="e.g. 42"
+                  placeholderTextColor={native.tertiaryLabel}
+                  keyboardType="number-pad"
+                />
+              </>
+            ) : null}
             <Text style={[styles.inputLabel, { color: theme.primaryDark }]}>Attendance code</Text>
             <TextInput
               style={[styles.field, { borderColor: native.separator, color: native.label }]}
@@ -282,7 +458,7 @@ export function AttendanceScreen() {
               autoCorrect={false}
             />
             <View style={styles.modalActions}>
-              <Pressable style={[styles.modalCancel, { borderColor: native.separator }]} onPress={() => setCheckInOpen(false)}>
+              <Pressable style={[styles.modalCancel, { borderColor: native.separator }]} onPress={closeCheckInModal}>
                 <Text style={type.secondary}>Cancel</Text>
               </Pressable>
               <Pressable
@@ -301,38 +477,17 @@ export function AttendanceScreen() {
 }
 
 const styles = StyleSheet.create({
-  recordRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    borderRadius: 14,
-    padding: 14,
-    borderWidth: 1,
-  },
-  recordDot: { width: 10, height: 10, borderRadius: 5 },
-  rowBody: { flex: 1, gap: 2 },
-  rowTitle: { fontSize: 14 },
-  recordPts: { fontSize: 14, fontWeight: "600" },
-  leaderRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    padding: 12,
-    borderRadius: 14,
-    borderWidth: 1,
-  },
-  leaderRank: { width: 32, fontSize: 14, fontWeight: "600" },
-  leaderName: { fontSize: 14 },
-  leaderPts: { fontSize: 15, fontWeight: "600" },
   modalBackdrop: {
     flex: 1,
     backgroundColor: "rgba(15,23,42,0.45)",
-    justifyContent: "flex-end"},
+    justifyContent: "flex-end",
+  },
   modalSheet: {
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 20,
-    gap: 10},
+    gap: 10,
+  },
   modalHint: { lineHeight: 18 },
   inputLabel: { fontSize: 12, fontWeight: "600", marginTop: 4 },
   field: {
@@ -348,11 +503,14 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 14,
     borderWidth: 1,
-    alignItems: "center"},
+    alignItems: "center",
+  },
   modalSubmit: {
     flex: 1,
     paddingVertical: 14,
     borderRadius: 14,
-    alignItems: "center"},
+    alignItems: "center",
+  },
   modalSubmitDisabled: { opacity: 0.5 },
-  modalSubmitText: { fontSize: 15, fontWeight: "600", color: "#ffffff" }})
+  modalSubmitText: { fontSize: 15, fontWeight: "600", color: "#ffffff" },
+})

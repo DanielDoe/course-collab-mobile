@@ -2,7 +2,7 @@ import { type ReactNode } from "react"
 import { ActivityIndicator, KeyboardAvoidingView, Platform, RefreshControl, StyleSheet, Text, View } from "react-native"
 import { ScrollView } from "react-native-gesture-handler"
 import { useThemedNative } from "../../context/AppearanceProvider"
-import { useModuleScrollContentPadding } from "../../context/ChromeInsetContext"
+import { useModuleScrollContentPadding, useChromeTopInset } from "../../context/ChromeInsetContext"
 import { useModuleContentStyle } from "../../lib/responsive-layout"
 import { NATIVE } from "../../constants/faculty-native-theme"
 import { useAppThemeTokens } from "../../context/AppearanceProvider"
@@ -25,6 +25,8 @@ type Props<T extends string> = {
   onRefresh?: () => void
   error?: string
   pagePaddingHorizontal?: number
+  /** Horizontally scroll the tab bar when there are many tabs. */
+  scrollableTabs?: boolean
 }
 
 export function TabbedModuleLayout<T extends string>({
@@ -38,12 +40,18 @@ export function TabbedModuleLayout<T extends string>({
   onRefresh,
   error,
   pagePaddingHorizontal = NATIVE.pagePadding,
+  scrollableTabs = false,
 }: Props<T>) {
   const native = useThemedNative()
   const tokens = useAppThemeTokens()
   const type = useNativeType()
   const scrollPad = useModuleScrollContentPadding()
+  const chromeTop = useChromeTopInset()
   const moduleContentStyle = useModuleContentStyle()
+  const hasInlineChrome = Boolean(error) || Boolean(chrome)
+  // Keep tab-strip clearance stable. Mounting dock-only search in `chrome` renders
+  // nothing inline but used to flip paddingTop and shift the pills on tab change.
+  const chromePaddingTop = chromeTop > 0 ? chromeTop + 4 : 6
 
   const pageScrollStyle = {
     paddingBottom: scrollPad.paddingBottom,
@@ -89,8 +97,9 @@ export function TabbedModuleLayout<T extends string>({
       <View
         style={[
           styles.chrome,
+          hasInlineChrome ? styles.chromeWithContent : styles.chromeTabsOnly,
           {
-            paddingTop: scrollPad.paddingTop ?? NATIVE.pagePadding,
+            paddingTop: chromePaddingTop,
             paddingHorizontal: NATIVE.pagePadding,
           },
         ]}
@@ -108,6 +117,8 @@ export function TabbedModuleLayout<T extends string>({
         value={tab}
         onChange={onTabChange}
         pagePaddingHorizontal={pagePaddingHorizontal}
+        scrollable={scrollableTabs}
+        visibleSegmentCount={scrollableTabs ? 3 : tabs.length}
         pages={pages.map((page) => wrapPage(page))}
       />
     </KeyboardAvoidingView>
@@ -128,7 +139,9 @@ export const signatureListStyles = StyleSheet.create({
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  chrome: { gap: 12, paddingBottom: 4 },
+  chrome: {},
+  chromeWithContent: { gap: 12, paddingBottom: 4 },
+  chromeTabsOnly: { gap: 0, paddingBottom: 0 },
   pageScroll: { flex: 1 },
   pageCenter: {
     flex: 1,

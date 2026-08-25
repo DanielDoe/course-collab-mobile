@@ -47,6 +47,7 @@ Mobile changes landed in `106e2c8`; backend changes are noted per row.
 | 10 | Quick Actions and Announcements are too low on the dashboard | Section order hardcoded with them last | `expo/app/(app)/dashboard.tsx` reordered to KPIs → Quick Actions → Announcements → charts |
 | 11 | Recommendation deadline: "Deadline is required" | Deadline started empty and the picker only emits a value once all three wheels are set | `expo/src/components/faculty/FacultyRecommendationCreateModal.tsx` prefills 30 days out and names the missing fields |
 | 12 | No way to mark a lecture as completed (feature request) | Completion was derived only from viewed slides | Backend `a53e604c` adds `mark_completed`; mobile toggle in `StudentLectureToolsSheet.tsx` + `StudentLectureViewerScreen.tsx`, client in `student-api.ts` (`setLectureCompleted`) |
+| 13 | Attendance tab bar jumps / uneven pill padding when switching tabs | Toggling `chrome={null \| CollabSearch}` flipped `TabbedModuleLayout` top padding even though dock search renders inline as null; scrollable segment pills had content-width padding | `TabbedModuleLayout.tsx` stable tab-strip clearance; `AttendanceScreen.tsx` registers bottom search dock without `chrome`; `MobbinPillSegmentControl.tsx` uniform scrollable segment padding |
 
 ### Fixed earlier but not yet in a build
 

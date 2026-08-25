@@ -372,6 +372,7 @@ export function MobbinPillSegmentControl<T extends string>({
           ref={scrollRef}
           horizontal
           style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
           showsHorizontalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
@@ -397,6 +398,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 4,
     paddingBottom: 10,
+  },
+  scrollContent: {
+    paddingHorizontal: 2,
   },
   scroll: {
     width: "100%",
@@ -428,7 +432,8 @@ const styles = StyleSheet.create({
   segmentFit: {
     flex: 0,
     flexGrow: 0,
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
+    minWidth: 92,
   },
   segmentDense: {
     paddingHorizontal: 4,
@@ -440,6 +445,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 6,
     maxWidth: "100%",
+    paddingHorizontal: 2,
   },
   segmentInnerCompact: {
     gap: 4,
