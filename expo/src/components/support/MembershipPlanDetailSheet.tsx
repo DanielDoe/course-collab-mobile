@@ -17,12 +17,13 @@ import {
   type MembershipDetailsResponse,
 } from "../../lib/membership-details-api"
 import {
+  formatPriceFromCents,
   formatSemesterPrice,
   getMembershipPlan,
   isTierAtLeast,
   type MembershipPlan,
 } from "../../lib/membership-plans"
-import { semesterPriceCentsForTier, type MembershipPlansResponse } from "../../lib/membership-pricing-api"
+import { listPriceCentsForTier, semesterPriceCentsForTier, type MembershipPlansResponse } from "../../lib/membership-pricing-api"
 import { resolveThemedMembershipPlan } from "../../lib/membership-plan-theme"
 import { openMembershipCheckout } from "../../lib/membership-web-paths"
 import { GlassSheetBackground } from "../theme/GlassSurface"
@@ -114,6 +115,7 @@ export function MembershipPlanDetailSheet({
   const isCurrentPlan = plan?.id === currentTier
   const isOwnedLowerTier = plan ? isTierAtLeast(currentTier, plan.id) && !isCurrentPlan : false
   const semesterCents = plan ? semesterPriceCentsForTier(pricing, plan.id) : 0
+  const listCents = plan ? listPriceCentsForTier(pricing, plan.id) : 0
 
   const status = useMemo(() => {
     if (!plan) return { label: "", tone: "inactive" as const }
@@ -204,7 +206,11 @@ export function MembershipPlanDetailSheet({
         </View>
 
         <Text style={[type.caption, styles.priceLine, { color: chrome.secondaryLabel }]}>
-          {semesterCents <= 0 ? "Free with enrollment" : formatSemesterPrice(semesterCents)}
+          {semesterCents <= 0
+            ? "Free with enrollment"
+            : listCents > semesterCents
+              ? `${formatSemesterPrice(semesterCents)}  ·  was ${formatPriceFromCents(listCents)}`
+              : formatSemesterPrice(semesterCents)}
         </Text>
 
         {detailsLoading ? (

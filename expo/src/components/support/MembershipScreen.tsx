@@ -24,6 +24,7 @@ import { fetchEffectiveMembershipTier } from "../../lib/student-shell-refresh"
 import type { StudentSession } from "../../lib/session"
 import type { MembershipTier } from "../../types/dashboard"
 import {
+  formatPriceFromCents,
   formatSemesterPrice,
   isTierAtLeast,
   MEMBERSHIP_FEATURE_MATRIX,
@@ -34,6 +35,7 @@ import {
 } from "../../lib/membership-plans"
 import {
   fetchMembershipPlanPricing,
+  listPriceCentsForTier,
   semesterPriceCentsForTier,
   type MembershipPlansResponse,
 } from "../../lib/membership-pricing-api"
@@ -287,6 +289,7 @@ function CurrentMembershipSummary({
 function SubtlePlanCard({
   plan,
   semesterCents,
+  listCents,
   currentTier,
   expiresAt,
   onExplore,
@@ -296,6 +299,7 @@ function SubtlePlanCard({
 }: {
   plan: MembershipPlan
   semesterCents: number
+  listCents: number
   currentTier: MembershipTier
   expiresAt: string | null
   onExplore: (plan: MembershipPlan) => void
@@ -328,11 +332,18 @@ function SubtlePlanCard({
             </Text>
           </View>
           <View style={styles.planPriceBlock}>
+            {listCents > semesterCents && semesterCents > 0 ? (
+              <Text style={[styles.planListPrice, { color: native.tertiaryLabel }]}>
+                {formatPriceFromCents(listCents)}
+              </Text>
+            ) : null}
             <Text style={[styles.planPrice, { color: native.secondaryLabel }]}>
               {planPriceLabel(semesterCents)}
             </Text>
             {semesterCents > 0 ? (
-              <Text style={[styles.planPriceCadence, { color: native.tertiaryLabel }]}>/ semester</Text>
+              <Text style={[styles.planPriceCadence, { color: native.tertiaryLabel }]}>
+                {listCents > semesterCents ? "save $10 / semester" : "/ semester"}
+              </Text>
             ) : null}
           </View>
         </View>
@@ -363,7 +374,7 @@ function SubtlePlanCard({
         {canUpgrade ? (
           <Pressable style={styles.upgradeLink} onPress={() => onUpgrade(plan)}>
             <Text style={[styles.upgradeLinkText, { color: plan.accent }]}>
-              Upgrade to {plan.name}
+              Get {plan.name} for {formatPriceFromCents(semesterCents)}
             </Text>
           </Pressable>
         ) : null}
@@ -665,7 +676,7 @@ export function MembershipScreen() {
           entering={FadeInDown.delay(180).duration(340)}
           style={[styles.allPlansLabel, { color: native.secondaryLabel }]}
         >
-          All plans
+          All plans · $10 student discount this semester
         </Animated.Text>
 
         <View style={styles.planStack}>
@@ -674,6 +685,7 @@ export function MembershipScreen() {
             key={plan.id}
             plan={plan}
             semesterCents={semesterPriceCentsForTier(pricing, plan.id)}
+            listCents={listPriceCentsForTier(pricing, plan.id)}
             currentTier={membershipTier}
             expiresAt={expiresAt}
             onExplore={openPlanExplorer}
@@ -848,6 +860,12 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   planPriceBlock: { alignItems: "flex-end", gap: 1 },
+  planListPrice: {
+    fontSize: 12,
+    fontWeight: "500",
+    textAlign: "right",
+    textDecorationLine: "line-through",
+  },
   planPrice: {
     fontSize: 14,
     fontWeight: "600",
