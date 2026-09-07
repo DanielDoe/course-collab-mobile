@@ -1,12 +1,7 @@
 import { ApiError } from "./api"
-import { instructorAuthenticatedRequest } from "./instructor-api"
+import { instructorAuthenticatedRequest, type InstructorScope } from "./instructor-api"
 
-export type AdminScope = {
-  instructorId: number
-  courseId: number
-  sessionId?: number | null
-  sessionCode?: string | null
-}
+export type AdminScope = InstructorScope
 
 export type InstructorScheduleRequest = {
   id: number
@@ -127,7 +122,6 @@ export const instructorScheduleAdjustmentApi = {
       meetingDurationMinutes?: number
       slotIncrementMinutes?: number
       instructorNotes?: string
-      sectionId?: number
     },
   ) =>
     instructorAuthenticatedRequest<{ success?: boolean; request: InstructorScheduleRequest }>(

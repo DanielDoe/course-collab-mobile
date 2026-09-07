@@ -128,7 +128,7 @@ export function FacultyPracticeScreen() {
     const [studentRows, analyticsData, sessionsRes] = await Promise.all([
       instructorApi.getPracticeStudentProgress(scope),
       instructorApi.getPracticeAnalytics(scope),
-      instructorApi.getSessions(scope).catch(() => ({ sessions: [] as InstructorSession[] })),
+      instructorApi.getSessions(scope, scope.academicTermId ?? undefined).catch(() => ({ sessions: [] as InstructorSession[] })),
     ])
     setStudents(studentRows)
     setAnalytics(analyticsData)
