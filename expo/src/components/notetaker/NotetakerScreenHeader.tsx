@@ -1,5 +1,6 @@
 import type { ReactNode } from "react"
-import { Pressable, StyleSheet, Text, View } from "react-native"
+import { StyleSheet, Text, View } from "react-native"
+import { Pressable } from "react-native-gesture-handler"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useRouter } from "expo-router"
 import { useSafeAreaInsets } from "react-native-safe-area-context"

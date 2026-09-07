@@ -2,7 +2,6 @@ import { useEffect, useState } from "react"
 import {
   Modal,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -33,6 +32,7 @@ import { SHEET_SECTION } from "./faculty-sheet-semantics"
 import { NativeSelect } from "../NativeSelect"
 import { yearSelectOptions } from "./FacultyNativePickers"
 import { FacultySummerCampDatePicker } from "./FacultySummerCampDatePicker"
+import { KeyboardAwareForm } from "../ui/KeyboardAwareForm"
 
 type Props = {
   visible: boolean
@@ -80,11 +80,7 @@ export function FacultyAcademicTermFormModal({
           }
         />
 
-        <ScrollView
-          contentContainerStyle={[collabSheetStyles.scroll, { paddingBottom: insets.bottom + 24 }]}
-          keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
-        >
+        <KeyboardAwareForm contentContainerStyle={collabSheetStyles.scroll}>
           {error ? <FacultySheetErrorBanner message={error} /> : null}
 
           <FacultySheetSection label="Term details" tone={SHEET_SECTION.edit}>
@@ -150,7 +146,7 @@ export function FacultyAcademicTermFormModal({
               />
             </FacultySheetField>
           </FacultySheetSection>
-        </ScrollView>
+        </KeyboardAwareForm>
       </FacultySheetContainer>
     </Modal>
   )
@@ -202,11 +198,7 @@ export function FacultySectionFormModal({
           }
         />
 
-        <ScrollView
-          contentContainerStyle={[collabSheetStyles.scroll, { paddingBottom: insets.bottom + 24 }]}
-          keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
-        >
+        <KeyboardAwareForm contentContainerStyle={collabSheetStyles.scroll}>
           <FacultySheetSection label="Section details" tone={SHEET_SECTION.edit}>
             <FacultySheetField label="Section code">
               <TextInput
@@ -235,7 +227,7 @@ export function FacultySectionFormModal({
               />
             </FacultySheetField>
           </FacultySheetSection>
-        </ScrollView>
+        </KeyboardAwareForm>
       </FacultySheetContainer>
     </Modal>
   )

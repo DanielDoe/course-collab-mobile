@@ -42,7 +42,9 @@ import { useFacultyStickyHeaderScrollLayout,
 import { FacultyProgressReviewDetailModal } from "./FacultyProgressReviewDetailModal"
 import { FacultyProgressReviewRunSheet } from "./FacultyProgressReviewRunSheet"
 import { FacultySummerCampDatePicker } from "./FacultySummerCampDatePicker"
+import { useFacultyListPager } from "../../hooks/useFacultyListPager"
 import { useModuleTheme } from "../../lib/themed-module-shell"
+import { FacultyListPagerFooter } from "./FacultyListPagerFooter"
 
 export function FacultyProgressReviewsScreen() {
   const { styles: moduleStyles, native, tokens, type } = useModuleTheme()
@@ -123,6 +125,7 @@ export function FacultyProgressReviewsScreen() {
   useSuppressModuleSearchDock(runSheetOpen || selectedReview != null)
 
   const filtered = useMemo(() => filterProgressReviews(reviews, search), [reviews, search])
+  const pager = useFacultyListPager(filtered, `${period}:${search}:${asOfDate}`, "reviews")
 
   if (!ready) {
     return (
@@ -257,9 +260,10 @@ export function FacultyProgressReviewsScreen() {
           />
         ) : (
           <View style={styles.list}>
-            {filtered.map((review) => (
+            {pager.items.map((review) => (
               <FacultyProgressReviewCard key={review.id} review={review} onPress={() => setSelectedReview(review)} />
             ))}
+            <FacultyListPagerFooter pager={pager} />
           </View>
         )}
       </ScrollView>

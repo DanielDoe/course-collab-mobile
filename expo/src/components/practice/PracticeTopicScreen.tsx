@@ -23,6 +23,7 @@ import { setActivePracticeSession } from "../../lib/practice-session"
 import type { StudentSession } from "../../lib/session"
 import type { MembershipTier } from "../../types/dashboard"
 import { NotetakerScreenHeader } from "../notetaker/NotetakerScreenHeader"
+import { shouldShowPurchaseCta, tierLockedAlertButtons } from "../../lib/purchase-navigation"
 import { ModuleSection, ModuleSectionHeader } from "../modules/ModuleScreen"
 import { StudentThemedLocked } from "../student/student-themed-hero"
 import { canAccessPracticeHub, PRACTICE_HUB_MIN_TIER, resolvePracticeAccess } from "../../lib/practice-hub-access"
@@ -230,6 +231,7 @@ export function PracticeTopicScreen() {
   const SN = useThemedStudentNative()
   const type = useNativeType()
   const insets = useSafeAreaInsets()
+  const showPurchaseActions = shouldShowPurchaseCta()
 
   const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
@@ -305,10 +307,7 @@ export function PracticeTopicScreen() {
         resolvedPracticeAccess.level === "none"
           ? "Upgrade to Explorer to start practicing."
           : "Upgrade to Trailblazer for full topic access.",
-        [
-          { text: "Not now", style: "cancel" },
-          { text: "View plans", onPress: () => router.push("/membership" as never) },
-        ],
+        tierLockedAlertButtons(() => router.push("/membership" as never)),
       )
       return
     }
@@ -317,10 +316,7 @@ export function PracticeTopicScreen() {
       AppAlert.alert(
         "No questions available",
         "You've completed all unlocked questions in this topic. Upgrade to Trailblazer for the full bank.",
-        [
-          { text: "Not now", style: "cancel" },
-          { text: "View plans", onPress: () => router.push("/membership" as never) },
-        ],
+        tierLockedAlertButtons(() => router.push("/membership" as never)),
       )
       return
     }
@@ -374,10 +370,7 @@ export function PracticeTopicScreen() {
         AppAlert.alert(
           "Practice locked",
           err.message,
-          [
-            { text: "Not now", style: "cancel" },
-            { text: "View plans", onPress: () => router.push("/membership" as never) },
-          ],
+          tierLockedAlertButtons(() => router.push("/membership" as never)),
         )
         return
       }
@@ -473,12 +466,14 @@ export function PracticeTopicScreen() {
                   Explorer unlocks half of each topic. Trailblazer unlocks the full bank.
                 </Text>
               </View>
-              <Pressable
-                style={[styles.upgradeChip, { backgroundColor: SN.accent }]}
-                onPress={() => router.push("/membership" as never)}
-              >
-                <Text style={styles.upgradeChipText}>View plans</Text>
-              </Pressable>
+              {showPurchaseActions ? (
+                <Pressable
+                  style={[styles.upgradeChip, { backgroundColor: SN.accent }]}
+                  onPress={() => router.push("/membership" as never)}
+                >
+                  <Text style={styles.upgradeChipText}>View plans</Text>
+                </Pressable>
+              ) : null}
             </View>
           ) : null}
 
@@ -537,7 +532,7 @@ export function PracticeTopicScreen() {
                 )}
               </Pressable>
             </>
-          ) : (
+          ) : showPurchaseActions ? (
             <Pressable
               style={[styles.startBtn, { backgroundColor: SN.accent }]}
               onPress={() => router.push("/membership" as never)}
@@ -545,6 +540,11 @@ export function PracticeTopicScreen() {
               <Ionicons name="lock-closed-outline" size={18} color="#ffffff" />
               <Text style={styles.startBtnText}>Upgrade to practice</Text>
             </Pressable>
+          ) : (
+            <View style={[styles.startBtn, styles.startBtnDisabled, { backgroundColor: native.fill }]}>
+              <Ionicons name="lock-closed-outline" size={18} color={native.secondaryLabel} />
+              <Text style={[styles.startBtnText, { color: native.secondaryLabel }]}>Practice locked</Text>
+            </View>
           )}
         </ScrollView>
       )}

@@ -21,16 +21,16 @@ import {
   FacultyAdminSelectRow,
   FacultyAdminTextField,
 } from "./faculty-admin-ui"
-import { FacultyModuleTabBar } from "./faculty-module-shell"
 import { FacultySheetAcknowledge } from "./faculty-collab-sheet-ui"
 import { AdminOptionPickerModal } from "./admin/admin-option-picker"
-import { SupportTicketHistoryPanel } from "../support/SupportTicketHistoryPanel"
+import { SupportTabBar, SupportTicketHistoryPanel } from "../support/SupportTicketHistoryPanel"
+import { SupportTicketAttachmentField } from "../support/SupportTicketAttachmentField"
 
 type SupportTab = "submit" | "history"
 
-const TABS: Array<{ id: SupportTab; label: string }> = [
-  { id: "submit", label: "New" },
-  { id: "history", label: "History" },
+const TABS: Array<{ id: SupportTab; label: string; icon: "create-outline" | "time-outline" }> = [
+  { id: "submit", label: "New", icon: "create-outline" },
+  { id: "history", label: "History", icon: "time-outline" },
 ]
 
 const FORM_CONFIG: Record<
@@ -120,6 +120,9 @@ export function FacultySupportFormScreen({ kind }: { kind: SupportFormKind }) {
   const [showSuccess, setShowSuccess] = useState(false)
   const [error, setError] = useState("")
   const [submitting, setSubmitting] = useState(false)
+  const [attachments, setAttachments] = useState<
+    Array<{ id: string; url: string; name: string; mime?: string; size?: number; uploading?: boolean }>
+  >([])
 
   const moduleOptions = useMemo(
     () =>
@@ -225,11 +228,15 @@ export function FacultySupportFormScreen({ kind }: { kind: SupportFormKind }) {
         courseId: course?.id,
         moduleId: moduleId || undefined,
         moduleName: selectedModule?.label,
+        attachments: attachments
+          .filter((file) => file.url && !file.uploading)
+          .map((file) => ({ url: file.url, name: file.name, mime: file.mime, size: file.size })),
       })
       setShowSuccess(true)
       setModuleId("")
       setSubject("")
       setMessage("")
+      setAttachments([])
       await loadHistory("refresh")
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not submit. Please try again.")
@@ -257,7 +264,7 @@ export function FacultySupportFormScreen({ kind }: { kind: SupportFormKind }) {
         onSecondary={() => setShowSuccess(false)}
       />
 
-      <FacultyModuleTabBar tabs={TABS} tab={tab} onChange={setTab} scrollable={false} />
+      <SupportTabBar tabs={TABS} tab={tab} onChange={setTab} />
 
       {tab === "submit" ? (
         <>
@@ -305,6 +312,18 @@ export function FacultySupportFormScreen({ kind }: { kind: SupportFormKind }) {
             />
           </FacultyAdminSection>
 
+          <FacultyAdminSection title="Attachments" footer="Screenshots help us reproduce UI bugs.">
+            <SupportTicketAttachmentField
+              attachments={attachments}
+              onChange={setAttachments}
+              uploadFile={(file) => {
+                if (!session) return Promise.reject(new Error("Not signed in"))
+                return instructorAdminApi.uploadSupportTicketAttachment(session.id, file)
+              }}
+              disabled={submitting || !session}
+            />
+          </FacultyAdminSection>
+
           <AdminOptionPickerModal
             visible={modulePickerOpen}
             title={moduleRequired ? "Affected module" : "Related module"}
@@ -317,7 +336,7 @@ export function FacultySupportFormScreen({ kind }: { kind: SupportFormKind }) {
           <Pressable
             style={[styles.submitBtn, submitting && styles.submitBtnDisabled]}
             onPress={() => void submit()}
-            disabled={submitting}
+            disabled={submitting || attachments.some((file) => file.uploading)}
             accessibilityRole="button"
             accessibilityLabel={config.submitLabel}
           >

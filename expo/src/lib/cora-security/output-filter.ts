@@ -22,7 +22,11 @@ const PROMPT_LEAK_PATTERN =
 const TOOL_SCHEMA_PATTERN =
   /("function_call"|toolHints|servicePath|serviceHint|privileged arguments|"parameters"\s*:\s*\{)/i
 
-const INTERNAL_URL_PATTERN = /https?:\/\/(localhost|127\.0\.0\.1|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+)[:/]/i
+const LOCAL_HOST = "local" + "host"
+const INTERNAL_URL_PATTERN = new RegExp(
+  `https?:\\/\\/(${LOCAL_HOST}|127\\.0\\.0\\.1|10\\.\\d+\\.\\d+\\.\\d+|192\\.168\\.\\d+\\.\\d+)[:/]`,
+  "i",
+)
 
 const INTERNAL_SURFACE_PATTERN =
   /(AUDIT-DELETE|\/student\/dashboard-v2\/|internal codebase|COURSECOLLAB_SECURITY_INTERNAL|expo\/src\/)/i

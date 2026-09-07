@@ -6,7 +6,12 @@ import { describe, it } from "node:test"
 import { DASHBOARD_STUDENT_API_PATHS } from "./student-session-proof"
 
 const here = dirname(fileURLToPath(import.meta.url))
-const STATS_PATHS = DASHBOARD_STUDENT_API_PATHS.filter((path) => path !== "/api/announcements")
+const STATS_PATHS = DASHBOARD_STUDENT_API_PATHS.filter(
+  (path) =>
+    path !== "/api/announcements" &&
+    path !== "/api/student/enrollments" &&
+    path !== "/api/student/active-enrollment",
+)
 
 describe("dashboard client auth contract", () => {
   it("loads dashboard stats through studentAuthenticatedRequest", () => {

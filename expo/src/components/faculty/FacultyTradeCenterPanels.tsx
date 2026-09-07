@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
+import { useFacultyListPager } from "../../hooks/useFacultyListPager"
+import { FacultyListPagerFooter } from "./FacultyListPagerFooter"
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { AppAlert } from '../../lib/app-alert'
 import { Ionicons } from "@/components/icons/AppIcon"
@@ -251,6 +253,7 @@ export function TradeCenterOverviewPanel({
     () => (analytics?.topTraders ?? []).slice(0, 5).filter((t) => traderMatchesSearch(t, search)),
     [analytics?.topTraders, search],
   )
+  const lowEngagementPager = useFacultyListPager(lowEngagement, search, "students")
   const reportingWeekDiffers =
     analytics?.usedFallbackWeek ||
     (analytics?.weekStartDate &&
@@ -283,7 +286,7 @@ export function TradeCenterOverviewPanel({
           <Text style={[type.caption, localStyles.sectionLabel, { color: native.secondaryLabel }]}>
             Low engagement
           </Text>
-          {lowEngagement.map((trader, index) => (
+          {lowEngagementPager.items.map((trader, index) => (
             <View
               key={`low-${trader.id}`}
               style={index > 0 ? [localStyles.rowDivider, { borderTopColor: native.separator }] : undefined}
@@ -291,6 +294,7 @@ export function TradeCenterOverviewPanel({
               <TradeCenterTraderRow trader={trader} />
             </View>
           ))}
+          <FacultyListPagerFooter pager={lowEngagementPager} />
         </View>
       ) : null}
 
@@ -560,6 +564,7 @@ export function TradeCenterAnalyticsPanel({
     () => (analytics?.topTraders ?? []).filter((t) => traderMatchesSearch(t, search)),
     [analytics?.topTraders, search],
   )
+  const tradersPager = useFacultyListPager(traders, search, "traders")
   const selectedTransactions = useMemo(() => {
     if (!selectedTrader) return []
     return (analytics?.transactions ?? []).filter((row) => transactionMatchesTrader(selectedTrader, row))
@@ -595,7 +600,7 @@ export function TradeCenterAnalyticsPanel({
         <Text style={[type.caption, localStyles.sectionLabel, { color: native.secondaryLabel }]}>
           Top traders by EC
         </Text>
-        {traders.map((trader, index) => (
+        {tradersPager.items.map((trader, index) => (
           <View
             key={trader.id}
             style={index > 0 ? [localStyles.rowDivider, { borderTopColor: native.separator }] : undefined}
@@ -607,6 +612,7 @@ export function TradeCenterAnalyticsPanel({
             />
           </View>
         ))}
+        <FacultyListPagerFooter pager={tradersPager} />
       </View>
 
       <FacultyTradeCenterTraderSheet
@@ -689,6 +695,14 @@ export function TradeCenterDonationsPanel({
     () => pointRequests.filter((row) => rowMatchesTradeSearch(row, search)),
     [pointRequests, search],
   )
+  const requestRows = useMemo(
+    () => [
+      ...filteredDonations.map((row) => ({ kind: "donation" as const, row })),
+      ...filteredPoints.map((row) => ({ kind: "point" as const, row })),
+    ],
+    [filteredDonations, filteredPoints],
+  )
+  const requestsPager = useFacultyListPager(requestRows, search, "requests")
 
   function openRequest(kind: TradeCenterRequestKind, row: Record<string, unknown>) {
     setSelectedKind(kind)
@@ -771,32 +785,20 @@ export function TradeCenterDonationsPanel({
   return (
     <>
       <View style={localStyles.panelGap}>
-        {filteredDonations.map((row) => {
-          const view = parseTradeCenterRequestRow("donation", row)
+        {requestsPager.items.map(({ kind, row }) => {
+          const view = parseTradeCenterRequestRow(kind, row)
           return (
             <RequestCard
-              key={`donation-${view.id}`}
+              key={`${kind}-${view.id}`}
               title={view.title}
               subtitle={view.subtitle}
               status={view.status}
               meta={view.meta}
-              onPress={() => openRequest("donation", row)}
+              onPress={() => openRequest(kind, row)}
             />
           )
         })}
-        {filteredPoints.map((row) => {
-          const view = parseTradeCenterRequestRow("point", row)
-          return (
-            <RequestCard
-              key={`point-${view.id}`}
-              title={view.title}
-              subtitle={view.subtitle}
-              status={view.status}
-              meta={view.meta}
-              onPress={() => openRequest("point", row)}
-            />
-          )
-        })}
+        <FacultyListPagerFooter pager={requestsPager} />
       </View>
 
       <FacultyTradeCenterDonationActionSheet
@@ -863,6 +865,29 @@ export function TradeCenterTradeLogPanel({
   search: string
 }) {
   const sections = useMemo(() => buildTradeLogSections(tradeLog, search), [tradeLog, search])
+  const logRows = useMemo(
+    () =>
+      sections.flatMap((section) =>
+        section.rows.map((row, index) => ({ sectionKey: section.key, row, index })),
+      ),
+    [sections],
+  )
+  const logPager = useFacultyListPager(logRows, search, "entries")
+  const pagedLogSections = useMemo(() => {
+    const grouped = new Map<TradeLogSectionKey, typeof logPager.items>()
+    for (const item of logPager.items) {
+      const existing = grouped.get(item.sectionKey) ?? []
+      existing.push(item)
+      grouped.set(item.sectionKey, existing)
+    }
+    return sections
+      .map((section) => ({
+        ...section,
+        totalCount: section.rows.length,
+        rows: (grouped.get(section.key) ?? []).map((item) => item.row),
+      }))
+      .filter((section) => section.rows.length > 0)
+  }, [logPager.items, sections])
 
   if (loading) {
     return <ActivityIndicator color={FACULTY_TRADE_CENTER_COLOR.link} style={localStyles.loader} />
@@ -884,9 +909,9 @@ export function TradeCenterTradeLogPanel({
 
   return (
     <View style={localStyles.panelGap}>
-      {sections.map((section) => (
+      {pagedLogSections.map((section) => (
         <View key={section.key} style={localStyles.logSectionBlock}>
-          <TradeLogSectionHeader title={tradeLogSectionTitle(section.key)} count={section.rows.length} />
+          <TradeLogSectionHeader title={tradeLogSectionTitle(section.key)} count={section.totalCount} />
           {section.rows.map((row, index) => {
             const status = tradeLogRowStatus(row)
             const pending = status ? isTradeCenterRequestPending(status) : false
@@ -915,6 +940,7 @@ export function TradeCenterTradeLogPanel({
           })}
         </View>
       ))}
+      <FacultyListPagerFooter pager={logPager} />
     </View>
   )
 }
@@ -948,6 +974,7 @@ export function TradeCenterRolloverPanel({
       ].some((field) => field.toLowerCase().includes(q)),
     )
   }, [rollover?.trades, search])
+  const tradesPager = useFacultyListPager(trades, search, "trades")
 
   if (loading) {
     return <ActivityIndicator color={FACULTY_TRADE_CENTER_COLOR.link} style={localStyles.loader} />
@@ -970,7 +997,7 @@ export function TradeCenterRolloverPanel({
   return (
     <>
       <View style={localStyles.panelGap}>
-        {trades.map((trade) => {
+        {tradesPager.items.map((trade) => {
           const thumb = facultyTradeCenterTraderThumb(trade.studentId || trade.studentName)
           return (
             <FacultySignatureListCard
@@ -991,6 +1018,7 @@ export function TradeCenterRolloverPanel({
             />
           )
         })}
+        <FacultyListPagerFooter pager={tradesPager} />
       </View>
 
       <FacultyTradeCenterRolloverActionSheet

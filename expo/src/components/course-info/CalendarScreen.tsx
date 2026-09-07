@@ -15,6 +15,9 @@ import {
   calendarEventColors,
   endOfMonth,
   eventTypeConfig,
+  filterCalendarEvents,
+  filterCalendarEventsByKind,
+  type CalendarEventKindFilter,
   formatEventTimeRange,
   isClassMeetingEvent,
   CALENDAR_COLOR,
@@ -38,6 +41,12 @@ import { ClassScheduleCard } from "./ClassScheduleCard"
 import { CalendarMonthGrid, eventsForSelectedDay, selectedDateLabel } from "./CalendarMonthGrid"
 import { useNativeType } from "../../lib/themed-module-theme"
 import { useNotificationModuleRefresh } from "../../lib/notifications/notification-events"
+import { useThrottledFocusRefresh } from "../../lib/use-throttled-focus-refresh"
+import { StudentFilterSheet, StudentSearchToolbar } from "../student/student-search-toolbar"
+import { ModuleAddActionSheet } from "../modules/ModuleAddActionSheet"
+import { CalendarPersonalEventSheet } from "../calendar/CalendarPersonalEventSheet"
+import { useOptionalStudentActiveCourse } from "../../context/StudentActiveCourseContext"
+import { useResetOnScopeChange } from "../../hooks/use-reset-on-scope-change"
 
 function useStudentSession(): StudentSession | null {
   const { session } = useSession()
@@ -117,6 +126,16 @@ export function CalendarScreen() {
   const [month, setMonth] = useState(() => startOfMonth(new Date()))
   const [selectedDate, setSelectedDate] = useState(() => new Date())
   const [agendaFilter, setAgendaFilter] = useState<AgendaFilter>("all")
+  const [search, setSearch] = useState("")
+  const [kindFilter, setKindFilter] = useState<CalendarEventKindFilter>("all")
+  const [addOpen, setAddOpen] = useState(false)
+  const [filterOpen, setFilterOpen] = useState(false)
+  const [eventOpen, setEventOpen] = useState(false)
+  const courseKey = useOptionalStudentActiveCourse()?.activeCourse?.pickerKey
+  useResetOnScopeChange(courseKey, useCallback(() => {
+    setSearch("")
+    setKindFilter("all")
+  }, []))
 
   const range = useMemo(() => {
     const start = startOfMonth(month)
@@ -127,6 +146,7 @@ export function CalendarScreen() {
   const calendarQuery = useStudentCalendar(session, range)
   const personalEvents = calendarQuery.personalEvents
   const classMeetings = calendarQuery.classMeetings as CalendarEvent[]
+  const officeHourEvents = calendarQuery.officeHourEvents
   const classSchedule = calendarQuery.classSchedule
   const loading = calendarQuery.isInitialLoading
   const refreshing = calendarQuery.isRefreshing && !calendarQuery.isInitialLoading
@@ -144,7 +164,8 @@ export function CalendarScreen() {
     await calendarQuery.refetch()
   }, [calendarQuery.refetch])
 
-  useNotificationModuleRefresh("calendar", onRefresh)
+  useNotificationModuleRefresh(["calendar", "schedule-adjustment", "office-hours"], onRefresh)
+  useThrottledFocusRefresh(onRefresh, Boolean(session))
 
   useEffect(() => {
     const sub = AppState.addEventListener("change", (state) => {
@@ -175,22 +196,62 @@ export function CalendarScreen() {
   }, [personalEvents])
 
   const allEvents = useMemo(
-    () => mergeCalendarEvents(personalEvents, classMeetings),
-    [personalEvents, classMeetings],
+    () => [...mergeCalendarEvents(personalEvents, classMeetings), ...officeHourEvents],
+    [personalEvents, classMeetings, officeHourEvents],
   )
+
+  const visibleEvents = useMemo(
+    () => filterCalendarEventsByKind(filterCalendarEvents(allEvents, search), kindFilter),
+    [allEvents, search, kindFilter],
+  )
+  const searchActive = Boolean(search.trim())
 
   const monthEvents = useMemo(() => {
     const monthStart = startOfMonth(month)
     const monthEnd = endOfMonth(month)
-    return allEvents.filter((event) => {
+    return visibleEvents.filter((event) => {
       const t = event.start_time ? new Date(event.start_time).getTime() : 0
       return t >= monthStart.getTime() && t <= monthEnd.getTime()
     })
-  }, [allEvents, month])
+  }, [visibleEvents, month])
 
   const dayEvents = useMemo(
-    () => eventsForSelectedDay(allEvents, selectedDate),
-    [allEvents, selectedDate],
+    () => eventsForSelectedDay(visibleEvents, selectedDate),
+    [visibleEvents, selectedDate],
+  )
+
+  const searchResults = useMemo(() => {
+    if (!searchActive) return dayEvents
+    return [...visibleEvents].sort(
+      (a, b) => new Date(a.start_time ?? 0).getTime() - new Date(b.start_time ?? 0).getTime(),
+    )
+  }, [dayEvents, searchActive, visibleEvents])
+
+  const addActions = useMemo(
+    () => [
+      {
+        id: "event",
+        label: "Add personal event",
+        detail: "Save a reminder on this course calendar",
+        icon: "calendar-outline" as const,
+        onPress: () => setEventOpen(true),
+      },
+      {
+        id: "office-hours",
+        label: "Request office hours",
+        detail: "Ask your instructor for a session",
+        icon: "cafe-outline" as const,
+        onPress: () => router.push("/module/office-hours" as never),
+      },
+      {
+        id: "project",
+        label: "Submit project",
+        detail: "Open the project submission form",
+        icon: "folder-open-outline" as const,
+        onPress: () => router.push("/collaboration/projects/submit" as never),
+      },
+    ],
+    [router],
   )
 
   const filteredByTab = useMemo(
@@ -219,18 +280,20 @@ export function CalendarScreen() {
   )
 
   function renderAgendaPage(filter: AgendaFilter) {
-    const selectedEvents = filteredByTab[filter]
+    const selectedEvents = searchActive ? filterDayEvents(searchResults, filter) : filteredByTab[filter]
     if (selectedEvents.length === 0) {
       return (
         <EmptyBlock
-          icon="calendar-outline"
-          title="Nothing scheduled"
+          icon={searchActive ? "search-outline" : "calendar-outline"}
+          title={searchActive ? "No matching events" : "Nothing scheduled"}
           body={
-            filter === "classes"
-              ? "No class meetings on this day."
-              : filter === "events"
-                ? "No personal events on this day. Add events on web to sync here."
-                : "No events on this day."
+            searchActive
+              ? `Nothing matched “${search.trim()}”. Try a title, type, or location.`
+              : filter === "classes"
+                ? "No class meetings on this day."
+                : filter === "events"
+                  ? "No personal events on this day. Add events on web to sync here."
+                  : "No events on this day."
           }
         />
       )
@@ -247,6 +310,52 @@ export function CalendarScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: native.groupedBackground }]}>
+      <StudentSearchToolbar
+        value={search}
+        onChange={setSearch}
+        placeholder="Search events, classes, projects…"
+        filterActive={kindFilter !== "all"}
+        filterLabel="Filter events"
+        onOpenFilter={() => setFilterOpen(true)}
+        trailingAction={{
+          onPress: () => setAddOpen(true),
+          accessibilityLabel: "Open calendar actions",
+          icon: "add",
+        }}
+      />
+      <StudentFilterSheet
+        visible={filterOpen}
+        title="Filter events"
+        subtitle="Narrow the calendar without clearing search."
+        value={kindFilter}
+        onSelect={(value) => {
+          setKindFilter(value as CalendarEventKindFilter)
+          setFilterOpen(false)
+        }}
+        onClose={() => setFilterOpen(false)}
+        options={[
+          { value: "all", label: "All types" },
+          { value: "classes", label: "Classes" },
+          { value: "exams", label: "Exams & quizzes" },
+          { value: "office_hours", label: "Office hours" },
+          { value: "study", label: "Study sessions" },
+          { value: "projects", label: "Projects" },
+          { value: "other", label: "Other" },
+        ]}
+      />
+      <ModuleAddActionSheet
+        visible={addOpen}
+        title="Calendar"
+        subtitle="Add something to this course."
+        actions={addActions}
+        onClose={() => setAddOpen(false)}
+      />
+      <CalendarPersonalEventSheet
+        visible={eventOpen}
+        session={session}
+        onClose={() => setEventOpen(false)}
+        onCreated={() => void onRefresh()}
+      />
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={[
@@ -309,9 +418,13 @@ export function CalendarScreen() {
 
             <View style={styles.section}>
               <View style={styles.agendaHead}>
-                <Text style={[styles.agendaDate, { color: CALENDAR_COLOR.agendaDate }]}>{selectedDateLabel(selectedDate)}</Text>
+                <Text style={[styles.agendaDate, { color: CALENDAR_COLOR.agendaDate }]}>
+                  {searchActive ? "Search results" : selectedDateLabel(selectedDate)}
+                </Text>
                 <Text style={[type.caption, styles.agendaCount]}>
-                  {filteredByTab[agendaFilter].length} item{filteredByTab[agendaFilter].length === 1 ? "" : "s"}
+                  {searchActive
+                    ? `${filterDayEvents(searchResults, agendaFilter).length} match${filterDayEvents(searchResults, agendaFilter).length === 1 ? "" : "es"}`
+                    : `${filteredByTab[agendaFilter].length} item${filteredByTab[agendaFilter].length === 1 ? "" : "s"}`}
                 </Text>
               </View>
 

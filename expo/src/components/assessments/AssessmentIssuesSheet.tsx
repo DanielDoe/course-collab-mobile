@@ -1,9 +1,8 @@
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Modal,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -25,6 +24,8 @@ import type { StudentSession } from "../../lib/session"
 import type { QuizItem } from "../../lib/student-api"
 import { ComposerSendButton } from "../theme/ComposerSendButton"
 import { NativeSelect } from "../NativeSelect"
+import { ChatKeyboardShell } from "../motion/ChatKeyboardShell"
+import { chatKeyboardAvoidingBehavior } from "../../lib/motion"
 
 type SheetTab = "report" | "open" | "closed"
 
@@ -125,8 +126,7 @@ export function AssessmentIssuesSheet({
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.backdrop}>
         <Pressable style={styles.backdropTap} onPress={onClose} />
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
+        <View
           style={[
             styles.sheet,
             { paddingBottom: insets.bottom + 12, backgroundColor: tokens.background },
@@ -228,7 +228,13 @@ export function AssessmentIssuesSheet({
                 void loadIssues()
               }}
             />
-          ) : tab === "report" ? (
+          ) : (
+            <KeyboardAvoidingView
+              style={styles.bodyShell}
+              behavior={chatKeyboardAvoidingBehavior}
+              keyboardVerticalOffset={0}
+            >
+              {tab === "report" ? (
             <ScrollView
               style={styles.body}
               contentContainerStyle={styles.bodyContent}
@@ -408,8 +414,10 @@ export function AssessmentIssuesSheet({
                 ))
               )}
             </ScrollView>
+              )}
+            </KeyboardAvoidingView>
           )}
-        </KeyboardAvoidingView>
+        </View>
       </View>
     </Modal>
   )
@@ -431,6 +439,11 @@ function IssueThread({
   const [loading, setLoading] = useState(true)
   const [draft, setDraft] = useState("")
   const [sending, setSending] = useState(false)
+  const commentsRef = useRef<ScrollView>(null)
+
+  const scrollCommentsToEnd = useCallback(() => {
+    commentsRef.current?.scrollToEnd({ animated: true })
+  }, [])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -462,115 +475,127 @@ function IssueThread({
   }
 
   return (
-    <View style={styles.thread}>
-      <Pressable style={styles.backRow} onPress={onBack}>
-        <Ionicons name="chevron-back" size={18} color={tokens.accent} />
-        <Text style={[styles.backText, { color: tokens.accent }]}>All issues</Text>
-      </Pressable>
-
-      <View
-        style={[
-          styles.threadHero,
-          { backgroundColor: tokens.surface, borderColor: tokens.border },
-        ]}
-      >
-        <Text style={[styles.threadTitle, { color: tokens.text }]}>{issue.quiz_title}</Text>
-        {issue.question_number ? (
-          <Text style={[styles.threadQ, { color: tokens.accent }]}>Question {issue.question_number}</Text>
-        ) : null}
-        <Text style={[styles.threadDesc, { color: tokens.textSecondary }]}>{issue.description}</Text>
-      </View>
-
-      <ScrollView style={styles.comments} contentContainerStyle={styles.commentsContent}>
-        {loading ? (
-          <ActivityIndicator color={tokens.accent} style={{ marginTop: 20 }} />
-        ) : comments.length === 0 ? (
-          <Text style={[styles.noComments, { color: SN.secondaryLabel }]}>
-            No comments yet — start the conversation.
-          </Text>
-        ) : (
-          comments.map((c) => {
-            const isStaff = c.commenter_role !== "student"
-            return (
-              <View
-                key={c.id}
-                style={[
-                  styles.commentBubble,
-                  isStaff
-                    ? [
-                        styles.commentStaff,
-                        { backgroundColor: tokens.surface, borderColor: tokens.border },
-                      ]
-                    : [
-                        styles.commentStudent,
-                        { backgroundColor: hexToRgba(tokens.accent, 0.1) },
-                      ],
-                ]}
-              >
-                <Text style={[styles.commentAuthor, { color: tokens.accent }]}>
-                  {c.commenter_name}
-                  {isStaff ? " · Staff" : ""}
-                </Text>
-                <Text style={[styles.commentBody, { color: tokens.text }]}>{c.comment_text}</Text>
-                <Text style={[styles.commentTime, { color: SN.secondaryLabel }]}>
-                  {new Date(c.created_at).toLocaleDateString(undefined, {
-                    month: "short",
-                    day: "numeric",
-                    hour: "numeric",
-                    minute: "2-digit",
-                  })}
-                </Text>
-              </View>
-            )
-          })
-        )}
-      </ScrollView>
-
-      {issue.status === "open" ? (
-        <View
-          style={[
-            styles.composeRow,
-            { borderTopColor: tokens.border, backgroundColor: tokens.surface },
-          ]}
-        >
-          <TextInput
+    <ChatKeyboardShell
+      style={styles.threadShell}
+      onKeyboardShow={scrollCommentsToEnd}
+      composer={
+        issue.status === "open" ? (
+          <View
             style={[
-              styles.composeInput,
-              {
-                borderColor: tokens.border,
-                color: tokens.text,
-                backgroundColor: tokens.background,
-              },
+              styles.composeRow,
+              { borderTopColor: tokens.border, backgroundColor: tokens.surface },
             ]}
-            value={draft}
-            onChangeText={setDraft}
-            placeholder="Add a comment…"
-            placeholderTextColor="#94a3b8"
-            multiline
-          />
-          <ComposerSendButton
-            active={!!draft.trim() && !sending}
-            sending={sending}
-            onPress={() => void send()}
-            iconName="send"
-            iconSize={18}
-            size={42}
-          />
-        </View>
-      ) : (
+          >
+            <TextInput
+              style={[
+                styles.composeInput,
+                {
+                  borderColor: tokens.border,
+                  color: tokens.text,
+                  backgroundColor: tokens.background,
+                },
+              ]}
+              value={draft}
+              onChangeText={setDraft}
+              placeholder="Add a comment…"
+              placeholderTextColor="#94a3b8"
+              multiline
+            />
+            <ComposerSendButton
+              active={!!draft.trim() && !sending}
+              sending={sending}
+              onPress={() => void send()}
+              iconName="send"
+              iconSize={18}
+              size={42}
+            />
+          </View>
+        ) : (
+          <View
+            style={[
+              styles.closedBanner,
+              { borderTopColor: tokens.border, backgroundColor: tokens.surface },
+            ]}
+          >
+            <Ionicons name="lock-closed-outline" size={14} color={SN.secondaryLabel} />
+            <Text style={[styles.closedBannerText, { color: SN.secondaryLabel }]}>
+              This issue is resolved — read only
+            </Text>
+          </View>
+        )
+      }
+    >
+      <View style={styles.thread}>
+        <Pressable style={styles.backRow} onPress={onBack}>
+          <Ionicons name="chevron-back" size={18} color={tokens.accent} />
+          <Text style={[styles.backText, { color: tokens.accent }]}>All issues</Text>
+        </Pressable>
+
         <View
           style={[
-            styles.closedBanner,
-            { borderTopColor: tokens.border, backgroundColor: tokens.surface },
+            styles.threadHero,
+            { backgroundColor: tokens.surface, borderColor: tokens.border },
           ]}
         >
-          <Ionicons name="lock-closed-outline" size={14} color={SN.secondaryLabel} />
-          <Text style={[styles.closedBannerText, { color: SN.secondaryLabel }]}>
-            This issue is resolved — read only
-          </Text>
+          <Text style={[styles.threadTitle, { color: tokens.text }]}>{issue.quiz_title}</Text>
+          {issue.question_number ? (
+            <Text style={[styles.threadQ, { color: tokens.accent }]}>Question {issue.question_number}</Text>
+          ) : null}
+          <Text style={[styles.threadDesc, { color: tokens.textSecondary }]}>{issue.description}</Text>
         </View>
-      )}
-    </View>
+
+        <ScrollView
+          ref={commentsRef}
+          style={styles.comments}
+          contentContainerStyle={styles.commentsContent}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
+        >
+          {loading ? (
+            <ActivityIndicator color={tokens.accent} style={{ marginTop: 20 }} />
+          ) : comments.length === 0 ? (
+            <Text style={[styles.noComments, { color: SN.secondaryLabel }]}>
+              No comments yet — start the conversation.
+            </Text>
+          ) : (
+            comments.map((c) => {
+              const isStaff = c.commenter_role !== "student"
+              return (
+                <View
+                  key={c.id}
+                  style={[
+                    styles.commentBubble,
+                    isStaff
+                      ? [
+                          styles.commentStaff,
+                          { backgroundColor: tokens.surface, borderColor: tokens.border },
+                        ]
+                      : [
+                          styles.commentStudent,
+                          { backgroundColor: hexToRgba(tokens.accent, 0.1) },
+                        ],
+                  ]}
+                >
+                  <Text style={[styles.commentAuthor, { color: tokens.accent }]}>
+                    {c.commenter_name}
+                    {isStaff ? " · Staff" : ""}
+                  </Text>
+                  <Text style={[styles.commentBody, { color: tokens.text }]}>{c.comment_text}</Text>
+                  <Text style={[styles.commentTime, { color: SN.secondaryLabel }]}>
+                    {new Date(c.created_at).toLocaleDateString(undefined, {
+                      month: "short",
+                      day: "numeric",
+                      hour: "numeric",
+                      minute: "2-digit",
+                    })}
+                  </Text>
+                </View>
+              )
+            })
+          )}
+        </ScrollView>
+      </View>
+    </ChatKeyboardShell>
   )
 }
 
@@ -583,6 +608,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 24,
     overflow: "hidden",
   },
+  bodyShell: { flex: 1 },
   handle: {
     alignSelf: "center",
     width: 40,
@@ -703,7 +729,8 @@ const styles = StyleSheet.create({
   issueMetaText: { fontSize: 11 },
   commentCount: { flexDirection: "row", alignItems: "center", gap: 4 },
   commentCountText: { fontSize: 11, fontWeight: "700" },
-  thread: { flex: 1, maxHeight: 420 },
+  threadShell: { flex: 1 },
+  thread: { flex: 1 },
   backRow: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 16, paddingVertical: 8 },
   backText: { fontSize: 14, fontWeight: "600" },
   threadHero: {

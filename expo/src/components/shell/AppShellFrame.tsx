@@ -3,14 +3,23 @@ import { Platform, StyleSheet, View } from "react-native"
 import { ChromeInsetProvider } from "../../context/ChromeInsetContext"
 import { useSearchDockBottomInset } from "../../context/ModuleSearchDockContext"
 import { ModuleSearchDockProvider } from "../../context/ModuleSearchDockProvider"
+import { ShellDrawerEdgeCapture } from "../navigation/ShellDrawerEdgeCapture"
+import type { DrawerEdgeSwipePortal } from "../navigation/drawer-edge-swipe"
 import { useGlassChromeActive } from "../theme/GlassSurface"
 import { floatingTopChromeInset, useStableTopSafeInset } from "./shell-shared"
+
+type DrawerEdgeProps = {
+  portal: DrawerEdgeSwipePortal
+  immersive: boolean
+  drawerOpen: boolean
+}
 
 type Props = {
   backgroundColor: string
   immersive: boolean
   topBar: ReactNode
   children: ReactNode
+  drawerEdge?: DrawerEdgeProps
   overlays?: ReactNode
 }
 
@@ -26,6 +35,7 @@ export function AppShellFrame({
   immersive,
   topBar,
   children,
+  drawerEdge,
   overlays,
 }: Props) {
   return (
@@ -34,6 +44,7 @@ export function AppShellFrame({
         backgroundColor={backgroundColor}
         immersive={immersive}
         topBar={topBar}
+        drawerEdge={drawerEdge}
         overlays={overlays}
       >
         {children}
@@ -47,6 +58,7 @@ function AppShellFrameInner({
   immersive,
   topBar,
   children,
+  drawerEdge,
   overlays,
 }: Props) {
   const topSafeInset = useStableTopSafeInset()
@@ -56,21 +68,30 @@ function AppShellFrameInner({
   const topInset = floatChrome ? floatingTopChromeInset(topSafeInset) : 0
   const searchDockInset = useSearchDockBottomInset()
   const floatSearchDock = searchDockInset > 0
+  const body = drawerEdge ? (
+    <ShellDrawerEdgeCapture {...drawerEdge}>{children}</ShellDrawerEdgeCapture>
+  ) : (
+    children
+  )
 
   return (
     <ChromeInsetProvider topInset={topInset} bottomInset={floatSearchDock ? searchDockInset : 0}>
       <View style={[styles.root, { backgroundColor }]}>
-        {showTopBar && !floatChrome ? topBar : null}
+        {showTopBar && !floatChrome ? (
+          <View style={styles.inlineTopBar} pointerEvents="box-none">
+            {topBar}
+          </View>
+        ) : null}
         {/* Opaque fill — prevents prior stack scenes from showing through translucent chrome. */}
         <View style={[styles.content, { backgroundColor }]}>
-          <View style={[styles.contentFill, { backgroundColor }]}>{children}</View>
+          <View style={[styles.contentFill, { backgroundColor }]}>{body}</View>
         </View>
         {showTopBar && floatChrome ? (
           <View style={styles.floatingChrome} pointerEvents="box-none">
             {topBar}
           </View>
         ) : null}
-        {overlays}
+        {overlays ? <View style={styles.overlaysLayer}>{overlays}</View> : null}
       </View>
     </ChromeInsetProvider>
   )
@@ -80,6 +101,14 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   content: { flex: 1 },
   contentFill: { flex: 1 },
+  inlineTopBar: {
+    position: "relative",
+    zIndex: 25,
+    ...Platform.select({
+      android: { elevation: 8 },
+      default: {},
+    }),
+  },
   floatingChrome: {
     position: "absolute",
     top: 0,
@@ -90,5 +119,10 @@ const styles = StyleSheet.create({
       android: { elevation: 8 },
       default: {},
     }),
+  },
+  overlaysLayer: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 40,
+    pointerEvents: "box-none",
   },
 })

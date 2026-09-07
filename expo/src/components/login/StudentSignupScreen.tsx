@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
@@ -12,7 +11,7 @@ import {
 } from "react-native"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
-import Animated, { FadeIn, FadeInRight, FadeOutLeft } from "react-native-reanimated"
+import { AuthKeyboardShell } from "../motion/AuthKeyboardShell"
 import { ApiError, api, type UniversityRecord } from "../../lib/api"
 import {
   submitStudentAccessRequest,
@@ -25,6 +24,7 @@ import {
 } from "../../lib/student-enrollment-catalog"
 import { persistRememberedUniversity } from "../../lib/remembered-student-auth"
 import { keyboardDismissScrollProps } from "../../lib/keyboard-dismiss-scroll-props"
+import { useAuthScrollBottomPadding } from "./AuthFlowScroll"
 import { useAuthFlowContentStyle, useAuthFlowLayout } from "../../lib/responsive-layout"
 import { ErrorBanner } from "./LoginCard"
 import { LoginButton } from "./LoginButton"
@@ -40,6 +40,8 @@ import {
   type StudentSignupStep,
 } from "./student-signup/student-signup-artwork"
 import { StudentSignupVerifyStep } from "./student-signup/StudentSignupVerifyStep"
+
+import Animated, { FadeIn, FadeInRight, FadeOutLeft } from "react-native-reanimated"
 
 type Step = "university" | StudentSignupStep
 
@@ -388,29 +390,27 @@ export function StudentSignupScreen({ initialUniversity, onBack, registerPanelBa
     step === "profile" ? "Submit access request" : step === "university" ? "Continue" : "Continue"
 
   const showStickyFooter = step !== "verify"
+  const bottomPad = useAuthScrollBottomPadding(showStickyFooter ? insets.bottom + 96 : insets.bottom + 28)
 
   return (
     <View style={[styles.root, { backgroundColor: LOGIN.canvas }]}>
       <LoginCanvasBubbles />
 
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={insets.top}
-      >
+      <AuthKeyboardShell>
         <ScrollView
           style={styles.flex}
           contentContainerStyle={[
             contentStyle,
             {
               paddingTop: insets.top + 12,
-              paddingBottom: showStickyFooter ? insets.bottom + 96 : insets.bottom + 28,
               paddingHorizontal: horizontalPadding,
               gap: contentGap,
+              paddingBottom: bottomPad,
             },
           ]}
           {...keyboardDismissScrollProps}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="always"
         >
           <View style={[styles.stack, { gap: stackGap }]}>
             {step === "university" ? (
@@ -580,7 +580,7 @@ export function StudentSignupScreen({ initialUniversity, onBack, registerPanelBa
             />
           </View>
         ) : null}
-      </KeyboardAvoidingView>
+      </AuthKeyboardShell>
     </View>
   )
 }

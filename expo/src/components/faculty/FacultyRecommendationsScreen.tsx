@@ -28,6 +28,8 @@ import { FacultyRecommendationLetterCard } from "./FacultyRecommendationsListCar
 import { FacultyGuestAccountRequestsPanel, guestAccountRequestsFilterActive } from "./FacultyGuestAccountRequestsPanel"
 import type { GuestAccountSortKey, GuestAccountStatusFilter } from "../../lib/faculty-guest-account-requests-utils"
 import { useFacultyStickyHeaderScrollLayout, FacultyModuleStickyHeader, FacultyModuleTabBar, FacultySearchToolbar } from "./faculty-module-shell"
+import { useFacultyListPager } from "../../hooks/useFacultyListPager"
+import { FacultyListPagerFooter } from "./FacultyListPagerFooter"
 
 type RecommendationTab = RecommendationFilter | "guest-requests"
 
@@ -127,6 +129,7 @@ export function FacultyRecommendationsScreen() {
     () => (isGuestTab(tab) ? [] : filterRecommendations(requests, letterFilter, search)),
     [requests, letterFilter, search, tab],
   )
+  const pager = useFacultyListPager(filtered, `${tab}:${search}`, "letters")
 
   const tabs = useMemo(
     () => [
@@ -237,9 +240,10 @@ export function FacultyRecommendationsScreen() {
           />
         ) : (
           <View style={localStyles.list}>
-            {filtered.map((item) => (
+            {pager.items.map((item) => (
               <FacultyRecommendationLetterCard key={item.id} item={item} onPress={() => openLetterWorkspace(item.id)} />
             ))}
+            <FacultyListPagerFooter pager={pager} />
           </View>
         )}
       </ScrollView>

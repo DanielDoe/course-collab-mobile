@@ -38,6 +38,11 @@ export type PracticeAnswerReviewOption = {
 
 export type PracticeAnswerReview = {
   isCorrect: boolean
+  /** True when score/points are between 0 and full credit (select-all partial). */
+  isPartialCredit?: boolean
+  score?: number
+  pointsEarned?: number
+  maxPoints?: number
   correctLetters: string[]
   correctTexts: string[]
   options: PracticeAnswerReviewOption[]
@@ -106,6 +111,8 @@ export type LectureWorkspaceConfig = {
   title: string
   button_label?: string
   questions: LectureWorkspaceQuestion[]
+  /** questionId → saved student answer JSON */
+  drafts?: Record<string, string>
 }
 
 export function defaultSamplePracticeConfig(): LectureSamplePracticeConfig {

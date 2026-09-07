@@ -26,6 +26,8 @@ import {
 } from "../../lib/message-course-import"
 import { unsentAuditLabel } from "../../lib/message-lifecycle"
 import { CoraImportedQuestionPreview } from "../ai-tutor/CoraImportedQuestionPreview"
+import { useMessagesLayout } from "../../hooks/useMessagesLayout"
+import { normalizeMessageParticipant } from "../../lib/messages-thread-normalize"
 
 export function MessageAvatar({
   name,
@@ -78,10 +80,12 @@ export const MessageThreadRow = memo(function MessageThreadRow({
   const native = useThemedNative()
   const tokens = useAppThemeTokens()
   const type = useNativeType()
+  const layout = useMessagesLayout()
   const preview = thread.lastMessage
     ? messagePreviewText(thread.lastMessage.body, 80)
     : "No messages yet"
-  const name = thread.otherParticipant.displayName
+  const participant = normalizeMessageParticipant(thread.otherParticipant)
+  const name = participant.displayName
 
   return (
     <Pressable
@@ -90,7 +94,8 @@ export const MessageThreadRow = memo(function MessageThreadRow({
         {
           backgroundColor: native.secondaryGrouped,
           borderColor: native.separator,
-          marginHorizontal: 16,
+          paddingHorizontal: layout.cardPadding,
+          minHeight: layout.threadRowMinHeight,
           borderLeftWidth: StyleSheet.hairlineWidth,
           borderRightWidth: StyleSheet.hairlineWidth,
         },
@@ -112,14 +117,17 @@ export const MessageThreadRow = memo(function MessageThreadRow({
       ]}
       onPress={onPress}
     >
-      <MessageAvatar name={name} presenceStatus={presenceStatus} />
+      <MessageAvatar name={name} size={layout.avatarSize} presenceStatus={presenceStatus} />
       <View style={styles.threadCopy}>
         <View style={styles.threadTop}>
           <Text style={[type.bodyEmphasis, styles.threadName]} numberOfLines={1}>
             {name}
           </Text>
           {thread.lastMessage ? (
-            <Text style={[type.caption, { color: native.tertiaryLabel }]}>
+            <Text
+              style={[type.caption, styles.threadTime, { color: native.tertiaryLabel }]}
+              numberOfLines={1}
+            >
               {thread.lastMessage.deliveryStatus
                 ? formatMessageMetaLine(thread.lastMessage.createdAt, {
                     deliveryStatus: thread.lastMessage.deliveryStatus,
@@ -129,9 +137,9 @@ export const MessageThreadRow = memo(function MessageThreadRow({
             </Text>
           ) : null}
         </View>
-        {thread.otherParticipant.subtitle ? (
+        {participant.subtitle ? (
           <Text style={[type.caption, { color: native.secondaryLabel }]} numberOfLines={1}>
-            {thread.otherParticipant.subtitle}
+            {participant.subtitle}
           </Text>
         ) : null}
         <Text
@@ -174,6 +182,7 @@ export const MessageBubble = memo(function MessageBubble({
   const native = useThemedNative()
   const tokens = useAppThemeTokens()
   const type = useNativeType()
+  const layout = useMessagesLayout()
   const [editHistoryOpen, setEditHistoryOpen] = useState(false)
   const courseImport = useMemo(
     () => (message.unsent ? null : parseCourseImportFromMessage(message.body)),
@@ -193,7 +202,13 @@ export const MessageBubble = memo(function MessageBubble({
 
   if (message.unsent) {
     return (
-      <View style={[styles.auditRow, message.isMine ? styles.auditRowMine : styles.auditRowOther]}>
+      <View
+        style={[
+          styles.auditRow,
+          { paddingHorizontal: layout.horizontalPadding },
+          message.isMine ? styles.auditRowMine : styles.auditRowOther,
+        ]}
+      >
         <Text style={[type.caption, styles.auditText, { color: native.secondaryLabel }]}>
           {unsentAuditLabel(message.isMine, message.senderName)}
         </Text>
@@ -217,9 +232,23 @@ export const MessageBubble = memo(function MessageBubble({
         : null
 
   return (
-    <View style={[styles.bubbleRow, message.isMine ? styles.bubbleRowMine : styles.bubbleRowOther]}>
-      {!message.isMine ? <MessageAvatar name={message.senderName} presenceStatus={senderPresence} /> : null}
-      <View style={[styles.bubbleCol, courseImport && styles.bubbleColCourseImport]}>
+    <View
+      style={[
+        styles.bubbleRow,
+        { paddingHorizontal: layout.horizontalPadding },
+        message.isMine ? styles.bubbleRowMine : styles.bubbleRowOther,
+      ]}
+    >
+      {!message.isMine ? (
+        <MessageAvatar name={message.senderName} size={layout.avatarSize} presenceStatus={senderPresence} />
+      ) : null}
+      <View
+        style={[
+          styles.bubbleCol,
+          courseImport && styles.bubbleColCourseImport,
+          { maxWidth: courseImport ? layout.courseImportBubbleMaxWidth : layout.bubbleMaxWidth },
+        ]}
+      >
         {!message.isMine ? (
           onPressSender ? (
             <Pressable onPress={onPressSender} hitSlop={4}>
@@ -434,19 +463,18 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    paddingHorizontal: 16,
     paddingVertical: 12,
-    minHeight: 72,
   },
   threadCopy: { flex: 1, minWidth: 0, gap: 2 },
   threadTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
-  threadName: { flex: 1 },
+  threadName: { flex: 1, minWidth: 0 },
+  threadTime: { flexShrink: 0, maxWidth: "46%" },
   threadPreview: { marginTop: 2 },
-  bubbleRow: { flexDirection: "row", gap: 8, marginBottom: 12, paddingHorizontal: 16 },
+  bubbleRow: { flexDirection: "row", gap: 8, marginBottom: 12 },
   bubbleRowMine: { justifyContent: "flex-end" },
   bubbleRowOther: { justifyContent: "flex-start" },
-  bubbleCol: { maxWidth: "82%", gap: 2 },
-  bubbleColCourseImport: { maxWidth: "92%" },
+  bubbleCol: { gap: 2 },
+  bubbleColCourseImport: {},
   bubble: {
     borderRadius: 18,
     paddingHorizontal: 14,
@@ -473,7 +501,6 @@ const styles = StyleSheet.create({
   editedLabel: { fontWeight: "500" },
   auditRow: {
     marginBottom: 10,
-    paddingHorizontal: 16,
     alignItems: "center",
   },
   auditRowMine: {},

@@ -7,6 +7,7 @@ import { consumeStudentShellBootstrap } from "../lib/app-bootstrap-cache"
 import { ensureAppBootstrap } from "../lib/post-login-bootstrap"
 import { SHELL_REFRESH_TTL_MS, type RefreshStudentDataOptions } from "../lib/faculty-shell-refresh-types"
 import { useStudentShell } from "../context/StudentShellContext"
+import { useOptionalStudentActiveCourse } from "../context/StudentActiveCourseContext"
 import type { StudentSession } from "../lib/session"
 
 export function useStudentShellRefresh(session: StudentSession) {
@@ -17,9 +18,11 @@ export function useStudentShellRefresh(session: StudentSession) {
     setNotificationCount,
     registerRefreshStudentData,
   } = useStudentShell()
+  const reloadEnrollments = useOptionalStudentActiveCourse()?.reloadEnrollments
   const refreshingRef = useRef(false)
   const lastRefreshAtRef = useRef(0)
   const initialRefreshDoneRef = useRef(false)
+  const sessionIdentity = `${session.databaseId}|${session.courseId ?? ""}|${session.section}|${session.id}`
 
   const refreshAll = useCallback(
     async (options?: RefreshStudentDataOptions) => {
@@ -33,22 +36,25 @@ export function useStudentShellRefresh(session: StudentSession) {
 
       refreshingRef.current = true
       try {
-        await refreshStudentShellData(
-          session,
-          {
-            setMembershipTier,
-            setMembershipTierLoaded,
-            setClassroomPoints,
-            setNotificationCount,
-          },
-          { syncStripe: force },
-        )
+        await Promise.all([
+          refreshStudentShellData(
+            session,
+            {
+              setMembershipTier,
+              setMembershipTierLoaded,
+              setClassroomPoints,
+              setNotificationCount,
+            },
+            { syncStripe: force },
+          ),
+          reloadEnrollments?.() ?? Promise.resolve(),
+        ])
         lastRefreshAtRef.current = Date.now()
       } finally {
         refreshingRef.current = false
       }
     },
-    [session, setMembershipTier, setMembershipTierLoaded, setClassroomPoints, setNotificationCount],
+    [reloadEnrollments, session, setMembershipTier, setMembershipTierLoaded, setClassroomPoints, setNotificationCount],
   )
 
   useEffect(() => {
@@ -93,8 +99,8 @@ export function useStudentShellRefresh(session: StudentSession) {
       mounted = false
     }
   }, [
+    sessionIdentity,
     refreshAll,
-    session,
     setClassroomPoints,
     setMembershipTier,
     setMembershipTierLoaded,

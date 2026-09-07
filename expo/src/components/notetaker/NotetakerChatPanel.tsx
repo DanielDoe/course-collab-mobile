@@ -1,8 +1,6 @@
 import { useCallback, useRef, useState } from "react"
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -24,6 +22,7 @@ import {
 import { CommEmptyState, CommTintButton } from "../faculty/faculty-communication-ui"
 import { CoraBrand } from "../cora/CoraBrand"
 import { ComposerSendButton } from "../theme/ComposerSendButton"
+import { ChatKeyboardShell } from "../motion/ChatKeyboardShell"
 
 type Props = {
   session: StudentSession
@@ -41,6 +40,10 @@ export function NotetakerChatPanel({ session, note, chatEnabled, onUpgrade }: Pr
   const [input, setInput] = useState("")
   const [sending, setSending] = useState(false)
   const scrollRef = useRef<ScrollView>(null)
+
+  const scrollToEnd = useCallback(() => {
+    scrollRef.current?.scrollToEnd({ animated: true })
+  }, [])
 
   const send = useCallback(async () => {
     const text = input.trim()
@@ -65,9 +68,9 @@ export function NotetakerChatPanel({ session, note, chatEnabled, onUpgrade }: Pr
       setMessages((prev) => [...prev, { role: "assistant", text: fallback }])
     } finally {
       setSending(false)
-      requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: true }))
+      requestAnimationFrame(scrollToEnd)
     }
-  }, [chatEnabled, input, note, sending, session])
+  }, [chatEnabled, input, note, scrollToEnd, sending, session])
 
   if (!chatEnabled) {
     return (
@@ -83,10 +86,32 @@ export function NotetakerChatPanel({ session, note, chatEnabled, onUpgrade }: Pr
   }
 
   return (
-    <KeyboardAvoidingView
+    <ChatKeyboardShell
       style={styles.root}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 96 : 0}
+      onKeyboardShow={scrollToEnd}
+      composer={
+        <View style={[styles.composer, { borderTopColor: native.separator, backgroundColor: native.groupedBackground }]}>
+          <TextInput
+            value={input}
+            onChangeText={setInput}
+            placeholder="Ask about this lecture…"
+            placeholderTextColor={native.tertiaryLabel}
+            multiline
+            maxLength={4000}
+            style={[
+              styles.input,
+              type.body,
+              { color: native.label, backgroundColor: native.secondaryGrouped, borderColor: native.separator },
+            ]}
+            editable={!sending}
+          />
+          <ComposerSendButton
+            active={!!input.trim() && !sending}
+            onPress={() => void send()}
+            size={40}
+          />
+        </View>
+      }
     >
       <ScrollView
         ref={scrollRef}
@@ -94,7 +119,7 @@ export function NotetakerChatPanel({ session, note, chatEnabled, onUpgrade }: Pr
         contentContainerStyle={styles.messagesContent}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
-        onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
+        onContentSizeChange={scrollToEnd}
       >
         {messages.length === 0 ? (
           <View style={[styles.hintBox, { backgroundColor: native.secondaryGrouped }]}>
@@ -129,37 +154,15 @@ export function NotetakerChatPanel({ session, note, chatEnabled, onUpgrade }: Pr
           </View>
         ) : null}
       </ScrollView>
-
-      <View style={[styles.composer, { borderTopColor: native.separator, backgroundColor: native.groupedBackground }]}>
-        <TextInput
-          value={input}
-          onChangeText={setInput}
-          placeholder="Ask about this lecture…"
-          placeholderTextColor={native.tertiaryLabel}
-          multiline
-          maxLength={4000}
-          style={[
-            styles.input,
-            type.body,
-            { color: native.label, backgroundColor: native.secondaryGrouped, borderColor: native.separator },
-          ]}
-          editable={!sending}
-        />
-        <ComposerSendButton
-          active={!!input.trim() && !sending}
-          onPress={() => void send()}
-          size={40}
-        />
-      </View>
-    </KeyboardAvoidingView>
+    </ChatKeyboardShell>
   )
 }
 
 const styles = StyleSheet.create({
-  root: { minHeight: 320 },
+  root: { flex: 1, minHeight: 320 },
   upgradeWrap: { gap: 12, paddingVertical: 8 },
-  messages: { flexGrow: 0, maxHeight: 420 },
-  messagesContent: { paddingVertical: 8, gap: 10 },
+  messages: { flex: 1 },
+  messagesContent: { paddingVertical: 8, gap: 10, flexGrow: 1 },
   hintBox: {
     flexDirection: "row",
     alignItems: "flex-start",

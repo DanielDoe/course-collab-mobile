@@ -33,6 +33,7 @@ import {
   seedFacultyDashboardCache,
   seedStudentDashboardCache,
 } from "./query/prefetch"
+import { enrichStudentContentSession } from "./student-content-session"
 
 let bootstrapInFlight: Promise<void> | null = null
 let bootstrapCompletedKey: string | null = null
@@ -67,11 +68,12 @@ export function resetAppBootstrapState() {
 }
 
 async function bootstrapStudent(session: StudentSession) {
+  const contentSession = await enrichStudentContentSession(session)
   const [dashboard, announcementData, tier, notifications] = await Promise.all([
-    fetchStudentDashboardBundle(session),
-    studentApi.getAnnouncements(session).catch(() => ({ announcements: [] as Announcement[] })),
-    fetchEffectiveMembershipTier(session),
-    fetchNotificationCount(session),
+    fetchStudentDashboardBundle(contentSession),
+    studentApi.getAnnouncements(contentSession).catch(() => ({ announcements: [] as Announcement[] })),
+    fetchEffectiveMembershipTier(contentSession),
+    fetchNotificationCount(contentSession),
   ])
 
   setStudentDashboardBootstrap({
@@ -93,9 +95,9 @@ async function bootstrapStudent(session: StudentSession) {
   })
 
   const queryClient = getQueryClient()
-  seedAnnouncementsCache(queryClient, session, announcementData.announcements ?? [])
-  seedStudentDashboardCache(queryClient, session, dashboard)
-  void prefetchStudentPhase1(queryClient, session)
+  seedAnnouncementsCache(queryClient, contentSession, announcementData.announcements ?? [])
+  seedStudentDashboardCache(queryClient, contentSession, dashboard)
+  void prefetchStudentPhase1(queryClient, contentSession)
 }
 
 async function bootstrapFacultyForCourse(

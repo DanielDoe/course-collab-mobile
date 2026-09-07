@@ -1,11 +1,31 @@
-import { RowStyle, type AppearanceParams } from "@stripe/stripe-react-native"
 import type { AppThemeTokens } from "../constants/app-themes"
+
+/** Mirrors @stripe/stripe-react-native RowStyle without importing native Stripe in Expo Go. */
+const FLAT_WITH_CHECKMARK = "FlatWithCheckmark" as const
+
+type StripeAppearanceParams = {
+  font?: { scale?: number }
+  shapes?: { borderRadius?: number; borderWidth?: number }
+  primaryButton?: {
+    shapes?: { borderRadius?: number }
+    colors?: { background?: string; text?: string }
+  }
+  colors?: Record<string, string | undefined>
+  embeddedPaymentElement?: {
+    row?: {
+      style?: typeof FLAT_WITH_CHECKMARK
+      additionalInsets?: number
+      floating?: { spacing?: number }
+      flat?: Record<string, unknown>
+    }
+  }
+}
 
 /**
  * Stripe Payment Element / PaymentSheet theming.
- * FlatWithCheckmark is used when Embedded PE is shown; PaymentSheet ignores it safely.
+ * Typed locally so Expo Go never imports @stripe/stripe-react-native at module load.
  */
-export function buildStripeCheckoutAppearance(tokens: AppThemeTokens): AppearanceParams {
+export function buildStripeCheckoutAppearance(tokens: AppThemeTokens): StripeAppearanceParams {
   const checkGlyph = "#FFFFFF"
   const selectionFill = tokens.isDark ? "#FFFFFF" : tokens.text
 
@@ -40,7 +60,7 @@ export function buildStripeCheckoutAppearance(tokens: AppThemeTokens): Appearanc
     },
     embeddedPaymentElement: {
       row: {
-        style: RowStyle.FlatWithCheckmark,
+        style: FLAT_WITH_CHECKMARK,
         additionalInsets: 12,
         floating: {
           spacing: 12,

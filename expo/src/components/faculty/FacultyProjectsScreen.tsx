@@ -46,6 +46,8 @@ import {
   rowMatchesFacultySection,
   useFacultySectionFilter,
 } from "../../lib/faculty-section-scope"
+import { useFacultyListPager } from "../../hooks/useFacultyListPager"
+import { FacultyListPagerFooter } from "./FacultyListPagerFooter"
 
 type ProjectModuleTab = "overview" | "score" | "leaderboard" | "manage" | "presentations" | "config" | "grades"
 type StatusFilter = "all" | "pending" | "approved" | "rejected"
@@ -207,6 +209,8 @@ export function FacultyProjectsScreen() {
         (entry.session ?? "").toLowerCase().includes(q),
     )
   }, [leaderboard, search, courseSessionCodes])
+
+  const pager = useFacultyListPager(filtered, `${tab}:${search}:${statusFilter}:${sessionFilter}`, "projects")
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true)
@@ -454,7 +458,7 @@ export function FacultyProjectsScreen() {
             />
         ) : tab === "manage" ? (
           <View style={localStyles.list}>
-            {filtered.map((project, index) => (
+            {pager.items.map((project, index) => (
               <FacultyProjectListCard
                 key={project.id}
                 project={project}
@@ -465,6 +469,7 @@ export function FacultyProjectsScreen() {
                 onReview={() => setSelected(project)}
               />
             ))}
+            <FacultyListPagerFooter pager={pager} />
           </View>
         ) : null}
       </ScrollView>

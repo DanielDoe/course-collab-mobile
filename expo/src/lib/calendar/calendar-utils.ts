@@ -104,6 +104,19 @@ export function getEventsForDate(events: CalendarEvent[], date: Date): CalendarE
     .sort((a, b) => new Date(a.start_time ?? 0).getTime() - new Date(b.start_time ?? 0).getTime())
 }
 
+export function parseCalendarWallClock(iso: string): Date {
+  if (/Z$/i.test(iso) || /[+-]\d{2}:\d{2}$/.test(iso)) return new Date(iso)
+  const match = iso.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/)
+  if (!match) return new Date(iso)
+  return new Date(
+    Number(match[1]),
+    Number(match[2]) - 1,
+    Number(match[3]),
+    Number(match[4]),
+    Number(match[5]),
+  )
+}
+
 export function formatEventTimeRange(event: CalendarEvent): string {
   if (event.all_day) return "All day"
   const start = event.start_time ? new Date(event.start_time) : null

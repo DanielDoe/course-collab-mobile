@@ -1,4 +1,5 @@
 import { useRouter } from "expo-router"
+import { navigationKeyFromHref, shouldAcceptNavigation } from "../../lib/motion"
 import type { AssessmentListKind } from "./assessment-config"
 import type { AssessmentTakeAction } from "../../constants/module-web-paths"
 
@@ -114,9 +115,12 @@ export function openAssessmentDetail(
   itemAssessmentType?: string,
 ) {
   const type = resolveAssessmentType(kind, itemAssessmentType)
-  router.push({
+  const dest = {
     pathname: "/assessment/[id]",
-    params: { id: String(quizId), type }} as never)
+    params: { id: String(quizId), type },
+  }
+  if (!shouldAcceptNavigation(navigationKeyFromHref(dest))) return
+  router.push(dest as never)
 }
 
 export function openAssessmentTake(
@@ -125,10 +129,12 @@ export function openAssessmentTake(
   quizId: number,
   action: AssessmentTakeAction = "start",
 ) {
-  router.push({
+  const dest = {
     pathname: "/assessment/take/[id]",
     params: { id: String(quizId), type: assessmentType, action },
-  } as never)
+  }
+  if (!shouldAcceptNavigation(navigationKeyFromHref(dest))) return
+  router.push(dest as never)
 }
 
 export function openAssessmentResults(
@@ -136,11 +142,15 @@ export function openAssessmentResults(
   attemptId: number,
   assessmentType?: string,
 ) {
-  router.push({
+  const dest = {
     pathname: "/assessment/report/[attemptId]",
     params: {
       attemptId: String(attemptId),
-      ...(assessmentType ? { type: assessmentType } : {})}} as never)
+      ...(assessmentType ? { type: assessmentType } : {}),
+    },
+  }
+  if (!shouldAcceptNavigation(navigationKeyFromHref(dest))) return
+  router.push(dest as never)
 }
 
 /** @deprecated Use openAssessmentDetail from list cards; take opens from detail actions. */

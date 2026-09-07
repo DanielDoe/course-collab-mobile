@@ -19,7 +19,10 @@ import {
   prepareGuestCoraCareerMobilePayment,
 } from "../../../lib/guest-mobile-payment-api"
 import { openGuestCoraCareerHostedCheckout } from "../../../lib/guest-stripe-hosted-checkout"
-import { shouldBlockNativeDigitalCheckout } from "../../../lib/compliance/ios-purchase-policy"
+import {
+  openGuestCoraCareerPurchase,
+  requiresExternalWebPurchase,
+} from "../../../lib/purchase-navigation"
 import { GUEST_CORA_CAREER_LIFETIME_CREDITS } from "../../../lib/guest-membership-config"
 import type { GuestCareerPlan } from "../../../lib/guest-types"
 import type { GuestSession } from "../../../lib/session"
@@ -75,10 +78,11 @@ export function GuestCoraCareerCheckoutScreen() {
     if (!guestSession) return
     setPaymentNotice("")
 
-    if (shouldBlockNativeDigitalCheckout()) {
+    if (requiresExternalWebPurchase()) {
       try {
         setPaymentLoading(true)
-        await openHostedCheckout()
+        await openGuestCoraCareerPurchase(guestSession)
+        setPaymentNotice("Complete payment in Safari. When you return, Cora Career will unlock automatically.")
       } catch (err) {
         setPaymentNotice(err instanceof ApiError ? err.message : "Could not open web checkout.")
       } finally {

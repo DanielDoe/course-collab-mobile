@@ -1,8 +1,8 @@
 import { useCallback, useMemo, useState } from "react"
+import { useFacultyListPager } from "../../hooks/useFacultyListPager"
 import { RefreshControl, StyleSheet, Text, View } from "react-native";
 import { AppAlert } from '../../lib/app-alert'
 import { Ionicons } from "@/components/icons/AppIcon"
-import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { ApiError } from "../../lib/api"
 import {
   formatFacultyRelativeTime,
@@ -47,6 +47,7 @@ import { useFacultyStickyHeaderScrollLayout,
   resolveSessionFilterCode,
   sessionFilterDisplayLabel} from "./faculty-module-shell"
 import { ModuleFlashList } from "../ModuleFlashList"
+import { FacultyListPagerFooter } from "./FacultyListPagerFooter"
 
 const TABS: Array<{ id: StudentDirectoryTab; label: string; icon: keyof typeof Ionicons.glyphMap }> = [
   { id: "students", label: "Students", icon: "people-outline" },
@@ -56,8 +57,7 @@ const TABS: Array<{ id: StudentDirectoryTab; label: string; icon: keyof typeof I
 
 export function FacultyStudentsScreen() {
   const { styles: moduleStyles, native, tokens, type } = useModuleTheme()
-  const insets = useSafeAreaInsets()
-  const { listScrollPad, chromeTop } = useFacultyStickyHeaderScrollLayout()
+  const { listScrollPad, chromeTop } = useFacultyStickyHeaderScrollLayout({ extraBottom: 32 })
   const { scope, ready, course } = useFacultyScope()
   const { sessionFilter, setSessionFilter } = useFacultySectionFilter(scope, "ALL")
 
@@ -184,6 +184,9 @@ export function FacultyStudentsScreen() {
     }
     return filteredRequests.map((row) => ({ key: String(row.id), kind: "request", row }))
   }, [loading, tab, filteredStudents, filteredResets, filteredRequests])
+
+  const pagerNoun = tab === "students" ? "students" : tab === "resets" ? "resets" : "requests"
+  const pager = useFacultyListPager(listRows, `${tab}:${search}:${sessionFilter}`, pagerNoun)
 
   const listEmptyMeta = useMemo(() => {
     if (loading) return null
@@ -313,12 +316,14 @@ export function FacultyStudentsScreen() {
       </FacultyModuleStickyHeader>
 
       <ModuleFlashList
-        data={listRows}
+        animateItems
+        data={pager.items}
         keyExtractor={(item) => item.key}
         renderItem={renderStudentRow}
-        extraData={tab}
+        extraData={`${tab}:${pager.page}`}
         contentContainerStyle={[styles.content, listScrollPad]}
         ListHeaderComponent={listHeader}
+        ListFooterComponent={<FacultyListPagerFooter pager={pager} />}
         ListEmptyComponent={
           loading ? (
             <QuerySkeleton />

@@ -1,5 +1,6 @@
 import { getApiBaseUrl } from "../constants"
 import { ApiError } from "./api"
+import { isRawRuntimeErrorMessage, sanitizeUserFacingError } from "./user-facing-error"
 
 export type ApiErrorKind = "network" | "server" | "client" | "unknown"
 
@@ -107,7 +108,7 @@ export function presentApiError(err: unknown, options: PresentOptions = {}): Api
       return {
         kind: "client",
         title: "Check your input",
-        message: err.message || fallback,
+        message: sanitizeUserFacingError(err.message, fallback),
         status: err.status,
         detail: buildApiErrorDetail(err),
         retryable: false,
@@ -128,7 +129,7 @@ export function presentApiError(err: unknown, options: PresentOptions = {}): Api
     return {
       kind: "client",
       title: `${feature} couldn't load`,
-      message: err.message || fallback,
+      message: sanitizeUserFacingError(err.message, fallback),
       status: err.status,
       detail: buildApiErrorDetail(err),
       retryable: true,
@@ -139,8 +140,10 @@ export function presentApiError(err: unknown, options: PresentOptions = {}): Api
     return {
       kind: "unknown",
       title: `${feature} couldn't load`,
-      message: err.message,
-      detail: __DEV__ ? `API: ${getApiBaseUrl()}` : undefined,
+      message: sanitizeUserFacingError(err.message, fallback),
+      detail: __DEV__
+        ? `${isRawRuntimeErrorMessage(err.message) ? err.message + "\n\n" : ""}API: ${getApiBaseUrl()}`
+        : undefined,
       retryable: true,
     }
   }

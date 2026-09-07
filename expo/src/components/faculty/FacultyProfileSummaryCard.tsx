@@ -4,6 +4,8 @@ import { Ionicons } from "@/components/icons/AppIcon"
 import { NATIVE } from "../../constants/faculty-native-theme"
 import { FACULTY_SETTINGS_COLOR } from "../../lib/faculty-settings-theme"
 import { useModuleTheme } from "../../lib/themed-module-shell"
+import { facultyScopeLabel } from "../../lib/faculty-scope-label"
+import type { InstructorCourse } from "../../lib/instructor-api"
 import {
   ProfileAvatar,
   formatFacultyRoleLabel,
@@ -15,6 +17,7 @@ type FacultyProfileSummaryCardProps = {
   name: string
   email?: string | null
   role?: string | null
+  course?: InstructorCourse | null
   courseCode?: string | null
   courseTitle?: string | null
   avatarSize?: number
@@ -31,6 +34,7 @@ export function FacultyProfileSummaryCard({
   name,
   email,
   role,
+  course,
   courseCode,
   courseTitle,
   avatarSize = 52,
@@ -129,7 +133,9 @@ export function FacultyProfileSummaryCard({
 
   const roleLabel = formatFacultyRoleLabel(role)
   const emailLine = email?.trim() || null
-  const sectionLine = getCourseDisplayLine(courseCode, courseTitle)
+  const sectionLine = course
+    ? facultyScopeLabel(course)
+    : getCourseDisplayLine(courseCode, courseTitle)
 
   return (
     <View style={[styles.card, style]}>

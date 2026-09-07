@@ -7,7 +7,7 @@ import { persistMfaDeviceTrustFromLogin, studentMfaLoginKey } from "../../lib/mf
 import { MfaLoginStep } from "../auth/MfaLoginStep"
 import { ErrorBanner, InfoBanner, LoginFieldGroup } from "./LoginCard"
 import { LoginButton, LoginField, LoginPasswordToggle } from "./LoginButton"
-import { LoginBackLink, LoginPortalHeader, LoginPortalStack, type RegisterAuthPanelBack } from "./login-chrome"
+import { LoginAltActions, LoginPortalHeader, LoginPortalStack, type RegisterAuthPanelBack } from "./login-chrome"
 import { AccessRequestStatusScreen } from "../auth/AccessRequestStatusScreen"
 
 type Props = {
@@ -170,7 +170,9 @@ export function GuestLoginPanel({ onBack, registerPanelBack }: Props) {
 
       <LoginButton label="Sign in" onPress={() => void handleSubmit()} loading={submitting} />
 
-      {onBack ? <LoginBackLink label="Other sign-in options" onPress={onBack} /> : null}
+      <LoginAltActions
+        actions={[onBack ? { label: "Other sign-in options", onPress: onBack } : null]}
+      />
     </LoginPortalStack>
   )
 }

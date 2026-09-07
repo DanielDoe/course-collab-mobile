@@ -3,6 +3,7 @@ import { StyleSheet, Text, View } from "react-native"
 import { useRouter } from "expo-router"
 import { ApiError, api, type UniversityRecord, type UniversityStudentLoginResponse } from "../src/lib/api"
 import { primeMembershipTierCache } from "../src/lib/membership-tier-cache"
+import { studentDatabaseIdFromLoginRecord } from "../src/lib/student-content-context"
 import { persistMfaDeviceTrustFromLogin, studentMfaLoginKey, studentMfaAliasKeys } from "../src/lib/mfa-device-trust"
 import { parseMfaCompletePayload, parseMfaLoginResponse, type MfaLoginState } from "../src/lib/mfa-types"
 import { useSession } from "../src/context/SessionProvider"
@@ -178,7 +179,10 @@ async function completeDevLogin(
     })
   }
 
-  await primeMembershipTierCache(String(student.id), data.effectiveMembershipTier)
+  await primeMembershipTierCache(
+    studentDatabaseIdFromLoginRecord(student) ?? "",
+    data.effectiveMembershipTier,
+  )
   await ctx.signIn({
     portal: "student",
     id: student.student_id,
@@ -186,7 +190,7 @@ async function completeDevLogin(
     email: student.email,
     name: student.full_name,
     section: student.section ?? enrollment?.section ?? "ELEG1301P01",
-    databaseId: String(student.id),
+    databaseId: studentDatabaseIdFromLoginRecord(student) ?? "",
     courseId: enrollment?.courseId ?? COURSE_ID,
     courseCode: enrollment?.courseCode ?? "ELEG1301",
     courseTitle: enrollment?.courseTitle ?? "ELEG 1301",

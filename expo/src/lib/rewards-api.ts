@@ -3,12 +3,22 @@ import { API_BASE_URL } from "../constants"
 import { assertProductionHttpsUrl, createApiAbortSignal } from "./http"
 import { persistHttpCookiesFromResponse } from "./student-http-cookies"
 import { ApiError, studentAuthenticatedHeaders, studentAuthenticatedRequest } from "./student-api"
-import { studentContentPath } from "./student-content-context"
+import { studentEnrichedContentPath } from "./student-content-session"
 import { attendanceLeaderboardForCurrentOffering } from "./attendance-leaderboard-scope"
 import { classroomPointsLeaderboardForCurrentOffering } from "./classroom-points-leaderboard-scope"
 
 function request<T>(session: StudentSession, path: string, init?: RequestInit): Promise<T> {
   return studentAuthenticatedRequest<T>(session, path, init)
+}
+
+async function requestContent<T>(
+  session: StudentSession,
+  path: string,
+  extra?: Record<string, string | number | undefined>,
+  init?: RequestInit,
+): Promise<T> {
+  const enrichedPath = await studentEnrichedContentPath(session, path, extra)
+  return request<T>(session, enrichedPath, init)
 }
 
 export type ClassroomPointRecord = {
@@ -107,6 +117,30 @@ export type AttendanceStreak = {
   daysToMilestone?: number
 }
 
+export type StructuredTodaySession = {
+  id: number
+  class_title?: string
+  section?: string
+  start_time?: string
+  end_time?: string
+  my_status?: string | null
+  my_checkin?: string | null
+}
+
+export type StudentAttendanceSessionItem = {
+  id: number
+  classTitle: string
+  startTime: string
+  endTime: string
+  sessionType?: string | null
+  selfCheckInEnabled?: boolean
+  checkInStatus: string
+  canCheckIn: boolean
+  statusMessage: string
+  requireLocation?: boolean
+  record: { status: string | null; pointsEarned: number } | null
+}
+
 export type AttendanceLeaderboardEntry = {
   rank: number
   full_name?: string
@@ -170,19 +204,16 @@ export type PointRequest = {
 
 export const rewardsApi = {
   getClassroomPoints: (session: StudentSession) =>
-    request<{
+    requestContent<{
       points?: ClassroomPointRecord[]
       summary?: ClassroomPointsSummary
       rewardsPolicy?: { points_for_full_grade?: number }
-    }>(
-      session,
-      studentContentPath(session, "/api/classroom-points"),
-    ),
+    }>(session, "/api/classroom-points"),
 
   getClassroomLeaderboard: async (session: StudentSession) => {
-    const res = await request<{ leaderboard?: ClassroomLeaderboardEntry[] }>(
+    const res = await requestContent<{ leaderboard?: ClassroomLeaderboardEntry[] }>(
       session,
-      studentContentPath(session, "/api/classroom-points/leaderboard"),
+      "/api/classroom-points/leaderboard",
     )
     return {
       ...res,
@@ -191,10 +222,7 @@ export const rewardsApi = {
   },
 
   getClassroomSubmissions: (session: StudentSession) =>
-    request<ClassroomSubmissionsResponse>(
-      session,
-      studentContentPath(session, "/api/classroom-points/submissions"),
-    ),
+    requestContent<ClassroomSubmissionsResponse>(session, "/api/classroom-points/submissions"),
 
   submitClassroomCode: (
     session: StudentSession,
@@ -281,22 +309,16 @@ export const rewardsApi = {
   },
 
   getAttendanceScore: (session: StudentSession) =>
-    request<{ attendance?: AttendanceScore }>(
-      session,
-      studentContentPath(session, "/api/attendance/score"),
-    ),
+    requestContent<{ attendance?: AttendanceScore }>(session, "/api/attendance/score"),
 
   getAttendanceStreaks: (session: StudentSession) =>
-    request<{ streak?: AttendanceStreak }>(
-      session,
-      studentContentPath(session, "/api/attendance/streaks"),
-    ),
+    requestContent<{ streak?: AttendanceStreak }>(session, "/api/attendance/streaks"),
 
   getAttendanceRecords: async (session: StudentSession) => {
     try {
-      return await request<{ records?: AttendanceRecord[] }>(
+      return await requestContent<{ records?: AttendanceRecord[] }>(
         session,
-        studentContentPath(session, "/api/attendance/records"),
+        "/api/attendance/records",
       )
     } catch (err) {
       // Production treats the shared records route as instructor-first when
@@ -310,16 +332,10 @@ export const rewardsApi = {
 
   getAttendanceLeaderboard: async (session: StudentSession, limit = 50) => {
     try {
-      const res = await request<{
+      const res = await requestContent<{
         leaderboard?: AttendanceLeaderboardEntry[]
         currentStudent?: AttendanceLeaderboardEntry
-      }>(
-        session,
-        studentContentPath(session, "/api/attendance/leaderboard", {
-          section: session.section,
-          limit,
-        }),
-      )
+      }>(session, "/api/attendance/leaderboard", { limit })
       const leaderboard = attendanceLeaderboardForCurrentOffering(res.leaderboard ?? [], session)
       const currentStudent = res.currentStudent
         ? attendanceLeaderboardForCurrentOffering([res.currentStudent], session)[0]
@@ -328,13 +344,61 @@ export const rewardsApi = {
     } catch (err) {
       if (
         err instanceof ApiError &&
-        (err.status === 401 || err.status === 403 || err.status === 404 || err.status === 500)
+        (err.status === 400 ||
+          err.status === 401 ||
+          err.status === 403 ||
+          err.status === 404 ||
+          err.status === 500)
       ) {
         return { leaderboard: [] as AttendanceLeaderboardEntry[] }
       }
       throw err
     }
   },
+
+  getStructuredTodaySession: async (session: StudentSession) => {
+    try {
+      return await request<{ success?: boolean; session?: StructuredTodaySession | null }>(
+        session,
+        `/api/student/attendance/structured-today?studentId=${encodeURIComponent(session.databaseId)}`,
+      )
+    } catch (err) {
+      if (err instanceof ApiError && (err.status === 404 || err.status === 500)) {
+        return { session: null }
+      }
+      throw err
+    }
+  },
+
+  getStudentAttendanceSessions: async (session: StudentSession) => {
+    try {
+      return await request<{ success?: boolean; sessions?: StudentAttendanceSessionItem[]; total?: number }>(
+        session,
+        `/api/attendance/student-sessions?studentId=${encodeURIComponent(session.databaseId)}`,
+      )
+    } catch (err) {
+      if (err instanceof ApiError && (err.status === 404 || err.status === 500)) {
+        return { sessions: [] }
+      }
+      throw err
+    }
+  },
+
+  selfCheckInStructured: (session: StudentSession, sessionId: number) =>
+    request<{
+      success?: boolean
+      alreadyRecorded?: boolean
+      status?: string
+      checkedInLocal?: string
+      sessionTitle?: string
+      message?: string
+    }>(session, "/api/student/attendance/self-checkin", {
+      method: "POST",
+      body: JSON.stringify({
+        studentId: session.databaseId,
+        sessionId,
+      }),
+    }),
 
   markAttendance: (
     session: StudentSession,

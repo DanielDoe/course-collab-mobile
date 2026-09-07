@@ -4,6 +4,7 @@ import { FacultyAcademicTermsScreen } from "../components/faculty/FacultyAcademi
 import { FacultyAnnouncementsScreen } from "../components/faculty/FacultyAnnouncementsScreen"
 import { FacultyAssessmentsScreen } from "../components/faculty/FacultyAssessmentsScreen"
 import { FacultyAttendanceScreen } from "../components/faculty/FacultyAttendanceScreen"
+import { FacultyCalendarScreen } from "../components/faculty/FacultyCalendarScreen"
 import { FacultyCampersScreen } from "../components/faculty/FacultyCampersScreen"
 import { FacultyClassroomPointsScreen } from "../components/faculty/FacultyClassroomPointsScreen"
 import { FacultyCourseNotesScreen } from "../components/faculty/FacultyCourseNotesScreen"
@@ -99,6 +100,7 @@ export const FACULTY_MODULE_RENDERERS: Record<string, ModuleRenderer> = {
   ...PLACEHOLDER_RENDERERS,
 
   "academic-terms": FacultyAcademicTermsScreen,
+  calendar: FacultyCalendarScreen,
   announcements: FacultyAnnouncementsScreen,
   syllabus: FacultySyllabusScreen,
   lectures: FacultyLecturesScreen,

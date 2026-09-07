@@ -9,7 +9,6 @@ import {
   View,
 } from "react-native"
 import { Ionicons } from "@/components/icons/AppIcon"
-import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { ApiError } from "../../lib/api"
 import { instructorApi, type InstructorSyllabus, type SyllabusSection } from "../../lib/instructor-api"
 import { useFacultyScope } from "../../hooks/useFacultyScope"
@@ -31,8 +30,13 @@ import { FacultyEmptyState } from "./faculty-shared"
 import { useFacultyModuleScrollPadding, FacultySearchToolbar } from "./faculty-module-shell"
 import { FacultySyllabusSectionEditorModal } from "./FacultySyllabusSectionEditorModal"
 import { FacultySyllabusSectionActionSheet } from "./FacultySyllabusSectionActionSheet"
-import { useSearchDockBottomInset } from "../../context/ModuleSearchDockContext"
 import { SolidListThumbTile } from "../theme/SolidListThumbTile"
+import {
+  buildSyllabusSavePayload,
+  shouldShowSyllabusPersistRail,
+  syllabusEditorFingerprint,
+} from "../../lib/faculty-syllabus-save"
+import { sanitizeUserFacingError } from "../../lib/user-facing-error"
 
 function sectionPreview(section: SyllabusSection): string {
   const visible = getSyllabusVisibleContent(section)
@@ -69,17 +73,13 @@ function SyllabusStatusChip({
   )
 }
 
-const FOOTER_BAR_HEIGHT = 132
-
 export function FacultySyllabusScreen() {
-  const insets = useSafeAreaInsets()
-  const searchDockInset = useSearchDockBottomInset()
   const scrollPad = useFacultyModuleScrollPadding(24)
   const tokens = useAppThemeTokens()
   const native = useThemedNative()
   const styles = useFacultyModuleStyles()
   const type = useNativeType()
-  const { scope, ready } = useFacultyScope()
+  const { scope, ready, course, hasCourse } = useFacultyScope()
 
   const [syllabus, setSyllabus] = useState<InstructorSyllabus | null>(null)
   const [canEdit, setCanEdit] = useState(false)
@@ -91,13 +91,25 @@ export function FacultySyllabusScreen() {
   const [selectedSection, setSelectedSection] = useState<SyllabusSection | null>(null)
   const [editorSection, setEditorSection] = useState<SyllabusSection | null>(null)
   const [search, setSearch] = useState("")
+  const [savedFingerprint, setSavedFingerprint] = useState("")
 
   const load = useCallback(async () => {
     if (!scope) return
     const data = await instructorApi.getSyllabus(scope)
-    setSyllabus(data.syllabus)
+    const next =
+      data.syllabus ?? {
+        id: 0,
+        courseId: scope.courseId,
+        title: course?.course_title ? `${course.course_title} syllabus` : "Course syllabus",
+        term: "",
+        status: "draft",
+        contentMode: "structured",
+        sections: [],
+      }
+    setSyllabus(next)
+    setSavedFingerprint(syllabusEditorFingerprint(next))
     setCanEdit(data.canEdit ?? true)
-  }, [scope])
+  }, [scope, course?.course_title])
 
   const courseId = scope?.courseId
 
@@ -112,6 +124,7 @@ export function FacultySyllabusScreen() {
     setEditorSection(null)
     setSearch("")
     setError("")
+    setSavedFingerprint("")
     setLoading(true)
     load()
       .catch((err) => setError(err instanceof ApiError ? err.message : "Could not load syllabus."))
@@ -133,14 +146,15 @@ export function FacultySyllabusScreen() {
     })
   }, [sections, search])
 
-  const listScrollPad = useMemo(
-    () => ({
-      ...scrollPad,
-      paddingBottom:
-        scrollPad.paddingBottom + (canEdit && syllabus ? FOOTER_BAR_HEIGHT + insets.bottom : 0),
-    }),
-    [scrollPad, canEdit, syllabus, insets.bottom],
+  const dirty = useMemo(
+    () => (syllabus ? syllabusEditorFingerprint(syllabus) !== savedFingerprint : false),
+    [syllabus, savedFingerprint],
   )
+  const showPersistRail = shouldShowSyllabusPersistRail({
+    canEdit,
+    status: syllabus?.status,
+    dirty,
+  })
 
   async function handleRefresh() {
     setRefreshing(true)
@@ -206,25 +220,86 @@ export function FacultySyllabusScreen() {
     setEditorSection(next)
   }
 
-  async function save(action?: "publish") {
-    if (!scope || !syllabus) return
+  const save = useCallback(async (action?: "publish") => {
+    if (!scope || !hasCourse) {
+      setError("Select a course before publishing this syllabus.")
+      return
+    }
+    if (!syllabus) {
+      setError("Unable to publish this syllabus. Please try again.")
+      return
+    }
+    const built = buildSyllabusSavePayload({
+      courseId: scope.courseId,
+      syllabus,
+      sections: reorderSections(syllabus.sections),
+      action,
+    })
+    if (!built.ok) {
+      setError(built.error)
+      return
+    }
     setSaving(true)
     setError("")
     try {
-      const result = await instructorApi.saveSyllabus(scope, {
-        title: syllabus.title,
-        term: syllabus.term,
-        contentMode: syllabus.contentMode,
-        sections: reorderSections(syllabus.sections),
-        action,
-      })
+      let payload = built.payload
+      if (action === "publish" && payload.id == null) {
+        const draft = await instructorApi.saveSyllabus(scope, { ...payload, action: undefined })
+        if (!draft.syllabus?.id) {
+          throw new Error("Syllabus was saved but the server did not return an id.")
+        }
+        setSyllabus(draft.syllabus)
+        payload = { ...payload, id: draft.syllabus.id, courseId: draft.syllabus.courseId ?? scope.courseId }
+      }
+      const result = await instructorApi.saveSyllabus(scope, payload)
+      if (!result.syllabus) {
+        throw new Error("Syllabus save succeeded but the published record was missing.")
+      }
       setSyllabus(result.syllabus)
+      setSavedFingerprint(syllabusEditorFingerprint(result.syllabus))
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not save syllabus.")
+      if (__DEV__) {
+        console.error("[faculty] syllabus save failed", {
+          courseId: scope.courseId,
+          syllabusId: syllabus.id,
+          action,
+          err,
+        })
+      }
+      setError(
+        sanitizeUserFacingError(
+          err instanceof ApiError ? err.message : err,
+          action === "publish"
+            ? "Unable to publish this syllabus. Please try again."
+            : "Unable to save this syllabus. Please try again.",
+        ),
+      )
     } finally {
       setSaving(false)
     }
-  }
+  }, [scope, hasCourse, syllabus])
+
+  const persistRail = useMemo(
+    () =>
+      showPersistRail && syllabus
+        ? {
+            statusLabel: dirty ? "Unsaved" : syllabus.status === "published" ? "Published" : "Draft",
+            dirty,
+            saving,
+            saveLabel: "Save",
+            publishLabel: "Publish",
+            onSaveDraft: () => {
+              void save()
+            },
+            onPublish: () => {
+              void save("publish")
+            },
+            accentFill: COURSE_INFO_ACTION.fill,
+            accentInk: COURSE_INFO_ACTION.ink,
+          }
+        : undefined,
+    [showPersistRail, syllabus, dirty, saving, save],
+  )
 
   if (!ready) {
     return (
@@ -243,6 +318,7 @@ export function FacultySyllabusScreen() {
         onChange={setSearch}
         placeholder="Search syllabus sections…"
         showFilter={false}
+        persistRail={persistRail}
         trailingAction={
           canEdit
             ? {
@@ -255,7 +331,7 @@ export function FacultySyllabusScreen() {
 
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={[styles.content, listScrollPad]}
+        contentContainerStyle={[styles.content, scrollPad]}
         contentInsetAdjustmentBehavior="never"
         automaticallyAdjustContentInsets={false}
         refreshControl={
@@ -274,14 +350,19 @@ export function FacultySyllabusScreen() {
             <View style={styles.card}>
               <View style={localStyles.heroTop}>
                 <Text style={[type.bodyEmphasis, localStyles.heroTitle]}>{syllabus.title}</Text>
-                <SyllabusStatusChip
-                  label={syllabus.status === "published" ? "Published" : "Draft"}
-                  colors={
-                    syllabus.status === "published"
-                      ? COURSE_INFO_SYLLABUS_STATUS.published
-                      : COURSE_INFO_SYLLABUS_STATUS.draft
-                  }
-                />
+                <View style={localStyles.heroChips}>
+                  <SyllabusStatusChip
+                    label={syllabus.status === "published" ? "Published" : "Draft"}
+                    colors={
+                      syllabus.status === "published"
+                        ? COURSE_INFO_SYLLABUS_STATUS.published
+                        : COURSE_INFO_SYLLABUS_STATUS.draft
+                    }
+                  />
+                  {dirty ? (
+                    <SyllabusStatusChip label="Unsaved" colors={COURSE_INFO_SYLLABUS_STATUS.draft} />
+                  ) : null}
+                </View>
               </View>
               {syllabus.term ? <Text style={[type.caption, localStyles.heroTerm, { color: native.secondaryLabel }]}>{syllabus.term}</Text> : null}
               {syllabus.contentMode === "pdf" && syllabus.pdfUrl ? (
@@ -370,38 +451,6 @@ export function FacultySyllabusScreen() {
         )}
       </ScrollView>
 
-      {syllabus && canEdit ? (
-        <View
-          style={[
-            styles.footerBar,
-            {
-              paddingBottom: insets.bottom + 12,
-              marginBottom: searchDockInset,
-            },
-          ]}
-        >
-          <Pressable
-            style={[styles.footerBtn, styles.draftBtn]}
-            disabled={saving}
-            onPress={() => void save()}
-            accessibilityRole="button"
-            accessibilityLabel="Save draft"
-          >
-            <Text style={styles.footerBtnText}>{saving ? "Saving…" : "Save draft"}</Text>
-          </Pressable>
-          <Pressable
-            style={[styles.footerBtn, localStyles.publishBtn]}
-            disabled={saving}
-            onPress={() => void save("publish")}
-            accessibilityRole="button"
-            accessibilityLabel="Publish syllabus"
-          >
-            <Ionicons name="cloud-upload-outline" size={18} color={COURSE_INFO_ACTION.ink} />
-            <Text style={localStyles.publishBtnText}>Publish</Text>
-          </Pressable>
-        </View>
-      ) : null}
-
       <FacultySyllabusSectionActionSheet
         visible={selectedSection != null}
         section={selectedSection}
@@ -429,6 +478,7 @@ export function FacultySyllabusScreen() {
 const localStyles = StyleSheet.create({
   heroTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
   heroTitle: { flex: 1, fontSize: 20 },
+  heroChips: { flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 0 },
   heroTerm: { fontWeight: "600" },
   pdfNote: { fontWeight: "600" },
   statusChip: {
@@ -447,15 +497,4 @@ const localStyles = StyleSheet.create({
   sectionBadges: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
   sectionPreview: { lineHeight: 20, fontWeight: "500" },
   sectionEmpty: { fontStyle: "italic" },
-  publishBtn: {
-    flex: 1,
-    backgroundColor: COURSE_INFO_ACTION.fill,
-    borderWidth: 0,
-  },
-  publishBtnText: {
-    fontSize: 16,
-    fontWeight: "600",
-    lineHeight: 21,
-    color: COURSE_INFO_ACTION.ink,
-  },
 })

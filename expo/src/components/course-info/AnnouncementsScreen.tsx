@@ -11,6 +11,7 @@ import { useStudentAnnouncements } from "../../hooks/query/useStudentAnnouncemen
 import { QueryRefreshBanner } from "../query/QueryRefreshBanner"
 import { summarizeAnnouncement } from "../../lib/announcement-summary"
 import { useNotificationModuleRefresh } from "../../lib/notifications/notification-events"
+import { useModuleListPageSize } from "../../hooks/useModuleListPageSize"
 import {
   announcementAttachmentCount,
   applyAnnouncementListQuery,
@@ -28,6 +29,7 @@ import { solidListThumb } from "../../lib/solid-list-thumb"
 import { SolidListThumbTile } from "../theme/SolidListThumbTile"
 import { NativeCountBadge } from "../faculty/faculty-shared"
 import { StudentGroupedFilterSheet, StudentSearchToolbar } from "../student/student-search-toolbar"
+import { ModuleListItemMotion } from "../ModuleFlashList"
 
 function useStudentSession(): StudentSession | null {
   const { session } = useSession()
@@ -47,7 +49,6 @@ function formatRelativeDate(value?: string): string {
 }
 
 /** ModuleScreen renders inside a plain ScrollView — page the list instead of mounting every row. */
-const PAGE_SIZE = 20
 
 const FILTER_OPTIONS: Array<{
   id: AnnouncementFilter
@@ -142,7 +143,8 @@ export function AnnouncementsScreen() {
   const [filter, setFilter] = useState<AnnouncementFilter>("all")
   const [sort, setSort] = useState<AnnouncementSort>("smart")
   const [filterSheetOpen, setFilterSheetOpen] = useState(false)
-  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
+  const pageSize = useModuleListPageSize({ preset: "standard" })
+  const [visibleCount, setVisibleCount] = useState(pageSize)
 
   const onRefresh = useCallback(async () => {
     await listQuery.refetch()
@@ -160,8 +162,8 @@ export function AnnouncementsScreen() {
   )
 
   useEffect(() => {
-    setVisibleCount(PAGE_SIZE)
-  }, [search, filter, sort])
+    setVisibleCount(pageSize)
+  }, [search, filter, sort, pageSize])
 
   const visible = useMemo(() => filtered.slice(0, visibleCount), [filtered, visibleCount])
 
@@ -253,22 +255,23 @@ export function AnnouncementsScreen() {
       ) : (
         <ModuleSection>
           {visible.map((item, index) => (
-            <AnnouncementListCard
-              key={item.id}
-              item={item}
-              index={index}
-              last={index === visible.length - 1}
-              onPress={() =>
-                router.push({
-                  pathname: "/announcements/[id]",
-                  params: { id: String(item.id) },
-                } as never)
-              }
-            />
+            <ModuleListItemMotion key={item.id} index={index}>
+              <AnnouncementListCard
+                item={item}
+                index={index}
+                last={index === visible.length - 1}
+                onPress={() =>
+                  router.push({
+                    pathname: "/announcements/[id]",
+                    params: { id: String(item.id) },
+                  } as never)
+                }
+              />
+            </ModuleListItemMotion>
           ))}
           <ModuleShowMoreRow
             remaining={filtered.length - visible.length}
-            onPress={() => setVisibleCount((prev) => prev + PAGE_SIZE)}
+            onPress={() => setVisibleCount((prev) => prev + pageSize)}
           />
         </ModuleSection>
       )}

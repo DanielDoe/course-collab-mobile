@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react"
-import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, KeyboardAvoidingView, Linking, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { AppAlert } from '../../lib/app-alert'
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useLocalSearchParams } from "expo-router"
 import { ModuleScreen, ModuleSectionHeader } from "../modules/ModuleScreen"
 import { NotetakerScreenHeader } from "../notetaker/NotetakerScreenHeader"
 import { useSession } from "../../context/SessionProvider"
-import { ApiError, type Announcement, type AnnouncementComment } from "../../lib/student-api"
+import { ApiError, studentApi, type Announcement, type AnnouncementComment } from "../../lib/student-api"
 import type { StudentSession } from "../../lib/session"
 import { formatListDate } from "../../lib/course-info-api"
 import {
@@ -28,6 +28,11 @@ import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProv
 import { useNativeType } from "../../lib/themed-module-theme"
 import { useNotificationModuleRefresh } from "../../lib/notifications/notification-events"
 import { API_BASE_URL } from "../../constants"
+import {
+  announcementCanAddToCalendar,
+  announcementEventEndIso,
+  announcementEventStartIso,
+} from "../../lib/announcement-calendar"
 
 const REACTIONS = [
   { id: "like", emoji: "👍", label: "Like" },
@@ -80,7 +85,13 @@ function AnnouncementDetailShell({
   return (
     <View style={[shellStyles.root, { backgroundColor: native.groupedBackground }]}>
       <NotetakerScreenHeader title={title} fallbackHref="/announcements" />
-      <View style={shellStyles.body}>{children}</View>
+      <KeyboardAvoidingView
+        style={shellStyles.body}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={0}
+      >
+        {children}
+      </KeyboardAvoidingView>
     </View>
   )
 }
@@ -104,6 +115,8 @@ export function AnnouncementDetailScreen() {
   const refreshing = detailQuery.isRefreshing && !detailQuery.isInitialLoading
   const error = detailQuery.error instanceof ApiError ? detailQuery.error.message : detailQuery.error ? "Could not load announcement." : ""
   const [commentDraft, setCommentDraft] = useState("")
+  const [calendarAdded, setCalendarAdded] = useState(false)
+  const [calendarBusy, setCalendarBusy] = useState(false)
   const submittingComment = commentMutation.isPending
   const reacting = reactMutation.isPending
 
@@ -120,6 +133,10 @@ export function AnnouncementDetailScreen() {
   useNotificationModuleRefresh("announcements", () => {
     void detailQuery.refetch()
   })
+
+  useEffect(() => {
+    if (announcement?.calendar_event_id) setCalendarAdded(true)
+  }, [announcement?.calendar_event_id])
 
   const locked = announcement?.student_content_locked === true
   const summary = useMemo(
@@ -215,6 +232,54 @@ export function AnnouncementDetailScreen() {
             </View>
             <Text style={[type.body, styles.summaryText, { color: native.label }]}>{summary}</Text>
           </View>
+
+          {announcementCanAddToCalendar(announcement) ? (
+            <Pressable
+              onPress={() => {
+                if (!session || calendarAdded || calendarBusy) return
+                const start = announcementEventStartIso(announcement)
+                if (!start) return
+                setCalendarBusy(true)
+                void studentApi
+                  .createCalendarEvent(session, {
+                    title: announcement.title,
+                    startTime: start,
+                    endTime: announcementEventEndIso(announcement),
+                    location: announcement.event_location,
+                    description: announcement.content_summary ?? announcement.ai_summary ?? undefined,
+                    eventType: announcement.category ?? "exam",
+                    announcementId: announcement.id,
+                  })
+                  .then(() => setCalendarAdded(true))
+                  .catch((err) => {
+                    AppAlert.alert(
+                      "Could not add to calendar",
+                      err instanceof ApiError ? err.message : "Try again.",
+                    )
+                  })
+                  .finally(() => setCalendarBusy(false))
+              }}
+              disabled={calendarAdded || calendarBusy}
+              accessibilityRole="button"
+              accessibilityLabel={calendarAdded ? "Added to calendar" : "Add to calendar"}
+              style={({ pressed }) => [
+                styles.calendarBtn,
+                {
+                  backgroundColor: calendarAdded ? native.fill : COURSE_INFO_ACTION.fill,
+                  opacity: pressed ? 0.88 : 1,
+                },
+              ]}
+            >
+              <Ionicons
+                name={calendarAdded ? "checkmark-circle" : "calendar-outline"}
+                size={16}
+                color={calendarAdded ? tokens.success : "#ffffff"}
+              />
+              <Text style={[styles.calendarBtnText, calendarAdded && { color: native.label }]}>
+                {calendarBusy ? "Adding…" : calendarAdded || announcement.calendar_event_id ? "Added to Calendar" : "Add to Calendar"}
+              </Text>
+            </Pressable>
+          ) : null}
 
           {locked ? (
             <View style={[styles.lockedBox, { backgroundColor: `${tokens.warning}14`, borderColor: `${tokens.warning}40` }]}>
@@ -364,6 +429,16 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     },
   summaryText: { fontSize: 15, lineHeight: 22 },
+  calendarBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    borderRadius: 12,
+    paddingVertical: 12,
+    minHeight: 44,
+  },
+  calendarBtnText: { color: "#ffffff", fontWeight: "700", fontSize: 15 },
   fullAnnouncementSection: { gap: 10 },
   lockedBox: {
     flexDirection: "row",

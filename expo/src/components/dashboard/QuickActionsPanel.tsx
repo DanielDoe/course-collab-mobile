@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from "react-native"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useRouter } from "expo-router"
+import { pushStudentAppHref } from "../../lib/student-app-href"
 import { DashboardCard } from "./DashboardCard"
 import { useThemedNative } from "../../context/AppearanceProvider"
 import { useNativeType } from "../../lib/themed-module-theme"
@@ -30,7 +31,7 @@ export function QuickActionsPanel() {
               { backgroundColor: native.secondaryGrouped },
               index < actions.length - 1 && { borderBottomColor: native.separator, borderBottomWidth: StyleSheet.hairlineWidth },
             ]}
-            onPress={() => router.push(action.route as never)}
+            onPress={() => pushStudentAppHref(router, action.route)}
           >
             <SolidListThumbTile thumb={action.thumb} icon={action.icon} size="compact" style={styles.iconTile} />
             <Text style={[type.bodyEmphasis, styles.label]}>{action.label}</Text>

@@ -38,6 +38,7 @@ import { StudentSearchToolbar } from "../student/student-search-toolbar"
 import { CommEmptyState, CommSectionFooter } from "../faculty/faculty-communication-ui"
 import { ModuleSectionHeader } from "../modules/ModuleScreen"
 import { StudentThemedLocked } from "../student/student-themed-hero"
+import { shouldShowPurchaseCta, tierLockedAlertButtons } from "../../lib/purchase-navigation"
 import { canAccessPracticeHub, PRACTICE_HUB_MIN_TIER, resolvePracticeAccess } from "../../lib/practice-hub-access"
 import { PracticeLeaderboardListCard } from "./PracticeLeaderboardListCard"
 import { PracticeLeaderboardPodium } from "./PracticeLeaderboardPodium"
@@ -48,6 +49,8 @@ import {
   leaderboardStreak,
   type PracticeLeaderboardViewOptions,
 } from "./practice-leaderboard-utils"
+import { useFacultyListPager } from "../../hooks/useFacultyListPager"
+import { FacultyListPagerFooter } from "../faculty/FacultyListPagerFooter"
 
 type Tab = "practice" | "leaderboard"
 
@@ -122,6 +125,7 @@ export function PracticeHubScreen() {
   const [tab, setTab] = useState<Tab>("practice")
   const [topicSearch, setTopicSearch] = useState("")
   const [topicPage, setTopicPage] = useState(0)
+  const showPurchaseActions = shouldShowPurchaseCta()
 
   const resolvedPracticeAccess = resolvePracticeAccess(
     membershipTier,
@@ -143,10 +147,7 @@ export function PracticeHubScreen() {
         resolvedPracticeAccess.level === "none"
           ? "Upgrade to Explorer to start practicing topics."
           : "This topic has no unlocked questions on your plan.",
-        [
-          { text: "Not now", style: "cancel" },
-          { text: "View plans", onPress: () => router.push("/membership" as never) },
-        ],
+        tierLockedAlertButtons(() => router.push("/membership" as never)),
       )
       return
     }
@@ -195,6 +196,13 @@ export function PracticeHubScreen() {
     )
   }, [practiceHubDecks, topicSearch])
 
+  const decksPager = useFacultyListPager(filteredPracticeHubDecks, `${topicSearch}|decks`, "decks")
+  const recentSessionsPager = useFacultyListPager(recentSessions, `${topicSearch}|sessions`, "sessions")
+  const leaderboardTail = useMemo(() => leaderboard.slice(3), [leaderboard])
+  const leaderboardTailPager = useFacultyListPager(leaderboardTail, "leaderboard-tail", "students", {
+    preset: "compact",
+  })
+
   function deckStudyLocked(deck: FlashcardDeck): boolean {
     if (!membershipTierLoaded || deck.cardCount <= 0) return false
     return isFlashcardDeckStudyLockedForAccess(deck.cardCount, resolvedTierAccess)
@@ -214,10 +222,7 @@ export function PracticeHubScreen() {
       AppAlert.alert(
         "Flashcards locked",
         flashcardUpgradeMessageForAccess(resolvedTierAccess),
-        [
-          { text: "Not now", style: "cancel" },
-          { text: "View plans", onPress: () => router.push("/membership" as never) },
-        ],
+        tierLockedAlertButtons(() => router.push("/membership" as never)),
       )
       return
     }
@@ -373,21 +378,24 @@ export function PracticeHubScreen() {
               }
             />
           ) : (
-            <View style={signatureListStyles.list}>
-              {filteredPracticeHubDecks.map((deck) => {
-                const mastery = deckMastery[String(deck.id)]
-                return (
-                  <FlashcardDeckListCard
-                    key={`ph-deck-${deck.id}`}
-                    deck={deck}
-                    masteryPct={mastery?.pct}
-                    studyLocked={deckStudyLocked(deck)}
-                    accessMeta={deckAccessMeta(deck)}
-                    onPress={() => openFlashcardDeck(deck)}
-                  />
-                )
-              })}
-            </View>
+            <>
+              <View style={signatureListStyles.list}>
+                {decksPager.items.map((deck) => {
+                  const mastery = deckMastery[String(deck.id)]
+                  return (
+                    <FlashcardDeckListCard
+                      key={`ph-deck-${deck.id}`}
+                      deck={deck}
+                      masteryPct={mastery?.pct}
+                      studyLocked={deckStudyLocked(deck)}
+                      accessMeta={deckAccessMeta(deck)}
+                      onPress={() => openFlashcardDeck(deck)}
+                    />
+                  )
+                })}
+              </View>
+              <FacultyListPagerFooter pager={decksPager} />
+            </>
           )}
         </View>
 
@@ -395,10 +403,10 @@ export function PracticeHubScreen() {
           <>
             <ModuleSectionHeader title="Recent sessions" />
             <View style={signatureListStyles.list}>
-              {recentSessions.map((sessionItem, index) => (
+              {recentSessionsPager.items.map((sessionItem, index) => (
                 <SignatureListCard
                   key={String(sessionItem.id ?? `${sessionItem.topic}-${index}`)}
-                  index={index}
+                  index={recentSessionsPager.page * recentSessionsPager.pageSize + index}
                   title={sessionItem.topic}
                   meta={formatSessionDate(sessionItem.created_at)}
                   metaIcon="calendar-outline"
@@ -412,6 +420,7 @@ export function PracticeHubScreen() {
                 />
               ))}
             </View>
+            <FacultyListPagerFooter pager={recentSessionsPager} />
           </>
         ) : null}
       </ScrollView>
@@ -446,12 +455,14 @@ export function PracticeHubScreen() {
               <Ionicons name="lock-closed-outline" size={24} color={tokens.accent} />
               <Text style={[type.caption, { color: tokens.accentDark, fontWeight: "600" }]}>Leaderboard locked</Text>
               <Text style={type.caption}>Upgrade to Explorer or Trailblazer to view rankings.</Text>
-              <Pressable
-                style={[styles.upgradeBtn, { backgroundColor: SN.accent }]}
-                onPress={() => router.push("/membership" as never)}
-              >
-                <Text style={styles.upgradeBtnText}>View plans</Text>
-              </Pressable>
+              {showPurchaseActions ? (
+                <Pressable
+                  style={[styles.upgradeBtn, { backgroundColor: SN.accent }]}
+                  onPress={() => router.push("/membership" as never)}
+                >
+                  <Text style={styles.upgradeBtnText}>View plans</Text>
+                </Pressable>
+              ) : null}
             </View>
           ) : leaderboard.length === 0 ? (
             <Text style={type.caption}>No leaderboard data yet. Complete a session to appear here.</Text>
@@ -479,15 +490,16 @@ export function PracticeHubScreen() {
                 <>
                   <ModuleSectionHeader title={`All students · ${leaderboard.length} ranked`} />
                   <View style={signatureListStyles.list}>
-                    {leaderboard.slice(3).map((entry, index) => (
+                    {leaderboardTailPager.items.map((entry, index) => (
                       <PracticeLeaderboardListCard
                         key={String(entry.student_id ?? entry.rank)}
                         entry={entry}
-                        index={index + 3}
+                        index={leaderboardTailPager.page * leaderboardTailPager.pageSize + index + 3}
                         viewOptions={leaderboardViewOptions}
                       />
                     ))}
                   </View>
+                  <FacultyListPagerFooter pager={leaderboardTailPager} />
                 </>
               ) : null}
             </>

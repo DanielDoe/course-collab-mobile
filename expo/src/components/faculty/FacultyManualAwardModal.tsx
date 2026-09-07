@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { KeyboardAwareForm } from "../ui/KeyboardAwareForm"
 import { AppAlert } from '../../lib/app-alert'
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { ApiError } from "../../lib/api"
@@ -129,12 +130,25 @@ export function FacultyManualAwardModal({
           accentColor={FACULTY_CLASSROOM_POINTS_COLOR.link}
         />
 
-        <ScrollView
+        <KeyboardAwareForm
           style={styles.scroll}
           contentContainerStyle={[collabSheetStyles.scroll, styles.scrollContent]}
-          keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
-          showsVerticalScrollIndicator={false}
+          footer={
+            <FacultySheetSubmitButton
+              label="Award points"
+              onPress={() => void handleSubmit()}
+              disabled={submitting || !selectedId}
+              loading={submitting}
+            />
+          }
+          footerStyle={[
+            styles.footer,
+            {
+              paddingBottom: Math.max(insets.bottom, 16),
+              borderTopColor: native.separator,
+              backgroundColor: native.groupedBackground,
+            },
+          ]}
         >
           <FacultySheetSection label="Award details" tone={SHEET_CLASSROOM_POINTS.award}>
             <FacultySheetField label="Points">
@@ -263,25 +277,7 @@ export function FacultyManualAwardModal({
               </ScrollView>
             )}
           </FacultySheetSection>
-        </ScrollView>
-
-        <View
-          style={[
-            styles.footer,
-            {
-              paddingBottom: Math.max(insets.bottom, 16),
-              borderTopColor: native.separator,
-              backgroundColor: native.groupedBackground,
-            },
-          ]}
-        >
-          <FacultySheetSubmitButton
-            label="Award points"
-            onPress={() => void handleSubmit()}
-            disabled={submitting || !selectedId}
-            loading={submitting}
-          />
-        </View>
+        </KeyboardAwareForm>
       </FacultySheetContainer>
     </Modal>
   )

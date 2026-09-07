@@ -3,7 +3,7 @@ import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, Share, Style
 import { AppAlert } from '../../lib/app-alert'
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useLocalSearchParams, useRouter } from "expo-router"
-import { useNavigation } from "@react-navigation/native"
+import { useNavigation } from "expo-router/react-navigation"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio"
 import {
@@ -430,6 +430,32 @@ export function NotetakerNoteDetailScreen() {
 
   const processing = isNotetakerProcessing(note.processing_status)
   const failed = note.processing_status === "failed"
+  const isChatTab = tab === "chat" && !processing && !failed
+
+  const segmentTabs = (
+    <View style={[styles.segmentTrack, { backgroundColor: native.fill }]}>
+      {DETAIL_TABS.map(({ id, label }) => (
+        <Pressable
+          key={id}
+          style={[
+            styles.segmentBtn,
+            tab === id && [styles.segmentBtnActive, { backgroundColor: native.secondaryGrouped }],
+          ]}
+          onPress={() => setTab(id)}
+        >
+          <Text
+            style={[
+              type.caption,
+              styles.segmentLabel,
+              { color: tab === id ? native.label : native.secondaryLabel },
+            ]}
+          >
+            {label}
+          </Text>
+        </Pressable>
+      ))}
+    </View>
+  )
 
   return (
     <>
@@ -452,6 +478,46 @@ export function NotetakerNoteDetailScreen() {
           }
         />
 
+        {isChatTab ? (
+          <View style={styles.chatLayout}>
+            <View style={[styles.statusRow, styles.chatSectionPad]}>
+              <CommStatusChip
+                label={formatStatus(note.processing_status)}
+                color={tokens.success}
+                soft={`${tokens.success}18`}
+              />
+              {note.duration_seconds ? (
+                <Text style={[type.caption, { color: native.secondaryLabel }]}>
+                  {Math.round(note.duration_seconds / 60)} min recorded
+                </Text>
+              ) : null}
+            </View>
+
+            {audioSource?.uri ? (
+              <View style={styles.chatSectionPad}>
+                <ModuleSection>
+                  <ModuleListRow
+                    title={playbackLabel}
+                    subtitle="Listen back to verify what was captured"
+                    icon={audioStatus.playing ? "pause-circle-outline" : "play-circle-outline"}
+                    iconBg={tokens.accentSoft}
+                    iconColor={tokens.accent}
+                    onPress={togglePlayback}
+                  />
+                </ModuleSection>
+              </View>
+            ) : null}
+
+            {segmentTabs}
+
+            <NotetakerChatPanel
+              session={session}
+              note={note}
+              chatEnabled={Boolean(limits?.chatEnabled)}
+              onUpgrade={openMembership}
+            />
+          </View>
+        ) : (
         <ModuleScreen
           loading={false}
           empty={false}
@@ -508,28 +574,7 @@ export function NotetakerNoteDetailScreen() {
                 </ModuleSection>
               ) : null}
 
-              <View style={[styles.segmentTrack, { backgroundColor: native.fill }]}>
-                {DETAIL_TABS.map(({ id, label }) => (
-                  <Pressable
-                    key={id}
-                    style={[
-                      styles.segmentBtn,
-                      tab === id && [styles.segmentBtnActive, { backgroundColor: native.secondaryGrouped }],
-                    ]}
-                    onPress={() => setTab(id)}
-                  >
-                    <Text
-                      style={[
-                        type.caption,
-                        styles.segmentLabel,
-                        { color: tab === id ? native.label : native.secondaryLabel },
-                      ]}
-                    >
-                      {label}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
+              {segmentTabs}
 
               {tab === "summary" ? (
                 summaryMarkdown ? (
@@ -537,7 +582,7 @@ export function NotetakerNoteDetailScreen() {
                 ) : (
                   <CommEmptyState icon="document-text-outline" title="No summary yet" body="" />
                 )
-              ) : tab === "transcript" ? (
+              ) : (
                 note.transcript?.trim() ? (
                   <View style={[styles.transcriptBox, { backgroundColor: native.secondaryGrouped }]}>
                     <Text style={[type.body, { color: native.label, lineHeight: 22 }]}>{note.transcript}</Text>
@@ -545,13 +590,6 @@ export function NotetakerNoteDetailScreen() {
                 ) : (
                   <CommEmptyState icon="text-outline" title="No transcript" body="" />
                 )
-              ) : (
-                <NotetakerChatPanel
-                  session={session}
-                  note={note}
-                  chatEnabled={Boolean(limits?.chatEnabled)}
-                  onUpgrade={openMembership}
-                />
               )}
 
               <CommSectionFooter>
@@ -635,6 +673,7 @@ export function NotetakerNoteDetailScreen() {
             Deleting removes this note from AI Notetaker. Notes moved to My Notes stay in your notebook.
           </CommSectionFooter>
         </ModuleScreen>
+        )}
       </View>
 
       <Modal visible={shareOpen} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShareOpen(false)}>
@@ -698,6 +737,8 @@ export function NotetakerNoteDetailScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
+  chatLayout: { flex: 1 },
+  chatSectionPad: { paddingHorizontal: 16 },
   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24, gap: 12 },
   backBtn: { padding: 8 },
   statusRow: {

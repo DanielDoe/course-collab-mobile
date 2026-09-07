@@ -1,6 +1,7 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useRouter } from "expo-router"
+import { pushStudentAppHref } from "../../lib/student-app-href"
 import type { PerformanceInsight } from "../../types/dashboard"
 import { DashboardCard } from "./DashboardCard"
 import { nativeType } from "../../constants/faculty-native-theme"
@@ -68,7 +69,7 @@ export function PerformanceInsightsCard({
                 },
               ]}
               onPress={() => {
-                if (insight.actionRoute) router.push(insight.actionRoute as never)
+                if (insight.actionRoute) pushStudentAppHref(router, insight.actionRoute)
               }}
               disabled={!insight.actionRoute}
             >

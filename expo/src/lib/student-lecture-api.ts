@@ -334,14 +334,19 @@ export async function fetchStudentLectureWorkspaceConfig(
   const eligible = payloads.filter(
     (payload) => payload != null && !isSamplePracticeOnlyPayload(payload),
   )
+  const draftMaps = eligible.map((payload) => parseLectureWorkspaceStudentApiResponse(payload).drafts ?? {})
+  const drafts = Object.assign({}, ...draftMaps) as Record<string, string>
   const best = pickBestWorkspaceConfig(eligible)
-  if (best.questions.length > 0) return best
+  if (best.questions.length > 0) return { ...best, drafts }
 
   if (dedicated != null) {
-    return parseLectureWorkspaceStudentApiResponse(unwrapLectureWorkspacePayload(dedicated))
+    return {
+      ...parseLectureWorkspaceStudentApiResponse(unwrapLectureWorkspacePayload(dedicated)),
+      drafts,
+    }
   }
 
-  return parseLectureWorkspace(extractWorkspaceRaw(...payloads) ?? payloads[0])
+  return { ...parseLectureWorkspace(extractWorkspaceRaw(...payloads) ?? payloads[0]), drafts }
 }
 
 export async function fetchStudentLectureSamplePracticeState(

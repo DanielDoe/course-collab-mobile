@@ -27,6 +27,7 @@ import {
   type StudentFilterGroup,
 } from "../student/student-search-toolbar"
 import { CommEmptyState, CommSectionFooter } from "../faculty/faculty-communication-ui"
+import { FacultyListPagerFooter } from "../faculty/FacultyListPagerFooter"
 import { NoteListCard } from "./NoteListCard"
 import { formatNoteWhen } from "./note-list-utils"
 import { ModuleSection } from "../modules/ModuleScreen"
@@ -35,7 +36,7 @@ import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProv
 import { useModuleScrollContentPadding } from "../../context/ChromeInsetContext"
 import { NATIVE } from "../../constants/faculty-native-theme"
 import { parseCircuitWorkspace, workspaceHasContent } from "../../lib/circuit-workspace"
-
+import { useFacultyListPager } from "../../hooks/useFacultyListPager"
 type Tab = "mine" | "course"
 type MineFilter = "all" | "owned" | "shared"
 type NoteSort = "recent" | "title"
@@ -146,16 +147,24 @@ export function NotesScreen() {
     })
   }, [courseNotes, search])
 
-  const groupedCourseNotes = useMemo(() => {
+  const minePager = useFacultyListPager(
+    filteredMyNotes,
+    `${search}|${mineFilter}|${noteSort}|${contentFilter}`,
+    "notes",
+  )
+
+  const coursePager = useFacultyListPager(filteredCourseNotes, search, "notes")
+
+  const pagedGroupedCourseNotes = useMemo(() => {
     const groups = new Map<string, CourseDigitalNote[]>()
-    for (const note of filteredCourseNotes) {
+    for (const note of coursePager.items) {
       const key = note.topic?.trim() || "General"
       const bucket = groups.get(key) ?? []
       bucket.push(note)
       groups.set(key, bucket)
     }
     return Array.from(groups.entries()).sort(([a], [b]) => a.localeCompare(b))
-  }, [filteredCourseNotes])
+  }, [coursePager.items])
 
   const mineFilterActive =
     mineFilter !== "all" || noteSort !== "recent" || contentFilter !== "all"
@@ -275,7 +284,7 @@ export function NotesScreen() {
         ) : (
           <>
             <View style={styles.list}>
-              {filteredMyNotes.map((note, index) => {
+              {minePager.items.map((note, index) => {
                 const shared = note.isOwner === false
                 return (
                   <NoteListCard
@@ -285,12 +294,13 @@ export function NotesScreen() {
                     contextLabel={shared ? `Shared by ${note.ownerName ?? "classmate"}` : undefined}
                     updatedLabel={formatNoteWhen(note.updatedAt)}
                     kind={shared ? "shared" : "personal"}
-                    index={index}
+                    index={minePager.page * minePager.pageSize + index}
                     onPress={() => router.push(`/notes/${note.id}`)}
                   />
                 )
               })}
             </View>
+            <FacultyListPagerFooter pager={minePager} />
             <CommSectionFooter>Tap a note to edit, or use filters to find shared notes.</CommSectionFooter>
           </>
         )}
@@ -334,24 +344,32 @@ export function NotesScreen() {
           />
         ) : (
           <>
-            {groupedCourseNotes.map(([topicName, topicNotes]) => (
-              <ModuleSection key={topicName} title={topicName}>
-                <View style={styles.list}>
-                  {topicNotes.map((note, index) => (
-                    <NoteListCard
-                      key={`course-${note.id}`}
-                      title={note.title || "Untitled note"}
-                      preview={notePreview(note.bodyText ?? "")}
-                      contextLabel={note.topic?.trim() || undefined}
-                      updatedLabel={formatNoteWhen(note.updatedAt)}
-                      kind="course"
-                      index={index}
-                      onPress={() => router.push(`/notes/course/${note.id}`)}
-                    />
-                  ))}
-                </View>
-              </ModuleSection>
-            ))}
+            {(() => {
+              let rowIndex = coursePager.page * coursePager.pageSize
+              return pagedGroupedCourseNotes.map(([topicName, topicNotes]) => (
+                <ModuleSection key={topicName} title={topicName}>
+                  <View style={styles.list}>
+                    {topicNotes.map((note) => {
+                      const index = rowIndex
+                      rowIndex += 1
+                      return (
+                        <NoteListCard
+                          key={`course-${note.id}`}
+                          title={note.title || "Untitled note"}
+                          preview={notePreview(note.bodyText ?? "")}
+                          contextLabel={note.topic?.trim() || undefined}
+                          updatedLabel={formatNoteWhen(note.updatedAt)}
+                          kind="course"
+                          index={index}
+                          onPress={() => router.push(`/notes/course/${note.id}`)}
+                        />
+                      )
+                    })}
+                  </View>
+                </ModuleSection>
+              ))
+            })()}
+            <FacultyListPagerFooter pager={coursePager} />
             <CommSectionFooter>Instructor notes are read-only. Open one to review content.</CommSectionFooter>
           </>
         )}

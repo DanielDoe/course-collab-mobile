@@ -2,17 +2,31 @@ import * as SecureStore from "./secure-store-client"
 import { getApiBaseUrl } from "../constants"
 import type { StudentSession } from "./session"
 import { studentAuthenticatedHeaders } from "./student-api"
+import { normalizedStudentDatabaseId } from "./student-content-context"
 
 /** Per-student flag: user explicitly picked appearance during onboarding. */
 export function appearanceSetupStorageKey(studentDbId: string): string {
   return `cc_student_${String(studentDbId).trim()}_appearance_setup_v1`
 }
 
+function appearanceSetupStudentKey(session: StudentSession): string {
+  return normalizedStudentDatabaseId(session) ?? session.id?.trim() ?? ""
+}
+
+/** Device-local onboarding gate — do not infer from server completion. */
+export async function hasSessionCompletedAppearanceSetup(
+  session: StudentSession,
+): Promise<boolean> {
+  const key = appearanceSetupStudentKey(session)
+  if (!key) return false
+  return hasStudentCompletedAppearanceSetup(key)
+}
+
 export async function hasStudentCompletedAppearanceSetup(
   studentDbId: string | null | undefined,
 ): Promise<boolean> {
   const id = String(studentDbId ?? "").trim()
-  if (!id) return false
+  if (!id || id === "undefined") return false
   try {
     return (await SecureStore.getItemAsync(appearanceSetupStorageKey(id))) === "true"
   } catch {
@@ -22,7 +36,7 @@ export async function hasStudentCompletedAppearanceSetup(
 
 export async function markStudentAppearanceSetupComplete(studentDbId: string): Promise<void> {
   const id = String(studentDbId).trim()
-  if (!id) return
+  if (!id || id === "undefined") return
   try {
     await SecureStore.setItemAsync(appearanceSetupStorageKey(id), "true")
   } catch {
@@ -41,7 +55,7 @@ async function appearanceSetupRequest(
     credentials: "include",
     headers: {
       ...(await studentAuthenticatedHeaders(session)),
-      ...init?.headers,
+      ...(init?.headers ?? {}),
     },
   })
   let body: { completed?: boolean; success?: boolean; error?: string } = {}
@@ -61,16 +75,19 @@ async function appearanceSetupRequest(
 
 /** Load server-side completion and mirror into SecureStore for fast client checks. */
 export async function syncAppearanceSetupFromServer(session: StudentSession): Promise<boolean> {
-  const id = session.databaseId
-  if (await hasStudentCompletedAppearanceSetup(id)) return true
+  const localKey = appearanceSetupStudentKey(session)
+  if (localKey && (await hasStudentCompletedAppearanceSetup(localKey))) return true
+
+  const databaseId = normalizedStudentDatabaseId(session)
+  if (!databaseId) return false
 
   try {
     const data = await appearanceSetupRequest(
       session,
-      `/api/student/appearance-setup?studentId=${encodeURIComponent(id)}`,
+      `/api/student/appearance-setup?studentId=${encodeURIComponent(databaseId)}`,
     )
     if (data.completed) {
-      await markStudentAppearanceSetupComplete(id)
+      await markStudentAppearanceSetupComplete(localKey || databaseId)
       return true
     }
   } catch {
@@ -81,11 +98,18 @@ export async function syncAppearanceSetupFromServer(session: StudentSession): Pr
 
 /** Persist completion on the account (server) and this device (SecureStore). */
 export async function persistAppearanceSetupComplete(session: StudentSession): Promise<void> {
-  await markStudentAppearanceSetupComplete(session.databaseId)
+  const localKey = appearanceSetupStudentKey(session)
+  if (localKey) {
+    await markStudentAppearanceSetupComplete(localKey)
+  }
+
+  const databaseId = normalizedStudentDatabaseId(session)
+  if (!databaseId) return
+
   try {
     await appearanceSetupRequest(session, "/api/student/appearance-setup", {
       method: "POST",
-      body: JSON.stringify({ studentId: session.databaseId }),
+      body: JSON.stringify({ studentId: databaseId }),
     })
   } catch {
     /* local flag still prevents repeat prompts on this device */

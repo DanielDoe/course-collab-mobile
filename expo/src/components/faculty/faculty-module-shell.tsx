@@ -1,6 +1,8 @@
-import { createContext, type ReactNode, useContext } from "react"
+import { createContext, type ReactNode, useContext, useEffect, useMemo, useState } from "react"
 import {
+  ActivityIndicator,
   Keyboard,
+  LayoutChangeEvent,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -10,7 +12,14 @@ import {
   type StyleProp,
   type ViewStyle,
 } from "react-native"
-import { useId, useMemo } from "react"
+import { useId } from "react"
+import Animated, {
+  interpolate,
+  interpolateColor,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+} from "react-native-reanimated"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { NATIVE, nativeType } from "../../constants/faculty-native-theme"
@@ -18,7 +27,11 @@ import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProv
 import { useModuleSearchDockRegistration,
   type ModuleSearchDockEntry,
 } from "../../context/ModuleSearchDockContext"
-import { useModuleScrollContentPadding, useChromeTopInset } from "../../context/ChromeInsetContext"
+import {
+  useChromeTopInset,
+  useModuleHeaderContentTop,
+  useModuleScrollContentPadding,
+} from "../../context/ChromeInsetContext"
 import { useModuleContentStyle } from "../../lib/responsive-layout"
 import { useNativeType, useThemedStudentNative } from "../../lib/themed-module-theme"
 import type { InstructorSession } from "../../lib/instructor-api"
@@ -31,10 +44,17 @@ import { HorizontalScrollWithHints } from "../theme/HorizontalScrollWithHints"
 import { useModuleTheme } from "../../lib/themed-module-shell"
 import { useGlassChromeActive } from "../theme/GlassSurface"
 import { GlassFilterOptionRow, GlassMenuList } from "../theme/GlassActionSheetMenu"
-import { FacultySheetChrome, FacultySheetModal } from "./faculty-collab-sheet-ui"
+import { ModuleFilterBottomSheet } from "../motion/ModuleFilterBottomSheet"
+import { facultySessionFilterDetail, facultySessionFilterLabel } from "../../lib/faculty-session-filter"
 import { CleanPillTabBar } from "../theme/CleanPillTabs"
 import { FACULTY_COLLAB_COLOR } from "../../lib/faculty-collab-theme"
 import { semanticSoft } from "../../lib/themed-module-theme"
+import {
+  spring,
+  triggerMotionHaptic,
+  useAppReducedMotion,
+  usePillTabIndicator,
+} from "../../lib/motion"
 
 /** @deprecated Use useFacultyPageBg() — static value is light-mode only. */
 export const FACULTY_PAGE_BG = NATIVE.groupedBackground
@@ -64,13 +84,12 @@ export function useFacultyModuleScrollPadding(extraBottom = 24, extraTop?: numbe
 export function useFacultyStickyHeaderScrollLayout(options?: {
   extraBottom?: number
   listTopGap?: number
-  stickyTopGap?: number
 }) {
-  const { extraBottom = 24, listTopGap = 12, stickyTopGap = 10 } = options ?? {}
+  const { extraBottom = 24, listTopGap = 12 } = options ?? {}
   const chromeTop = useChromeTopInset()
+  const chromeSpacer = useModuleHeaderContentTop()
   const scrollPad = useFacultyModuleScrollPadding(extraBottom)
   const moduleContentStyle = useModuleContentStyle()
-  const chromeSpacer = chromeTop > 0 ? chromeTop + stickyTopGap : stickyTopGap + 2
   const stickyHeaderStyle = { height: chromeSpacer }
   const listScrollPad = { ...scrollPad, paddingTop: listTopGap, ...moduleContentStyle }
   return { chromeTop, scrollPad, stickyHeaderStyle, listScrollPad, chromeSpacer, moduleContentStyle }
@@ -115,7 +134,7 @@ export function FacultyModuleStickyHeader({
   )
 }
 
-export type FacultyFilterOption = { value: string; label: string }
+export type FacultyFilterOption = { value: string; label: string; detail?: string }
 
 export type FacultyStatBadgeTone = "green" | "violet" | "blue" | "amber"
 
@@ -319,6 +338,7 @@ export function FacultyFilterSheet({
   visible,
   title,
   subtitle,
+  groupLabel,
   options,
   value,
   onSelect,
@@ -326,61 +346,49 @@ export function FacultyFilterSheet({
   visible: boolean
   title: string
   subtitle?: string
+  groupLabel?: string
   options: FacultyFilterOption[]
   value: string
   onSelect: (value: string) => void
   onClose: () => void
 }) {
-  const insets = useSafeAreaInsets()
-  const native = useThemedNative()
   const type = useNativeType()
+  const native = useThemedNative()
 
   return (
-    <FacultySheetModal
-      visible={visible}
-      onRequestClose={onClose}
-      containerStyle={shellStyles.filterSheet}
-    >
-      <FacultySheetChrome topInset={insets.top} title={title} onClose={onClose} />
-      {subtitle ? (
-        <Text
-          style={[type.secondary, shellStyles.filterSheetSub, { color: native.secondaryLabel }]}
-          accessible={false}
-        >
-          {subtitle}
+    <ModuleFilterBottomSheet visible={visible} title={title} subtitle={subtitle} onClose={onClose}>
+      {groupLabel ? (
+        <Text style={[type.sectionHeader, shellStyles.filterGroupTitle, { color: native.secondaryLabel }]}>
+          {groupLabel}
         </Text>
       ) : null}
-      <ScrollView
-        contentContainerStyle={[shellStyles.filterSheetList, { paddingBottom: insets.bottom + 24 }]}
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
-        showsVerticalScrollIndicator={false}
-      >
-        <GlassMenuList>
-          {options.map((opt, index) => (
-            <GlassFilterOptionRow
-              key={opt.value}
-              label={opt.label}
-              active={value === opt.value}
-              onPress={() => {
-                onSelect(opt.value)
-                onClose()
-              }}
-              showSeparator={index < options.length - 1}
-            />
-          ))}
-        </GlassMenuList>
-      </ScrollView>
-    </FacultySheetModal>
+      <GlassMenuList>
+        {options.map((opt, index) => (
+          <GlassFilterOptionRow
+            key={opt.value}
+            label={opt.label}
+            detail={opt.detail}
+            active={value === opt.value}
+            onPress={() => {
+              onSelect(opt.value)
+              onClose()
+            }}
+            showSeparator={index < options.length - 1}
+          />
+        ))}
+      </GlassMenuList>
+    </ModuleFilterBottomSheet>
   )
 }
 
 export function sectionFilterSheetOptions(sections: InstructorSession[]): FacultyFilterOption[] {
   return [
-    { value: "ALL", label: "All sections" },
-    ...sections.map((s) => ({
-      value: String(s.id),
-      label: s.description && s.description !== s.code ? `${s.code} · ${s.description}` : s.code})),
+    { value: "ALL", label: "All sections", detail: "Entire course" },
+    ...sections.map((session) => ({
+      value: String(session.id),
+      label: facultySessionFilterLabel(session.code),
+      detail: facultySessionFilterDetail(session),
+    })),
   ]
 }
 
@@ -410,6 +418,114 @@ export type FacultyModuleTabItem<T extends string> = {
   count?: number
 }
 
+function FacultySignatureTab<T extends string>({
+  item,
+  index,
+  active,
+  accent,
+  inactiveLabelColor,
+  activeLabelColor,
+  inactiveIconColor,
+  scrollable,
+  onLayout,
+  onPress,
+}: {
+  item: FacultyModuleTabItem<T>
+  index: number
+  active: boolean
+  accent: string
+  inactiveLabelColor: string
+  activeLabelColor: string
+  inactiveIconColor: string
+  scrollable: boolean
+  onLayout: (index: number) => (event: LayoutChangeEvent) => void
+  onPress: () => void
+}) {
+  const tokens = useAppThemeTokens()
+  const type = useNativeType()
+  const reduceMotion = useAppReducedMotion()
+  const progress = useSharedValue(active ? 1 : 0)
+  const showCount = item.count != null && item.count > 0
+
+  useEffect(() => {
+    progress.value = reduceMotion
+      ? active
+        ? 1
+        : 0
+      : withSpring(active ? 1 : 0, spring.faculty)
+  }, [active, progress, reduceMotion])
+
+  const labelStyle = useAnimatedStyle(() => ({
+    color: interpolateColor(progress.value, [0, 1], [inactiveLabelColor, activeLabelColor]),
+    transform: [{ scale: interpolate(progress.value, [0, 1], [0.97, 1]) }],
+  }))
+
+  const contentStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(progress.value, [0, 1], [0.78, 1]),
+  }))
+
+  const inactiveIconStyle = useAnimatedStyle(() => ({
+    opacity: 1 - progress.value,
+    transform: [{ scale: interpolate(progress.value, [0, 1], [1, 0.88]) }],
+  }))
+
+  const activeIconStyle = useAnimatedStyle(() => ({
+    opacity: progress.value,
+    transform: [{ scale: interpolate(progress.value, [0, 1], [0.88, 1.06]) }],
+  }))
+
+  return (
+    <Pressable
+      style={({ pressed }) => [
+        shellStyles.signatureTab,
+        !scrollable && shellStyles.signatureTabFlex,
+        pressed && { opacity: NATIVE.pressedOpacity },
+      ]}
+      onPress={onPress}
+      onLayout={onLayout(index)}
+      accessibilityRole="tab"
+      accessibilityLabel={`${item.label} tab`}
+      accessibilityState={{ selected: active }}
+    >
+      <Animated.View style={[shellStyles.signatureTabContent, contentStyle]}>
+        {item.icon ? (
+          <View style={shellStyles.signatureTabIcon}>
+            <Animated.View style={inactiveIconStyle}>
+              <Ionicons name={item.icon} size={17} color={inactiveIconColor} />
+            </Animated.View>
+            <Animated.View style={[shellStyles.signatureTabIconOverlay, activeIconStyle]} pointerEvents="none">
+              <Ionicons name={item.icon} size={17} color={accent} />
+            </Animated.View>
+          </View>
+        ) : null}
+        <Animated.Text
+          style={[
+            type.caption,
+            shellStyles.signatureTabLabel,
+            labelStyle,
+            active && shellStyles.signatureTabLabelActive,
+          ]}
+          numberOfLines={1}
+        >
+          {item.label}
+        </Animated.Text>
+        {showCount ? (
+          <View
+            style={[
+              shellStyles.signatureTabCount,
+              { backgroundColor: semanticSoft(FACULTY_COLLAB_COLOR.nudge, tokens.isDark) },
+            ]}
+          >
+            <Text style={[type.footnote, shellStyles.signatureTabCountText, { color: FACULTY_COLLAB_COLOR.nudge }]}>
+              {item.count}
+            </Text>
+          </View>
+        ) : null}
+      </Animated.View>
+    </Pressable>
+  )
+}
+
 /**
  * Signature faculty module tabs — underline rail with indigo active marker.
  * Used across Groups, Projects, Flashcards, Summer Camp, and all faculty modules.
@@ -427,70 +543,59 @@ export function FacultySignatureTabBar<T extends string>({
   scrollable?: boolean
   embedded?: boolean
 }) {
-  const native = useThemedNative()
-  const tokens = useAppThemeTokens()
-  const type = useNativeType()
   const accent = FACULTY_COLLAB_COLOR.tabActive
+  const native = useThemedNative()
+  const inactiveLabelColor = native.secondaryLabel
+  const activeLabelColor = native.label
+  const inactiveIconColor = native.tertiaryLabel
 
-  const content = tabs.map((item) => {
-    const active = item.id === tab
-    const showCount = item.count != null && item.count > 0
-
-    return (
-      <Pressable
-        key={item.id}
-        style={({ pressed }) => [
-          shellStyles.signatureTab,
-          !scrollable && shellStyles.signatureTabFlex,
-          active && { borderBottomWidth: 2, borderBottomColor: accent },
-          pressed && { opacity: NATIVE.pressedOpacity },
-        ]}
-        onPress={() => onChange(item.id)}
-        accessibilityRole="tab"
-        accessibilityLabel={`${item.label} tab`}
-        accessibilityState={{ selected: active }}
-      >
-        {item.icon ? (
-          <Ionicons name={item.icon} size={17} color={active ? accent : native.tertiaryLabel} />
-        ) : null}
-        <Text
-          style={[
-            type.caption,
-            shellStyles.signatureTabLabel,
-            { color: active ? native.label : native.secondaryLabel },
-            active && shellStyles.signatureTabLabelActive,
-          ]}
-          numberOfLines={1}
-        >
-          {item.label}
-        </Text>
-        {showCount ? (
-          <View
-            style={[
-              shellStyles.signatureTabCount,
-              { backgroundColor: semanticSoft(FACULTY_COLLAB_COLOR.nudge, tokens.isDark) },
-            ]}
-          >
-            <Text style={[type.footnote, shellStyles.signatureTabCountText, { color: FACULTY_COLLAB_COLOR.nudge }]}>
-              {item.count}
-            </Text>
-          </View>
-        ) : null}
-      </Pressable>
-    )
+  const activeIndex = Math.max(0, tabs.findIndex((item) => item.id === tab))
+  const { indicatorStyle, onTabLayout } = usePillTabIndicator(activeIndex, {
+    springPreset: spring.faculty,
   })
+
+  const track = (
+    <View style={scrollable ? shellStyles.signatureTabTrack : shellStyles.signatureTabRow}>
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          shellStyles.signatureTabIndicator,
+          { backgroundColor: accent },
+          indicatorStyle,
+        ]}
+      />
+      {tabs.map((item, index) => (
+        <FacultySignatureTab
+          key={item.id}
+          item={item}
+          index={index}
+          active={item.id === tab}
+          accent={accent}
+          inactiveLabelColor={inactiveLabelColor}
+          activeLabelColor={activeLabelColor}
+          inactiveIconColor={inactiveIconColor}
+          scrollable={scrollable}
+          onLayout={onTabLayout}
+          onPress={() => {
+            if (item.id !== tab) triggerMotionHaptic("selection")
+            onChange(item.id)
+          }}
+        />
+      ))}
+    </View>
+  )
 
   return (
     <View
-        style={embedded ? shellStyles.signatureTabWrapEmbedded : shellStyles.signatureTabWrap}
+      style={embedded ? shellStyles.signatureTabWrapEmbedded : shellStyles.signatureTabWrap}
       accessibilityRole="tablist"
     >
       {scrollable ? (
         <HorizontalScrollWithHints showHints={tabs.length > 4} contentContainerStyle={shellStyles.signatureTabScroll}>
-          {content}
+          {track}
         </HorizontalScrollWithHints>
       ) : (
-        <View style={shellStyles.signatureTabRow}>{content}</View>
+        track
       )}
     </View>
   )
@@ -681,6 +786,92 @@ export function FacultyModuleSearchInner({
   )
 }
 
+export type FacultyDockPersistRailProps = {
+  statusLabel: string
+  dirty?: boolean
+  saving?: boolean
+  saveLabel?: string
+  publishLabel?: string
+  onSaveDraft: () => void
+  onPublish: () => void
+  accentFill?: string
+  accentInk?: string
+}
+
+export function FacultyDockPersistRail({
+  statusLabel,
+  dirty = false,
+  saving = false,
+  saveLabel = "Save",
+  publishLabel = "Publish",
+  onSaveDraft,
+  onPublish,
+  accentFill,
+  accentInk,
+}: FacultyDockPersistRailProps) {
+  const native = useThemedNative()
+  const tokens = useAppThemeTokens()
+  const type = useNativeType()
+  const fill = accentFill ?? tokens.accent
+  const ink = accentInk ?? "#FFFFFF"
+  return (
+    <View>
+      <View style={shellStyles.persistRow}>
+        <View style={shellStyles.persistStatus}>
+          <View
+            style={[
+              shellStyles.persistDot,
+              { backgroundColor: dirty ? fill : native.tertiaryLabel },
+            ]}
+          />
+          <Text
+            style={[type.caption, shellStyles.persistStatusText, { color: dirty ? native.label : native.secondaryLabel }]}
+            numberOfLines={1}
+          >
+            {statusLabel}
+          </Text>
+        </View>
+        <View style={shellStyles.persistActions}>
+          <Pressable
+            style={shellStyles.persistSaveBtn}
+            disabled={saving}
+            onPress={onSaveDraft}
+            accessibilityRole="button"
+            accessibilityLabel="Save draft"
+          >
+            {saving ? (
+              <ActivityIndicator size="small" color={native.label} />
+            ) : (
+              <Text style={[type.caption, shellStyles.persistSaveText, { color: native.label }]}>{saveLabel}</Text>
+            )}
+          </Pressable>
+          <Pressable
+            style={[shellStyles.persistPublishBtn, { backgroundColor: fill }]}
+            disabled={saving}
+            onPress={onPublish}
+            accessibilityRole="button"
+            accessibilityLabel="Publish syllabus"
+          >
+            <Ionicons name="cloud-upload-outline" size={14} color={ink} />
+            <Text style={[type.caption, shellStyles.persistPublishText, { color: ink }]}>{publishLabel}</Text>
+          </Pressable>
+        </View>
+      </View>
+      <View style={[shellStyles.persistDivider, { backgroundColor: native.separator }]} />
+    </View>
+  )
+}
+
+function withFacultyPersistRail(node: ReactNode, persistRail?: FacultyDockPersistRailProps) {
+  if (!persistRail) return node
+  return (
+    <View style={shellStyles.persistDock}>
+      <FacultyDockPersistRail {...persistRail} />
+      {node}
+    </View>
+  )
+}
+
 export type FacultySearchToolbarProps = {
   value: string
   onChange: (v: string) => void
@@ -696,6 +887,8 @@ export type FacultySearchToolbarProps = {
     icon?: keyof typeof Ionicons.glyphMap
     badgeCount?: number
   }
+  /** Document persist row above search — used by Syllabus so Save/Publish share the glass dock. */
+  persistRail?: FacultyDockPersistRailProps
   placement?: "dock" | "inline"
   embedded?: boolean
 }
@@ -717,6 +910,7 @@ export function FacultySearchToolbar({ placement = "dock", embedded, ...props }:
     props.showSearch,
     props.filterLabel,
     props.trailingAction,
+    props.persistRail,
   ])
   useModuleSearchDockRegistration(dockId, dockEntry)
   if (placement === "dock") return null
@@ -733,6 +927,7 @@ export function FacultySearchToolbarInner({
   showSearch = true,
   filterLabel,
   trailingAction,
+  persistRail,
   embedded = false,
   placement = "dock",
 }: FacultySearchToolbarProps) {
@@ -776,7 +971,7 @@ export function FacultySearchToolbarInner({
     )
 
     if (!showSearch && showFilter && onOpenFilter) {
-      return (
+      return withFacultyPersistRail(
         <LiquidGlassSearchField
           placeholder={placeholder}
           value=""
@@ -813,18 +1008,20 @@ export function FacultySearchToolbarInner({
             </Pressable>
           }
           trailing={trailing}
-        />
+        />,
+        persistRail,
       )
     }
 
-    return (
+    return withFacultyPersistRail(
       <LiquidGlassSearchField
         value={value}
         onChange={onChange}
         placeholder={placeholder}
         trailing={trailing}
         accentColor={facultyAccent}
-      />
+      />,
+      persistRail,
     )
   }
 
@@ -839,7 +1036,7 @@ export function FacultySearchToolbarInner({
   ]
 
   if (!showSearch && showFilter && onOpenFilter) {
-    return (
+    return withFacultyPersistRail(
       <View style={toolbarStyle}>
         <Pressable
           style={shellStyles.filterOnlyInner}
@@ -883,11 +1080,12 @@ export function FacultySearchToolbarInner({
             ) : null}
           </View>
         ) : null}
-      </View>
+      </View>,
+      persistRail,
     )
   }
 
-  return (
+  return withFacultyPersistRail(
     <View style={toolbarStyle}>
       {showSearch ? (
         <>
@@ -957,7 +1155,8 @@ export function FacultySearchToolbarInner({
           ) : null}
         </View>
       ) : null}
-    </View>
+    </View>,
+    persistRail,
   )
 }
 
@@ -982,54 +1181,33 @@ export function FacultyGroupedFilterSheet({
   onSelect: (groupId: string, value: string) => void
   onClose: () => void
 }) {
-  const insets = useSafeAreaInsets()
   const native = useThemedNative()
   const type = useNativeType()
 
   return (
-    <FacultySheetModal
-      visible={visible}
-      onRequestClose={onClose}
-      containerStyle={shellStyles.filterSheet}
-    >
-      <FacultySheetChrome topInset={insets.top} title={title} onClose={onClose} />
-      {subtitle ? (
-        <Text
-          style={[type.secondary, shellStyles.filterSheetSub, { color: native.secondaryLabel }]}
-          accessible={false}
-        >
-          {subtitle}
-        </Text>
-      ) : null}
-      <ScrollView
-        contentContainerStyle={[shellStyles.groupedFilterList, { paddingBottom: insets.bottom + 24 }]}
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
-        showsVerticalScrollIndicator={false}
-      >
-        {groups.map((group) => (
-          <View key={group.id} style={shellStyles.filterGroup}>
-            <Text style={[type.sectionHeader, shellStyles.filterGroupTitle, { color: native.secondaryLabel }]}>
-              {group.title}
-            </Text>
-            <GlassMenuList>
-              {group.options.map((opt, index) => (
-                <GlassFilterOptionRow
-                  key={`${group.id}-${opt.value}`}
-                  label={opt.label}
-                  active={group.value === opt.value}
-                  onPress={() => {
-                    onSelect(group.id, opt.value)
-                    onClose()
-                  }}
-                  showSeparator={index < group.options.length - 1}
-                />
-              ))}
-            </GlassMenuList>
-          </View>
-        ))}
-      </ScrollView>
-    </FacultySheetModal>
+    <ModuleFilterBottomSheet visible={visible} title={title} subtitle={subtitle} onClose={onClose}>
+      {groups.map((group) => (
+        <View key={group.id} style={shellStyles.filterGroup}>
+          <Text style={[type.sectionHeader, shellStyles.filterGroupTitle, { color: native.secondaryLabel }]}>
+            {group.title}
+          </Text>
+          <GlassMenuList>
+            {group.options.map((opt, index) => (
+              <GlassFilterOptionRow
+                key={`${group.id}-${opt.value}`}
+                label={opt.label}
+                active={group.value === opt.value}
+                onPress={() => {
+                  onSelect(group.id, opt.value)
+                  onClose()
+                }}
+                showSeparator={index < group.options.length - 1}
+              />
+            ))}
+          </GlassMenuList>
+        </View>
+      ))}
+    </ModuleFilterBottomSheet>
   )
 }
 
@@ -1098,7 +1276,7 @@ const shellStyles = StyleSheet.create({
     justifyContent: "center",
     flexShrink: 0},
   filterBtnActive: {},
-  filterSheet: { flex: 1, paddingHorizontal: 16 },
+  filterSheet: { flex: 1 },
   filterSheetHead: {
     flexDirection: "row",
     alignItems: "center",
@@ -1109,7 +1287,7 @@ const shellStyles = StyleSheet.create({
   filterSheetSub: {
     lineHeight: 18,
     marginBottom: 14},
-  filterSheetList: { gap: 8, paddingBottom: 24 },
+  filterSheetList: { gap: 16, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 24 },
   filterSheetRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -1186,6 +1364,22 @@ const shellStyles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 16,
     gap: 4,
+    position: "relative",
+  },
+  signatureTabTrack: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    position: "relative",
+    paddingHorizontal: 16,
+  },
+  signatureTabIndicator: {
+    position: "absolute",
+    left: 0,
+    bottom: 0,
+    height: 2,
+    borderRadius: 1,
+    zIndex: 1,
   },
   signatureTab: {
     flexDirection: "row",
@@ -1194,6 +1388,23 @@ const shellStyles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingTop: 10,
     paddingBottom: 12,
+    zIndex: 2,
+  },
+  signatureTabContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  signatureTabIcon: {
+    width: 17,
+    height: 17,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  signatureTabIconOverlay: {
+    ...StyleSheet.absoluteFill,
+    alignItems: "center",
+    justifyContent: "center",
   },
   signatureTabFlex: {
     flex: 1,
@@ -1282,5 +1493,64 @@ const shellStyles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 10,
     gap: 10,
+  },
+  persistDock: {
+    width: "100%",
+    gap: 2,
+  },
+  persistRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    minHeight: 32,
+    paddingHorizontal: 6,
+    gap: 8,
+  },
+  persistStatus: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  persistDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+  },
+  persistStatusText: {
+    flexShrink: 1,
+    fontWeight: "600",
+  },
+  persistActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    flexShrink: 0,
+  },
+  persistSaveBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    minHeight: 28,
+    justifyContent: "center",
+  },
+  persistSaveText: {
+    fontWeight: "600",
+  },
+  persistPublishBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+    minHeight: 28,
+    borderRadius: 999,
+  },
+  persistPublishText: {
+    fontWeight: "700",
+  },
+  persistDivider: {
+    height: StyleSheet.hairlineWidth,
+    marginHorizontal: 4,
+    marginBottom: 2,
   },
 })

@@ -4,13 +4,15 @@ import type {
   AttendanceAnalytics,
   AttendanceRecord,
   AttendanceRosterStudent,
-  AttendanceSession} from "./instructor-api"
+  AttendanceSession,
+  AttendanceStudentSummary,
+} from "./instructor-api"
 import {
   facultyAttendanceStatusColor,
   FACULTY_ATTENDANCE_COLOR,
 } from "./faculty-attendance-theme"
 
-export type AttendanceTab = "overview" | "roll" | "meetings" | "log"
+export type AttendanceTab = "overview" | "roll" | "meetings" | "log" | "leaderboard"
 
 export type AttendanceStatus = "present" | "absent" | "excused" | "late"
 
@@ -303,6 +305,36 @@ export function filterRosterStudents<
   if (!q) return students
   return students.filter((s) =>
     [s.fullName, s.studentNumber].join(" ").toLowerCase().includes(q),
+  )
+}
+
+export function rankFacultyAttendanceStandings(
+  analytics: AttendanceAnalytics | null,
+): AttendanceStudentSummary[] {
+  const pool =
+    (analytics?.topPerformers?.length ? analytics.topPerformers : analytics?.studentSummaries) ?? []
+  return [...pool]
+    .filter((student) => {
+      const pct = attendanceDisplayPercent(student.attendance_percentage)
+      return pct > 0 || numericCount(student.current_streak) > 0 || numericCount(student.credits_earned) > 0
+    })
+    .sort((a, b) => {
+      const byPct = attendanceDisplayPercent(b.attendance_percentage) - attendanceDisplayPercent(a.attendance_percentage)
+      if (byPct !== 0) return byPct
+      const byStreak = numericCount(b.current_streak) - numericCount(a.current_streak)
+      if (byStreak !== 0) return byStreak
+      return numericCount(b.credits_earned) - numericCount(a.credits_earned)
+    })
+}
+
+export function filterFacultyAttendanceStandings(
+  rows: AttendanceStudentSummary[],
+  query: string,
+): AttendanceStudentSummary[] {
+  const q = query.trim().toLowerCase()
+  if (!q) return rows
+  return rows.filter((student) =>
+    [student.full_name, student.student_id].join(" ").toLowerCase().includes(q),
   )
 }
 

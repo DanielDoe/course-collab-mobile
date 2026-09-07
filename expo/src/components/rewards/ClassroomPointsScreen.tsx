@@ -20,6 +20,8 @@ import { SignatureListCard } from "../theme/SignatureListCard"
 import { TabbedModuleLayout, signatureListStyles } from "../theme/TabbedModuleLayout"
 import { ClassroomPointsLeaderboardPodium } from "./ClassroomPointsLeaderboardPodium"
 import { classroomPointsLeaderboardForCurrentOffering } from "../../lib/classroom-points-leaderboard-scope"
+import { useFacultyListPager } from "../../hooks/useFacultyListPager"
+import { FacultyListPagerFooter } from "../faculty/FacultyListPagerFooter"
 
 function useStudentSession(): StudentSession | null {
   const { session } = useSession()
@@ -191,6 +193,13 @@ export function ClassroomPointsScreen() {
     return awarded.filter((entry) => (entry.full_name ?? "Student").toLowerCase().includes(q))
   }, [leaderboard, search, session])
 
+  const historyPager = useFacultyListPager(sortedHistory, `${search}|history`, "awards")
+  const tasksPager = useFacultyListPager(taskItems, `${search}|tasks`, "tasks")
+  const leaderboardTail = useMemo(() => filteredLeaderboard.slice(3), [filteredLeaderboard])
+  const leaderboardTailPager = useFacultyListPager(leaderboardTail, `${search}|leaderboard`, "students", {
+    preset: "compact",
+  })
+
   function openPointDetail(item: ClassroomPointRecord) {
     router.push(`/rewards/classroom-point/${item.id}`)
   }
@@ -219,11 +228,19 @@ export function ClassroomPointsScreen() {
       )
     }
     return (
-      <View style={signatureListStyles.list}>
-        {sortedHistory.map((item, index) => (
-          <PointListCard key={item.id} item={item} index={index} onPress={() => openPointDetail(item)} />
-        ))}
-      </View>
+      <>
+        <View style={signatureListStyles.list}>
+          {historyPager.items.map((item, index) => (
+            <PointListCard
+              key={item.id}
+              item={item}
+              index={historyPager.page * historyPager.pageSize + index}
+              onPress={() => openPointDetail(item)}
+            />
+          ))}
+        </View>
+        <FacultyListPagerFooter pager={historyPager} />
+      </>
     )
   }
 
@@ -238,11 +255,19 @@ export function ClassroomPointsScreen() {
       )
     }
     return (
-      <View style={signatureListStyles.list}>
-        {taskItems.map((sub, index) => (
-          <AssignmentListCard key={sub.id} sub={sub} index={index} onPress={() => openTask(sub)} />
-        ))}
-      </View>
+      <>
+        <View style={signatureListStyles.list}>
+          {tasksPager.items.map((sub, index) => (
+            <AssignmentListCard
+              key={sub.id}
+              sub={sub}
+              index={tasksPager.page * tasksPager.pageSize + index}
+              onPress={() => openTask(sub)}
+            />
+          ))}
+        </View>
+        <FacultyListPagerFooter pager={tasksPager} />
+      </>
     )
   }
 
@@ -257,14 +282,19 @@ export function ClassroomPointsScreen() {
       )
     }
     return (
-      <View style={signatureListStyles.list}>
-        <ClassroomPointsLeaderboardPodium entries={filteredLeaderboard} />
-        {filteredLeaderboard.length > 3 ? (
-          filteredLeaderboard.slice(3).map((entry, index) => (
-            <LeaderboardListCard key={entry.rank} entry={entry} index={index + 3} />
-          ))
-        ) : null}
-      </View>
+      <>
+        <View style={signatureListStyles.list}>
+          <ClassroomPointsLeaderboardPodium entries={filteredLeaderboard} />
+          {leaderboardTailPager.items.map((entry, index) => (
+            <LeaderboardListCard
+              key={entry.rank}
+              entry={entry}
+              index={leaderboardTailPager.page * leaderboardTailPager.pageSize + index + 3}
+            />
+          ))}
+        </View>
+        <FacultyListPagerFooter pager={leaderboardTailPager} />
+      </>
     )
   }
 

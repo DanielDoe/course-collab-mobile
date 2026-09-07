@@ -34,7 +34,9 @@ import { useFacultyStickyHeaderScrollLayout, FacultyAdaptiveSegmentNav, FacultyM
 import { FacultyReportDetailSheet } from "./FacultyReportDetailSheet"
 import { FacultyReportGenerateSheet } from "./FacultyReportGenerateSheet"
 import { FacultyStudentReportSheet } from "./FacultyStudentReportSheet"
+import { useFacultyListPager } from "../../hooks/useFacultyListPager"
 import { useModuleTheme } from "../../lib/themed-module-shell"
+import { FacultyListPagerFooter } from "./FacultyListPagerFooter"
 
 type ReportsTab = "templates" | "generated"
 
@@ -122,6 +124,9 @@ export function FacultyReportsScreen() {
     const inRange = filterSavedReportsByDateRange(merged, dateRange)
     return filterSavedReports(inRange, search)
   }, [localReports, savedReports, search, dateRange])
+  const studentHitsPager = useFacultyListPager(studentHits, search, "students")
+  const templatesPager = useFacultyListPager(filteredTemplates, search, "templates")
+  const savedPager = useFacultyListPager(filteredSaved, `${search}:${datePreset}`, "reports")
 
   if (!ready) {
     return (
@@ -211,13 +216,14 @@ export function FacultyReportsScreen() {
                   <ActivityIndicator color={FACULTY_REPORTS_COLOR.link} style={{ marginTop: 8 }} />
                 ) : studentHits.length > 0 ? (
                   <View style={styles.cardList}>
-                    {studentHits.map((student) => (
+                    {studentHitsPager.items.map((student) => (
                       <FacultyReportStudentHitCard
                         key={student.id}
                         student={student}
                         onPress={() => setStudentReportId(student.id)}
                       />
                     ))}
+                    <FacultyListPagerFooter pager={studentHitsPager} />
                   </View>
                 ) : (
                   <Text style={[type.caption, { color: native.tertiaryLabel, fontWeight: "600", paddingHorizontal: 4 }]}>
@@ -237,13 +243,14 @@ export function FacultyReportsScreen() {
               <View style={styles.sectionBlock}>
                 <Text style={[type.sectionHeader, { color: native.label, paddingHorizontal: 4 }]}>Report templates</Text>
                 <View style={styles.cardList}>
-                  {filteredTemplates.map((template) => (
+                  {templatesPager.items.map((template) => (
                     <FacultyReportTemplateCard
                       key={template.id}
                       template={template}
                       onPress={() => setGenerateTemplate(template)}
                     />
                   ))}
+                  <FacultyListPagerFooter pager={templatesPager} />
                 </View>
               </View>
             )}
@@ -268,13 +275,14 @@ export function FacultyReportsScreen() {
           <View style={styles.sectionBlock}>
             <Text style={[type.sectionHeader, { color: native.label, paddingHorizontal: 4 }]}>Saved reports</Text>
             <View style={styles.cardList}>
-              {filteredSaved.map((report) => (
+              {savedPager.items.map((report) => (
                 <FacultyReportSavedCard
                   key={report.id}
                   report={report}
                   onPress={() => setSelectedReport(report)}
                 />
               ))}
+              <FacultyListPagerFooter pager={savedPager} />
             </View>
           </View>
         )}

@@ -7,6 +7,7 @@ import { useRouter } from "expo-router"
 import type { Swipeable } from "react-native-gesture-handler"
 import { ModuleScreen, ModuleSectionHeader } from "../modules/ModuleScreen"
 import { StudentSearchToolbar } from "../student/student-search-toolbar"
+import { ModuleAddActionSheet } from "../modules/ModuleAddActionSheet"
 import { CommEmptyState, CommSectionFooter } from "../faculty/faculty-communication-ui"
 import { SignatureListCard } from "../theme/SignatureListCard"
 import { signatureListStyles } from "../theme/TabbedModuleLayout"
@@ -38,8 +39,11 @@ import {
   type NotetakerProcessingStep,
 } from "./NotetakerProcessingOverlay"
 import { NATIVE } from "../../constants/faculty-native-theme"
+import { shouldShowPurchaseCta } from "../../lib/purchase-navigation"
 import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
 import { useNativeType, useThemedStudentNative } from "../../lib/themed-module-theme"
+import { useFacultyListPager } from "../../hooks/useFacultyListPager"
+import { FacultyListPagerFooter } from "../faculty/FacultyListPagerFooter"
 
 function useStudentSession(): StudentSession | null {
   const { session } = useSession()
@@ -85,6 +89,7 @@ function PlanPanel({
   const native = useThemedNative()
   const type = useNativeType()
   const SN = useThemedStudentNative()
+  const showPurchaseActions = shouldShowPurchaseCta()
 
   return (
     <View style={[styles.planCard, tokens.cardShadow, { backgroundColor: native.secondaryGrouped, borderColor: tokens.border }]}>
@@ -110,7 +115,7 @@ function PlanPanel({
           />
         </View>
       </View>
-      {!limits.chatEnabled && onUpgrade ? (
+      {!limits.chatEnabled && onUpgrade && showPurchaseActions ? (
         <Pressable
           onPress={onUpgrade}
           style={({ pressed }) => [
@@ -137,6 +142,7 @@ export function NotetakerHomeScreen() {
   const type = useNativeType()
 
   const [search, setSearch] = useState("")
+  const [addOpen, setAddOpen] = useState(false)
   const [debouncedSearch, setDebouncedSearch] = useState("")
   const [notes, setNotes] = useState<NotetakerNote[]>([])
   const [limits, setLimits] = useState<NotetakerLimits | null>(null)
@@ -223,6 +229,9 @@ export function NotetakerHomeScreen() {
     () => notes.filter((note) => archivedIds.has(note.id)),
     [notes, archivedIds],
   )
+
+  const activePager = useFacultyListPager(activeNotes, `${debouncedSearch}|active`, "notes")
+  const archivedPager = useFacultyListPager(archivedNotes, `${debouncedSearch}|archived`, "notes")
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true)
@@ -427,6 +436,37 @@ export function NotetakerHomeScreen() {
         onChange={setSearch}
         placeholder="Search notes…"
         showFilter={false}
+        trailingAction={
+          searchDisabled
+            ? undefined
+            : {
+                onPress: () => setAddOpen(true),
+                accessibilityLabel: "Open notetaker actions",
+                icon: "add",
+              }
+        }
+      />
+      <ModuleAddActionSheet
+        visible={addOpen}
+        title="AI Notetaker"
+        subtitle="Capture a new lecture recording."
+        onClose={() => setAddOpen(false)}
+        actions={[
+          {
+            id: "record",
+            label: "Record audio",
+            detail: "Start a live capture session",
+            icon: "mic-outline",
+            onPress: openRecord,
+          },
+          {
+            id: "upload",
+            label: "Upload audio",
+            detail: "Import MP3, M4A, or WAV",
+            icon: "cloud-upload-outline",
+            onPress: () => void openUpload(),
+          },
+        ]}
       />
 
       {tierBlocked ? (
@@ -505,9 +545,14 @@ export function NotetakerHomeScreen() {
           body="Archived notes appear below. Swipe a note left to archive, edit, or delete."
         />
       ) : (
-        <View style={signatureListStyles.list}>
-          {activeNotes.map((note, index) => renderNoteRow(note, index, "active"))}
-        </View>
+        <>
+          <View style={signatureListStyles.list}>
+            {activePager.items.map((note, index) =>
+              renderNoteRow(note, activePager.page * activePager.pageSize + index, "active"),
+            )}
+          </View>
+          <FacultyListPagerFooter pager={activePager} />
+        </>
       )}
 
       {!tierBlocked && archivedNotes.length > 0 ? (
@@ -517,8 +562,11 @@ export function NotetakerHomeScreen() {
             Swipe left on a note for restore or delete. Archived notes stay on this device until you remove them.
           </CommSectionFooter>
           <View style={signatureListStyles.list}>
-            {archivedNotes.map((note, index) => renderNoteRow(note, index, "archived"))}
+            {archivedPager.items.map((note, index) =>
+              renderNoteRow(note, archivedPager.page * archivedPager.pageSize + index, "archived"),
+            )}
           </View>
+          <FacultyListPagerFooter pager={archivedPager} />
         </>
       ) : null}
     </ModuleScreen>

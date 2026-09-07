@@ -1,9 +1,12 @@
 import { useEffect, useState, type ComponentType, type ReactNode } from "react"
+import { Platform } from "react-native"
 import { fetchStripeClientConfig } from "../lib/stripe-config-api"
 import { isStripeNativeAvailable } from "../lib/stripe-native"
 
 export const STRIPE_RETURN_URL = "coursecollab://stripe-redirect"
-export const APPLE_MERCHANT_ID = "merchant.com.coursecollab.app"
+
+/** Google Pay merchant id — Android native checkout only. */
+const ANDROID_GOOGLE_PAY_MERCHANT_ID = "merchant.com.coursecollab.app"
 
 type Props = {
   children: ReactNode
@@ -36,14 +39,14 @@ export function StripeAppProvider({ children }: Props) {
   }, [])
 
   useEffect(() => {
-    if (!nativeReady || !publishableKey) return
+    if (!nativeReady || !publishableKey || Platform.OS !== "android") return
     const stripe = require("@stripe/stripe-react-native") as {
       StripeProvider: StripeProviderComponent
     }
     setStripeProvider(() => stripe.StripeProvider)
   }, [nativeReady, publishableKey])
 
-  if (!nativeReady || !publishableKey || !StripeProvider) {
+  if (Platform.OS !== "android" || !nativeReady || !publishableKey || !StripeProvider) {
     return <>{children}</>
   }
 
@@ -53,7 +56,7 @@ export function StripeAppProvider({ children }: Props) {
   return (
     <StripeProvider
       publishableKey={publishableKey}
-      merchantIdentifier={APPLE_MERCHANT_ID}
+      merchantIdentifier={ANDROID_GOOGLE_PAY_MERCHANT_ID}
       urlScheme="coursecollab"
     >
       <DeepLinkHandler>{children}</DeepLinkHandler>

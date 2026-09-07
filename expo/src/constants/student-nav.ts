@@ -193,6 +193,7 @@ export function getNavLabel(pathname: string): string {
   if (/^\/notes\//.test(pathname)) return "Edit note"
   if (/^\/flashcards\/\d+\/edit$/.test(pathname)) return "Edit deck"
   if (/^\/flashcards\//.test(pathname)) return "Study deck"
+  if (/^\/schedule-adjustment\//.test(pathname)) return "Schedule Adjustment"
   const moduleMatch = pathname.match(/^\/module\/(.+)$/)
   if (moduleMatch) {
     const id = moduleMatch[1]

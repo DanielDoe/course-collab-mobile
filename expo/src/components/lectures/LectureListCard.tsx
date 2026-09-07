@@ -9,9 +9,9 @@ import { lectureSolidThumb, lectureStatusAccent } from "../../lib/lecture-list-t
 import { SolidListThumbTile } from "../theme/SolidListThumbTile"
 import {
   clampProgress,
+  formatLectureIndexLabel,
   lectureListDisplayTitle,
   lectureStatusLabel,
-  lectureTitleIncludesCourse,
   resolveLectureCardKind,
   type LectureCardKind,
   type LectureTitleFields,
@@ -19,7 +19,7 @@ import {
 
 type Props = {
   lecture: LectureItem
-  courseLabel: string
+  courseCode?: string | null
   index: number
   siblings?: readonly LectureTitleFields[]
   onPress: () => void
@@ -36,7 +36,7 @@ function statusIcon(kind: LectureCardKind): keyof typeof Ionicons.glyphMap {
   return "ellipse"
 }
 
-export function LectureListCard({ lecture, courseLabel, index, siblings = [], onPress }: Props) {
+export function LectureListCard({ lecture, courseCode, index, siblings = [], onPress }: Props) {
   const native = useThemedNative()
   const tokens = useAppThemeTokens()
   const type = useNativeType()
@@ -46,7 +46,11 @@ export function LectureListCard({ lecture, courseLabel, index, siblings = [], on
   const statusColor = lectureStatusAccent(kind, solidThumb)
   const locked = kind === "locked"
   const showProgress = kind === "in_progress"
-  const displayTitle = lectureListDisplayTitle(lecture, siblings)
+  const displayTitle = lectureListDisplayTitle(lecture, siblings, courseCode)
+  const indexLabel = formatLectureIndexLabel(lecture.week, {
+    title: lecture.title,
+    courseCode,
+  })
 
   return (
     <Pressable
@@ -71,11 +75,9 @@ export function LectureListCard({ lecture, courseLabel, index, siblings = [], on
         <Text style={[type.bodyEmphasis, styles.title, { color: native.label }]} numberOfLines={2}>
           {displayTitle}
         </Text>
-        {lectureTitleIncludesCourse(displayTitle, courseLabel) ? null : (
-          <Text style={[type.caption, styles.course, { color: native.secondaryLabel }]} numberOfLines={1}>
-            {courseLabel}
-          </Text>
-        )}
+        <Text style={[type.caption, styles.course, { color: native.secondaryLabel }]} numberOfLines={1}>
+          {indexLabel}
+        </Text>
 
         <View style={styles.statusRow}>
           <View style={styles.statusMain}>
@@ -119,7 +121,7 @@ const styles = StyleSheet.create({
     gap: 12,
     borderRadius: 16,
     borderWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     paddingVertical: 12,
     minHeight: 88,
   },
@@ -169,5 +171,6 @@ const styles = StyleSheet.create({
   chevron: {
     flexShrink: 0,
     marginTop: 2,
+    marginRight: 2,
   },
 })

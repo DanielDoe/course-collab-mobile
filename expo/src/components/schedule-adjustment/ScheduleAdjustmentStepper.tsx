@@ -2,6 +2,7 @@ import { ScrollView, StyleSheet, Text, View } from "react-native"
 import { useAppThemeTokens } from "../../context/AppearanceProvider"
 import { useNativeType } from "../../lib/themed-module-theme"
 import { workflowStepIndex } from "../../lib/schedule-adjustment/workflow-steps"
+import { isDirectProposal } from "../../lib/schedule-adjustment/arrangement"
 
 const STEPS = [
   "Current",
@@ -14,14 +15,24 @@ const STEPS = [
   "Complete",
 ]
 
-export function ScheduleAdjustmentStepper({ status }: { status: string }) {
+const DIRECT_STEPS = ["Current", "Consent", "Finalize", "Calendar", "Complete"]
+
+export function ScheduleAdjustmentStepper({
+  status,
+  adjustmentMode,
+}: {
+  status: string
+  adjustmentMode?: unknown
+}) {
   const tokens = useAppThemeTokens()
   const type = useNativeType()
-  const active = workflowStepIndex(status)
+  const direct = isDirectProposal(adjustmentMode)
+  const labels = direct ? DIRECT_STEPS : STEPS
+  const active = workflowStepIndex(status, adjustmentMode)
 
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
-      {STEPS.map((label, index) => {
+      {labels.map((label, index) => {
         const step = index + 1
         const reached = step <= active
         return (

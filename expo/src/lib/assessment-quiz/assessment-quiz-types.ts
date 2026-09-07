@@ -1,3 +1,5 @@
+import type { PracticeAnswerReview } from "../lecture-types"
+
 export type AssessmentQuestion = {
   id: number
   question_text: string
@@ -86,6 +88,8 @@ export type EvaluateAnswerResult = {
   requiresManualReview?: boolean
   requiresReview?: boolean
   score?: number
+  aiFeedback?: unknown
+  answerReview?: PracticeAnswerReview | null
 }
 
 export type FinalizeQuizResult = {

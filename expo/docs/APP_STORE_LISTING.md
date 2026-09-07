@@ -3,7 +3,7 @@
 **App:** CourseCollab Mobile  
 **ASC App ID:** `6803146932`  
 **Bundle ID:** `com.coursecollab.app`  
-**Current build:** 1.0.0 (12) — production IPA via EAS
+**Current build:** 1.0.0 **(48)** — [EAS Build 77acc173](https://expo.dev/accounts/danieldoe/projects/course-collab-mobile/builds/77acc173-a1a8-4ba6-ac53-8d508dc98d54) · [Submission d124f41f](https://expo.dev/accounts/danieldoe/projects/course-collab-mobile/submissions/d124f41f-c96c-40b4-b86b-4f528cb3e233)
 
 Use this doc when the EAS submission finishes and the build appears in App Store Connect → **TestFlight** / **App Store** tab.
 
@@ -40,13 +40,13 @@ Apple Review Student
 
 Name: Alex Rivera
 University: University of Houston
-Email: alex.rivera@coursecollab.demo
 Student ID: 910000001
 Password: Review26!
 MFA / 2FA: Not required
 Password Change: Not required
 
-Sign In: Select Student, choose University of Houston, then sign in using either the email address or Student ID above with the provided password.
+Sign In: Select Student → University of Houston → enter Student ID 910000001 (not email) and password Review26!.
+Note: Email login with alex.rivera@coursecollab.demo shows a course picker (ECE + ELEG). Student IDs sign in directly.
 
 Apple Review Instructor
 
@@ -57,7 +57,7 @@ Password: Review26!
 MFA / 2FA: Not required
 Password Change: Not required
 
-Sign In: Select Instructor, then sign in using either the email address or username above with the provided password.
+Sign In: Select Instructor → username mchen (or maya.chen@coursecollab.demo) + password Review26!.
 
 Apple Review Career Member
 
@@ -68,7 +68,7 @@ Password: ELEG2026!
 MFA / 2FA: Not required
 Password Change: Not required
 
-Sign In: Select Other Sign In Options → Career Member, then sign in using either the email address or Career Member ID above with the provided password.
+Sign In: Select Other Sign In Options → Career Member → email danieldoe33@gmail.com + password ELEG2026!.
 
 ── NOT IN SCOPE FOR REVIEW ──
 Summer Camp sign-in shows “Coming soon” — intentional for this release.
@@ -77,8 +77,14 @@ Summer Camp sign-in shows “Coming soon” — intentional for this release.
 Student/faculty/career AI features call our production API; demo accounts have sandbox context only.
 Privacy: Settings → Privacy & Security → Cora privacy.
 
-── PAYMENTS ──
-Membership upgrades use Stripe Payment Sheet. No Apple IAP (Guideline 3.1.3(b) multiplatform).
+── PAYMENTS (iOS) ──
+The iOS app does NOT process payments of any kind. No Apple IAP, no Apple Pay / PassKit, no Stripe Payment Sheet, and no in-app links to web checkout for memberships or Cora credits. Purchase / upgrade buttons are hidden on iOS; checkout routes redirect to read-only account screens. Users may view existing plan tier and credit balance synced from course-collab.com. New purchases are completed independently on the website (Guideline 3.1.1 reader / account-management model).
+
+── PAYMENTS (Android) ──
+Membership and Cora credits may use native Stripe Payment Sheet (Google Pay supported).
+
+── APPLE PAY / PASSKIT ──
+Removed. This build has no Apple Pay merchant entitlement and no PassKit usage.
 
 ── ACCOUNT DELETION ──
 Settings → Privacy & Security → Delete account (in-app flow).
@@ -235,9 +241,37 @@ App Store Connect → **Business** (or banner on Apps page):
 
 ---
 
+## Resolution Center reply (Guideline 3.1.1 — payments)
+
+After uploading the new build, paste this in **App Store Connect → Resolution Center** (or reply to the rejection thread):
+
+```
+Thank you for your review. We have updated CourseCollab Mobile to address Guideline 3.1.1.
+
+The iOS app no longer processes payments of any kind:
+• No Apple In-App Purchase
+• No Apple Pay / PassKit (merchant entitlement removed)
+• No Stripe Payment Sheet or native checkout
+• No in-app Safari links to purchase membership or Cora credits
+
+On iOS, purchase and upgrade buttons are hidden. Checkout routes redirect to read-only account screens. Users can view their existing membership tier and Cora credit balance (synced from their CourseCollab web account). New purchases must be completed independently at course-collab.com in a browser outside the app.
+
+To verify: Sign in as review student 910000001 / Review26!. Open Settings → Membership — no upgrade or checkout buttons appear. Open Cora — no "Buy credits" CTA. Direct navigation to checkout paths redirects without payment UI.
+
+Android uses Google Play–compliant native checkout where applicable; this submission is iOS-only.
+
+Please contact danieldoe33@icloud.com with any questions.
+```
+
+Also update **App Review Information → Notes** with the PAYMENTS (iOS) block from `APP_STORE_REVIEW_CREDENTIALS.md`.
+
+---
+
 ## TestFlight → App Review submission checklist
 
-- [ ] Build 11 (or latest) processed in TestFlight
+- [ ] Latest production build processed in TestFlight
+- [ ] Resolution Center reply sent (payments / 3.1.1)
+- [ ] App Review Notes updated (no iOS payments)
 - [ ] Screenshots uploaded (6.7" + iPad if applicable)
 - [ ] Description, subtitle, keywords, URLs filled
 - [ ] App Privacy questionnaire complete

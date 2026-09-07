@@ -40,6 +40,12 @@ export const FACULTY_MODULE_META: Record<string, FacultyModuleMeta> = {
     summary: "Manage terms, sections, and which term students can sign into.",
     icon: "calendar-outline",
     features: ["Term list", "Set active term", "Section roster"]},
+  calendar: {
+    id: "calendar",
+    title: "Calendar",
+    summary: "Class meetings, office hours, and open schedule adjustments for this course.",
+    icon: "calendar-number-outline",
+    features: ["Month view", "Upcoming sessions", "Schedule adjustment banner"]},
   announcements: {
     id: "announcements",
     title: "Announcements",

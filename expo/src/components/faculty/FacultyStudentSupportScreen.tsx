@@ -7,9 +7,11 @@ import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { ApiError } from "../../lib/api"
 import { SUPPORT_QUEUES } from "../../constants/faculty-communication-theme"
 import { useFacultyScope } from "../../hooks/useFacultyScope"
+import { useFacultyListPager } from "../../hooks/useFacultyListPager"
 import { useFacultyShell } from "../../context/FacultyShellContext"
 import { instructorApi, type InstructorPasswordResetRequest } from "../../lib/instructor-api"
 import { FACULTY_COMMUNICATION_COLOR, facultySupportGuideThumb } from "../../lib/faculty-communication-theme"
+import { FacultyListPagerFooter } from "./FacultyListPagerFooter"
 import { FacultySupportResetCard } from "./FacultyCommunicationListCards"
 import {
   CommEmptyState,
@@ -89,7 +91,9 @@ export function FacultyStudentSupportScreen() {
   )
 
   const filteredGuides = useMemo(() => filterSupportGuides(FAQ_GUIDES, guideSearch), [guideSearch])
-  const guideCategories = useMemo(() => groupSupportGuidesByCategory(filteredGuides), [filteredGuides])
+  const resetPager = useFacultyListPager(resets, "resets", "resets")
+  const guidePager = useFacultyListPager(filteredGuides, `guides:${guideSearch}`, "guides")
+  const guideCategories = useMemo(() => groupSupportGuidesByCategory(guidePager.items), [guidePager.items])
 
   const navTabs = useMemo(
     () => [
@@ -221,7 +225,7 @@ export function FacultyStudentSupportScreen() {
             </View>
           ) : (
             <View style={styles.resetList}>
-              {resets.map((row) => (
+              {resetPager.items.map((row) => (
                 <FacultySupportResetCard
                   key={row.id}
                   row={row}
@@ -230,6 +234,7 @@ export function FacultyStudentSupportScreen() {
                   onReject={() => void rejectReset(row)}
                 />
               ))}
+              <FacultyListPagerFooter pager={resetPager} />
             </View>
           )}
           <CommSectionFooter>Approved resets issue a temporary password for the student&apos;s next sign-in.</CommSectionFooter>
@@ -252,7 +257,7 @@ export function FacultyStudentSupportScreen() {
               <View key={category} style={screenStyles.guideSection}>
                 <Text style={screenStyles.guideCategory}>{category}</Text>
                 <CommGroupedList>
-                  {filteredGuides
+                  {guidePager.items
                     .filter((item) => item.category === category)
                     .map((item, index, items) => {
                       const open = openFaq === item.id
@@ -298,6 +303,7 @@ export function FacultyStudentSupportScreen() {
               </View>
             ))
           )}
+          <FacultyListPagerFooter pager={guidePager} />
           <CommSectionFooter>
             {`${FAQ_GUIDES.length} guides across ${new Set(FAQ_GUIDES.map((g) => g.category)).size} topics — tap to expand answers aligned with student and web app flows.`}
           </CommSectionFooter>

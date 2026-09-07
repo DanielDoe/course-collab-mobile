@@ -15,9 +15,16 @@ import type { CoraCreditPack } from "../../lib/cora/credits/types"
 import type { FacultySession, StudentSession } from "../../lib/session"
 import { hexToRgba } from "../../constants/app-themes"
 import { NATIVE } from "../../constants/faculty-native-theme"
+import {
+  iosCoraCreditsPurchaseNotice,
+  iosExternalPurchaseCtaLabel,
+  openCreditPurchase,
+  requiresExternalWebPurchase,
+} from "../../lib/purchase-navigation"
 import { isStripeNativeAvailable } from "../../lib/stripe-native"
 import type { MobilePaymentSheetResponse } from "../../lib/membership-payment-api"
 import { MembershipNativePaymentPresenterGate } from "../support/MembershipNativePaymentPresenterGate"
+import { shouldShowPurchaseCta } from "../../lib/purchase-navigation"
 
 type Props = {
   audience: "student" | "instructor"
@@ -34,6 +41,9 @@ export function CoraCreditPacksPanel({ audience, session, onPurchased }: Props) 
   const native = useThemedNative()
   const SN = useThemedStudentNative()
   const type = useNativeType()
+  const showPurchaseActions = shouldShowPurchaseCta()
+
+  if (!showPurchaseActions) return null
 
   const [packs, setPacks] = useState<CoraCreditPack[]>([])
   const [loading, setLoading] = useState(true)
@@ -66,6 +76,25 @@ export function CoraCreditPacksPanel({ audience, session, onPurchased }: Props) 
         setError("Sign in to purchase Cora Credits.")
         return
       }
+
+      if (requiresExternalWebPurchase()) {
+        setBuyingId(packId)
+        setError(null)
+        try {
+          await openCreditPurchase({
+            audience,
+            session,
+            packId,
+          })
+          AppAlert.alert("Complete checkout in Safari", iosCoraCreditsPurchaseNotice())
+        } catch (e) {
+          setError(e instanceof Error ? e.message : "Could not open web checkout.")
+        } finally {
+          setBuyingId(null)
+        }
+        return
+      }
+
       if (!isStripeNativeAvailable()) {
         setError(
           "Stripe checkout needs a native rebuild. From the expo folder run pod install, then npm run ios:sim.",
@@ -194,7 +223,11 @@ export function CoraCreditPacksPanel({ audience, session, onPurchased }: Props) 
                 ]}
               >
                 <Text style={styles.buyText}>
-                  {buyingId === pack.id ? "Starting checkout…" : "Buy pack"}
+                  {buyingId === pack.id
+                    ? "Opening…"
+                    : requiresExternalWebPurchase()
+                      ? iosExternalPurchaseCtaLabel()
+                      : "Buy pack"}
                 </Text>
               </Pressable>
             </View>
@@ -205,7 +238,7 @@ export function CoraCreditPacksPanel({ audience, session, onPurchased }: Props) 
       {error ? <Text style={[type.caption, { color: "#DC2626" }]}>{error}</Text> : null}
 
       {/* Same native PaymentSheet host used by membership upgrades */}
-      {paymentSheet ? (
+      {!requiresExternalWebPurchase() && paymentSheet ? (
         <MembershipNativePaymentPresenterGate
           presentKey={presentKey}
           sheet={paymentSheet}

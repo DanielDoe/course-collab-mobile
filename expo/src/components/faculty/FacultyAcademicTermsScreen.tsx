@@ -28,12 +28,14 @@ import {
   type InstructorAcademicTerm,
   type InstructorSession} from "../../lib/instructor-api"
 import { useFacultyScope } from "../../hooks/useFacultyScope"
+import { useFacultyListPager } from "../../hooks/useFacultyListPager"
 import { NATIVE } from "../../constants/faculty-native-theme"
 import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
 import { useFacultyModuleStyles } from "../../lib/faculty-themed-ui"
 import { FACULTY_COLLAB_COLOR } from "../../lib/faculty-collab-theme"
 import { semanticSoft, useNativeType } from "../../lib/themed-module-theme"
 import { SolidListThumbTile } from "../theme/SolidListThumbTile"
+import { FacultyListPagerFooter } from "./FacultyListPagerFooter"
 import { FacultyAcademicTermActionSheet } from "./FacultyAcademicTermActionSheet"
 import {
   FacultyAcademicTermFormModal,
@@ -76,12 +78,26 @@ export function FacultyAcademicTermsScreen() {
   const [sectionFormOpen, setSectionFormOpen] = useState(false)
   const [sectionFormTerm, setSectionFormTerm] = useState<InstructorAcademicTerm | null>(null)
   const [sectionFormTarget, setSectionFormTarget] = useState<InstructorSession | null>(null)
+  const [sectionsByTerm, setSectionsByTerm] = useState<Record<number, InstructorSession[]>>({})
 
   const load = useCallback(async () => {
     if (!scope) return
     setError("")
     const data = await instructorApi.getAcademicTerms(scope)
-    setTerms(data.terms ?? [])
+    const nextTerms = data.terms ?? []
+    setTerms(nextTerms)
+    const grouped: Record<number, InstructorSession[]> = {}
+    await Promise.all(
+      nextTerms.map(async (term) => {
+        try {
+          const sessions = await instructorApi.getSessions(scope, term.id)
+          grouped[term.id] = (sessions.sessions ?? []).filter((s) => s.code.toUpperCase() !== "BETA")
+        } catch {
+          grouped[term.id] = []
+        }
+      }),
+    )
+    setSectionsByTerm(grouped)
   }, [scope])
 
   useEffect(() => {
@@ -115,6 +131,7 @@ export function FacultyAcademicTermsScreen() {
     }
     return items
   }, [terms, filter, search])
+  const pager = useFacultyListPager(displayedTerms, `${filter}:${search}`, "terms")
 
   const filterOptions: FacultyFilterOption[] = [
     { value: "all", label: "All terms" },
@@ -275,9 +292,22 @@ export function FacultyAcademicTermsScreen() {
             body="Try a different search or filter."
           />
         ) : (
-          displayedTerms.map((term) => (
-            <TermCard key={term.id} term={term} onPress={() => openTermSheet(term)} styles={styles} native={native} />
-          ))
+          <>
+            {pager.items.map((term) => (
+              <TermCard
+                key={term.id}
+                term={term}
+                sections={sectionsByTerm[term.id] ?? []}
+                courseCode={course?.course_code}
+                onPress={() => openTermSheet(term)}
+                onAddSection={() => openAddSection(term)}
+                onEditSection={(session) => openEditSection(term, session)}
+                styles={styles}
+                native={native}
+              />
+            ))}
+            <FacultyListPagerFooter pager={pager} />
+          </>
         )}
       </ScrollView>
 
@@ -442,11 +472,19 @@ function ActiveTermInsightBanner({ courseCode }: { courseCode?: string }) {
 
 function TermCard({
   term,
+  sections,
+  courseCode,
   onPress,
+  onAddSection,
+  onEditSection,
   styles,
   native}: {
   term: InstructorAcademicTerm
+  sections: InstructorSession[]
+  courseCode?: string
   onPress: () => void
+  onAddSection: () => void
+  onEditSection: (session: InstructorSession) => void
   styles: ReturnType<typeof useFacultyModuleStyles>
   native: ReturnType<typeof useThemedNative>
 }) {
@@ -455,12 +493,13 @@ function TermCard({
   const courses = uniqueTermCourses(term.courses)
 
   return (
-    <Pressable
-      style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={`${academicTermLabel(term)}${term.is_active ? ", Active" : ""}`}
-    >
+    <View style={styles.card}>
+      <Pressable
+        style={({ pressed }) => [pressed && styles.cardPressed]}
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel={`${academicTermLabel(term)}${term.is_active ? ", Active" : ""}`}
+      >
       <View style={styles.cardTop}>
         <SolidListThumbTile thumb={season.thumb} icon={season.icon} size="compact" />
         <View style={styles.cardCopy}>
@@ -492,7 +531,45 @@ function TermCard({
           ) : null}
         </View>
       ) : null}
-    </Pressable>
+      </Pressable>
+
+      <View style={termCardStyles.sectionsBlock}>
+        <Text style={[styles.cardDates, { fontWeight: "700" }]}>Sections</Text>
+        {sections.length === 0 ? (
+          <Text style={styles.cardDates}>No sections yet for {courseCode ?? "this course"}.</Text>
+        ) : (
+          sections.map((session) => (
+            <Pressable
+              key={session.id}
+              onPress={() => onEditSection(session)}
+              style={termCardStyles.sectionRow}
+              accessibilityRole="button"
+              accessibilityLabel={`Edit section ${session.code}`}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.cardTitle, { fontSize: 15 }]}>
+                  {courseCode ? `${courseCode}${session.code}` : session.code}
+                </Text>
+                <Text style={styles.cardDates}>
+                  {session.student_count ?? 0} students
+                  {session.description ? ` · ${session.description}` : ""}
+                </Text>
+              </View>
+              <Text style={[styles.cardDates, { color: native.tint }]}>Edit</Text>
+            </Pressable>
+          ))
+        )}
+        <Pressable
+          onPress={onAddSection}
+          accessibilityRole="button"
+          accessibilityLabel="Add section"
+          style={termCardStyles.addSection}
+        >
+          <Ionicons name="add-circle-outline" size={16} color={native.tint} />
+          <Text style={[styles.cardDates, { color: native.tint, fontWeight: "700" }]}>+ Add Section</Text>
+        </Pressable>
+      </View>
+    </View>
   )
 }
 
@@ -505,6 +582,14 @@ const termCardStyles = StyleSheet.create({
   },
   metaItem: { flexDirection: "row", alignItems: "center", gap: 8, flex: 1, minWidth: 0 },
   metaText: { fontWeight: "600" },
+  sectionsBlock: { gap: 8, paddingTop: 10 },
+  sectionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 8,
+  },
+  addSection: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 6 },
 })
 
 function MetaItem({

@@ -5,6 +5,7 @@ import { Ionicons } from "@/components/icons/AppIcon"
 import { useRouter } from "expo-router"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { hexToRgba } from "../../constants/app-themes"
+import { SYSTEM } from "../../constants/faculty-native-theme"
 import { useAppThemeTokens } from "../../context/AppearanceProvider"
 import { semanticSoft, useThemedStudentNative } from "../../lib/themed-module-theme"
 import { useSession } from "../../context/SessionProvider"
@@ -12,6 +13,7 @@ import { practiceApi, type SubmitPracticeResult } from "../../lib/practice-api"
 import {
   buildAnswerForSubmit,
   getQuestionOptions,
+  restoreSelectionFromSavedAnswer,
 } from "../../lib/assessment-quiz/assessment-answer-mapper"
 import {
   circuitSubmissionHasRequiredUpload,
@@ -45,6 +47,15 @@ import { QuestionContentWebView, QuestionMediaView } from "../rewards/QuestionCo
 import { parseQuestionMedia } from "../../lib/classroom-submission"
 import { QuestionPrepareGate } from "../questions/QuestionPrepareGate"
 import { resolvePracticeQuestionMcqEarnedFraction } from "../../lib/practice-mcq-earned-fraction"
+import {
+  buildPartialCreditFallbackReview,
+  isEvalPartialCredit,
+  practiceAnswerReviewOptionState,
+  practiceHubFeedbackSummary,
+  resolveObjectiveAnswerReview,
+} from "../../lib/lecture-sample-practice-grading"
+import type { PracticeAnswerReview } from "../../lib/lecture-types"
+import { extractPracticeQuestionTexts } from "../../lib/question-prepare"
 import type { StudentSession } from "../../lib/session"
 import {
   emptyMultiPartAnswer,
@@ -92,6 +103,8 @@ export function PracticeQuizScreen() {
   const [submittingAnswer, setSubmittingAnswer] = useState(false)
   const [submittingFinal, setSubmittingFinal] = useState(false)
   const [answeredIds, setAnsweredIds] = useState<Set<number>>(new Set())
+  const [answersByQuestion, setAnswersByQuestion] = useState<Record<number, string | string[]>>({})
+  const [answerReviews, setAnswerReviews] = useState<Record<number, PracticeAnswerReview>>({})
   const [attemptCounts, setAttemptCounts] = useState<Record<number, number>>({})
   const [results, setResults] = useState<SubmitPracticeResult | null>(null)
   const questionStartRef = useRef<Record<number, number>>({})
@@ -109,12 +122,6 @@ export function PracticeQuizScreen() {
     const idx = questions.findIndex((q) => !q.locked)
     return idx >= 0 ? idx : 0
   }, [questions])
-
-  useEffect(() => {
-    if (questions.some((q) => q.locked) && currentQuestion?.locked) {
-      setCurrentIndex(firstUnlockedIndex)
-    }
-  }, [questions, currentQuestion?.locked, firstUnlockedIndex])
 
   useEffect(() => {
     if (practiceSession) {
@@ -156,20 +163,134 @@ export function PracticeQuizScreen() {
     return unlockedQuestions.every((q) => answeredIds.has(q.id))
   }, [answeredIds, unlockedQuestions])
 
-  const resetSelection = useCallback((question: PracticeQuestion | undefined) => {
-    setSelectedLetter("")
-    setSelectedLetters([])
-    setTextAnswer("")
-    setCircuitAnswerJson(emptyCircuitSubmissionAnswer())
-    setMultiPartAnswerJson(
-      serializeMultiPartAnswer(emptyMultiPartAnswer(question?.subquestions ?? [])),
-    )
-    setShowHint(false)
-    setShowFeedback(false)
-    if (question) {
-      questionStartRef.current[question.id] = Date.now()
+  const restoreQuestionState = useCallback(
+    (question: PracticeQuestion | undefined) => {
+      if (!question) return
+
+      const saved = answersByQuestion[question.id]
+      const review = answerReviews[question.id]
+      const qType = question.question_type.toLowerCase()
+      const isMulti = isMultiSelectType(qType)
+
+      if (isCircuitQuestion(question) && typeof saved === "string") {
+        setCircuitAnswerJson(saved)
+        setSelectedLetter("")
+        setSelectedLetters([])
+        setTextAnswer("")
+      } else if (isMultiPartQuestion(question) && typeof saved === "string") {
+        setMultiPartAnswerJson(saved)
+        setSelectedLetter("")
+        setSelectedLetters([])
+        setTextAnswer("")
+      } else if (Array.isArray(saved)) {
+        setSelectedLetters(saved)
+        setSelectedLetter("")
+        setTextAnswer("")
+      } else if (typeof saved === "string") {
+        if (isMulti) {
+          const sel = restoreSelectionFromSavedAnswer(asAssessmentQuestion(question), saved)
+          setSelectedLetters(sel.letters)
+          setSelectedLetter("")
+          setTextAnswer("")
+        } else if (isTextInputQuestion(question) || isCodeQuestion(question)) {
+          setTextAnswer(saved)
+          setSelectedLetter("")
+          setSelectedLetters([])
+        } else {
+          setSelectedLetter(saved)
+          setSelectedLetters([])
+          setTextAnswer("")
+        }
+      } else {
+        setSelectedLetter("")
+        setSelectedLetters([])
+        setTextAnswer("")
+      }
+
+      setShowHint(false)
+      if (answeredIds.has(question.id)) {
+        setShowFeedback(true)
+        setIsCorrect(review?.isCorrect ?? false)
+        setFeedbackText(
+          practiceHubFeedbackSummary(
+            review,
+            review?.isCorrect ? "Correct!" : "Not quite — keep learning!",
+          ),
+        )
+      } else {
+        setShowFeedback(false)
+        setIsCorrect(false)
+        setFeedbackText("")
+      }
+    },
+    [answersByQuestion, answerReviews, answeredIds],
+  )
+
+  useEffect(() => {
+    if (questions.some((q) => q.locked) && currentQuestion?.locked) {
+      const target = questions[firstUnlockedIndex]
+      setCurrentIndex(firstUnlockedIndex)
+      if (target) restoreQuestionState(target)
     }
-  }, [])
+  }, [questions, currentQuestion?.locked, firstUnlockedIndex, restoreQuestionState])
+
+  useEffect(() => {
+    if (questions.length > 0 && currentIndex >= 0 && currentIndex < questions.length) {
+      restoreQuestionState(questions[currentIndex])
+    }
+  }, [currentIndex, questions, restoreQuestionState])
+
+  useEffect(() => {
+    if (!session || !attemptId || !questions.length || hydrating) return
+    let cancelled = false
+    void practiceApi.getAttemptState(session, attemptId).then((state) => {
+      if (cancelled) return
+      if (state.completedAt) {
+        void clearActivePracticeSession()
+        router.replace("/module/practice" as never)
+        return
+      }
+      if (!Array.isArray(state.answers) || state.answers.length === 0) return
+
+      const restoredAnswers: Record<number, string | string[]> = {}
+      const restoredAnswered = new Set<number>()
+      const restoredReviews: Record<number, PracticeAnswerReview> = {}
+
+      for (const row of state.answers) {
+        restoredAnswers[row.questionId] = row.studentAnswer
+        restoredAnswered.add(row.questionId)
+        const question = questions.find((q) => q.id === row.questionId)
+        if (!question) continue
+
+        const savedText = Array.isArray(row.studentAnswer)
+          ? JSON.stringify(row.studentAnswer)
+          : String(row.studentAnswer ?? "")
+        const sel = restoreSelectionFromSavedAnswer(asAssessmentQuestion(question), savedText)
+        const letters =
+          sel.letters.length > 0
+            ? sel.letters
+            : Array.isArray(row.studentAnswer)
+              ? row.studentAnswer.map(String)
+              : []
+
+        const review = resolveObjectiveAnswerReview({
+          question,
+          selectedLetters: letters,
+          selectedLetter: sel.letter,
+          serverReview: null,
+          evalResult: { isCorrect: row.isCorrect },
+        })
+        if (review) restoredReviews[row.questionId] = review
+      }
+
+      setAnswersByQuestion((prev) => ({ ...prev, ...restoredAnswers }))
+      setAnsweredIds((prev) => new Set([...prev, ...restoredAnswered]))
+      setAnswerReviews((prev) => ({ ...prev, ...restoredReviews }))
+    }).catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [session, attemptId, questions, hydrating, router])
 
   const goToIndex = (index: number) => {
     const target = questions[index]
@@ -185,7 +306,7 @@ export function PracticeQuizScreen() {
       return
     }
     setCurrentIndex(index)
-    resetSelection(questions[index])
+    restoreQuestionState(questions[index])
   }
 
   const nextUnlockedIndex = (fromIndex: number): number | null => {
@@ -284,14 +405,59 @@ export function PracticeQuizScreen() {
 
       setAttemptCounts((prev) => ({ ...prev, [currentQuestion.id]: attemptNum }))
       setAnsweredIds((prev) => new Set(prev).add(currentQuestion.id))
+
+      const evalMeta = {
+        isCorrect: evalResult.isCorrect,
+        score: evalResult.score,
+        pointsEarned: evalResult.pointsEarned,
+        maxPoints: evalResult.maxPoints ?? 1,
+      }
+
+      let review = resolveObjectiveAnswerReview({
+        question: currentQuestion,
+        selectedLetters,
+        selectedLetter,
+        serverReview: evalResult.answerReview ?? null,
+        evalResult: evalMeta,
+      })
+      if (!review) {
+        review = buildPartialCreditFallbackReview({
+          question: currentQuestion,
+          selectedLetters,
+          evalResult: evalMeta,
+        })
+      }
+      if (review) {
+        setAnswerReviews((prev) => ({ ...prev, [currentQuestion.id]: review }))
+      }
+
+      setAnswersByQuestion((prev) => ({
+        ...prev,
+        [currentQuestion.id]:
+          isCircuit || isMultiPart
+            ? typeof answerToSubmit === "string"
+              ? answerToSubmit
+              : JSON.stringify(answerToSubmit)
+            : isMulti
+              ? [...selectedLetters]
+              : selectedLetter || textAnswer || String(answerToSubmit),
+      }))
+
+      const partial = isEvalPartialCredit(evalMeta, review)
       setIsCorrect(evalResult.isCorrect)
       setFeedbackText(
         evalResult.feedback ??
           (evalResult.requiresManualReview
             ? "Submission recorded for review."
-            : evalResult.isCorrect
-              ? "Correct!"
-              : "Not quite — keep learning!"),
+            : practiceHubFeedbackSummary(
+                review,
+                partial
+                  ? "Partial credit — some selections were correct."
+                  : evalResult.isCorrect
+                    ? "Correct!"
+                    : "Not quite — keep learning!",
+                evalMeta,
+              )),
       )
       setShowFeedback(true)
 
@@ -402,6 +568,16 @@ export function PracticeQuizScreen() {
   const isMulti = isMultiSelectType(qType)
   const isText = isTextInputQuestion(currentQuestion)
   const submitted = answeredIds.has(currentQuestion.id)
+  const currentReview = answerReviews[currentQuestion.id] ?? null
+  const isPartial = isEvalPartialCredit(
+    {
+      isCorrect: currentReview?.isCorrect,
+      score: currentReview?.score,
+      pointsEarned: currentReview?.pointsEarned,
+      maxPoints: currentReview?.maxPoints ?? 1,
+    },
+    currentReview,
+  )
   const tierLocked = currentQuestion.locked === true
   const circuitConfig = parseCircuitSubmissionConfig(currentQuestion.solution_upload_config)
   const circuitReady = circuitSubmissionHasRequiredUpload(circuitAnswerJson, circuitConfig)
@@ -632,15 +808,33 @@ export function PracticeQuizScreen() {
           ) : (
             options.map(({ letter, text }) => {
               const selected = isMulti ? selectedLetters.includes(letter) : selectedLetter === letter
+              const reviewState =
+                submitted && currentReview
+                  ? practiceAnswerReviewOptionState(currentReview, letter)
+                  : null
+              const showReview = reviewState != null
+
               return (
                 <Pressable
                   key={letter}
                   style={[
                     styles.option,
                     { borderColor: tokens.border, backgroundColor: tokens.background },
-                    selected && {
+                    selected && !showReview && {
                       borderColor: tokens.accent,
                       backgroundColor: hexToRgba(tokens.accent, 0.06),
+                    },
+                    reviewState?.showPartialCreditSelection && {
+                      borderColor: SYSTEM.orange.color,
+                      backgroundColor: hexToRgba(SYSTEM.orange.color, 0.08),
+                    },
+                    reviewState?.isCorrect && {
+                      borderColor: SYSTEM.green.color,
+                      backgroundColor: hexToRgba(SYSTEM.green.color, 0.08),
+                    },
+                    reviewState?.showWrongSelection && {
+                      borderColor: SYSTEM.red.color,
+                      backgroundColor: hexToRgba(SYSTEM.red.color, 0.06),
                     },
                     submitted && styles.optionLocked,
                   ]}
@@ -660,14 +854,31 @@ export function PracticeQuizScreen() {
                     style={[
                       styles.optionLetter,
                       { backgroundColor: tokens.surface, borderColor: tokens.border },
-                      selected && { backgroundColor: tokens.accent, borderColor: tokens.accent },
+                      selected && !showReview && { backgroundColor: tokens.accent, borderColor: tokens.accent },
+                      reviewState?.showPartialCreditSelection && {
+                        backgroundColor: SYSTEM.orange.color,
+                        borderColor: SYSTEM.orange.color,
+                      },
+                      reviewState?.isCorrect && {
+                        backgroundColor: SYSTEM.green.color,
+                        borderColor: SYSTEM.green.color,
+                      },
+                      reviewState?.showWrongSelection && {
+                        backgroundColor: SYSTEM.red.color,
+                        borderColor: SYSTEM.red.color,
+                      },
                     ]}
                   >
                     <Text
                       style={[
                         styles.optionLetterText,
                         { color: SN.secondaryLabel },
-                        selected && styles.optionLetterTextSelected,
+                        (selected && !showReview) ||
+                        reviewState?.isCorrect ||
+                        reviewState?.showPartialCreditSelection ||
+                        reviewState?.showWrongSelection
+                          ? styles.optionLetterTextSelected
+                          : null,
                       ]}
                     >
                       {letter}
@@ -680,10 +891,26 @@ export function PracticeQuizScreen() {
                     <Ionicons
                       name={isMulti ? "checkbox" : "checkmark-circle"}
                       size={20}
-                      color={tokens.accent}
+                      color={
+                        reviewState?.showWrongSelection
+                          ? SYSTEM.red.color
+                          : reviewState?.showPartialCreditSelection
+                            ? SYSTEM.orange.color
+                            : reviewState?.isCorrect
+                              ? SYSTEM.green.color
+                              : tokens.accent
+                      }
                     />
                   ) : isMulti ? (
-                    <Ionicons name="square-outline" size={20} color={SN.secondaryLabel} />
+                    <Ionicons
+                      name="square-outline"
+                      size={20}
+                      color={
+                        reviewState?.isCorrect
+                          ? SYSTEM.green.color
+                          : SN.secondaryLabel
+                      }
+                    />
                   ) : null}
                 </Pressable>
               )
@@ -696,16 +923,16 @@ export function PracticeQuizScreen() {
                 styles.feedbackBox,
                 {
                   backgroundColor: semanticSoft(
-                    isCorrect ? tokens.success : tokens.danger,
+                    isCorrect ? tokens.success : isPartial ? tokens.warning : tokens.danger,
                     tokens.isDark,
                   ),
                 },
               ]}
             >
               <Ionicons
-                name={isCorrect ? "checkmark-circle" : "close-circle"}
+                name={isCorrect ? "checkmark-circle" : isPartial ? "alert-circle" : "close-circle"}
                 size={20}
-                color={isCorrect ? tokens.success : tokens.danger}
+                color={isCorrect ? tokens.success : isPartial ? tokens.warning : tokens.danger}
               />
               <View style={styles.feedbackCopy}>
                 <QuestionContentWebView text={feedbackText} embedded compact />

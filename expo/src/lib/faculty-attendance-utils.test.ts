@@ -4,6 +4,7 @@ import {
   facultyAttendanceAnalyticsIsPlaceholder,
   formatAttendancePct,
   offeringHasAttendanceActivity,
+  rankFacultyAttendanceStandings,
   sanitizeFacultyAttendanceAnalytics,
 } from "./faculty-attendance-utils"
 import type { AttendanceAnalytics } from "./instructor-api"
@@ -85,6 +86,17 @@ describe("faculty attendance Fall 2026 isolation", () => {
       records: [{ id: 1, studentId: 958, studentName: "Daniel Doe", studentNumber: "dmdoep01", section: "ELEG1301P02", status: "present", timestamp: "2026-08-24" }],
     })
     assert.equal(sanitized?.topPerformers?.length, 1)
+  })
+
+  it("ranks standings by attendance then streak for the podium", () => {
+    const ranked = rankFacultyAttendanceStandings({
+      topPerformers: [
+        { id: 1, full_name: "Late", student_id: "a", attendance_percentage: 80, current_streak: 4 },
+        { id: 2, full_name: "First", student_id: "b", attendance_percentage: 100, current_streak: 2 },
+        { id: 3, full_name: "Zero", student_id: "c", attendance_percentage: 0, current_streak: 0, credits_earned: 0 },
+      ],
+    })
+    assert.deepEqual(ranked.map((row) => row.full_name), ["First", "Late"])
   })
 
   it("does not count empty meetings as activity", () => {

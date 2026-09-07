@@ -36,6 +36,8 @@ import { FacultyGroupActionSheet } from "./FacultyGroupActionSheet"
 import { FacultyCollabCreateMenuSheet } from "./FacultyCollabCreateMenuSheet"
 import { FacultyGroupCreateModal } from "./FacultyGroupCreateModal"
 import { FacultyProjectCreateModal } from "./FacultyProjectCreateModal"
+import { useFacultyListPager } from "../../hooks/useFacultyListPager"
+import { FacultyListPagerFooter } from "./FacultyListPagerFooter"
 
 type MenuTab = "all" | "pending" | "approved" | "rejected" | "deleted"
 
@@ -153,6 +155,8 @@ export function FacultyGroupsScreen() {
         g.session.toLowerCase().includes(q),
     )
   }, [allGroups, menu, search, scope, sessionFilter])
+
+  const pager = useFacultyListPager(filtered, `${menu}:${search}:${sessionFilter}`, "groups")
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true)
@@ -299,7 +303,7 @@ export function FacultyGroupsScreen() {
           />
         ) : (
           <View style={localStyles.list}>
-            {filtered.map((group, index) => (
+            {pager.items.map((group, index) => (
               <FacultyGroupListCard
                 key={group.id}
                 group={group}
@@ -326,6 +330,7 @@ export function FacultyGroupsScreen() {
                 }
               />
             ))}
+            <FacultyListPagerFooter pager={pager} />
           </View>
         )}
       </ScrollView>

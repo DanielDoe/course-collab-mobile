@@ -9,6 +9,7 @@ describe("persist policy", () => {
     assert.equal(canPersistQueryKey(["student", "announcements", "student", "u1", "10", "A", "list"]), true)
     assert.equal(canPersistQueryKey(["student", "lectures", "student", "u1", "10", "A", "list"]), true)
     assert.equal(canPersistQueryKey(["student", "calendar", "student", "u1", "10", "A", "range"]), true)
+    assert.equal(canPersistQueryKey(["faculty", "calendar", "faculty", "u1", "10", "A", "range"]), true)
   })
 
   it("never persists admin, grades, exams, or cora secrets", () => {

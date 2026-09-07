@@ -10,6 +10,8 @@ import { useModuleTheme } from "../../lib/themed-module-shell"
 import { NATIVE } from "../../constants/faculty-native-theme"
 import { FACULTY_FLASHCARD_COLOR } from "../../lib/faculty-flashcard-theme"
 import { FacultyEmptyState } from "./faculty-shared"
+import { useFacultyListPager } from "../../hooks/useFacultyListPager"
+import { FacultyListPagerFooter } from "./FacultyListPagerFooter"
 import { FacultySearchToolbar } from "./faculty-module-shell"
 
 type DeletedCard = FlashcardCard & {
@@ -110,6 +112,8 @@ export function FacultyFlashcardsDeletedPanel({ scope, decks, cards, onChanged }
     )
   }
 
+  const decksPager = useFacultyListPager(filteredDecks, `${search}:${typeFilter}:decks`, "decks")
+  const cardsPager = useFacultyListPager(filteredCards, `${search}:${typeFilter}:cards`, "cards")
   const isEmpty = decks.length === 0 && cards.length === 0
 
   return (
@@ -137,7 +141,7 @@ export function FacultyFlashcardsDeletedPanel({ scope, decks, cards, onChanged }
         <FacultyEmptyState icon="trash-outline" title="No deleted items" body="Deleted decks and cards appear here." />
       ) : (
         <View style={localStyles.list}>
-          {filteredDecks.map((deck) => (
+          {decksPager.items.map((deck) => (
             <View
               key={`deck-${deck.id}`}
               style={[
@@ -178,7 +182,8 @@ export function FacultyFlashcardsDeletedPanel({ scope, decks, cards, onChanged }
             </View>
           ))}
 
-          {filteredCards.map((card) => (
+          <FacultyListPagerFooter pager={decksPager} />
+          {cardsPager.items.map((card) => (
             <View
               key={`card-${card.id}`}
               style={[
@@ -211,6 +216,7 @@ export function FacultyFlashcardsDeletedPanel({ scope, decks, cards, onChanged }
               </Pressable>
             </View>
           ))}
+          <FacultyListPagerFooter pager={cardsPager} />
         </View>
       )}
     </>

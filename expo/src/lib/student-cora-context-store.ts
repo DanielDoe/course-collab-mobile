@@ -13,24 +13,39 @@ import { tailorStudentCoraCapabilities } from "./student-cora-context"
 
 const memoryCache = new Map<string, StudentCoraContext>()
 
-function storageKey(studentId: string): string {
+function storageKey(studentId: string, courseId?: number | null): string {
+  if (courseId != null && Number.isFinite(courseId) && courseId > 0) {
+    return `student_cora_ctx_${studentId}_${Math.trunc(courseId)}`
+  }
   return `student_cora_ctx_${studentId}`
 }
 
-export function getStudentCoraContextFromMemory(studentId: string): StudentCoraContext | null {
-  return memoryCache.get(studentId) ?? null
+function cacheKey(studentId: string, courseId?: number | null): string {
+  return storageKey(studentId, courseId)
 }
 
-export async function loadStudentCoraContext(studentId: string): Promise<StudentCoraContext | null> {
-  const cached = memoryCache.get(studentId)
+export function getStudentCoraContextFromMemory(
+  studentId: string,
+  courseId?: number | null,
+): StudentCoraContext | null {
+  return memoryCache.get(cacheKey(studentId, courseId)) ?? null
+}
+
+export async function loadStudentCoraContext(
+  studentId: string,
+  courseId?: number | null,
+): Promise<StudentCoraContext | null> {
+  const key = cacheKey(studentId, courseId)
+  const cached = memoryCache.get(key)
   if (cached) return cached
 
   try {
-    const raw = await SecureStore.getItemAsync(storageKey(studentId))
+    const raw = await SecureStore.getItemAsync(storageKey(studentId, courseId))
     if (!raw) return null
     const parsed = JSON.parse(raw) as StudentCoraContext
     if (parsed.version !== STUDENT_CORA_CONTEXT_VERSION || !parsed.setupComplete) return null
-    memoryCache.set(studentId, parsed)
+    if (courseId != null && parsed.courseId != null && parsed.courseId !== courseId) return null
+    memoryCache.set(key, parsed)
     return parsed
   } catch {
     return null
@@ -38,13 +53,19 @@ export async function loadStudentCoraContext(studentId: string): Promise<Student
 }
 
 export async function saveStudentCoraContext(context: StudentCoraContext): Promise<void> {
-  memoryCache.set(context.studentId, context)
-  await SecureStore.setItemAsync(storageKey(context.studentId), JSON.stringify(context))
+  const key = cacheKey(context.studentId, context.courseId)
+  memoryCache.set(key, context)
+  await SecureStore.setItemAsync(storageKey(context.studentId, context.courseId), JSON.stringify(context))
 }
 
-export async function clearStudentCoraContext(studentId: string): Promise<void> {
-  memoryCache.delete(studentId)
-  await SecureStore.deleteItemAsync(storageKey(studentId))
+export async function clearStudentCoraContext(studentId: string, courseId?: number | null): Promise<void> {
+  const key = cacheKey(studentId, courseId)
+  memoryCache.delete(key)
+  await SecureStore.deleteItemAsync(storageKey(studentId, courseId))
+  if (courseId != null) {
+    memoryCache.delete(storageKey(studentId))
+    await SecureStore.deleteItemAsync(storageKey(studentId))
+  }
 }
 
 export function resolveStudentCoraCapabilities(context: StudentCoraContext | null): StudentCoraCapability[] {

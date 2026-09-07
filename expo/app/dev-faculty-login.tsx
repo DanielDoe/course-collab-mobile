@@ -1,16 +1,24 @@
 import { useEffect, useState } from "react"
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native"
-import { useRouter } from "expo-router"
+import { useLocalSearchParams, useRouter } from "expo-router"
 import { ApiError, api } from "../src/lib/api"
 import { setStoredFacultyCourseId } from "../src/lib/faculty-course-storage"
 import { instructorApi } from "../src/lib/instructor-api"
 import { useSession } from "../src/context/SessionProvider"
 import { BRAND } from "../src/constants"
+import { getStoredSession } from "../src/lib/session"
 import { replaceAuthRoute } from "../src/lib/navigation-reset"
+
+function devLoginForceParam(force: string | string[] | undefined): boolean {
+  const value = Array.isArray(force) ? force[0] : force
+  return value === "1" || value === "true"
+}
 
 /** Dev-only helper: faculty login via coursecollab://dev-faculty-login */
 export default function DevFacultyLoginScreen() {
   const router = useRouter()
+  const { force } = useLocalSearchParams<{ force?: string }>()
+  const forceLogin = devLoginForceParam(force)
   const { signIn } = useSession()
   const [error, setError] = useState("")
 
@@ -24,6 +32,14 @@ export default function DevFacultyLoginScreen() {
 
     void (async () => {
       try {
+        if (!forceLogin) {
+          const existing = await getStoredSession()
+          if (existing) {
+            if (mounted) replaceAuthRoute(router, "/signing-in")
+            return
+          }
+        }
+
         const data = await api.instructorLogin("dmdoe", "dmdoe123")
         const instructor = data.faculty ?? data.instructor
         if (!instructor) throw new ApiError("Login failed", 500)
@@ -61,7 +77,7 @@ export default function DevFacultyLoginScreen() {
     return () => {
       mounted = false
     }
-  }, [router, signIn])
+  }, [forceLogin, router, signIn])
 
   return (
     <View style={styles.root}>

@@ -12,6 +12,7 @@ import { Ionicons } from "@/components/icons/AppIcon"
 import { ApiError } from "../../lib/api"
 import { useFacultyShell } from "../../context/FacultyShellContext"
 import { useFacultyScope } from "../../hooks/useFacultyScope"
+import { useFacultyListPager } from "../../hooks/useFacultyListPager"
 import { persistFacultyCourse } from "../../hooks/useFacultyShellRefresh"
 import {
   termPayloadFromForm,
@@ -34,6 +35,7 @@ import { FACULTY_ADMIN_COLOR } from "../../lib/faculty-admin-theme"
 import { FacultyEmptyState } from "./faculty-shared"
 import { useFacultyModuleScrollPadding, FacultySearchToolbar } from "./faculty-module-shell"
 import { useModuleTheme } from "../../lib/themed-module-shell"
+import { FacultyListPagerFooter } from "./FacultyListPagerFooter"
 import { FacultyMyCourseCard } from "./FacultyAdminListCards"
 import { FacultyMyCourseActionSheet } from "./FacultyMyCourseActionSheet"
 import { FacultyCreateCourseSheet } from "./FacultyCreateCourseSheet"
@@ -128,10 +130,12 @@ export function FacultyMyCoursesScreen() {
       is_active_term: course.is_active_term,
       academic_term_id: course.academic_term_id,
       description: course.description,
+      session_id: course.session_id,
+      session_code: course.session_code,
     }
+    await persistFacultyCourse(session.id, next.id, next.session_code)
     setSelectedCourse(next)
-    await persistFacultyCourse(session.id, next.id)
-    await refreshFacultyData?.(next)
+    await refreshFacultyData?.(next, { force: true })
   }
 
   const filtered = useMemo(() => {
@@ -145,13 +149,14 @@ export function FacultyMyCoursesScreen() {
     )
   }, [courses, search])
 
+  const pager = useFacultyListPager(filtered, `courses:${search}`, "courses")
   const currentTerm = useMemo(
-    () => filtered.filter((c) => c.is_active_term !== false),
-    [filtered],
+    () => pager.items.filter((c) => c.is_active_term !== false),
+    [pager.items],
   )
   const otherTerms = useMemo(
-    () => filtered.filter((c) => c.is_active_term === false),
-    [filtered],
+    () => pager.items.filter((c) => c.is_active_term === false),
+    [pager.items],
   )
 
   function openCourseSheet(course: FacultyCourseOfferingRow) {
@@ -288,7 +293,7 @@ export function FacultyMyCoursesScreen() {
         <View style={styles.list}>
           {items.map((course) => (
             <FacultyMyCourseCard
-              key={facultyOfferingKey(course.course_id, course.academic_term_id)}
+              key={facultyOfferingKey(course)}
               course={course}
               active={selectedCourse?.id === course.course_id}
               onPress={() => openCourseSheet(course)}
@@ -372,7 +377,8 @@ export function FacultyMyCoursesScreen() {
           <>
             {renderSection("Current Term", currentTerm)}
             {renderSection("Other Terms", otherTerms)}
-            {currentTerm.length === 0 && otherTerms.length === 0 ? renderSection("Courses", filtered) : null}
+            {currentTerm.length === 0 && otherTerms.length === 0 ? renderSection("Courses", pager.items) : null}
+            <FacultyListPagerFooter pager={pager} />
           </>
         )}
       </ScrollView>

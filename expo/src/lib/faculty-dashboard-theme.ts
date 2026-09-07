@@ -5,6 +5,19 @@ import type { SolidListThumb } from "./solid-list-thumb"
 import { solidListThumbFixed } from "./solid-list-thumb"
 
 /** Faculty dashboard KPI — same Color Hunt solid thumb pattern as student `dashboard-theme.ts`. */
+export const FACULTY_DASHBOARD_QUICK_ACTION_THUMBS = {
+  points: solidListThumbFixed(COLOR_HUNT.amber, COLOR_HUNT.ink),
+  issues: solidListThumbFixed(COLOR_HUNT.orange),
+  officeHours: solidListThumbFixed(COLOR_HUNT_COOL.cyan),
+  messages: solidListThumbFixed(COLOR_HUNT_COOL.indigo),
+  lectures: solidListThumbFixed(COLOR_HUNT_COOL.sky, "#1E3A5F"),
+  quizzes: solidListThumbFixed(COLOR_HUNT_COOL.indigo),
+  attendance: solidListThumbFixed(COLOR_HUNT_COOL.gold, COLOR_HUNT.ink),
+  calendar: solidListThumbFixed(COLOR_HUNT.yellow, COLOR_HUNT.ink),
+  announcements: solidListThumbFixed(COLOR_HUNT.pink),
+  playground: solidListThumbFixed(COLOR_HUNT.orange),
+} as const satisfies Record<string, SolidListThumb>
+
 export const FACULTY_DASHBOARD_KPI_THUMBS = {
   activeQuizzes: solidListThumbFixed(COLOR_HUNT_COOL.indigo),
   students: solidListThumbFixed(COLOR_HUNT_COOL.cyan),

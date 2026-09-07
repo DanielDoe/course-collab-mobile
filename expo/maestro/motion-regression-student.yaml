@@ -1,0 +1,110 @@
+appId: com.coursecollab.app
+---
+# Motion regression — drawer, filter sheets, search dock, Cora, messages.
+# Run on iOS simulator with dev student login.
+
+- launchApp:
+    clearState: false
+- openLink: coursecollab://dev-student-login
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 90000
+- tapOn:
+    text: "Not now"
+    optional: true
+- tapOn:
+    text: "Dismiss alert"
+    optional: true
+
+# --- Drawer motion ---
+- assertNotVisible:
+    text: "Close menu"
+- swipe:
+    start: "4%,50%"
+    end: "55%,50%"
+    duration: 450
+- extendedWaitUntil:
+    visible: "Close menu"
+    timeout: 10000
+- waitForAnimationToEnd
+- tapOn: "Close menu"
+- waitForAnimationToEnd
+- assertNotVisible:
+    text: "Close menu"
+
+# --- Search dock + filter sheet (Assessments) ---
+- openLink: coursecollab:///module/assessments
+- extendedWaitUntil:
+    visible: "Assessments"
+    timeout: 30000
+- tapOn:
+    id: "Open filters"
+    optional: true
+- tapOn:
+    text: "Open filters"
+    optional: true
+- extendedWaitUntil:
+    visible: "Filter|All types|Done"
+    timeout: 10000
+- waitForAnimationToEnd
+- takeScreenshot: motion-filter-sheet-open
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn:
+    point: "50%,12%"
+    optional: true
+- waitForAnimationToEnd
+
+# --- Cora keyboard shell ---
+- openLink: coursecollab:///module/ai-tutor
+- extendedWaitUntil:
+    visible: "New conversation|Message Cora"
+    timeout: 30000
+- tapOn:
+    text: "New conversation"
+    optional: true
+- tapOn:
+    text: "Message Cora…"
+    optional: true
+- inputText: "hello"
+- waitForAnimationToEnd
+- takeScreenshot: motion-cora-keyboard
+- hideKeyboard
+- waitForAnimationToEnd
+
+# --- Messages thread ---
+- openLink: coursecollab:///module/messages
+- extendedWaitUntil:
+    visible: "Messages"
+    timeout: 30000
+- tapOn:
+    text: ".*"
+    index: 0
+    optional: true
+- extendedWaitUntil:
+    visible: "Message|Type a message|Send"
+    timeout: 15000
+    optional: true
+- waitForAnimationToEnd
+- takeScreenshot: motion-messages-thread
+
+# --- Forum thread composer (collaboration) ---
+- openLink: coursecollab:///module/forum
+- extendedWaitUntil:
+    visible: "Forum|Discussion"
+    timeout: 30000
+- tapOn:
+    text: ".*"
+    index: 0
+    optional: true
+- extendedWaitUntil:
+    visible: "Write a reply"
+    timeout: 15000
+    optional: true
+- tapOn:
+    text: "Write a reply…"
+    optional: true
+- waitForAnimationToEnd
+- takeScreenshot: motion-forum-composer
+- hideKeyboard

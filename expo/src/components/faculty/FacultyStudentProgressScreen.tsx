@@ -36,6 +36,10 @@ import {
   hasScoreTrendChartData,
 } from "./faculty-chart-html"
 import { sanitizeFacultyAttendanceAnalytics } from "../../lib/faculty-attendance-utils"
+import {
+  effectiveFacultySectionCode,
+  useFacultySectionFilter,
+} from "../../lib/faculty-section-scope"
 import { useFacultyScope } from "../../hooks/useFacultyScope"
 import { NATIVE } from "../../constants/faculty-native-theme"
 import { FacultyChartCard } from "./FacultyChartCard"
@@ -53,7 +57,9 @@ import { FacultyPracticeStudentReportModal } from "./FacultyPracticeStudentRepor
 import { FacultyAtRiskActionSheet } from "./FacultyAtRiskActionSheet"
 import { FacultyStudentDetailModal } from "./FacultyStudentDetailModal"
 import { useSuppressModuleSearchDock } from "../../context/ModuleSearchDockContext"
+import { useFacultyListPager } from "../../hooks/useFacultyListPager"
 import { useModuleTheme } from "../../lib/themed-module-shell"
+import { FacultyListPagerFooter } from "./FacultyListPagerFooter"
 import { useChartContentWidth, useDashboardContentStyle } from "../../lib/responsive-layout"
 
 const TABS: Array<{ id: StudentProgressTab; label: string; icon: keyof typeof Ionicons.glyphMap }> = [
@@ -69,6 +75,7 @@ export function FacultyStudentProgressScreen() {
   const dashboardContentStyle = useDashboardContentStyle()
   const chartWidth = useChartContentWidth()
   const { scope, ready } = useFacultyScope()
+  const { sessionFilter, setSessionFilter } = useFacultySectionFilter(scope, "ALL")
 
   const [tab, setTab] = useState<StudentProgressTab>("overview")
   const [stats, setStats] = useState<InstructorDashboardStats | null>(null)
@@ -76,7 +83,6 @@ export function FacultyStudentProgressScreen() {
   const [students, setStudents] = useState<PracticeStudentProgress[]>([])
   const [attendance, setAttendance] = useState<AttendanceAnalytics | null>(null)
   const [sessions, setSessions] = useState<InstructorSession[]>([])
-  const [sessionFilter, setSessionFilter] = useState("ALL")
   const [sessionSheetOpen, setSessionSheetOpen] = useState(false)
   const [search, setSearch] = useState("")
   const [loading, setLoading] = useState(true)
@@ -86,10 +92,15 @@ export function FacultyStudentProgressScreen() {
   const [selectedAtRisk, setSelectedAtRisk] = useState<AtRiskStudentRow | null>(null)
   const [profileStudent, setProfileStudent] = useState<InstructorStudent | null>(null)
 
+  const sectionForScope = useMemo(
+    () => effectiveFacultySectionCode(scope, sessionFilter, "ALL"),
+    [scope, sessionFilter],
+  )
+
   const load = useCallback(async () => {
     if (!scope) return
     setError("")
-    const sessionCode = sessionFilter === "ALL" ? undefined : sessionFilter
+    const sessionCode = sectionForScope ?? (sessionFilter === "ALL" ? undefined : sessionFilter)
     const [nextStats, nextCharts, nextStudents, nextAttendance, sessionRes] = await Promise.all([
       instructorApi.getDashboardStats(scope),
       instructorApi.getDashboardCharts(scope),
@@ -102,7 +113,7 @@ export function FacultyStudentProgressScreen() {
     setStudents(nextStudents)
     setAttendance(nextAttendance)
     setSessions(sessionRes.sessions ?? [])
-  }, [scope, sessionFilter])
+  }, [scope, sessionFilter, sectionForScope])
 
   useEffect(() => {
     if (!ready) {
@@ -126,23 +137,33 @@ export function FacultyStudentProgressScreen() {
     }
   }
 
+  const scopedStudents = useMemo(
+    () =>
+      filterPracticeProgress(
+        students,
+        "",
+        sectionForScope ?? (sessionFilter === "ALL" ? "ALL" : sessionFilter),
+      ),
+    [students, sectionForScope, sessionFilter],
+  )
+
   const filteredStudents = useMemo(
-    () => filterPracticeProgress(students, search, sessionFilter),
-    [students, search, sessionFilter],
+    () => filterPracticeProgress(students, search, sectionForScope ?? sessionFilter),
+    [students, search, sectionForScope, sessionFilter],
   )
 
   const lowPractice = useMemo(
-    () => students.filter((s) => (s.avg_score ?? 100) < 60 && (s.total_attempts ?? 0) > 0),
-    [students],
+    () => scopedStudents.filter((s) => (s.avg_score ?? 100) < 60 && (s.total_attempts ?? 0) > 0),
+    [scopedStudents],
   )
 
   const scopedAttendance = useMemo(
     () =>
       sanitizeFacultyAttendanceAnalytics(attendance, {
-        sectionCode: sessionFilter === "ALL" ? "ALL" : sessionFilter,
+        sectionCode: sectionForScope ?? (sessionFilter === "ALL" ? "ALL" : sessionFilter),
         courseSessionCodes: sessions.map((s) => s.code),
       }),
-    [attendance, sessionFilter, sessions],
+    [attendance, sectionForScope, sessionFilter, sessions],
   )
 
   const atRiskRows = useMemo(
@@ -151,17 +172,22 @@ export function FacultyStudentProgressScreen() {
   )
 
   const filteredAtRisk = useMemo(() => filterAtRiskRows(atRiskRows, search), [atRiskRows, search])
+  const studentsPager = useFacultyListPager(filteredStudents, `${search}:${sessionFilter}`, "students")
+  const atRiskPager = useFacultyListPager(filteredAtRisk, `${search}:${sessionFilter}`, "students")
 
   const tabs = TABS.map((t) => ({
     ...t,
     label:
       t.id === "at_risk" && atRiskRows.length > 0
         ? `${t.label} · ${atRiskRows.length}`
-        : t.id === "students" && students.length > 0
-          ? `${t.label} · ${students.length}`
+        : t.id === "students" && scopedStudents.length > 0
+          ? `${t.label} · ${scopedStudents.length}`
           : t.label}))
 
-  const practiceDistribution = useMemo(() => buildPracticeScoreDistribution(students), [students])
+  const practiceDistribution = useMemo(
+    () => buildPracticeScoreDistribution(scopedStudents),
+    [scopedStudents],
+  )
   const practiceDistributionHtml = useMemo(
     () => buildFacultyPracticeScoreDistributionChartHtml(practiceDistribution, chartWidth),
     [practiceDistribution, chartWidth],
@@ -201,7 +227,7 @@ export function FacultyStudentProgressScreen() {
             value={search}
             onChange={setSearch}
             placeholder={tab === "students" ? "Search students…" : "Search at-risk students…"}
-            filterActive={tab === "students" && sessionFilter !== "ALL"}
+            filterActive={tab === "students" && !sectionForScope && sessionFilter !== "ALL"}
             onOpenFilter={tab === "students" ? () => setSessionSheetOpen(true) : undefined}
             showFilter={tab === "students"}
           />
@@ -275,22 +301,23 @@ export function FacultyStudentProgressScreen() {
           filteredStudents.length === 0 ? (
             <FacultyEmptyState
               icon="people-outline"
-              title={students.length === 0 ? "No practice progress yet" : "No matches"}
+              title={scopedStudents.length === 0 ? "No practice progress yet" : "No matches"}
               body={
-                students.length === 0
+                scopedStudents.length === 0
                   ? "Student practice activity will appear here."
                   : "Try another search or section filter."
               }
             />
           ) : (
             <View style={styles.list}>
-              {filteredStudents.map((student) => (
+              {studentsPager.items.map((student) => (
                 <FacultyStudentProgressCard
                   key={student.student_id}
                   student={student}
                   onPress={() => setSelectedStudent(student)}
                 />
               ))}
+              <FacultyListPagerFooter pager={studentsPager} />
             </View>
           )
         ) : filteredAtRisk.length === 0 ? (
@@ -301,9 +328,10 @@ export function FacultyStudentProgressScreen() {
           />
         ) : (
           <View style={styles.list}>
-            {filteredAtRisk.map((row) => (
+            {atRiskPager.items.map((row) => (
               <FacultyAtRiskCard key={row.id} row={row} onPress={() => setSelectedAtRisk(row)} />
             ))}
+            <FacultyListPagerFooter pager={atRiskPager} />
           </View>
         )}
       </ScrollView>

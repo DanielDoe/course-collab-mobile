@@ -15,6 +15,9 @@ type StudentShellContextValue = {
   openNotifications: () => void
   closeNotifications: () => void
   toggleNotifications: () => void
+  coursePickerOpen: boolean
+  openCoursePicker: () => void
+  closeCoursePicker: () => void
   membershipTier: MembershipTier
   membershipTierLoaded: boolean
   setMembershipTier: (tier: MembershipTier) => void
@@ -35,6 +38,7 @@ export function StudentShellProvider({ children }: { children: ReactNode }) {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
+  const [coursePickerOpen, setCoursePickerOpen] = useState(false)
   const [membershipTier, setMembershipTier] = useState<MembershipTier>("Scholar")
   const [membershipTierLoaded, setMembershipTierLoaded] = useState(false)
   const [classroomPoints, setClassroomPoints] = useState(0)
@@ -48,6 +52,7 @@ export function StudentShellProvider({ children }: { children: ReactNode }) {
   const openDrawer = useCallback(() => {
     setProfileOpen(false)
     setNotificationsOpen(false)
+    setCoursePickerOpen(false)
     setDrawerOpen(true)
   }, [])
   const closeDrawer = useCallback(() => setDrawerOpen(false), [])
@@ -56,6 +61,7 @@ export function StudentShellProvider({ children }: { children: ReactNode }) {
       if (!v) {
         setProfileOpen(false)
         setNotificationsOpen(false)
+        setCoursePickerOpen(false)
       }
       return !v
     })
@@ -64,6 +70,7 @@ export function StudentShellProvider({ children }: { children: ReactNode }) {
   const openProfile = useCallback(() => {
     setDrawerOpen(false)
     setNotificationsOpen(false)
+    setCoursePickerOpen(false)
     setProfileOpen(true)
   }, [])
   const closeProfile = useCallback(() => setProfileOpen(false), [])
@@ -72,6 +79,7 @@ export function StudentShellProvider({ children }: { children: ReactNode }) {
       if (!v) {
         setDrawerOpen(false)
         setNotificationsOpen(false)
+        setCoursePickerOpen(false)
       }
       return !v
     })
@@ -80,6 +88,7 @@ export function StudentShellProvider({ children }: { children: ReactNode }) {
   const openNotifications = useCallback(() => {
     setDrawerOpen(false)
     setProfileOpen(false)
+    setCoursePickerOpen(false)
     setNotificationsOpen(true)
   }, [])
   const closeNotifications = useCallback(() => setNotificationsOpen(false), [])
@@ -88,10 +97,19 @@ export function StudentShellProvider({ children }: { children: ReactNode }) {
       if (!v) {
         setDrawerOpen(false)
         setProfileOpen(false)
+        setCoursePickerOpen(false)
       }
       return !v
     })
   }, [])
+
+  const openCoursePicker = useCallback(() => {
+    setDrawerOpen(false)
+    setProfileOpen(false)
+    setNotificationsOpen(false)
+    setCoursePickerOpen(true)
+  }, [])
+  const closeCoursePicker = useCallback(() => setCoursePickerOpen(false), [])
 
   const value = useMemo(
     () => ({
@@ -107,6 +125,9 @@ export function StudentShellProvider({ children }: { children: ReactNode }) {
       openNotifications,
       closeNotifications,
       toggleNotifications,
+      coursePickerOpen,
+      openCoursePicker,
+      closeCoursePicker,
       membershipTier,
       membershipTierLoaded,
       setMembershipTier,
@@ -130,6 +151,9 @@ export function StudentShellProvider({ children }: { children: ReactNode }) {
       openNotifications,
       closeNotifications,
       toggleNotifications,
+      coursePickerOpen,
+      openCoursePicker,
+      closeCoursePicker,
       membershipTier,
       membershipTierLoaded,
       classroomPoints,

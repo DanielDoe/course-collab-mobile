@@ -38,6 +38,12 @@ export function resolveNotificationLink(link: string | null | undefined): string
     return path
   }
 
+  if (path.startsWith("/schedule-adjustment/")) {
+    const requestId = path.slice("/schedule-adjustment/".length).split("/")[0]
+    if (requestId && /^\d+$/.test(requestId)) return `/schedule-adjustment/${requestId}`
+    return "/module/schedule-adjustment"
+  }
+
   const v2Prefix = "/student/dashboard-v2/"
   if (path.startsWith(v2Prefix)) {
     const rest = path.slice(v2Prefix.length)
@@ -68,6 +74,9 @@ export function resolveNotificationLink(link: string | null | undefined): string
       const requestId = params?.get("request")
       if (requestId && /^\d+$/.test(requestId)) return `/recommendations/${requestId}`
       return "/module/recommendations"
+    }
+    if (segment === "schedule-adjustment") {
+      return tail.length && /^\d+$/.test(tail[0]) ? `/schedule-adjustment/${tail[0]}` : "/module/schedule-adjustment"
     }
     const nativeModule = CLASSIC_MODULE_MAP[segment]
     if (nativeModule) return `/module/${nativeModule}`

@@ -4,6 +4,7 @@ import { Ionicons } from "@/components/icons/AppIcon"
 import { LinearGradient } from "expo-linear-gradient"
 import { useAppThemeTokens } from "../../context/AppearanceProvider"
 import { nativeType } from "../../constants/faculty-native-theme"
+import { shouldShowPurchaseCta } from "../../lib/purchase-navigation"
 
 export type StudentHeroStat = {
   icon: keyof typeof Ionicons.glyphMap
@@ -78,6 +79,7 @@ export function StudentThemedLocked({
 }: StudentThemedLockedProps) {
   const tokens = useAppThemeTokens()
   const hero = tokens.hero
+  const showPurchaseActions = shouldShowPurchaseCta()
 
   return (
     <View style={[styles.lockedRoot, { paddingTop, paddingBottom }]}>
@@ -85,16 +87,18 @@ export function StudentThemedLocked({
         <Ionicons name={icon} size={40} color="#ffffff" />
         <Text style={styles.lockedSubtitle}>{subtitle}</Text>
       </LinearGradient>
-      <Pressable onPress={onUpgrade} style={styles.upgradeBtnWrap}>
-        <LinearGradient
-          colors={[tokens.accent, tokens.accentHover]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={styles.upgradeBtn}
-        >
-          <Text style={styles.upgradeBtnText}>{upgradeLabel}</Text>
-        </LinearGradient>
-      </Pressable>
+      {showPurchaseActions ? (
+        <Pressable onPress={onUpgrade} style={styles.upgradeBtnWrap}>
+          <LinearGradient
+            colors={[tokens.accent, tokens.accentHover]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.upgradeBtn}
+          >
+            <Text style={styles.upgradeBtnText}>{upgradeLabel}</Text>
+          </LinearGradient>
+        </Pressable>
+      ) : null}
     </View>
   )
 }

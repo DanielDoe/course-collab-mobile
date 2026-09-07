@@ -17,6 +17,9 @@ import {
   RECOMMENDATION_PURPOSES,
   type RecommendationRequest} from "../../lib/course-info-api"
 import { TabbedModuleLayout, signatureListStyles } from "../theme/TabbedModuleLayout"
+import { StudentFilterSheet, StudentSearchToolbar } from "../student/student-search-toolbar"
+import { useOptionalStudentActiveCourse } from "../../context/StudentActiveCourseContext"
+import { useResetOnScopeChange } from "../../hooks/use-reset-on-scope-change"
 import { EmptyBlock } from "../rewards/rewards-shared"
 import { COURSE_INFO_ACTION, COURSE_INFO_RECOMMENDATION } from "../../lib/course-info-color-theme"
 import { InfoSectionCard, StatusBadge, statusTone, useCourseInfoTheme } from "./course-info-shared"
@@ -25,7 +28,8 @@ import { useThemedNative } from "../../context/AppearanceProvider"
 import { useNativeType } from "../../lib/themed-module-theme"
 import { useNotificationModuleRefresh } from "../../lib/notifications/notification-events"
 import { FacultySummerCampDatePicker } from "../faculty/FacultySummerCampDatePicker"
-
+import { useFacultyListPager } from "../../hooks/useFacultyListPager"
+import { FacultyListPagerFooter } from "../faculty/FacultyListPagerFooter"
 function useStudentSession(): StudentSession | null {
   const { session } = useSession()
   return session?.portal === "student" ? session : null
@@ -79,6 +83,14 @@ export function RecommendationsScreen() {
   const native = useThemedNative()
   const type = useNativeType()
   const [tab, setTab] = useState<Tab>(params.tab === "new" ? "new" : "requests")
+  const [search, setSearch] = useState("")
+  const [statusFilter, setStatusFilter] = useState("all")
+  const [filterOpen, setFilterOpen] = useState(false)
+  const courseKey = useOptionalStudentActiveCourse()?.activeCourse?.pickerKey
+  useResetOnScopeChange(courseKey, useCallback(() => {
+    setSearch("")
+    setStatusFilter("all")
+  }, []))
   const [requests, setRequests] = useState<RecommendationRequest[]>([])
   const [instructors, setInstructors] = useState<Array<{ id: number; name?: string; username?: string }>>([])
   const [sessions, setSessions] = useState<Array<{ id: number; code?: string; description?: string }>>([])
@@ -169,27 +181,60 @@ export function RecommendationsScreen() {
     [],
   )
 
+  const visibleRequests = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return requests.filter((item) => {
+      const status = item.status.replace(/_/g, " ").toLowerCase()
+      if (statusFilter !== "all" && item.status.toLowerCase() !== statusFilter) return false
+      if (!q) return true
+      return [
+        purposeLabel(item.purpose),
+        item.course_code,
+        item.instructor_name,
+        item.status,
+        item.student_request_description,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+        .includes(q)
+    })
+  }, [requests, search, statusFilter])
+
+  const requestsPager = useFacultyListPager(
+    visibleRequests,
+    `${search}|${statusFilter}`,
+    "requests",
+  )
+
   function renderRequestsPage() {
-    if (requests.length === 0) {
+    if (visibleRequests.length === 0) {
       return (
         <EmptyBlock
           icon="document-text-outline"
-          title="No requests yet"
-          body="Start a new request — your instructor stays in control of drafts and PDFs."
+          title={search.trim() || statusFilter !== "all" ? "No matching requests" : "No requests yet"}
+          body={
+            search.trim() || statusFilter !== "all"
+              ? "Try a different search or reset filters."
+              : "Start a new request — your instructor stays in control of drafts and PDFs."
+          }
         />
       )
     }
 
     return (
-      <View style={signatureListStyles.list}>
-        {requests.map((item) => (
-          <RequestCard
-            key={item.id}
-            item={item}
-            onPress={() => router.push(`/recommendations/${item.id}` as never)}
-          />
-        ))}
-      </View>
+      <>
+        <View style={signatureListStyles.list}>
+          {requestsPager.items.map((item) => (
+            <RequestCard
+              key={item.id}
+              item={item}
+              onPress={() => router.push(`/recommendations/${item.id}` as never)}
+            />
+          ))}
+        </View>
+        <FacultyListPagerFooter pager={requestsPager} />
+      </>
     )
   }
 
@@ -315,6 +360,41 @@ export function RecommendationsScreen() {
   }
 
   return (
+    <>
+    <StudentSearchToolbar
+      value={search}
+      onChange={(value) => {
+        setSearch(value)
+        if (value.trim()) setTab("requests")
+      }}
+      placeholder="Search purpose, instructor, or status…"
+      filterActive={statusFilter !== "all"}
+      filterLabel="Filter recommendation letters"
+      onOpenFilter={() => setFilterOpen(true)}
+      trailingAction={{
+        onPress: () => setTab("new"),
+        accessibilityLabel: "New recommendation request",
+        icon: "add",
+      }}
+    />
+    <StudentFilterSheet
+      visible={filterOpen}
+      title="Filter requests"
+      value={statusFilter}
+      onSelect={(value) => {
+        setStatusFilter(value)
+        setFilterOpen(false)
+        setTab("requests")
+      }}
+      onClose={() => setFilterOpen(false)}
+      options={[
+        { value: "all", label: "All statuses" },
+        { value: "pending", label: "Pending" },
+        { value: "in_progress", label: "In progress" },
+        { value: "completed", label: "Completed" },
+        { value: "cancelled", label: "Cancelled" },
+      ]}
+    />
     <TabbedModuleLayout
       tabs={tabs}
       tab={tab}
@@ -325,6 +405,7 @@ export function RecommendationsScreen() {
       error={error}
       pages={[renderRequestsPage(), renderNewRequestPage()]}
     />
+    </>
   )
 }
 

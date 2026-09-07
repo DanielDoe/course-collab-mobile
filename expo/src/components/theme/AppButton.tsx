@@ -1,9 +1,10 @@
 import type { ReactNode } from "react"
-import { ActivityIndicator, Pressable, StyleSheet, Text, type StyleProp, type ViewStyle } from "react-native"
+import { ActivityIndicator, StyleSheet, Text, type StyleProp, type ViewStyle } from "react-native"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { APP_BUTTON_MIN_HEIGHT, APP_BUTTON_PADDING, APP_BUTTON_RADIUS } from "../../constants/app-button"
 import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
 import { useNativeType } from "../../lib/themed-module-theme"
+import { PressableScale } from "../motion/PressableScale"
 
 export type AppButtonVariant = "primary" | "secondary" | "outline" | "soft" | "ghost"
 export type AppButtonSize = "md" | "sm"
@@ -99,8 +100,8 @@ export function AppButton({
     ) : null
 
   return (
-    <Pressable
-      style={({ pressed }) => [
+    <PressableScale
+      style={[
         styles.base,
         {
           minHeight: minH,
@@ -109,7 +110,7 @@ export function AppButton({
           backgroundColor: fill,
           borderColor: variant === "primary" || variant === "ghost" ? fill : palette.border,
           borderWidth: variant === "primary" ? 0 : StyleSheet.hairlineWidth,
-          opacity: isDisabled ? 0.5 : pressed ? 0.9 : 1,
+          opacity: isDisabled ? 0.5 : 1,
           alignSelf: fullWidth ? "stretch" : "flex-start",
         },
         style,
@@ -130,7 +131,7 @@ export function AppButton({
           {icon && iconPosition === "right" ? iconNode : null}
         </>
       )}
-    </Pressable>
+    </PressableScale>
   )
 }
 

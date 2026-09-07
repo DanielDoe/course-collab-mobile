@@ -10,9 +10,9 @@ const here = dirname(fileURLToPath(import.meta.url))
 describe("quiz history client load contract", () => {
   it("lists History from /api/student/quiz-history, not assessment-history alone", () => {
     const api = readFileSync(join(here, "student-api.ts"), "utf8")
-    assert.match(api, /getQuizHistory:\s*\(session/)
+    assert.match(api, /getQuizHistory:\s*(?:async\s*)?\(session/)
     assert.match(api, /\/api\/student\/quiz-history/)
-    assert.match(api, /getAssessmentHistory:\s*\(session/)
+    assert.match(api, /getAssessmentHistory:\s*(?:async\s*)?\(session/)
     assert.match(api, /\/api\/student\/assessment-history/)
     assert.match(api, /studentAuthenticatedRequest|studentRequest/)
 

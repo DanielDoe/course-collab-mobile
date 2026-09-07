@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { ActivityIndicator, FlatList, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, FlatList, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { AppAlert } from '../../../lib/app-alert'
 import Animated, {
   Easing,
@@ -33,8 +33,11 @@ import {
   facultyCoraChatSolidCanvas,
   facultyCoraChatStarterCardStyle,
 } from "../../../lib/faculty-cora-theme"
-import { getThemedCoraChatBubblePalette } from "../../ai-tutor/cora-chat-bubble-theme"
+import { CORA_CHAT_EDGE_PADDING, getThemedCoraChatBubblePalette } from "../../ai-tutor/cora-chat-bubble-theme"
 import { CoraActionCard } from "../../cora/CoraActionCard"
+import { CoraUiPayloadCard, isRedundantCoraUiPayload } from "../../cora/CoraUiPayloadCard"
+import { CoraConvertToToolChipRow } from "../../cora/CoraConvertToToolChip"
+import { convertToToolSuggestions } from "../../../lib/cora/convert-to-tool-suggestion"
 import { openCoraNativeRoute } from "../../../lib/cora/resolve-open-route"
 import { CoraChatDayDivider } from "../../cora/CoraChatDayDivider"
 import { shouldShowChatDayDivider } from "../../../lib/cora/chat-day-divider"
@@ -111,8 +114,10 @@ import {
   buildFacultyCoraIntentStarter,
   facultyCoraIntentCapability,
 } from "../../../lib/faculty-cora-composer-intents"
+import { supplementFacultyCoraLiveResponse } from "../../../lib/faculty-cora-create-offline"
 import type { CoraToolRunResult } from "../../../lib/cora-tool-runner"
 import { FacultyCoraImportCourseSheet } from "./FacultyCoraImportCourseSheet"
+import { ChatKeyboardShell } from "../../motion/ChatKeyboardShell"
 import { CoraBrand } from "../../cora/CoraBrand"
 import { CoraChatAmbientLayer } from "../../cora/CoraChatAmbientLayer"
 import { FacultyCoraComposerAttachMenu } from "./FacultyCoraComposerAttachMenu"
@@ -394,7 +399,7 @@ export function FacultyCoraImmersiveChat({
   }, [capabilityId])
 
   const persistActiveThread = useCallback(
-    async (messagesOverride?: AssistantMessage[]) => {
+    async (messagesOverride?: AssistantMessage[], capabilityOverride?: FacultyCoraCapabilityId) => {
       const id = threadIdRef.current
       const courseId = scope.courseId
       if (!id || !courseId) return
@@ -413,13 +418,16 @@ export function FacultyCoraImmersiveChat({
       // Keep ref in sync when caller passes the just-built message list (setState is async).
       if (messagesOverride) messagesRef.current = messagesOverride
 
+      const persistedCapability = capabilityOverride ?? activeCapabilityId
+      const persistedCapabilityMeta = resolveFacultyCoraCapability(persistedCapability, context)
+
       const existingThread =
         threads.find((thread) => thread.id === id) ?? archivedThreads.find((thread) => thread.id === id)
 
-      const thread = buildFacultyCoraThread(id, storable, activeCapabilityId, {
+      const thread = buildFacultyCoraThread(id, storable, persistedCapability, {
         createdAt: createdAtRef.current,
-        capabilityId: activeCapabilityId,
-        title: existingThread?.title ?? capability.label,
+        capabilityId: persistedCapability,
+        title: existingThread?.title ?? persistedCapabilityMeta.label,
         titleIsCustom: existingThread?.titleIsCustom,
       })
       await saveFacultyCoraThread(scope.instructorId, courseId, thread, scope)
@@ -430,7 +438,7 @@ export function FacultyCoraImmersiveChat({
         )
       })
     },
-    [activeCapabilityId, archivedThreads, capability.label, scope, threads],
+    [activeCapabilityId, archivedThreads, context, scope, threads],
   )
 
   // Debounced disk save so confirm cards survive even if send's finally-path races.
@@ -798,6 +806,19 @@ export function FacultyCoraImmersiveChat({
   const headerHeight = insets.top + 56
   const lastAssistantId = [...messages].reverse().find((m) => m.role === "assistant" && m.content)?.id ?? null
   const conversationTitle = capability.label
+  const convertSuggestions = useMemo(() => {
+    const last = messages[messages.length - 1]
+    if (!last || last.role !== "assistant") return []
+    if (pendingAssistantId === last.id) return []
+    const prior = [...messages.slice(0, -1)].reverse().find((entry) => entry.role === "user")
+    return convertToToolSuggestions({
+      role: "faculty",
+      facultyContext: activeCapabilityId,
+      userText: prior?.content ?? "",
+      assistantText: last.content,
+      hasProposals: Boolean(last.proposals?.length),
+    })
+  }, [activeCapabilityId, messages, pendingAssistantId])
 
   const handleVoiceTranscript = useCallback((text: string) => setInput(text), [])
   const { listening, toggleListening } = useCoraVoiceDictation(handleVoiceTranscript)
@@ -813,6 +834,8 @@ export function FacultyCoraImmersiveChat({
   const handleListContentSizeChange = useCallback(() => {
     if (sending || pendingAssistantId) scrollToEnd(true)
   }, [pendingAssistantId, scrollToEnd, sending])
+
+  const scrollOnKeyboardShow = useCallback(() => scrollToEnd(true), [scrollToEnd])
 
   const stopGeneration = useCallback(() => {
     sendAbortRef.current?.abort()
@@ -883,17 +906,22 @@ export function FacultyCoraImmersiveChat({
       }
 
       try {
-        const res = await facultyCoraApi.sendMessage(
+        const res = supplementFacultyCoraLiveResponse(
           scope,
-          {
-            message: apiText,
-            capabilityId: activeCapabilityId,
-            threadId: threadIdRef.current,
-            conversationHistory: messages,
-            confirmScopeRelated: scopeRetryRef.current?.confirm,
-            declaredAcademicContext: scopeRetryRef.current?.context ?? null,
-          },
-          { prepared, signal: streamController.signal },
+          apiText,
+          await facultyCoraApi.sendMessage(
+            scope,
+            {
+              message: apiText,
+              capabilityId: activeCapabilityId,
+              threadId: threadIdRef.current,
+              conversationHistory: messages,
+              confirmScopeRelated: scopeRetryRef.current?.confirm,
+              declaredAcademicContext: scopeRetryRef.current?.context ?? null,
+            },
+            { prepared, signal: streamController.signal },
+          ),
+          activeCapabilityId,
         )
         scopeRetryRef.current = null
 
@@ -955,6 +983,12 @@ export function FacultyCoraImmersiveChat({
         }
 
         recordCoraSuccess(prepared, { prompt: apiText, response: res.reply })
+        const mergedProposals =
+          res.proposals?.length
+            ? res.proposals
+            : outcome.kind === "assistant" && outcome.proposals?.length
+              ? outcome.proposals
+              : []
         nextMessages = [
           ...draft.slice(0, -1),
           {
@@ -963,7 +997,7 @@ export function FacultyCoraImmersiveChat({
             content: res.reply,
             createdAt: nowIso,
             actions: res.actions ?? [],
-            proposals: res.proposals ?? [],
+            proposals: mergedProposals,
             coraPublicMode: res.publicMode,
             coraProfile: res.profile,
             ui: res.ui,
@@ -1023,47 +1057,10 @@ export function FacultyCoraImmersiveChat({
     async (nextCapabilityId: FacultyCoraCapabilityId) => {
       if (nextCapabilityId === activeCapabilityId) return
 
-      await persistActiveThread()
-
-      const capabilityThread = findFacultyCoraThreadForCapability(
-        threads,
-        archivedThreads,
-        nextCapabilityId,
-      )
-
-      if (capabilityThread) {
-        setThreadId(capabilityThread.id)
-        setMessages(capabilityThread.messages)
-        createdAtRef.current = capabilityThread.createdAt
-        sentInitialRef.current = true
-        if (scope.courseId) {
-          await activateFacultyCoraThread(scope.instructorId, scope.courseId, capabilityThread.id, scope)
-        }
-      } else {
-        const newId = createFacultyCoraThreadId()
-        setThreadId(newId)
-        setMessages([])
-        createdAtRef.current = new Date().toISOString()
-        sentInitialRef.current = false
-        if (scope.courseId) {
-          await activateFacultyCoraThread(scope.instructorId, scope.courseId, null, scope)
-        }
-      }
-
       setActiveCapabilityId(nextCapabilityId)
-      setInput("")
-      setAttachments([])
-      setFeedbackById({})
-      setPendingAssistantId(null)
+      await persistActiveThread(undefined, nextCapabilityId)
     },
-    [
-      activeCapabilityId,
-      archivedThreads,
-      persistActiveThread,
-      scope.courseId,
-      scope.instructorId,
-      threads,
-    ],
+    [activeCapabilityId, persistActiveThread],
   )
 
   const runAction = useCallback(
@@ -1497,9 +1494,55 @@ export function FacultyCoraImmersiveChat({
         </View>
       </View>
 
-      <KeyboardAvoidingView
+      <ChatKeyboardShell
         style={styles.keyboardShell}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        onKeyboardShow={scrollOnKeyboardShow}
+        composer={
+          <View
+            style={[styles.composerArea, { backgroundColor: solidCanvas }]}
+            onLayout={(e) => {
+              const next = Math.ceil(e.nativeEvent.layout.height)
+              setComposerHeight((prev) => (Math.abs(prev - next) > 1 ? next : prev))
+            }}
+          >
+            <CoraWorkspaceComposer
+              value={input}
+              onChangeText={setInput}
+              onSend={handleComposerSend}
+              onStop={stopGeneration}
+              canSend={!!(input.trim() || attachments.length > 0 || importedQuestion) && !sending}
+              streaming={sending}
+              disabled={false}
+              hasMessages={messages.length > 0}
+              hideLearningGoals
+              modePill={{
+                label: capability.label,
+                onPress: () => setModeSheetOpen(true),
+              }}
+              placeholder={
+                activeCapabilityId === "improve"
+                  ? importedQuestion
+                    ? "Describe how to improve this question…"
+                    : "Import a question or describe what to improve…"
+                  : messages.length > 0
+                    ? "Ask a follow-up…"
+                    : "Ask Cora about your course…"
+              }
+              attachAccessibilityLabel="Add files and teaching tools"
+              onOpenAttachMenu={() => setAttachMenuOpen(true)}
+              onToggleVoice={() => void toggleListening(input)}
+              listening={listening}
+              attachments={attachments}
+              onRemoveAttachment={(id) => setAttachments((prev) => prev.filter((item) => item.id !== id))}
+              importedQuestion={importedQuestion}
+              importedQuestionLabel={importedQuestionLabel}
+              onClearImportedQuestion={() => {
+                setImportedQuestion(null)
+                setImportedQuestionLabel(null)
+              }}
+            />
+          </View>
+        }
       >
       <FlatList
         ref={listRef}
@@ -1667,59 +1710,32 @@ export function FacultyCoraImmersiveChat({
                 onRun={runAction}
               />
             ) : null}
+            {item.role === "assistant" &&
+            item.ui &&
+            !isRedundantCoraUiPayload(item.ui, Boolean(item.proposals?.length)) ? (
+              <View style={styles.proposalWrap}>
+                <CoraUiPayloadCard
+                  ui={item.ui}
+                  accent={FACULTY_CORA_COLOR.link}
+                  onOpenRoute={(route) => {
+                    onClose()
+                    openCoraNativeRoute(router, route)
+                  }}
+                />
+              </View>
+            ) : null}
+            {item.role === "assistant" && index === messages.length - 1 && convertSuggestions.length ? (
+              <CoraConvertToToolChipRow
+                suggestions={convertSuggestions}
+                onPress={(suggestion) => sendPromptNow(suggestion.prompt)}
+              />
+            ) : null}
           </View>
           )
         }}
       />
 
-        <View
-          style={[
-            styles.composerArea,
-            { paddingBottom: Math.max(insets.bottom, 12), backgroundColor: solidCanvas },
-          ]}
-          onLayout={(e) => {
-            const next = Math.ceil(e.nativeEvent.layout.height)
-            setComposerHeight((prev) => (Math.abs(prev - next) > 1 ? next : prev))
-          }}
-        >
-          <CoraWorkspaceComposer
-            value={input}
-            onChangeText={setInput}
-            onSend={handleComposerSend}
-            onStop={stopGeneration}
-            canSend={!!(input.trim() || attachments.length > 0 || importedQuestion) && !sending}
-            streaming={sending}
-            disabled={false}
-            hasMessages={messages.length > 0}
-            hideLearningGoals
-            modePill={{
-              label: capability.label,
-              onPress: () => setModeSheetOpen(true),
-            }}
-            placeholder={
-              activeCapabilityId === "improve"
-                ? importedQuestion
-                  ? "Describe how to improve this question…"
-                  : "Import a question or describe what to improve…"
-                : messages.length > 0
-                  ? "Ask a follow-up…"
-                  : "Ask Cora about your course…"
-            }
-            attachAccessibilityLabel="Add files and teaching tools"
-            onOpenAttachMenu={() => setAttachMenuOpen(true)}
-            onToggleVoice={() => void toggleListening(input)}
-            listening={listening}
-            attachments={attachments}
-            onRemoveAttachment={(id) => setAttachments((prev) => prev.filter((item) => item.id !== id))}
-            importedQuestion={importedQuestion}
-            importedQuestionLabel={importedQuestionLabel}
-            onClearImportedQuestion={() => {
-              setImportedQuestion(null)
-              setImportedQuestionLabel(null)
-            }}
-          />
-        </View>
-      </KeyboardAvoidingView>
+      </ChatKeyboardShell>
 
       <CoraChatSideNav
         visible={sideNavOpen}
@@ -1756,7 +1772,7 @@ export function FacultyCoraImmersiveChat({
             <View style={[styles.modeSheetHandle, { backgroundColor: native.separator }]} />
             <Text style={[type.bodyEmphasis, styles.modeSheetTitle]}>AI mode</Text>
             <Text style={[type.caption, styles.modeSheetHint, { color: SN.secondaryLabel }]}>
-              Choose how Cora should help in this conversation.
+              Changes how Cora responds — your messages stay in this chat.
             </Text>
             <ScrollView showsVerticalScrollIndicator={false}>
               {capabilities.map((item) => {
@@ -1973,13 +1989,14 @@ const styles = StyleSheet.create({
   },
   composerArea: {
     zIndex: 20,
-    paddingHorizontal: NATIVE.pagePadding,
+    paddingHorizontal: CORA_CHAT_EDGE_PADDING,
     paddingTop: 14,
     backgroundColor: "transparent",
   },
   welcomeWrap: {
     alignItems: "center",
     paddingVertical: 24,
+    paddingHorizontal: CORA_CHAT_EDGE_PADDING,
     gap: 8,
   },
   welcomeSub: {

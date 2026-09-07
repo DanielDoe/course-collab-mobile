@@ -17,13 +17,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { useThemedNative } from "../../context/AppearanceProvider"
 import {
   CHROME_CONTENT_TOP_GAP,
-  CHROME_FLOATING_CONTENT_EXTRA_GAP,
-  floatingChromeSpacerHeight,
   useChromeTopInset,
   useModuleScrollContentPadding,
 } from "../../context/ChromeInsetContext"
-import { useGlassChromeActive } from "../theme/GlassSurface"
-import { floatingTopChromeInset, useStableTopSafeInset } from "../shell/shell-shared"
 import { NATIVE } from "../../constants/faculty-native-theme"
 import { useModuleContentStyle, useModulePageLayout } from "../../lib/responsive-layout"
 import { useNativeType } from "../../lib/themed-module-theme"
@@ -32,7 +28,9 @@ import { SolidListThumbTile } from "../theme/SolidListThumbTile"
 import { FacultyEmptyState } from "../faculty/faculty-shared"
 import { AppErrorScreen } from "../errors/AppErrorScreen"
 import { DismissKeyboardView } from "../ui/DismissKeyboardView"
+import { PressableScale } from "../motion/PressableScale"
 import { keyboardDismissScrollProps } from "../../lib/keyboard-dismiss-scroll-props"
+import { useKeyboardHeight } from "../ui/KeyboardAwareForm"
 
 export const MODULE_PAGE_BG = NATIVE.groupedBackground
 
@@ -50,6 +48,8 @@ type Props = {
   errorFeature?: string
   onRetryError?: () => void
   contentStyle?: StyleProp<ViewStyle>
+  /** Breathing room below floating top chrome. Default 24; Messages-style modules use 8. */
+  headerToContentGap?: number
   /** Prevent iOS ScrollView from re-applying top safe-area inset (immersive screens with custom header). */
   disableTopInsetAdjustment?: boolean
   /** Screen stacks its own header below the status bar (e.g. NotetakerScreenHeader). */
@@ -69,22 +69,19 @@ export function ModuleScreen({
   errorFeature,
   onRetryError,
   contentStyle,
+  headerToContentGap,
   disableTopInsetAdjustment = false,
   stackedHeader = false,
 }: Props) {
   const insets = useSafeAreaInsets()
   const native = useThemedNative()
   const chromeTop = useChromeTopInset()
-  const glassChromeActive = useGlassChromeActive()
-  const topSafeInset = useStableTopSafeInset()
   const scrollPad = useModuleScrollContentPadding(36)
-  const effectiveChromeTop =
-    chromeTop > 0 ? chromeTop : glassChromeActive ? floatingTopChromeInset(topSafeInset) : 0
-  const floatingSpacerHeight = floatingChromeSpacerHeight(
-    effectiveChromeTop,
-    CHROME_CONTENT_TOP_GAP,
-    CHROME_FLOATING_CONTENT_EXTRA_GAP,
-  )
+  const keyboardHeight = useKeyboardHeight()
+  const contentTopGap = headerToContentGap ?? CHROME_CONTENT_TOP_GAP
+  const effectiveChromeTop = stackedHeader ? 0 : chromeTop
+  const floatingSpacerHeight =
+    effectiveChromeTop > 0 ? effectiveChromeTop + contentTopGap : 0
   const type = useNativeType()
   const moduleContentStyle = useModuleContentStyle()
   const pageLayout = useModulePageLayout()
@@ -113,8 +110,8 @@ export function ModuleScreen({
       contentContainerStyle={[
         styles.content,
         {
-          paddingBottom: scrollPad.paddingBottom,
-          paddingTop: floatingSpacerHeight > 0 ? 0 : scrollPad.paddingTop,
+          paddingBottom: scrollPad.paddingBottom + (Platform.OS === "android" ? keyboardHeight : 0),
+          paddingTop: floatingSpacerHeight > 0 ? 0 : contentTopGap,
         },
         moduleContentStyle,
         {
@@ -149,6 +146,7 @@ export function ModuleScreen({
         ) : undefined
       }
       showsVerticalScrollIndicator={false}
+      automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
       {...keyboardDismissScrollProps}
     >
       <DismissKeyboardView style={{ gap: pageLayout.stackGap }}>
@@ -312,8 +310,7 @@ export function ModuleListRow({
 
   if (onPress && !onTrailingPress) {
     return (
-      <Pressable
-        style={({ pressed }) => [pressed && { opacity: NATIVE.pressedOpacity }]}
+      <PressableScale
         onPress={onPress}
         android_ripple={Platform.OS === "android" ? { color: "rgba(128,128,128,0.12)" } : undefined}
       >
@@ -327,7 +324,7 @@ export function ModuleListRow({
           <View style={[styles.listRowMain, styles.listRowMainFull]}>{rowBody}</View>
           {trailingNode}
         </View>
-      </Pressable>
+      </PressableScale>
     )
   }
 
@@ -355,26 +352,26 @@ export function ModuleListRow({
       ]}
     >
       {onPress ? (
-        <Pressable
-          style={({ pressed }) => [styles.listRowMain, pressed && { opacity: NATIVE.pressedOpacity }]}
+        <PressableScale
+          style={styles.listRowMain}
           onPress={onPress}
           android_ripple={Platform.OS === "android" ? { color: "rgba(128,128,128,0.12)" } : undefined}
         >
           {rowBody}
-        </Pressable>
+        </PressableScale>
       ) : (
         <View style={styles.listRowMain}>{rowBody}</View>
       )}
       {trailingNode && onTrailingPress ? (
-        <Pressable
-          style={({ pressed }) => [styles.listRowTrailing, pressed && { opacity: NATIVE.pressedOpacity }]}
+        <PressableScale
+          style={styles.listRowTrailing}
           onPress={onTrailingPress}
           hitSlop={8}
           accessibilityRole="button"
           accessibilityLabel={`More about ${title}`}
         >
           {trailingNode}
-        </Pressable>
+        </PressableScale>
       ) : (
         trailingNode
       )}

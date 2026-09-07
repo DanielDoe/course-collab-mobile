@@ -28,6 +28,7 @@ import {
 } from "../../lib/circuit-workspace"
 import { formatRelativeTime } from "../../lib/collaboration-api"
 import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
+import { useAppToast } from "../../context/AppToastProvider"
 import { useNativeType } from "../../lib/themed-module-theme"
 import { NATIVE } from "../../constants/faculty-native-theme"
 import {
@@ -60,6 +61,7 @@ export function NoteEditorScreen() {
   const tokens = useAppThemeTokens()
   const native = useThemedNative()
   const type = useNativeType()
+  const { showSuccess } = useAppToast()
 
   const [loading, setLoading] = useState(true)
   const detailQuery = useStudentNoteDetail(session, noteId)
@@ -73,6 +75,7 @@ export function NoteEditorScreen() {
   const [bodyHtml, setBodyHtml] = useState("")
   const [inkWorkspace, setInkWorkspace] = useState<CircuitWorkspace>(() => createEmptyWorkspace())
   const [contentTab, setContentTab] = useState<ContentTab>("typed")
+  const [inkDrawing, setInkDrawing] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
   const [shareLoading, setShareLoading] = useState(false)
   const [shareSaving, setShareSaving] = useState(false)
@@ -199,7 +202,8 @@ export function NoteEditorScreen() {
   }, [session, noteId, load, detailQuery.data?.note, detailQuery.isLoading])
 
   async function flushSave() {
-    await persistNote()
+    const saved = await persistNote()
+    if (saved) showSuccess("Note saved")
   }
 
   function openExportMenu() {
@@ -299,6 +303,7 @@ export function NoteEditorScreen() {
       await digitalNotesApi.updateShares(session, note.id, selectedShareIds)
       setShareCount(selectedShareIds.length)
       setShareOpen(false)
+      showSuccess("Sharing updated")
     } catch (err) {
       AppAlert.alert("Share failed", err instanceof ApiError ? err.message : "Try again.")
     } finally {
@@ -407,6 +412,8 @@ export function NoteEditorScreen() {
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
+        scrollEnabled={!inkDrawing}
+        scrollEventThrottle={16}
       >
         <FlashInfoHintQueue hints={flashHints} />
 
@@ -434,7 +441,10 @@ export function NoteEditorScreen() {
               styles.segmentBtn,
               contentTab === "typed" && [styles.segmentBtnActive, { backgroundColor: native.secondaryGrouped }],
             ]}
-            onPress={() => setContentTab("typed")}
+            onPress={() => {
+              setInkDrawing(false)
+              setContentTab("typed")
+            }}
           >
             <Text
               style={[
@@ -477,7 +487,12 @@ export function NoteEditorScreen() {
         ) : readOnly ? (
           <CircuitWorkspaceViewer workspace={inkWorkspace} />
         ) : (
-          <CircuitWorkspaceEditor workspace={inkWorkspace} onChange={setInkWorkspace} disabled={readOnly} />
+          <CircuitWorkspaceEditor
+            workspace={inkWorkspace}
+            onChange={setInkWorkspace}
+            disabled={readOnly}
+            onDrawingActiveChange={setInkDrawing}
+          />
         )}
 
         {!readOnly ? (

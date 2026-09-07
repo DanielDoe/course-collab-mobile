@@ -56,17 +56,19 @@ appId: com.coursecollab.app
     direction: DOWN
     timeout: 45000
     speed: 40
+    centerElement: true
 - tapOn: ".*early procedural programming languages.*"
+- scrollUntilVisible:
+    element:
+      text: "A, FORTRAN"
+    direction: UP
+    timeout: 45000
+    speed: 40
+    centerElement: true
 - runFlow:
     when:
       visible: "Submit answer"
     commands:
-      - scrollUntilVisible:
-          element:
-            text: "A, FORTRAN"
-          direction: DOWN
-          timeout: 30000
-          speed: 40
       - tapOn: "A, FORTRAN"
       - tapOn: "B, ALGOL"
       - tapOn: "C, COBOL"
@@ -92,16 +94,17 @@ appId: com.coursecollab.app
     timeout: 45000
     speed: 40
 - tapOn: ".*common programming mistakes.*"
+- scrollUntilVisible:
+    element:
+      text: "A, Not backing up code"
+    direction: UP
+    timeout: 45000
+    speed: 40
+    centerElement: true
 - runFlow:
     when:
       visible: "Submit answer"
     commands:
-      - scrollUntilVisible:
-          element:
-            text: "A, Not backing up code"
-          direction: DOWN
-          timeout: 30000
-          speed: 40
       - tapOn: "A, Not backing up code"
       - scrollUntilVisible:
           element:
@@ -137,16 +140,17 @@ appId: com.coursecollab.app
     timeout: 45000
     speed: 40
 - tapOn: ".*problem solution documentation.*"
+- scrollUntilVisible:
+    element:
+      text: "A, Program description"
+    direction: UP
+    timeout: 45000
+    speed: 40
+    centerElement: true
 - runFlow:
     when:
       visible: "Submit answer"
     commands:
-      - scrollUntilVisible:
-          element:
-            text: "A, Program description"
-          direction: DOWN
-          timeout: 30000
-          speed: 40
       - tapOn: "A, Program description"
       - scrollUntilVisible:
           element:

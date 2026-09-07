@@ -32,7 +32,9 @@ import { FacultyIssuesScreen } from "./FacultyIssuesScreen"
 import {
   FACULTY_ASSESSMENT_COLOR,
 } from "../../lib/faculty-assessment-theme"
+import { useFacultyListPager } from "../../hooks/useFacultyListPager"
 import { useModuleTheme } from "../../lib/themed-module-shell"
+import { FacultyListPagerFooter } from "./FacultyListPagerFooter"
 import { useFacultyStickyHeaderScrollLayout,
   FacultyAdaptiveSegmentNav,
   FacultyGroupedFilterSheet,
@@ -147,6 +149,7 @@ export function FacultyAssessmentsScreen({assessmentType,
     const items = filterAssessments(quizzes, sessions, statusFilter, sectionCode, search)
     return [...items].sort((a, b) => Number(b.is_active) - Number(a.is_active))
   }, [quizzes, sessions, statusFilter, sectionFilter, search])
+  const pager = useFacultyListPager(filtered, `${search}:${sectionFilter}:${statusFilter}`, config.label.toLowerCase())
 
   const filtersActive = sectionFilter !== "ALL" || statusFilter !== "ALL"
 
@@ -276,7 +279,7 @@ export function FacultyAssessmentsScreen({assessmentType,
           />
         ) : (
           <View style={styles.list}>
-            {filtered.map((quiz) => (
+            {pager.items.map((quiz) => (
               <FacultyAssessmentCard
                 key={quiz.id}
                 quiz={quiz}
@@ -289,6 +292,7 @@ export function FacultyAssessmentsScreen({assessmentType,
                 onDelete={() => performDelete(quiz)}
               />
             ))}
+            <FacultyListPagerFooter pager={pager} />
           </View>
         )}
           </ScrollView>

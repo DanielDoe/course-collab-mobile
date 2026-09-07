@@ -97,7 +97,7 @@ export function NotificationListPager({
           accessibilityLabel="Previous page"
         >
           <Ionicons name="chevron-back" size={16} color={tokens.accent} />
-          <Text style={[type.caption, styles.pagerLabel, { color: tokens.accent }]}>Prev</Text>
+          <Text style={[type.caption, styles.pagerLabel, { color: tokens.accent }]}>Previous</Text>
         </Pressable>
       </View>
       <Text
@@ -197,7 +197,7 @@ const styles = StyleSheet.create({
   },
   pagerSide: {
     flex: 1,
-    minWidth: 72,
+    minWidth: 88,
   },
   pagerSideEnd: {
     alignItems: "flex-end",

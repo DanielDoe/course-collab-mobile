@@ -12,6 +12,7 @@ import { Ionicons } from "@/components/icons/AppIcon"
 import { useLocalSearchParams } from "expo-router"
 import { ApiError } from "../../lib/api"
 import { AppAlert } from "../../lib/app-alert"
+import { useAppToast } from "../../context/AppToastProvider"
 import {
   COURSE_EXCHANGE_TABS,
   EXCHANGE_POST_IMPORT_CHECKLIST,
@@ -46,7 +47,9 @@ import { FACULTY_COURSE_EXCHANGE_COLOR } from "../../lib/faculty-course-exchange
 import { instructorApi } from "../../lib/instructor-api"
 import { filterGroupsProjectsForOwnSession } from "../../lib/course-exchange/groups-projects-session-policy"
 import { useFacultyScope } from "../../hooks/useFacultyScope"
+import { useFacultyListPager } from "../../hooks/useFacultyListPager"
 import { useFacultyShell } from "../../context/FacultyShellContext"
+import { FacultyListPagerFooter } from "./FacultyListPagerFooter"
 import { FacultyEmptyState } from "./faculty-shared"
 import {
   FacultyModuleStickyHeader,
@@ -78,6 +81,7 @@ export function FacultyCourseExchangeScreen() {
   const { tab: tabParam } = useLocalSearchParams<{ tab?: string }>()
   const { scope, ready } = useFacultyScope()
   const { selectedCourse, setBadges } = useFacultyShell()
+  const { showSuccess, showError } = useAppToast()
 
   const [tab, setTab] = useState<CourseExchangeTabId>(() => parseCourseExchangeTabParam(tabParam))
   const [search, setSearch] = useState("")
@@ -360,6 +364,26 @@ export function FacultyCourseExchangeScreen() {
     )
   }, [myShared, search])
 
+  const discoverPager = useFacultyListPager(filteredDiscover, `discover:${search}:${discoverFilter}`, "courses")
+  const receivedPager = useFacultyListPager(filteredReceived, `received:${search}:${receivedFilter}`, "requests")
+  const sentPager = useFacultyListPager(filteredSent, `sent:${search}:${sentFilter}`, "requests")
+  const sharedWithMePager = useFacultyListPager(
+    filteredSharedWithMe,
+    `shared-with-me:${search}:${sharedWithMeFilter}`,
+    "copies",
+  )
+  const mySharedPager = useFacultyListPager(filteredMyShared, `my-shared:${search}`, "copies")
+  const pager =
+    tab === "received"
+      ? receivedPager
+      : tab === "sent"
+        ? sentPager
+        : tab === "shared-with-me"
+          ? sharedWithMePager
+          : tab === "my-shared"
+            ? mySharedPager
+            : discoverPager
+
   const detailDestinationLabel = useMemo(() => {
     if (!detailRequest?.destination_course_id) return null
     const match = destinationOptions.find((c) => c.course_id === detailRequest.destination_course_id)
@@ -577,14 +601,6 @@ export function FacultyCourseExchangeScreen() {
     setActing(true)
     try {
       await instructorApi.saveCourseExchangeSharingSettings(scope, payload)
-      AppAlert.alert(
-        payload.sharingMode === "request_only" ? "Course is discoverable" : "Sharing turned off",
-        payload.sharingMode === "request_only"
-          ? payload.autoApprove
-            ? "Requests for enabled modules import automatically."
-            : "Other instructors can request the modules you enabled."
-          : "This course no longer appears in Discover.",
-      )
       await loadSharing()
       setConfigureCourse((prev) =>
         prev && prev.courseId === payload.courseId
@@ -596,8 +612,10 @@ export function FacultyCourseExchangeScreen() {
             }
           : prev,
       )
+      setConfigureCourse(null)
+      showSuccess("Sharing updated")
     } catch (err) {
-      AppAlert.alert("Save failed", err instanceof ApiError ? err.message : "Could not save settings.")
+      showError(err instanceof ApiError ? err.message : "Could not save settings.")
     } finally {
       setActing(false)
     }
@@ -750,7 +768,7 @@ export function FacultyCourseExchangeScreen() {
       if (exchangeLayout === "grid") {
         return (
           <FacultyCourseExchangeCardGrid>
-            {filteredDiscover.map((row) => (
+            {discoverPager.items.map((row) => (
               <FacultyCourseExchangeDiscoverGridCard
                 key={row.courseId}
                 row={row}
@@ -760,7 +778,7 @@ export function FacultyCourseExchangeScreen() {
           </FacultyCourseExchangeCardGrid>
         )
       }
-      return filteredDiscover.map((row) => (
+      return discoverPager.items.map((row) => (
         <FacultyCourseExchangeDiscoverCard key={row.courseId} row={row} onPress={() => openDiscoverCourse(row)} />
       ))
     }
@@ -779,7 +797,7 @@ export function FacultyCourseExchangeScreen() {
         <>
           {exchangeLayout === "grid" ? (
             <FacultyCourseExchangeCardGrid>
-              {filteredReceived.map((row) => (
+              {receivedPager.items.map((row) => (
                 <FacultyCourseExchangeRequestGridCard
                   key={row.id}
                   row={row}
@@ -792,7 +810,7 @@ export function FacultyCourseExchangeScreen() {
               ))}
             </FacultyCourseExchangeCardGrid>
           ) : (
-            filteredReceived.map((row) => (
+            receivedPager.items.map((row) => (
               <FacultyCourseExchangeRequestCard
                 key={row.id}
                 row={row}
@@ -822,7 +840,7 @@ export function FacultyCourseExchangeScreen() {
         <>
           {exchangeLayout === "grid" ? (
             <FacultyCourseExchangeCardGrid>
-              {filteredSent.map((row) => (
+              {sentPager.items.map((row) => (
                 <FacultyCourseExchangeRequestGridCard
                   key={row.id}
                   row={row}
@@ -835,7 +853,7 @@ export function FacultyCourseExchangeScreen() {
               ))}
             </FacultyCourseExchangeCardGrid>
           ) : (
-            filteredSent.map((row) => (
+            sentPager.items.map((row) => (
               <FacultyCourseExchangeRequestCard
                 key={row.id}
                 row={row}
@@ -869,7 +887,7 @@ export function FacultyCourseExchangeScreen() {
         <>
           {exchangeLayout === "grid" ? (
             <FacultyCourseExchangeCardGrid>
-              {filteredSharedWithMe.map((copy, index) => {
+              {sharedWithMePager.items.map((copy, index) => {
                 const id = copyRowId(copy)
                 const updates = id != null ? updateCounts[id] ?? copyRowUpdateCount(copy) : 0
                 return (
@@ -887,7 +905,7 @@ export function FacultyCourseExchangeScreen() {
               })}
             </FacultyCourseExchangeCardGrid>
           ) : (
-            filteredSharedWithMe.map((copy, index) => {
+            sharedWithMePager.items.map((copy, index) => {
               const id = copyRowId(copy)
               const updates = id != null ? updateCounts[id] ?? copyRowUpdateCount(copy) : 0
               return (
@@ -923,7 +941,7 @@ export function FacultyCourseExchangeScreen() {
         <>
           {exchangeLayout === "grid" ? (
             <FacultyCourseExchangeCardGrid>
-              {filteredMyShared.map((copy, index) => (
+              {mySharedPager.items.map((copy, index) => (
                 <FacultyCourseExchangeCopyGridCard
                   key={String(copy.id ?? index)}
                   copy={copy}
@@ -936,7 +954,7 @@ export function FacultyCourseExchangeScreen() {
               ))}
             </FacultyCourseExchangeCardGrid>
           ) : (
-            filteredMyShared.map((copy, index) => (
+            mySharedPager.items.map((copy, index) => (
               <FacultyCourseExchangeCopyCard
                 key={String(copy.id ?? index)}
                 copy={copy}
@@ -1012,6 +1030,7 @@ export function FacultyCourseExchangeScreen() {
           }
         >
           {renderListBody()}
+          {!loading ? <FacultyListPagerFooter pager={pager} /> : null}
         </ScrollView>
       )}
 

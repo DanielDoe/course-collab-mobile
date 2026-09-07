@@ -61,7 +61,7 @@ type Props = {
 
 export function LoginTypewriter({ style, color }: Props) {
   const { LOGIN, loginType } = useLoginTheme()
-  const { isCompactHeight } = useAuthFlowLayout()
+  const { isCompactHeight, isTallPhone } = useAuthFlowLayout()
   const accent = color ?? LOGIN.purple
   const [lineIndex, setLineIndex] = useState(0)
   const [charCount, setCharCount] = useState(0)
@@ -151,7 +151,7 @@ export function LoginTypewriter({ style, color }: Props) {
 
   return (
     <View
-      style={[styles.wrap, { minHeight: isCompactHeight ? 56 : 72 }]}
+      style={[styles.wrap, { minHeight: isCompactHeight ? 56 : isTallPhone ? 80 : 72 }]}
       accessibilityRole="header"
       accessibilityLabel={currentLine}
     >

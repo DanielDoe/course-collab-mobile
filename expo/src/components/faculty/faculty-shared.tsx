@@ -8,6 +8,7 @@ import { REPORT_SOLID } from "../../lib/assessment-report-theme"
 import { COLOR_HUNT_COOL } from "../../lib/codebench-badge-theme"
 import type { SolidListThumb } from "../../lib/solid-list-thumb"
 import { SolidListThumbTile } from "../theme/SolidListThumbTile"
+import { PressableScale } from "../motion/PressableScale"
 
 /** @deprecated Use useFacultyTheme() — static values are light-mode only. */
 export const FACULTY_THEME = {
@@ -322,15 +323,14 @@ export function FacultyListRow({
 
   if (!onPress) return content
   return (
-    <Pressable
-      style={({ pressed }) => [pressed && { opacity: NATIVE.pressedOpacity }]}
+    <PressableScale
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={title}
       android_ripple={Platform.OS === "android" ? { color: "rgba(0,0,0,0.08)" } : undefined}
     >
       {content}
-    </Pressable>
+    </PressableScale>
   )
 }
 

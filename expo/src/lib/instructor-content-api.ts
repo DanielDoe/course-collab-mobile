@@ -7,6 +7,7 @@ import { mfaTrustRequestHeadersForInstructor } from "./mfa-device-trust"
 import { getStoredSession } from "./session"
 import { mergeCookieHeaders, persistHttpCookiesFromResponse, studentHttpCookieHeader } from "./student-http-cookies"
 import { headersHaveStudentSessionProof, STUDENT_REFRESH_HEADER } from "./student-session-proof"
+import { getStoredRefreshToken } from "./refresh-token-store"
 import { observeHttpResponse } from "./perf/http"
 
 export type InstructorScope = {
@@ -80,7 +81,10 @@ async function instructorRequest<T>(
   const trust = await mfaTrustRequestHeadersForInstructor(faculty)
   Object.assign(headers, mergeCookieHeaders(trust.Cookie, jarCookie))
   const refresh =
-    refreshTokenFromCookieHeader(jarCookie) ?? refreshTokenFromCookieHeader(trust.Cookie)
+    refreshTokenFromCookieHeader(jarCookie) ??
+    refreshTokenFromCookieHeader(trust.Cookie) ??
+    (await getStoredRefreshToken()) ??
+    undefined
   if (refresh) headers[STUDENT_REFRESH_HEADER] = refresh
   if (!headersHaveStudentSessionProof(headers)) {
     throw new ApiError("Instructor authentication required", 401)

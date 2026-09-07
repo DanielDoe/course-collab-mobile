@@ -38,6 +38,8 @@ import { useModuleScrollContentPadding } from "../../context/ChromeInsetContext"
 import { useModuleContentStyle } from "../../lib/responsive-layout"
 import { useStudentShell } from "../../context/StudentShellContext"
 import { useNotificationModuleRefresh } from "../../lib/notifications/notification-events"
+import { useFacultyListPager } from "../../hooks/useFacultyListPager"
+import { FacultyListPagerFooter } from "../faculty/FacultyListPagerFooter"
 import {
   flashcardDeckAccessMetaForAccess,
   flashcardUpgradeMessageForAccess,
@@ -135,16 +137,50 @@ export function FlashcardsHomeScreen() {
 
   const allDecks = useMemo(() => [...courseDecks, ...myDecks], [courseDecks, myDecks])
 
-  function filterDecks(source: DeckSource): FlashcardDeck[] {
-    const decks = source === "course" ? courseDecks : source === "mine" ? myDecks : allDecks
+  const allDecksFiltered = useMemo(() => {
     const q = search.trim().toLowerCase()
-    if (!q) return decks
-    return decks.filter(
+    if (!q) return allDecks
+    return allDecks.filter(
       (deck) =>
         deck.title.toLowerCase().includes(q) ||
         deck.description.toLowerCase().includes(q) ||
         (deck.topic?.toLowerCase().includes(q) ?? false),
     )
+  }, [allDecks, search])
+
+  const courseDecksFiltered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return courseDecks
+    return courseDecks.filter(
+      (deck) =>
+        deck.title.toLowerCase().includes(q) ||
+        deck.description.toLowerCase().includes(q) ||
+        (deck.topic?.toLowerCase().includes(q) ?? false),
+    )
+  }, [courseDecks, search])
+
+  const mineDecksFiltered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return myDecks
+    return myDecks.filter(
+      (deck) =>
+        deck.title.toLowerCase().includes(q) ||
+        deck.description.toLowerCase().includes(q) ||
+        (deck.topic?.toLowerCase().includes(q) ?? false),
+    )
+  }, [myDecks, search])
+
+  const allDecksPager = useFacultyListPager(allDecksFiltered, `all|${search}`, "decks")
+  const courseDecksPager = useFacultyListPager(courseDecksFiltered, `course|${search}`, "decks")
+  const mineDecksPager = useFacultyListPager(mineDecksFiltered, `mine|${search}`, "decks")
+  const leaderboardPager = useFacultyListPager(leaderboard, "leaderboard", "students")
+
+  function filterDecks(source: DeckSource): FlashcardDeck[] {
+    return source === "course" ? courseDecksFiltered : source === "mine" ? mineDecksFiltered : allDecksFiltered
+  }
+
+  function deckPager(source: DeckSource) {
+    return source === "course" ? courseDecksPager : source === "mine" ? mineDecksPager : allDecksPager
   }
 
   function deckSourceCount(source: DeckSource): number {
@@ -244,6 +280,7 @@ export function FlashcardsHomeScreen() {
 
   function renderDeckList(source: DeckSource) {
     const visibleDecks = filterDecks(source)
+    const pager = deckPager(source)
     const total = deckSourceCount(source)
 
     if (visibleDecks.length === 0) {
@@ -263,7 +300,7 @@ export function FlashcardsHomeScreen() {
     return (
       <>
         <View style={styles.deckList}>
-          {visibleDecks.map((deck) => {
+          {pager.items.map((deck) => {
             const mastery = deckMastery[String(deck.id)]
             const studyLocked = deckStudyLocked(deck)
             const accessMeta = deckAccessMeta(deck)
@@ -282,6 +319,7 @@ export function FlashcardsHomeScreen() {
             )
           })}
         </View>
+        <FacultyListPagerFooter pager={pager} />
         <CommSectionFooter>Tap a deck to study. Use + to create your own deck.</CommSectionFooter>
       </>
     )
@@ -365,7 +403,7 @@ export function FlashcardsHomeScreen() {
         ) : (
           <>
             <CommGroupedList>
-              {leaderboard.map((row, index) => (
+              {leaderboardPager.items.map((row, index) => (
                 <CommListRow
                   key={row.rank}
                   title={row.isCurrentUser ? "You" : row.displayName}
@@ -375,10 +413,14 @@ export function FlashcardsHomeScreen() {
                   iconColor={row.isCurrentUser ? SN.accent : COMM_SYSTEM.gray.color}
                   iconSoft={row.isCurrentUser ? SN.accentSoft : COMM_SYSTEM.gray.soft}
                   showChevron={false}
-                  isLast={index === leaderboard.length - 1}
+                  isLast={
+                    index === leaderboardPager.items.length - 1 &&
+                    leaderboardPager.page >= leaderboardPager.pageCount - 1
+                  }
                 />
               ))}
             </CommGroupedList>
+            <FacultyListPagerFooter pager={leaderboardPager} />
             <CommSectionFooter>Rankings refresh weekly based on cards mastered.</CommSectionFooter>
           </>
         )}

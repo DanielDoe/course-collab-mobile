@@ -131,8 +131,8 @@ export function FacultyClassroomStudentHistorySheet({ student, scope, onClose, o
   }
 
   return (
-    <FacultySheetModal visible={Boolean(student)} onRequestClose={onClose}>
-      <FacultySheetChrome topInset={insets.top} title="Point history" onClose={onClose} />
+    <FacultySheetModal visible={Boolean(student)} onRequestClose={onClose} layout="glassBottom">
+      <FacultySheetChrome topInset={insets.top} title="Point history" onClose={onClose} pageSheet />
       {student ? (
         <ScrollView
           contentContainerStyle={[collabSheetStyles.scroll, { paddingBottom: insets.bottom + 24 }]}

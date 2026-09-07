@@ -9,7 +9,7 @@ import { MfaLoginStep } from "../auth/MfaLoginStep"
 import { AccessRequestStatusScreen } from "../auth/AccessRequestStatusScreen"
 import { ErrorBanner, InfoBanner, LoginFieldGroup } from "./LoginCard"
 import { LoginButton, LoginField, LoginPasswordToggle } from "./LoginButton"
-import { LoginBackLink, LoginPortalHeader, LoginPortalStack, type RegisterAuthPanelBack } from "./login-chrome"
+import { LoginAltActions, LoginPortalHeader, LoginPortalStack, type RegisterAuthPanelBack } from "./login-chrome"
 import { useLoginTheme } from "./login-theme"
 
 type Props = {
@@ -319,7 +319,9 @@ export function SummerLoginPanel({ onBack, registerPanelBack }: Props) {
         loading={submitting}
       />
 
-      {onBack ? <LoginBackLink label="Other sign-in options" onPress={onBack} /> : null}
+      <LoginAltActions
+        actions={[onBack ? { label: "Other sign-in options", onPress: onBack } : null]}
+      />
     </LoginPortalStack>
   )
 }

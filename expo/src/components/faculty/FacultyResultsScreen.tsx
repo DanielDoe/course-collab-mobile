@@ -32,7 +32,9 @@ import type { InstructorSession } from "../../lib/instructor-api"
 import { FacultyAttemptReportModal } from "./FacultyAttemptReportModal"
 import { FacultyResultCard } from "./FacultyResultsListCards"
 import { FACULTY_RESULTS_COLOR } from "../../lib/faculty-results-theme"
+import { useFacultyListPager } from "../../hooks/useFacultyListPager"
 import { useModuleTheme } from "../../lib/themed-module-shell"
+import { FacultyListPagerFooter } from "./FacultyListPagerFooter"
 
 const RESULT_TABS: Array<{ id: ResultsTab; icon: keyof typeof Ionicons.glyphMap }> = [
   { id: "all", icon: "layers-outline" },
@@ -44,7 +46,7 @@ const RESULT_TABS: Array<{ id: ResultsTab; icon: keyof typeof Ionicons.glyphMap 
 ]
 
 export function FacultyResultsScreen() {
-  const { styles: moduleStyles, native, tokens, type } = useModuleTheme()
+  const { styles: moduleStyles } = useModuleTheme()
   const insets = useSafeAreaInsets()
   const { listScrollPad } = useFacultyStickyHeaderScrollLayout()
   const { scope, ready, course } = useFacultyScope()
@@ -109,6 +111,7 @@ export function FacultyResultsScreen() {
     () => filterResults(results, tab, search),
     [results, tab, search],
   )
+  const pager = useFacultyListPager(filtered, `${tab}:${search}:${sessionFilter}`, "results")
 
   const tabs = RESULT_TABS.map((t) => ({
     ...t,
@@ -180,16 +183,13 @@ export function FacultyResultsScreen() {
             }
           />
         ) : (
-          filtered.slice(0, 200).map((item) => (
-            <FacultyResultCard key={item.attempt_id} item={item} onPress={() => setSelectedResult(item)} />
-          ))
+          <>
+            {pager.items.map((item) => (
+              <FacultyResultCard key={item.attempt_id} item={item} onPress={() => setSelectedResult(item)} />
+            ))}
+            <FacultyListPagerFooter pager={pager} />
+          </>
         )}
-
-        {!loading && filtered.length > 200 ? (
-          <Text style={[type.caption, styles.moreNote, { color: native.tertiaryLabel }]}>
-            Showing first 200 matches. Refine your search to see more.
-          </Text>
-        ) : null}
       </ScrollView>
 
       <FacultyFilterSheet
@@ -215,6 +215,5 @@ export function FacultyResultsScreen() {
 const styles = StyleSheet.create({
   content: { padding: 16, gap: 14 },
   loadingBox: { paddingVertical: 48, alignItems: "center" },
-  moreNote: { textAlign: "center", paddingVertical: 8, lineHeight: 18 },
   segmentBar: { marginHorizontal: -16, paddingHorizontal: 16, paddingBottom: 2 },
 })

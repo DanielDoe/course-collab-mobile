@@ -11,10 +11,12 @@ import {
   attendanceStatusLabel,
   computeTrendInsight,
   filterRecords,
+  filterFacultyAttendanceStandings,
   filterMeetingsBySearch,
   filterRosterStudents,
   filterSessionsBySection,
   formatAttendancePct,
+  rankFacultyAttendanceStandings,
   formatMeetingDay,
   formatMeetingTimeRange,
   meetingStatusBadge,
@@ -31,6 +33,7 @@ import {
   type AttendanceRecord,
   type AttendanceRosterStudent,
   type AttendanceSession,
+  type AttendanceStudentSummary,
   type InstructorSession,
 } from "../../lib/instructor-api"
 import { useFacultyScope } from "../../hooks/useFacultyScope"
@@ -45,11 +48,14 @@ import {
   facultyAttendanceStudentThumb,
 } from "../../lib/faculty-attendance-theme"
 import { semanticSoft } from "../../lib/themed-module-theme"
+import { FacultyAttendanceLeaderboard } from "./FacultyAttendanceLeaderboard"
 import { FacultyEmptyState, FacultyStatusPill } from "./faculty-shared"
 import { FacultySignatureListCard } from "./FacultyCollabListCards"
 import { ModuleFlashList } from "../ModuleFlashList"
 import { FACULTY_SHEET_CHIP_RADIUS } from "./faculty-collab-sheet-ui"
+import { useFacultyListPager } from "../../hooks/useFacultyListPager"
 import { useModuleTheme } from "../../lib/themed-module-shell"
+import { FacultyListPagerFooter } from "./FacultyListPagerFooter"
 import { useFacultyStickyHeaderScrollLayout,
   FacultyFilterSheet,
   FacultyModuleStickyHeader,
@@ -64,6 +70,7 @@ const MAIN_TABS: Array<{ id: AttendanceTab; label: string; icon: keyof typeof Io
   { id: "roll", label: "Roll call", icon: "people-outline" },
   { id: "meetings", label: "Meetings", icon: "calendar-outline" },
   { id: "log", label: "Log", icon: "list-outline" },
+  { id: "leaderboard", label: "Leaderboard", icon: "trophy-outline" },
 ]
 
 function useAttendanceTheme() {
@@ -199,8 +206,6 @@ function useAttendanceTheme() {
           ...cardShadow,
         },
         logLinkText: { flex: 1, fontSize: 14, fontWeight: "700", color: native.label },
-        logBack: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 4 },
-        logBackText: { fontSize: 14, fontWeight: "700", color: FACULTY_ATTENDANCE_COLOR.link },
         logStatusChip: {
           flexDirection: "row",
           alignItems: "center",
@@ -405,6 +410,17 @@ export function FacultyAttendanceScreen() {
     () => filterRecords(records, search, logStatus),
     [records, search, logStatus],
   )
+  const rollPager = useFacultyListPager(
+    rollCallRoster,
+    `roll:${search}:${selectedMeetingId}:${rosterSection}`,
+    "students",
+  )
+  const meetingsPager = useFacultyListPager(
+    filteredMeetings,
+    `meetings:${search}:${scopedSectionCode}`,
+    "meetings",
+  )
+  const logPager = useFacultyListPager(filteredLog, `log:${search}:${logStatus}:${scopedSectionCode}`, "records")
 
   const uniqueSections = useMemo(() => {
     const seen = new Set<string>()
@@ -424,6 +440,14 @@ export function FacultyAttendanceScreen() {
         records: records,
       }),
     [analytics, scopedSectionCode, uniqueSections, filteredMeetings, records],
+  )
+  const standings = useMemo(
+    () => rankFacultyAttendanceStandings(displayAnalytics),
+    [displayAnalytics],
+  )
+  const filteredStandings = useMemo(
+    () => filterFacultyAttendanceStandings(standings, search),
+    [standings, search],
   )
   const trendInsight = useMemo(() => computeTrendInsight(displayAnalytics), [displayAnalytics])
   const trendTone = trendInsight.improving ? FACULTY_ATTENDANCE_COLOR.trend : tokens.warning
@@ -674,7 +698,9 @@ export function FacultyAttendanceScreen() {
         ? "Search meetings…"
         : tab === "log"
           ? "Search attendance log…"
-          : "Search students or meetings…"
+          : tab === "leaderboard"
+            ? "Search rankings…"
+            : "Search students or meetings…"
 
   return (
     <View style={[moduleStyles.root, styles.root]}>
@@ -697,7 +723,8 @@ export function FacultyAttendanceScreen() {
       <FacultyFilterSheet
         visible={configSheetOpen}
         title="Attendance settings"
-        subtitle="Scope stats, roll call, meetings, and the log to one section."
+        groupLabel="Section"
+        subtitle="Stats, roll call, meetings, and the log follow this section."
         options={sectionFilterSheetOptions(uniqueSections)}
         value={sectionFilter}
         onSelect={selectSectionScope}
@@ -736,6 +763,7 @@ export function FacultyAttendanceScreen() {
             selectedMeetingId={selectedMeetingId}
             onSelectMeeting={setSelectedMeetingId}
             roster={rollCallRoster}
+            rosterPager={rollPager}
             rosterSection={rosterSection}
             sessionMarks={sessionMarks}
             markingId={markingId}
@@ -789,16 +817,19 @@ export function FacultyAttendanceScreen() {
             {tab === "overview" ? (
               <OverviewTab
                 analytics={displayAnalytics}
+                standings={standings}
                 activeMeeting={activeMeeting}
                 onGoRoll={() => setTab("roll")}
                 onGoMeetings={() => setTab("meetings")}
                 onGoLog={() => setTab("log")}
+                onGoLeaderboard={() => setTab("leaderboard")}
               />
             ) : null}
 
             {tab === "meetings" ? (
               <MeetingsTab
                 meetings={filteredMeetings}
+                pager={meetingsPager}
                 onSelect={(m) => {
                   setSelectedMeetingId(m.id)
                   setTab("roll")
@@ -810,12 +841,14 @@ export function FacultyAttendanceScreen() {
             {tab === "log" ? (
               <LogTab
                 records={filteredLog}
+                pager={logPager}
                 logStatus={logStatus}
                 onLogStatus={setLogStatus}
                 onUpdateStatus={handleUpdateRecord}
-                onBack={() => setTab("overview")}
               />
             ) : null}
+
+            {tab === "leaderboard" ? <FacultyAttendanceLeaderboard rows={filteredStandings} /> : null}
           </>
         )}
       </ScrollView>
@@ -826,22 +859,25 @@ export function FacultyAttendanceScreen() {
 
 function OverviewTab({
   analytics,
+  standings,
   activeMeeting,
   onGoRoll,
   onGoMeetings,
   onGoLog,
+  onGoLeaderboard,
 }: {
   analytics: AttendanceAnalytics | null
+  standings: AttendanceStudentSummary[]
   activeMeeting: AttendanceSession | null
   onGoRoll: () => void
   onGoMeetings: () => void
   onGoLog: () => void
+  onGoLeaderboard: () => void
 }) {
   const { styles, tokens } = useAttendanceTheme()
   const statusRows = analytics?.statusBreakdown ?? []
   const statusTotal = statusRows.reduce((sum, r) => sum + Number(r.count ?? 0), 0) || 1
   const atRisk = analytics?.flaggedStudents ?? analytics?.chronicAbsentees ?? []
-  const top = analytics?.topPerformers ?? []
 
   return (
     <View style={styles.section}>
@@ -904,31 +940,23 @@ function OverviewTab({
         </View>
       ) : null}
 
-      <View style={styles.splitRow}>
-        <InsightPanel title="Needs follow-up" empty="Everyone is on track.">
-          {atRisk.slice(0, 5).map((s) => (
-            <InsightRow
-              key={s.id}
-              name={s.full_name}
-              meta={s.student_id}
-              badge={formatAttendancePct(s.attendance_percentage)}
-              tone="warning"
-            />
-          ))}
-        </InsightPanel>
-        <InsightPanel title="Top attendance" empty="Marks will appear after first roll.">
-          {top.slice(0, 5).map((s, i) => (
-            <InsightRow
-              key={s.id}
-              name={s.full_name}
-              meta={s.current_streak ? `${s.current_streak} day streak` : s.student_id}
-              badge={formatAttendancePct(s.attendance_percentage)}
-              tone="success"
-              rank={i + 1}
-            />
-          ))}
-        </InsightPanel>
-      </View>
+      <FacultyAttendanceLeaderboard
+        rows={standings}
+        compact
+        onSeeAll={onGoLeaderboard}
+      />
+
+      <InsightPanel title="Needs follow-up" empty="Everyone is on track.">
+        {atRisk.slice(0, 5).map((s) => (
+          <InsightRow
+            key={s.id}
+            name={s.full_name}
+            meta={s.student_id}
+            badge={formatAttendancePct(s.attendance_percentage)}
+            tone="warning"
+          />
+        ))}
+      </InsightPanel>
 
       {(analytics?.weeklyTrend ?? []).length > 0 ? (
         <View style={styles.panel}>
@@ -959,6 +987,7 @@ function RollCallTab({
   selectedMeetingId,
   onSelectMeeting,
   roster,
+  rosterPager,
   rosterSection,
   sessionMarks,
   markingId,
@@ -973,6 +1002,7 @@ function RollCallTab({
   selectedMeetingId: number | null
   onSelectMeeting: (id: number) => void
   roster: AttendanceRosterStudent[]
+  rosterPager: ReturnType<typeof useFacultyListPager<AttendanceRosterStudent>>
   rosterSection: string
   sessionMarks: Record<number, AttendanceStatus>
   markingId: number | null
@@ -1115,12 +1145,13 @@ function RollCallTab({
 
   return (
     <ModuleFlashList
-      data={roster}
+      data={rosterPager.items}
       keyExtractor={(item) => String(item.studentId)}
       renderItem={renderRosterRow}
       extraData={{ sessionMarks, markingId, selectedMeetingId }}
       contentContainerStyle={[styles.content, listScrollPad]}
       ListHeaderComponent={meetingHeader}
+      ListFooterComponent={<FacultyListPagerFooter pager={rosterPager} />}
       ListEmptyComponent={
         <FacultyEmptyState
           icon="people-outline"
@@ -1183,10 +1214,12 @@ function RollCallStudentRow({
 
 function MeetingsTab({
   meetings,
+  pager,
   onSelect,
   onToggleCancel,
 }: {
   meetings: AttendanceSession[]
+  pager: ReturnType<typeof useFacultyListPager<AttendanceSession>>
   onSelect: (m: AttendanceSession) => void
   onToggleCancel: (m: AttendanceSession) => void
 }) {
@@ -1204,7 +1237,7 @@ function MeetingsTab({
 
   return (
     <View style={styles.section}>
-      {meetings.map((m) => {
+      {pager.items.map((m) => {
         const status = facultyAttendanceMeetingStatusMeta(m)
         return (
           <FacultySignatureListCard
@@ -1257,24 +1290,25 @@ function MeetingsTab({
           />
         )
       })}
+      <FacultyListPagerFooter pager={pager} />
     </View>
   )
 }
 
 function LogTab({
   records,
+  pager,
   logStatus,
   onLogStatus,
   onUpdateStatus,
-  onBack,
 }: {
   records: AttendanceRecord[]
+  pager: ReturnType<typeof useFacultyListPager<AttendanceRecord>>
   logStatus: string
   onLogStatus: (v: string) => void
   onUpdateStatus: (record: AttendanceRecord, status: AttendanceStatus) => void
-  onBack: () => void
 }) {
-  const { styles, native, tokens } = useAttendanceTheme()
+  const { styles, native } = useAttendanceTheme()
   const [statusSheetOpen, setStatusSheetOpen] = useState(false)
   const statusOptions = useMemo(
     () => [
@@ -1287,10 +1321,6 @@ function LogTab({
 
   return (
     <View style={styles.section}>
-      <Pressable style={styles.logBack} onPress={onBack}>
-        <Ionicons name="arrow-back" size={18} color={FACULTY_ATTENDANCE_COLOR.link} />
-        <Text style={styles.logBackText}>Back to overview</Text>
-      </Pressable>
       <Pressable style={styles.logStatusChip} onPress={() => setStatusSheetOpen(true)}>
         <Ionicons name="options-outline" size={16} color={native.secondaryLabel} />
         <Text style={styles.logStatusChipText}>{statusLabel}</Text>
@@ -1312,12 +1342,7 @@ function LogTab({
         <FacultyEmptyState icon="list-outline" title="No records" body="Attendance marks and QR check-ins appear here." />
       ) : (
         <>
-        {records.length > 80 ? (
-          <Text style={{ color: native.secondaryLabel, fontSize: 12, fontWeight: "600" }}>
-            Showing the 80 most recent of {records.length} records.
-          </Text>
-        ) : null}
-        {records.slice(0, 80).map((record) => (
+        {pager.items.map((record) => (
           <FacultySignatureListCard
             key={record.id}
             thumb={facultyAttendanceStudentThumb(record.studentId)}
@@ -1346,6 +1371,7 @@ function LogTab({
             }
           />
         ))}
+        <FacultyListPagerFooter pager={pager} />
         </>
       )}
     </View>

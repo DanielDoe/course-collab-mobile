@@ -32,6 +32,7 @@ import {
 import { useMembershipTier } from "../../hooks/useMembershipTier"
 import { useStudentShell } from "../../context/StudentShellContext"
 import { getNavUpgradePrompt } from "../../lib/membership-tier"
+import { isIosPurchaseUiHidden, tierLockedAlertButtons } from "../../lib/purchase-navigation"
 import type { StudentSession } from "../../lib/session"
 import type { MembershipTier } from "../../types/dashboard"
 import { NATIVE } from "../../constants/faculty-native-theme"
@@ -203,10 +204,7 @@ export function StudentDrawerAccordion({ session }: Props) {
 
     if (locked) {
       const prompt = getNavUpgradePrompt(item, membershipTier)
-      AppAlert.alert(prompt.title, prompt.message, [
-        { text: "Not now", style: "cancel" },
-        { text: "View plans", onPress: () => navigate("/membership") },
-      ])
+      AppAlert.alert(prompt.title, prompt.message, tierLockedAlertButtons(() => navigate("/membership")))
       return
     }
 
@@ -336,11 +334,13 @@ export function StudentDrawerAccordion({ session }: Props) {
               onPress={handleNavPress}
             />
 
-            <DrawerUpgradeCard
-              tier={membershipTier}
-              tierLoaded={membershipTierLoaded}
-              onPress={() => navigate("/membership")}
-            />
+            {isIosPurchaseUiHidden() ? null : (
+              <DrawerUpgradeCard
+                tier={membershipTier}
+                tierLoaded={membershipTierLoaded}
+                onPress={() => navigate("/membership")}
+              />
+            )}
           </ScrollView>
           </View>
         </Animated.View>

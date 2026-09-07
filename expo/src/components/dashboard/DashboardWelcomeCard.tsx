@@ -39,7 +39,7 @@ function visibleSubtitle(badge?: string | null, subtitle?: string | null): strin
 
   const badgeKey = badgeTrimmed.replace(/[^a-zA-Z0-9]/g, "").toLowerCase()
   const subKey = trimmed.replace(/[^a-zA-Z0-9]/g, "").toLowerCase()
-  if (badgeKey && (subKey === badgeKey || subKey.startsWith(badgeKey))) {
+  if (badgeKey && (subKey === badgeKey || subKey.startsWith(badgeKey) || badgeKey.startsWith(subKey))) {
     // Drop leading course-code tokens; if only a parenthetical/demo label remains, hide.
     const remainder = trimmed
       .replace(new RegExp(`^\\s*${badgeTrimmed.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*`, "i"), "")
@@ -48,6 +48,7 @@ function visibleSubtitle(badge?: string | null, subtitle?: string | null): strin
       .replace(/\)$/, "")
       .trim()
     if (!remainder || /^\([^)]*\)$/.test(remainder) || remainder.length < 3) return null
+    return remainder
   }
 
   if (normalizeLabel(badgeTrimmed) === normalizeLabel(trimmed)) return null
@@ -137,6 +138,8 @@ export type DashboardWelcomeCardProps = {
   subtitle?: string | null
   /** When set, renders a single meta line instead of role/badge/subtitle pills */
   metaLine?: string | null
+  /** Keep the course/meta line on one row (ellipsis). Defaults to 2. */
+  metaNumberOfLines?: number
   /** Replaces the initials avatar (e.g. Cora brand mark). */
   leading?: ReactNode
   leadingRef?: RefObject<View | null>
@@ -154,6 +157,7 @@ export function DashboardWelcomeCard({
   badge,
   subtitle,
   metaLine,
+  metaNumberOfLines = 2,
   leading,
   leadingRef,
   hideLeading = false,
@@ -212,7 +216,7 @@ export function DashboardWelcomeCard({
             </Text>
           </View>
         ) : null}
-        <Text style={[type.secondary, styles.metaLine]} numberOfLines={2}>
+        <Text style={[type.secondary, styles.metaLine]} numberOfLines={metaNumberOfLines}>
           {metaLineText}
         </Text>
       </View>
@@ -482,5 +486,7 @@ const styles = StyleSheet.create({
   },
   metaLine: {
     lineHeight: 20,
+    minWidth: 0,
+    flexShrink: 1,
   },
 })

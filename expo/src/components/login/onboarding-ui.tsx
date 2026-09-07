@@ -13,11 +13,15 @@ import {
   type NativeSyntheticEvent,
 } from "react-native"
 import { ScrollView } from "react-native-gesture-handler"
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import type { LegalDocument } from "../../content/legal/types"
 import { NATIVE } from "../../constants/faculty-native-theme"
-import { useAuthFlowContentStyle, useAuthFlowLayout } from "../../lib/responsive-layout"
+import {
+  authFlowCenterSlack,
+  useOnboardingFlowLayout,
+} from "../../lib/responsive-layout"
 import type { AppSession } from "../../lib/session"
 import {
   onboardingStepMeta,
@@ -26,6 +30,26 @@ import {
 import { LoginButton } from "./LoginButton"
 import { useLoginTheme } from "./login-theme"
 import { keyboardDismissScrollProps } from "../../lib/keyboard-dismiss-scroll-props"
+import { motion, useAppReducedMotion, easing } from "../../lib/motion"
+import { AuthFlowHeroEnter } from "../motion/AuthFlowPanelTransition"
+import { PressableScale } from "../motion/PressableScale"
+
+function OnboardingProgressFill({ progress, color }: { progress: number; color: string }) {
+  const reduceMotion = useAppReducedMotion()
+  const width = useSharedValue(progress)
+
+  useEffect(() => {
+    width.value = reduceMotion
+      ? progress
+      : withTiming(progress, { duration: motion.slow, easing: easing.emphasize })
+  }, [progress, reduceMotion, width])
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    width: `${Math.max(0, Math.min(1, width.value)) * 100}%`,
+  }))
+
+  return <Animated.View style={[styles.progressFill, { backgroundColor: color }, animatedStyle]} />
+}
 
 type OnboardingShellProps = {
   session: AppSession
@@ -37,6 +61,8 @@ type OnboardingShellProps = {
   children: ReactNode
   footer?: ReactNode
   scrollable?: boolean
+  /** Tighter header spacing for short overview screens (welcome). */
+  compact?: boolean
 }
 
 export function OnboardingShell({
@@ -49,25 +75,34 @@ export function OnboardingShell({
   children,
   footer,
   scrollable = true,
+  compact = false,
 }: OnboardingShellProps) {
   const insets = useSafeAreaInsets()
   const { LOGIN, loginType } = useLoginTheme()
-  const contentStyle = useAuthFlowContentStyle()
-  const { horizontalPadding, contentGap } = useAuthFlowLayout()
+  const { horizontalPadding, contentGap, shouldCenterVertically, contentStyle } = useOnboardingFlowLayout()
   const { stepIndex, totalSteps, progress } = onboardingStepMeta(session, stepId)
+  const [scrollViewportH, setScrollViewportH] = useState(0)
+  const [scrollContentH, setScrollContentH] = useState(0)
+  const scrollSlack = authFlowCenterSlack({
+    viewportH: scrollViewportH,
+    contentH: scrollContentH,
+    padTop: 0,
+    padBottom: 0,
+    shouldCenter: shouldCenterVertically,
+  })
 
   const body = (
-    <>
-      <View style={styles.header}>
+    <AuthFlowHeroEnter>
+      <View style={[styles.header, compact && styles.headerCompact]}>
         <View style={[styles.pill, { backgroundColor: LOGIN.soft, borderColor: LOGIN.softBorder }]}>
           <Ionicons name={icon} size={14} color={LOGIN.purple} />
           <Text style={[styles.pillText, { color: LOGIN.purple }]}>{pillLabel}</Text>
         </View>
-        <Text style={[loginType.heroTitle, styles.title]}>{title}</Text>
-        <Text style={[loginType.heroSubtitle, styles.subtitle]}>{subtitle}</Text>
+        <Text style={[loginType.heroTitle, styles.title, compact && styles.titleCompact]}>{title}</Text>
+        <Text style={[loginType.heroSubtitle, styles.subtitle, compact && styles.subtitleCompact]}>{subtitle}</Text>
       </View>
       {children}
-    </>
+    </AuthFlowHeroEnter>
   )
 
   return (
@@ -84,12 +119,7 @@ export function OnboardingShell({
         ]}
       >
         <View style={[styles.progressBar, { backgroundColor: LOGIN.separator }]}>
-          <View
-            style={[
-              styles.progressFill,
-              { width: `${Math.round(progress * 100)}%`, backgroundColor: LOGIN.purple },
-            ]}
-          />
+          <OnboardingProgressFill progress={progress} color={LOGIN.purple} />
         </View>
         <Text style={[styles.progressLabel, { color: LOGIN.secondaryLabel }]}>
           Step {stepIndex + 1} of {totalSteps}
@@ -97,15 +127,21 @@ export function OnboardingShell({
       </View>
 
       {scrollable ? (
-        <View style={[styles.scrollHost, contentStyle]}>
+        <View
+          style={[styles.scrollHost, contentStyle]}
+          onLayout={(event) => {
+            const next = event.nativeEvent.layout.height
+            setScrollViewportH((prev) => (next > 0 && Math.abs(next - prev) > 1 ? next : prev))
+          }}
+        >
           <ScrollView
             style={styles.scrollView}
             contentContainerStyle={[
-              styles.scrollContent,
+              compact ? styles.scrollContentCompact : styles.scrollContent,
               {
-                paddingBottom: footer
-                  ? Math.max(24, insets.bottom + 12)
-                  : insets.bottom + 28,
+                paddingTop: scrollSlack,
+                paddingBottom:
+                  (footer ? Math.max(24, insets.bottom + 12) : insets.bottom + 28) + scrollSlack,
               },
             ]}
             {...keyboardDismissScrollProps}
@@ -114,13 +150,34 @@ export function OnboardingShell({
             showsVerticalScrollIndicator={false}
             alwaysBounceVertical
           >
-            <View style={[styles.scroll, { paddingHorizontal: horizontalPadding, gap: contentGap }]}>
+            <View
+              style={[
+                styles.scroll,
+                { paddingHorizontal: horizontalPadding, gap: compact ? 12 : contentGap },
+              ]}
+              onLayout={(event) => {
+                const next = event.nativeEvent.layout.height
+                setScrollContentH((prev) => (next > 0 && Math.abs(next - prev) > 1 ? next : prev))
+              }}
+            >
               {body}
             </View>
           </ScrollView>
         </View>
       ) : (
-        <View style={[styles.scrollHost, contentStyle, styles.scroll, { flex: 1, paddingHorizontal: horizontalPadding, gap: contentGap }]}>
+        <View
+          style={[
+            styles.scrollHost,
+            contentStyle,
+            styles.scroll,
+            {
+              flex: 1,
+              paddingHorizontal: horizontalPadding,
+              gap: compact ? 12 : contentGap,
+              justifyContent: shouldCenterVertically ? "center" : "flex-start",
+            },
+          ]}
+        >
           {body}
         </View>
       )}
@@ -335,13 +392,13 @@ export function OnboardingAcceptFooter({
       {hint ? (
         <Text style={[loginType.info, styles.footerHint, { color: LOGIN.secondaryLabel }]}>{hint}</Text>
       ) : null}
-      <Pressable
-        style={({ pressed }) => [
+      <PressableScale
+        style={[
           styles.checkRow,
           {
             backgroundColor: LOGIN.grouped,
             borderColor: checked ? LOGIN.purple : LOGIN.separator,
-            opacity: pressed ? 0.92 : disabled ? 0.55 : 1,
+            opacity: disabled ? 0.55 : 1,
           },
         ]}
         onPress={disabled ? undefined : onToggleCheck}
@@ -361,7 +418,7 @@ export function OnboardingAcceptFooter({
           {checked ? <Ionicons name="checkmark" size={14} color="#FFFFFF" /> : null}
         </View>
         <Text style={[loginType.body, styles.checkLabel, { color: LOGIN.label }]}>{agreeLabel}</Text>
-      </Pressable>
+      </PressableScale>
       <LoginButton
         label={continueLabel}
         icon="arrow-forward"
@@ -409,8 +466,7 @@ export function OnboardingLegalStepLayout({
 }) {
   const insets = useSafeAreaInsets()
   const { LOGIN, loginType } = useLoginTheme()
-  const contentStyle = useAuthFlowContentStyle()
-  const { horizontalPadding, contentGap } = useAuthFlowLayout()
+  const { horizontalPadding, contentGap, contentStyle } = useOnboardingFlowLayout()
   const { stepIndex, totalSteps, progress } = onboardingStepMeta(session, stepId)
   const [checked, setChecked] = useState(false)
   const [scrolledToEnd, setScrolledToEnd] = useState(false)
@@ -489,12 +545,7 @@ export function OnboardingLegalStepLayout({
         ]}
       >
         <View style={[styles.progressBar, { backgroundColor: LOGIN.separator }]}>
-          <View
-            style={[
-              styles.progressFill,
-              { width: `${Math.round(progress * 100)}%`, backgroundColor: LOGIN.purple },
-            ]}
-          />
+          <OnboardingProgressFill progress={progress} color={LOGIN.purple} />
         </View>
         <Text style={[styles.progressLabel, { color: LOGIN.secondaryLabel }]}>
           Step {stepIndex + 1} of {totalSteps}
@@ -617,6 +668,9 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
   },
+  scrollContentCompact: {
+    flexGrow: 0,
+  },
   legalScrollContent: {
     flexGrow: 0,
   },
@@ -624,6 +678,9 @@ const styles = StyleSheet.create({
     paddingTop: 10,
   },
   header: { alignItems: "center", gap: 10, marginBottom: 8, paddingTop: 4 },
+  headerCompact: { gap: 6, marginBottom: 4, paddingTop: 0 },
+  titleCompact: { fontSize: 28, lineHeight: 34 },
+  subtitleCompact: { lineHeight: 22, paddingHorizontal: 0 },
   pill: {
     flexDirection: "row",
     alignItems: "center",
@@ -635,7 +692,7 @@ const styles = StyleSheet.create({
   },
   pillText: { fontSize: 12, fontWeight: "600" },
   title: { textAlign: "center" },
-  subtitle: { textAlign: "center", paddingHorizontal: 8 },
+  subtitle: { textAlign: "center", paddingHorizontal: 0 },
   documentTitle: { fontSize: 22, lineHeight: 28, paddingHorizontal: 4 },
   legalRoot: { gap: 16 },
   metaCard: {
@@ -650,7 +707,7 @@ const styles = StyleSheet.create({
   card: {
     borderRadius: NATIVE.sectionRadius,
     borderWidth: StyleSheet.hairlineWidth,
-    padding: 16,
+    padding: 14,
     gap: 10,
   },
   paragraph: { lineHeight: 24, fontSize: 16 },

@@ -112,18 +112,18 @@ export function GradeHeroCard({
           </G>
         </Svg>
         <View style={styles.gaugeCenter} pointerEvents="none">
-          <View style={styles.pctRow}>
-            <Text
-              style={[styles.pct, { color: arc, fontSize: pctMainSize, maxWidth: 96 }]}
-              adjustsFontSizeToFit
-              numberOfLines={1}
-              minimumFontScale={0.7}
-            >
-              {pctText}
-            </Text>
-            <Text style={[styles.pctSymbol, { color: arc, fontSize: pctSymbolSize }]}>%</Text>
+          <View style={styles.gaugeCenterInner}>
+            <View style={styles.pctRow}>
+              <Text
+                style={[styles.pct, { color: arc, fontSize: pctMainSize }]}
+                numberOfLines={1}
+              >
+                {pctText}
+              </Text>
+              <Text style={[styles.pctSymbol, { color: arc, fontSize: pctSymbolSize }]}>%</Text>
+            </View>
+            <Text style={[type.caption, styles.pctLabel, { color: heroMuted }]}>Weighted</Text>
           </View>
-          <Text style={[type.caption, styles.pctLabel, { color: heroMuted }]}>Weighted</Text>
         </View>
       </View>
 
@@ -148,7 +148,9 @@ export function GradeHeroCard({
             {letterLabel}
           </Text>
         </View>
-        <Text style={[type.caption, styles.letterHint, { color: heroMuted }]}>Letter grade</Text>
+        <Text style={[type.caption, styles.letterHint, { color: heroMuted }]}>
+          {isInProgress ? "Status" : "Letter grade"}
+        </Text>
       </View>
 
       {gradeIsProvisional ? (
@@ -177,10 +179,14 @@ export function GradeHeroCard({
 
       {pendingCategories.length > 0 ? (
         <View style={styles.pendingWrap}>
-          <Text style={[type.sectionHeader, styles.pendingLabel, { color: heroMuted }]}>Pending categories</Text>
-          {pendingCategories.map((item) => (
-            <FacultyStatusPill key={item} label={item} tone="warning" />
-          ))}
+          <Text style={[type.sectionHeader, styles.pendingLabel, { color: heroMuted }]}>
+            Pending categories
+          </Text>
+          <View style={styles.pendingTags}>
+            {pendingCategories.map((item) => (
+              <FacultyStatusPill key={item} label={item} tone="warning" />
+            ))}
+          </View>
         </View>
       ) : null}
     </LinearGradient>
@@ -208,21 +214,32 @@ const styles = StyleSheet.create({
     height: SIZE,
     alignItems: "center",
     justifyContent: "center",
-    marginVertical: 4},
+    marginVertical: 4,
+  },
   gaugeCenter: {
-    ...StyleSheet.absoluteFillObject,
+    position: "absolute",
+    top: 0,
+    left: 0,
+    width: SIZE,
+    height: SIZE,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 28},
+  },
+  gaugeCenterInner: {
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 2,
+  },
   pctRow: {
     flexDirection: "row",
-    alignItems: "baseline",
+    alignItems: "center",
     justifyContent: "center",
-    maxWidth: "100%"},
+  },
   pct: {
     fontWeight: "600",
     letterSpacing: -0.5,
-    lineHeight: undefined},
+    textAlign: "center",
+  },
   pctSymbol: {
     fontWeight: "600",
     marginLeft: 1,
@@ -261,10 +278,12 @@ const styles = StyleSheet.create({
   },
   pendingWrap: {
     alignSelf: "stretch",
-    flexDirection: "row",
-    flexWrap: "wrap",
-    alignItems: "center",
     gap: 8,
   },
-  pendingLabel: { flexShrink: 0 },
+  pendingTags: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  pendingLabel: {},
 })

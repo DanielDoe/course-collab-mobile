@@ -1,21 +1,18 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react"
-import { ActivityIndicator, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
-import { AppAlert } from '../../lib/app-alert'
-import { ScrollView } from "react-native-gesture-handler"
+import { useCallback, useEffect, useId, useMemo, useState } from "react"
+import { Pressable, StyleSheet, Text, View } from "react-native"
+import { AppAlert } from "../../lib/app-alert"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useSession } from "../../context/SessionProvider"
 import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
-import { useModuleScrollContentPadding } from "../../context/ChromeInsetContext"
 import { ApiError } from "../../lib/student-api"
 import type { StudentSession } from "../../lib/session"
 import { useNotificationModuleRefresh } from "../../lib/notifications/notification-events"
-import { useNativeType, useThemedStudentNative } from "../../lib/themed-module-theme"
+import { useNativeType } from "../../lib/themed-module-theme"
 import { NATIVE } from "../../constants/faculty-native-theme"
-import { StudentSearchToolbar } from "../student/student-search-toolbar"
+import { useModuleSearchDockRegistration, type ModuleSearchDockEntry } from "../../context/ModuleSearchDockContext"
 import { SignatureListCard } from "../theme/SignatureListCard"
-import { PillSwipeTabs } from "../theme/PillSwipeTabs"
 import type { MobbinPillSegmentOption } from "../theme/MobbinPillSegmentControl"
-import { signatureListStyles } from "../theme/TabbedModuleLayout"
+import { TabbedModuleLayout, signatureListStyles } from "../theme/TabbedModuleLayout"
 import {
   formatRelativeTime,
   rewardsApi,
@@ -24,6 +21,8 @@ import {
   type TradeCenterPoints,
   type TradeHistoryItem} from "../../lib/rewards-api"
 import { EmptyBlock, SectionLabel, useRewardsTheme } from "./rewards-shared"
+import { useFacultyListPager } from "../../hooks/useFacultyListPager"
+import { FacultyListPagerFooter } from "../faculty/FacultyListPagerFooter"
 import {
   TRADE_CENTER_ACTION,
   TRADE_CENTER_BALANCE_THEMES,
@@ -50,6 +49,55 @@ const TAB_OPTIONS: MobbinPillSegmentOption<Tab>[] = [
   { id: "requests", label: "Requests", icon: "mail-outline" },
   { id: "history", label: "History", icon: "time-outline" },
 ]
+
+/** Bottom search dock — keeps tab strip spacing stable (see TabbedModuleLayout). */
+function TradeCenterSearchDock({
+  tab,
+  search,
+  onChangeSearch,
+  onSync,
+}: {
+  tab: Tab
+  search: string
+  onChangeSearch: (value: string) => void
+  onSync: () => void
+}) {
+  const dockId = useId()
+  const placeholder =
+    tab === "history"
+      ? "Search trade history…"
+      : tab === "requests"
+        ? "Search point requests…"
+        : "Search trade center…"
+
+  const trailingAction = useMemo(
+    () =>
+      ({
+        onPress: onSync,
+        accessibilityLabel: "Sync balances",
+        icon: "refresh-outline",
+      }) as const,
+    [onSync],
+  )
+
+  const dockEntry = useMemo<ModuleSearchDockEntry>(
+    () => ({
+      kind: "student",
+      props: {
+        value: search,
+        onChange: onChangeSearch,
+        placeholder,
+        showFilter: false,
+        placement: "dock",
+        trailingAction,
+      },
+    }),
+    [search, onChangeSearch, placeholder, trailingAction],
+  )
+
+  useModuleSearchDockRegistration(dockId, dockEntry)
+  return null
+}
 
 function BalanceTile({
   statKey,
@@ -186,10 +234,7 @@ export function TradeCenterScreen() {
   const session = useStudentSession()
   const theme = useRewardsTheme()
   const native = useThemedNative()
-  const tokens = useAppThemeTokens()
-  const SN = useThemedStudentNative()
   const type = useNativeType()
-  const scrollPad = useModuleScrollContentPadding()
   const [tab, setTab] = useState<Tab>("overview")
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -279,6 +324,9 @@ export function TradeCenterScreen() {
     )
   }, [pointRequests, search])
 
+  const requestsPager = useFacultyListPager(filteredRequests, `${tab}|${search}|requests`, "requests")
+  const historyPager = useFacultyListPager(filteredHistory, `${tab}|${search}|history`, "activities")
+
   async function handleSync() {
     if (!session) return
     setBusy(true)
@@ -360,46 +408,6 @@ export function TradeCenterScreen() {
     } catch (err) {
       AppAlert.alert("Failed", err instanceof ApiError ? err.message : "Could not reject request.")
     }
-  }
-
-  const pageScrollStyle = useMemo(
-    () => ({
-      paddingBottom: scrollPad.paddingBottom,
-      flexGrow: 1 as const,
-    }),
-    [scrollPad.paddingBottom],
-  )
-
-  function wrapPage(content: ReactNode) {
-    if (loading && !refreshing) {
-      return (
-        <View style={styles.pageCenter}>
-          <ActivityIndicator size="large" color={tokens.accent} />
-          <Text style={[type.caption, { color: SN.secondaryLabel }]}>Loading trade center…</Text>
-        </View>
-      )
-    }
-
-    return (
-      <ScrollView
-        style={styles.pageScroll}
-        contentContainerStyle={pageScrollStyle}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
-        directionalLockEnabled
-        nestedScrollEnabled
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={tokens.accent} />
-        }
-      >
-        {content}
-      </ScrollView>
-    )
-  }
-
-  function handlePillChange(next: Tab) {
-    setTab(next)
   }
 
   function renderOverviewPage() {
@@ -534,16 +542,19 @@ export function TradeCenterScreen() {
       )
     }
     return (
-      <View style={signatureListStyles.list}>
-        {filteredRequests.map((req) => (
-          <RequestRow
-            key={req.id}
-            req={req}
-            onApprove={() => handleApprove(req.id)}
-            onReject={() => handleReject(req.id)}
-          />
-        ))}
-      </View>
+      <>
+        <View style={signatureListStyles.list}>
+          {requestsPager.items.map((req) => (
+            <RequestRow
+              key={req.id}
+              req={req}
+              onApprove={() => handleApprove(req.id)}
+              onReject={() => handleReject(req.id)}
+            />
+          ))}
+        </View>
+        <FacultyListPagerFooter pager={requestsPager} />
+      </>
     )
   }
 
@@ -558,85 +569,51 @@ export function TradeCenterScreen() {
       )
     }
     return (
-      <View style={signatureListStyles.list}>
-        {filteredHistory.map((item, index) => (
-          <HistoryListCard key={item.id} item={item} index={index} />
-        ))}
-      </View>
+      <>
+        <View style={signatureListStyles.list}>
+          {historyPager.items.map((item, index) => (
+            <HistoryListCard
+              key={item.id}
+              item={item}
+              index={historyPager.page * historyPager.pageSize + index}
+            />
+          ))}
+        </View>
+        <FacultyListPagerFooter pager={historyPager} />
+      </>
     )
   }
 
   return (
-    <View style={[styles.root, { backgroundColor: native.groupedBackground }]}>
-      <View
-        style={[
-          styles.chrome,
-          {
-            paddingTop: scrollPad.paddingTop ?? NATIVE.pagePadding,
-            paddingHorizontal: NATIVE.pagePadding,
-          },
-        ]}
-      >
-        {error ? (
-          <View style={[styles.errorBox, { backgroundColor: `${tokens.danger}18` }]}>
-            <Text style={[type.destructive, styles.errorText]}>{error}</Text>
-          </View>
-        ) : null}
-      </View>
-
-      <StudentSearchToolbar
-        value={search}
-        onChange={setSearch}
-        placeholder={
-          tab === "history"
-            ? "Search trade history…"
-            : tab === "requests"
-              ? "Search point requests…"
-              : "Search trade center…"
-        }
-        showFilter={false}
-        trailingAction={{
-          onPress: () => void handleSync(),
-          accessibilityLabel: "Sync balances",
-          icon: "refresh-outline",
-        }}
+    <>
+      <TradeCenterSearchDock
+        tab={tab}
+        search={search}
+        onChangeSearch={setSearch}
+        onSync={() => void handleSync()}
       />
-
-      <View style={styles.topBar}>
-        <PillSwipeTabs
-          options={TAB_OPTIONS}
-          value={tab}
-          onChange={handlePillChange}
-          pagePaddingHorizontal={NATIVE.pagePadding}
-          scrollable
-          visibleSegmentCount={3}
-          pages={[
-            wrapPage(renderOverviewPage()),
-            wrapPage(renderTradePage()),
-            wrapPage(renderDonatePage()),
-            wrapPage(renderRequestsPage()),
-            wrapPage(renderHistoryPage()),
-          ]}
-        />
-      </View>
-    </View>
+      <TabbedModuleLayout
+        tabs={TAB_OPTIONS}
+        tab={tab}
+        onTabChange={setTab}
+        scrollableTabs
+        loading={loading}
+        refreshing={refreshing}
+        onRefresh={() => void onRefresh()}
+        error={error}
+        pages={[
+          renderOverviewPage(),
+          renderTradePage(),
+          renderDonatePage(),
+          renderRequestsPage(),
+          renderHistoryPage(),
+        ]}
+      />
+    </>
   )
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1 },
-  chrome: { gap: 12, paddingBottom: 4 },
-  topBar: { flex: 1 },
-  pageScroll: { flex: 1 },
-  pageCenter: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 10,
-    paddingVertical: 48,
-  },
-  errorBox: { padding: 12, borderRadius: NATIVE.sectionRadius },
-  errorText: { fontSize: 14, lineHeight: 20 },
   section: { gap: 10 },
   balanceTile: {
     borderRadius: 14,

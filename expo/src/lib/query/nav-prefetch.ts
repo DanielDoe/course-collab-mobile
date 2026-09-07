@@ -121,6 +121,17 @@ function facultyRoutePrefetch(
 ) {
   const scope = { instructorId, courseId }
   const queryScope = facultyQueryScopeFromInstructor(scope)
+  if (route.includes("calendar")) {
+    const start = new Date()
+    start.setDate(1)
+    start.setHours(0, 0, 0, 0)
+    const end = new Date(start.getFullYear(), start.getMonth() + 3, 0, 23, 59, 59, 999)
+    return queryClient.prefetchQuery({
+      queryKey: queryKeys.faculty.calendar.range(queryScope, start.toISOString(), end.toISOString(), "all"),
+      queryFn: () => instructorApi.getCalendar(scope, { startDate: start, endDate: end }, "all"),
+      staleTime: STALE_BY_RESOURCE.calendar,
+    })
+  }
   if (route.includes("announcement")) {
     return queryClient.prefetchQuery({
       queryKey: queryKeys.faculty.announcements.list(queryScope),

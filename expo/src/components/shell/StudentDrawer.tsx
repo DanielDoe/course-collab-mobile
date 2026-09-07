@@ -1,20 +1,17 @@
-import { useCallback, useEffect, useMemo, useState, memo, type RefObject } from "react"
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useEffect, useMemo, memo, type RefObject } from "react"
+import { Pressable, StyleSheet, Text, View } from "react-native"
+import { ScrollView } from "react-native-gesture-handler"
 import { AppAlert } from '../../lib/app-alert'
 import type { IoniconName } from "@/components/icons/AppIcon"
 import { DrawerNavIcon } from "./drawer-nav-icons"
 import { BrandLogoMark } from "../brand/BrandLogoMark"
 import { useRouter, usePathname } from "expo-router"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
-import Animated, {
-  Easing,
-  interpolateColor,
-  runOnJS,
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-  withTiming,
-} from "react-native-reanimated"
+import {
+  DrawerPanelScrollHost,
+  ShellDrawerChrome,
+  useShellDrawerMotion,
+} from "../navigation/ShellDrawerMotionProvider"
 import {
   STUDENT_DASHBOARD_LINK,
   STUDENT_NAV_GROUPS,
@@ -51,6 +48,12 @@ import { isDrawerShellRouteActive, navigateDrawerShellRoute } from "../../lib/dr
 import { normalizeRoutePathname } from "../../lib/navigation-reset"
 import { getQueryClient } from "../../lib/query/client"
 import { prefetchForRoute } from "../../lib/query/nav-prefetch"
+import Animated, {
+  interpolateColor,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+} from "react-native-reanimated"
 
 type Props = {
   session: StudentSession
@@ -66,6 +69,8 @@ export function StudentDrawer({ session }: Props) {
   const router = useRouter()
   const pathname = usePathname()
   const { drawerOpen, closeDrawer, membershipTier, membershipTierLoaded } = useStudentShell()
+  const { modalVisible } = useShellDrawerMotion()
+  const drawerOverlayVisible = drawerOpen || modalVisible
   const drawerTheme = useDrawerNavTheme()
   const tokens = useAppThemeTokens()
   const type = useNativeType()
@@ -74,38 +79,9 @@ export function StudentDrawer({ session }: Props) {
   const { scrollRef, contentRef, registerRow, unregisterRow, onRowLayout, onScroll } =
     useDrawerScrollToActive(activeItemId, drawerOpen)
 
-  const [modalVisible, setModalVisible] = useState(false)
-  const backdropOpacity = useSharedValue(0)
-  const panelTranslateX = useSharedValue(-panelWidth)
-
-  const finishClose = useCallback(() => setModalVisible(false), [])
-
   useEffect(() => {
     closeDrawer()
   }, [pathname, closeDrawer])
-
-  useEffect(() => {
-    panelTranslateX.value = drawerOpen ? 0 : -panelWidth
-  }, [drawerOpen, panelTranslateX, panelWidth])
-
-  useEffect(() => {
-    if (drawerOpen) {
-      setModalVisible(true)
-      backdropOpacity.value = withTiming(1, { duration: 220, easing: Easing.out(Easing.cubic) })
-      panelTranslateX.value = withSpring(0, { damping: 22, stiffness: 260 })
-      return
-    }
-
-    backdropOpacity.value = withTiming(0, { duration: 180 })
-    panelTranslateX.value = withTiming(-panelWidth, { duration: 200 }, () => {
-      runOnJS(finishClose)()
-    })
-  }, [drawerOpen, backdropOpacity, panelTranslateX, panelWidth, finishClose])
-
-  const backdropStyle = useAnimatedStyle(() => ({ opacity: backdropOpacity.value }))
-  const panelStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: panelTranslateX.value }],
-  }))
 
   function navigate(route: string) {
     prefetchForRoute(getQueryClient(), session, route)
@@ -135,19 +111,12 @@ export function StudentDrawer({ session }: Props) {
   const layout = drawerShellLayout(panelWidth, insets, drawerTheme)
 
   return (
-    <Modal visible={modalVisible} transparent animationType="none" onRequestClose={closeDrawer} statusBarTranslucent>
-      <View style={styles.root}>
-        <Animated.View style={[styles.backdrop, backdropStyle]}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={closeDrawer} accessibilityLabel="Close menu" />
-        </Animated.View>
-
-        <Animated.View
-          style={[
-            styles.panel,
-            panelStyle,
-            layout.panel,
-          ]}
-        >
+    <ShellDrawerChrome
+      visible={drawerOverlayVisible}
+      onRequestClose={closeDrawer}
+      backdropBaseStyle={styles.backdrop}
+      panelBaseStyle={[styles.panel, layout.panel]}
+    >
           <View
             style={[
               styles.header,
@@ -196,12 +165,15 @@ export function StudentDrawer({ session }: Props) {
                 style={[styles.closeBtn, { backgroundColor: drawerTheme.closeBtnBg }]}
                 onPress={closeDrawer}
                 hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Close menu"
               >
                 <DrawerNavIcon name="close" size={18} color={drawerTheme.secondaryLabel} />
               </Pressable>
             </View>
           </View>
 
+          <DrawerPanelScrollHost>
           <ScrollView
             ref={scrollRef}
             style={[styles.scroll, { backgroundColor: layout.scrollBackground }]}
@@ -275,9 +247,8 @@ export function StudentDrawer({ session }: Props) {
                 />
               </View>
             </ScrollView>
-        </Animated.View>
-      </View>
-    </Modal>
+          </DrawerPanelScrollHost>
+    </ShellDrawerChrome>
   )
 }
 
@@ -479,7 +450,6 @@ function NavRowComponent({
 const NavRow = memo(NavRowComponent)
 
 const styles = StyleSheet.create({
-  root: { flex: 1, flexDirection: "row", alignItems: "stretch" },
   backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: GLASS_SHEET_BACKDROP },
   panel: {
     borderTopRightRadius: 24,

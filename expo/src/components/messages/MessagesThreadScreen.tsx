@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   ActivityIndicator,
   FlatList,
-  KeyboardAvoidingView,
+  Keyboard,
   Platform,
   Pressable,
   StyleSheet,
@@ -32,13 +32,18 @@ import {
   markThreadReadLocally,
   markThreadUnreadLocally,
 } from "../../lib/messages-local-state"
-import { emitMessagesRefresh, onMessagesRefresh } from "../../lib/notifications/notification-events"
+import {
+  emitMessagesRefresh,
+  onMessagesRefresh,
+  shouldReloadThreadOnMessageRefresh,
+} from "../../lib/notifications/notification-events"
 import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
 import { useNativeType } from "../../lib/themed-module-theme"
 import { useChatListScrollToEnd } from "../../hooks/useChatListScrollToEnd"
+import { ChatKeyboardShell } from "../motion/ChatKeyboardShell"
 import { MessageBubble } from "./messages-ui"
 import { AppErrorNotice } from "../errors/AppErrorNotice"
-import { MessageComposerBar, MESSAGE_COMPOSER_DOCK_HEIGHT } from "./MessageComposerBar"
+import { MessageComposerBar } from "./MessageComposerBar"
 import {
   MessageComposerAttachMenu,
   type MessageAttachActionId,
@@ -58,7 +63,9 @@ import { buildMessageBodyWithCourseImport } from "../../lib/message-course-impor
 import { messagePlainTextForEdit } from "../../lib/message-lifecycle"
 import { hexToRgba } from "../../constants/app-themes"
 import type { FacultySession, StudentSession } from "../../lib/session"
-import { LIQUID_GLASS_SEARCH_DOCK_H_INSET } from "../theme/GlassBottomSearchDock"
+import { useMessagesLayout } from "../../hooks/useMessagesLayout"
+
+const EMPTY_THREAD_MESSAGES: ThreadMessage[] = []
 
 function applyOptimisticReaction(
   reactions: MessageReactionGroup[],
@@ -126,6 +133,7 @@ const MessagesThreadList = memo(function MessagesThreadList({
   onOpenProfile,
   onLongPressMessage,
 }: ThreadListProps) {
+  const layout = useMessagesLayout()
   const listRef = useRef<FlatList<ThreadMessage>>(null)
   const scrollToEnd = useChatListScrollToEnd(listRef, 80)
   const prevCountRef = useRef(messages.length)
@@ -139,6 +147,14 @@ const MessagesThreadList = memo(function MessagesThreadList({
 
   useEffect(() => {
     requestAnimationFrame(() => scrollToEnd(false))
+  }, [scrollToEnd])
+
+  useEffect(() => {
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow"
+    const sub = Keyboard.addListener(showEvent, () => {
+      requestAnimationFrame(() => scrollToEnd(true))
+    })
+    return () => sub.remove()
   }, [scrollToEnd])
 
   const renderMessage = useCallback(
@@ -172,11 +188,11 @@ const MessagesThreadList = memo(function MessagesThreadList({
       style={styles.flex}
       contentContainerStyle={[
         styles.messages,
+        layout.contentStyle,
         {
-          // Clear the floating header only — do not pin short threads to the
-          // bottom (flex-end + flexGrow left a huge empty void under the header).
           paddingTop: headerHeight,
           paddingBottom,
+          width: "100%",
         },
       ]}
       initialNumToRender={16}
@@ -210,6 +226,7 @@ export function MessagesThreadScreen() {
   const native = useThemedNative()
   const type = useNativeType()
   const headerHeight = messagesThreadHeaderHeight(topSafeInset)
+  const layout = useMessagesLayout()
   const facultyShell = useOptionalFacultyShell()
   const studentSession = session?.portal === "student" ? (session as StudentSession) : null
   const facultySession = session?.portal === "faculty" ? (session as FacultySession) : null
@@ -251,7 +268,8 @@ export function MessagesThreadScreen() {
     const data = await messagesApi.getThread(auth, threadId)
     setThread(data.thread)
     markThreadReadLocally(threadId)
-    emitMessagesRefresh({ threadId })
+    // Notify the inbox only — do not emit an event that this screen would reload on.
+    emitMessagesRefresh({ threadId, cause: "local-read" })
   }, [auth, threadId])
 
   useEffect(() => {
@@ -273,14 +291,8 @@ export function MessagesThreadScreen() {
   }, [auth, threadId, load])
 
   useEffect(() => {
-    if (!auth || !Number.isFinite(threadId)) return
-    markThreadReadLocally(threadId)
-    emitMessagesRefresh({ threadId })
-  }, [auth, threadId])
-
-  useEffect(() => {
     return onMessagesRefresh((payload) => {
-      if (payload?.threadId != null && payload.threadId !== threadId) return
+      if (!shouldReloadThreadOnMessageRefresh(threadId, payload)) return
       void load().catch(() => {})
     })
   }, [load, threadId])
@@ -593,7 +605,7 @@ export function MessagesThreadScreen() {
     if (thread?.otherParticipant) {
       refs.push({ kind: thread.otherParticipant.kind, id: thread.otherParticipant.id })
     }
-    for (const message of thread?.messages ?? []) {
+    for (const message of thread?.messages ?? EMPTY_THREAD_MESSAGES) {
       if (!message.isMine) {
         refs.push({ kind: message.senderKind, id: message.senderId })
       }
@@ -610,11 +622,7 @@ export function MessagesThreadScreen() {
     ? getLastSeenAt(thread.otherParticipant.kind, thread.otherParticipant.id)
     : undefined
 
-  const messagePaddingBottom =
-    MESSAGE_COMPOSER_DOCK_HEIGHT +
-    Math.max(insets.bottom, 10) +
-    (attachments.length > 0 ? 56 : 0) +
-    (importedQuestion ? 140 : 0)
+  const messagePaddingBottom = 12
 
   const onLongPressMessage = useCallback((message: ThreadMessage) => {
     setActionMessage(message)
@@ -622,11 +630,79 @@ export function MessagesThreadScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: native.groupedBackground }]}>
-      <KeyboardAvoidingView
+      <ChatKeyboardShell
         style={styles.flex}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={0}
+        composer={
+          <>
+            {importedQuestion ? (
+              <View
+                style={[
+                  styles.importPreviewDock,
+                  {
+                    borderColor: hexToRgba(tokens.accent, 0.18),
+                    backgroundColor: hexToRgba(tokens.accent, 0.06),
+                    marginHorizontal: layout.composerHorizontalInset,
+                  },
+                ]}
+              >
+                <CoraImportedQuestionPreview
+                  label={importedQuestionLabel ?? undefined}
+                  problem={importedQuestion}
+                  compact
+                  chatTurn
+                  onClear={() => {
+                    setImportedQuestion(null)
+                    setImportedQuestionLabel(null)
+                  }}
+                />
+              </View>
+            ) : null}
+
+            {attachments.length > 0 ? (
+              <View
+                style={[
+                  styles.attachRow,
+                  {
+                    borderTopColor: native.separator,
+                    backgroundColor: native.groupedBackground,
+                    paddingHorizontal: layout.horizontalPadding,
+                  },
+                ]}
+              >
+                {attachments.map((attachment, index) => (
+                  <View key={`${attachment.fileUrl}-${index}`} style={[styles.attachChip, { backgroundColor: native.fill }]}>
+                    <Text style={[type.caption, { flex: 1 }]} numberOfLines={1}>
+                      {attachment.fileName}
+                    </Text>
+                    <Pressable
+                      onPress={() => setAttachments((prev) => prev.filter((_, i) => i !== index))}
+                      hitSlop={6}
+                    >
+                      <Ionicons name="close-circle" size={18} color={native.secondaryLabel} />
+                    </Pressable>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+
+            <MessageComposerBar
+              value={draft}
+              onChange={setDraft}
+              onSend={(text) => void handleSend(text)}
+              onAttach={() => setAttachMenuOpen(true)}
+              placeholder="Message…"
+              sending={sending}
+              uploading={uploading}
+              hasAttachments={attachments.length > 0}
+              hasCourseImport={importedQuestion != null && !editingMessage}
+              editing={editingMessage != null}
+              onCancelEdit={cancelEditingMessage}
+              bottomInset={0}
+            />
+          </>
+        }
       >
+        <View style={styles.threadColumn}>
         {loading ? (
           <View style={[styles.center, { paddingTop: headerHeight }]}>
             <ActivityIndicator size="large" color={tokens.accent} />
@@ -658,77 +734,8 @@ export function MessagesThreadScreen() {
             style={styles.inlineErrorNotice}
           />
         ) : null}
-
-        {importedQuestion ? (
-          <View
-            style={[
-              styles.importPreviewDock,
-              {
-                borderColor: hexToRgba(tokens.accent, 0.18),
-                backgroundColor: hexToRgba(tokens.accent, 0.06),
-                marginBottom: MESSAGE_COMPOSER_DOCK_HEIGHT + Math.max(insets.bottom, 10) - 4,
-              },
-            ]}
-          >
-            <CoraImportedQuestionPreview
-              label={importedQuestionLabel ?? undefined}
-              problem={importedQuestion}
-              compact
-              chatTurn
-              onClear={() => {
-                setImportedQuestion(null)
-                setImportedQuestionLabel(null)
-              }}
-            />
-          </View>
-        ) : null}
-
-        {attachments.length > 0 ? (
-          <View
-            style={[
-              styles.attachRow,
-              {
-                borderTopColor: native.separator,
-                backgroundColor: native.groupedBackground,
-                marginBottom:
-                  MESSAGE_COMPOSER_DOCK_HEIGHT +
-                  Math.max(insets.bottom, 10) -
-                  8 +
-                  (importedQuestion ? 132 : 0),
-              },
-            ]}
-          >
-            {attachments.map((attachment, index) => (
-              <View key={`${attachment.fileUrl}-${index}`} style={[styles.attachChip, { backgroundColor: native.fill }]}>
-                <Text style={[type.caption, { flex: 1 }]} numberOfLines={1}>
-                  {attachment.fileName}
-                </Text>
-                <Pressable
-                  onPress={() => setAttachments((prev) => prev.filter((_, i) => i !== index))}
-                  hitSlop={6}
-                >
-                  <Ionicons name="close-circle" size={18} color={native.secondaryLabel} />
-                </Pressable>
-              </View>
-            ))}
-          </View>
-        ) : null}
-
-        <MessageComposerBar
-          value={draft}
-          onChange={setDraft}
-          onSend={(text) => void handleSend(text)}
-          onAttach={() => setAttachMenuOpen(true)}
-          placeholder="Message…"
-          sending={sending}
-          uploading={uploading}
-          hasAttachments={attachments.length > 0}
-          hasCourseImport={importedQuestion != null && !editingMessage}
-          editing={editingMessage != null}
-          onCancelEdit={cancelEditingMessage}
-          bottomInset={insets.bottom}
-        />
-      </KeyboardAvoidingView>
+        </View>
+      </ChatKeyboardShell>
 
       <MessagesThreadHeader
         participant={thread?.otherParticipant ?? null}
@@ -822,6 +829,7 @@ export function MessagesThreadScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   flex: { flex: 1 },
+  threadColumn: { flex: 1 },
   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
   errorWrap: { width: "100%" },
   messages: {},
@@ -829,21 +837,16 @@ const styles = StyleSheet.create({
   inlineErrorNotice: { marginHorizontal: 0, marginBottom: 6 },
   attachRow: {
     borderTopWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: 12,
     paddingVertical: 8,
     gap: 6,
   },
   importPreviewDock: {
-    position: "absolute",
-    left: LIQUID_GLASS_SEARCH_DOCK_H_INSET,
-    right: LIQUID_GLASS_SEARCH_DOCK_H_INSET,
-    bottom: 0,
-    zIndex: 24,
     borderRadius: 16,
     borderWidth: StyleSheet.hairlineWidth,
     padding: 10,
     maxHeight: 160,
     overflow: "hidden",
+    marginBottom: 6,
   },
   attachChip: {
     flexDirection: "row",

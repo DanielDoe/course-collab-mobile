@@ -1,12 +1,17 @@
 import type { ReactNode } from "react"
-import { useMemo, useRef, useState } from "react"
+import { useMemo, useRef, useState, useEffect } from "react"
 import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native"
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated"
 import { Ionicons } from "@/components/icons/AppIcon"
+import { PressableScale } from "../motion/PressableScale"
 import { useAppThemeTokens } from "../../context/AppearanceProvider"
 import { APP_BUTTON_RADIUS } from "../../constants/app-button"
 import { semanticSoft } from "../../lib/themed-module-theme"
 import { useReliableTextInputFocus } from "../../hooks/useReliableTextInputFocus"
+import { motion, timing, triggerMotionHaptic } from "../../lib/motion"
 import { useLoginTheme } from "./login-theme"
+
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable)
 
 type Props = {
   label: string
@@ -93,8 +98,8 @@ export function LoginButton({
   const fill = backgroundColor ?? (isGold ? LOGIN.gold : LOGIN.cta)
   const labelColor = isGold ? LOGIN.goldInk : LOGIN.ctaInk
   return (
-    <Pressable
-      style={({ pressed }) => [
+    <PressableScale
+      style={[
         styles.button,
         {
           minHeight: LOGIN.rowMinHeight,
@@ -102,9 +107,9 @@ export function LoginButton({
           backgroundColor: fill,
         },
         (disabled || loading) && { backgroundColor: fill, opacity: 1 },
-        pressed && !disabled && !loading && styles.pressed,
       ]}
       disabled={disabled || loading}
+      haptic={disabled || loading ? null : "light"}
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={label}
@@ -127,7 +132,7 @@ export function LoginButton({
           ) : null}
         </>
       )}
-    </Pressable>
+    </PressableScale>
   )
 }
 
@@ -143,16 +148,19 @@ export function LoginPasswordToggle({
   const fieldStyles = useLoginFieldStyles()
 
   return (
-    <Pressable
-      onPress={onToggle}
+    <PressableScale
+      onPress={() => {
+        triggerMotionHaptic("selection")
+        onToggle()
+      }}
       hitSlop={6}
+      haptic={null}
       accessibilityRole="button"
       accessibilityLabel={visible ? "Hide password" : "Show password"}
-      style={({ pressed }) => [
+      style={[
         fieldStyles.trailingBtn,
         {
           backgroundColor: tokens.native.fill,
-          opacity: pressed ? 0.72 : 1,
         },
       ]}
     >
@@ -161,7 +169,7 @@ export function LoginPasswordToggle({
         size={20}
         color={LOGIN.secondaryLabel}
       />
-    </Pressable>
+    </PressableScale>
   )
 }
 
@@ -216,14 +224,27 @@ export function LoginField({
     ? semanticSoft(accentColor, LOGIN.isDark)
     : LOGIN.accentSoft
 
+  const focusProgress = useSharedValue(focused ? 1 : 0)
+  useEffect(() => {
+    focusProgress.value = withTiming(focused ? 1 : 0, {
+      duration: motion.fast,
+      easing: timing.fadeIn.easing,
+    })
+  }, [focusProgress, focused])
+
+  const shellAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: 1 + focusProgress.value * 0.008 }],
+  }))
+
   return (
     <View style={styles.field}>
       {label ? <Text style={[styles.label, { color: LOGIN.secondaryLabel }]}>{label}</Text> : null}
-      <Pressable
+      <AnimatedPressable
         onPress={focusReliably}
         disabled={!editable}
         style={[
           styles.shell,
+          shellAnimatedStyle,
           {
             borderRadius: 14,
             backgroundColor: focused ? accentSoft : LOGIN.grouped,
@@ -268,9 +289,10 @@ export function LoginField({
           placeholderTextColor={LOGIN.secondaryLabel}
           keyboardAppearance={keyboardAppearance}
           autoCorrect={false}
+          testID={label ? `login-field-${label.trim().toLowerCase().replace(/\s+/g, "-")}` : undefined}
         />
         {trailing ? <View style={styles.trailing}>{trailing}</View> : null}
-      </Pressable>
+      </AnimatedPressable>
     </View>
   )
 }
@@ -283,6 +305,5 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingHorizontal: 20,
   },
-  pressed: { opacity: 0.88 },
   buttonLabel: { color: "#ffffff" },
 })

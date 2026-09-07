@@ -31,6 +31,8 @@ function SignatureListCard({
   onPress,
   trailing,
   footer,
+  testID,
+  accessibilityLabel,
 }: {
   thumb: SolidListThumb
   icon?: keyof typeof Ionicons.glyphMap
@@ -44,6 +46,8 @@ function SignatureListCard({
   onPress?: () => void
   trailing?: ReactNode
   footer?: ReactNode
+  testID?: string
+  accessibilityLabel?: string
 }) {
   const native = useThemedNative()
   const tokens = useAppThemeTokens()
@@ -115,7 +119,8 @@ function SignatureListCard({
           style={({ pressed }) => [{ opacity: pressed ? NATIVE.pressedOpacity : 1 }]}
           onPress={onPress}
           accessibilityRole="button"
-          accessibilityLabel={title}
+          accessibilityLabel={accessibilityLabel ?? title}
+          testID={testID}
         >
           <View style={styles.row}>{body}</View>
           {footer ? <View style={[styles.footer, { borderTopColor: native.separator }]}>{footer}</View> : null}
@@ -321,6 +326,8 @@ export function FacultyCoursePickerRow({
       }
       trailing={active ? <FacultyStatusPill label="Selected" tone="live" /> : undefined}
       onPress={onPress}
+      testID={`faculty-course-${course.session_code ?? course.course_code}`}
+      accessibilityLabel={course.session_code ?? course.course_code}
     />
   )
 }

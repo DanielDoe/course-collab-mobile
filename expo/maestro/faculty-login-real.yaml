@@ -1,0 +1,61 @@
+appId: com.coursecollab.app
+---
+- launchApp:
+    clearState: false
+- tapOn:
+    text: "Open"
+    optional: true
+- tapOn:
+    text: "Cancel"
+    optional: true
+- extendedWaitUntil:
+    visible: "Continue with University|Choose your campus|Faculty sign in|Open navigation menu|Select a course|Search lectures…|Manage Lectures"
+    timeout: 45000
+- runFlow:
+    when:
+      visible: "Continue with University"
+    commands:
+      - tapOn: "Faculty"
+- runFlow:
+    when:
+      visible: "Choose your campus"
+    commands:
+      - tapOn:
+          id: "login-university-PVAMU"
+          optional: true
+      - tapOn:
+          text: "PVAMU campus"
+          optional: true
+      - tapOn:
+          point: "50%,44%"
+      - tapOn: "Continue"
+- runFlow:
+    when:
+      visible: "Faculty sign in"
+    commands:
+      - tapOn: "Username"
+      - inputText: "dmdoe"
+      - tapOn: "Password"
+      - tapOn:
+          point: "50%,51%"
+      - inputText: "dmdoe123"
+      - tapOn: "Continue to dashboard"
+- extendedWaitUntil:
+    visible: "Open navigation menu|Select a course|Choose your campus|Enter verification|Verify"
+    timeout: 90000
+- runFlow:
+    when:
+      visible: "Select a course"
+    commands:
+      - tapOn:
+          id: "faculty-course-ELEG1301P01"
+          optional: true
+      - tapOn:
+          text: "ELEG1301P01"
+          optional: true
+      - tapOn:
+          id: "faculty-course-ELEG1304P03"
+          optional: true
+- extendedWaitUntil:
+    visible: "Open navigation menu"
+    timeout: 60000

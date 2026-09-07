@@ -74,6 +74,7 @@ export const FACULTY_NAV_GROUPS: FacultyNavGroup[] = [
     icon: "book-outline",
     items: [
       { id: "academic-terms", label: "Academic Terms", route: "/module/academic-terms", icon: "calendar-outline" },
+      { id: "calendar", label: "Calendar", route: "/module/calendar", icon: "calendar-number-outline" },
       { id: "announcements", label: "Announcements", route: "/module/announcements", icon: "megaphone-outline" },
       { id: "syllabus", label: "Syllabus", route: "/module/syllabus", icon: "document-text-outline" },
       { id: "lectures", label: "Manage Lectures", route: "/module/lectures", icon: "easel-outline" },
@@ -143,7 +144,6 @@ export const FACULTY_NAV_GROUPS: FacultyNavGroup[] = [
     label: "Administration",
     icon: "shield-outline",
     items: [
-      { id: "course-settings", label: "Course Settings", route: "/module/course-settings", icon: "options-outline" },
       { id: "schedule-adjustment", label: "Schedule Adjustment", route: "/module/schedule-adjustment", icon: "swap-horizontal-outline" },
       { id: "assessment-governance", label: "Assessment Governance", route: "/module/assessment-governance", icon: "lock-closed-outline" },
       { id: "assessment-defaults", label: "Assessment Defaults", route: "/module/assessment-defaults", icon: "list-outline" },
@@ -193,6 +193,7 @@ export const FACULTY_LABEL_BY_ROUTE: Record<string, string> = {
   "/membership/success": "Membership activated",
   "/membership/manage": "Billing & subscription",
   "/membership/cancel": "Payment cancelled",
+  "/module/course-settings": "Course Settings",
 }
 
 for (const group of [...FACULTY_NAV_GROUPS, FACULTY_SUPPORT_GROUP]) {
@@ -270,6 +271,7 @@ export function facultyNativeRouteFromLink(link: string | undefined): string {
   const path = link.toLowerCase()
 
   if (path.includes("management/sessions") || path.includes("academic-terms")) return "/module/academic-terms"
+  if (path.includes("/calendar") && !path.includes("schedule-adjustment")) return "/module/calendar"
   if (path.includes("communication/announcements") || path.includes("announcements")) return "/module/announcements"
   if (path.includes("content/syllabus") || path.includes("/syllabus")) return "/module/syllabus"
   if (path.includes("content/lectures") || path.includes("/lectures")) return "/module/lectures"

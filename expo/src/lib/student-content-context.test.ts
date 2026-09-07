@@ -2,10 +2,13 @@ import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import {
   enrollmentAcademicTermId,
+  normalizedStudentDatabaseId,
   studentContentFields,
   studentContentPath,
   studentContentQuery,
+  studentDatabaseIdFromLoginRecord,
   studentProjectsListPath,
+  studentSessionHasAuthIdentity,
 } from "./student-content-context"
 import type { StudentSession } from "./session"
 
@@ -29,6 +32,7 @@ describe("student content context", () => {
     assert.match(qs, /studentDatabaseId=958/)
     assert.match(qs, /studentId=958/)
     assert.match(qs, /session=ELEG1301P01/)
+    assert.match(qs, /section=ELEG1301P01/)
     assert.match(qs, /courseId=5/)
     assert.match(qs, /academic_term_id=70/)
   })
@@ -85,5 +89,16 @@ describe("student content context", () => {
     assert.equal(fields.session, "ELEG1301P01")
     assert.equal(fields.courseId, 5)
     assert.equal(fields.academic_term_id, 70)
+  })
+
+  it("rejects corrupted databaseId values used by bad session patches", () => {
+    assert.equal(normalizedStudentDatabaseId(session({ databaseId: undefined as unknown as string })), undefined)
+    assert.equal(normalizedStudentDatabaseId(session({ databaseId: "undefined" })), undefined)
+    assert.equal(studentSessionHasAuthIdentity(session({ databaseId: "undefined" })), false)
+    assert.equal(studentDatabaseIdFromLoginRecord({ id: undefined }), undefined)
+    assert.equal(studentDatabaseIdFromLoginRecord({ id: 958 }), "958")
+    const qs = studentContentQuery(session({ databaseId: "undefined" }))
+    assert.equal(qs.includes("studentId=undefined"), false)
+    assert.equal(qs.includes("studentId="), false)
   })
 })

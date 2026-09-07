@@ -13,6 +13,7 @@ import {
   resourceVersionKey,
   STALE_BY_RESOURCE,
 } from "../../lib/query"
+import { keepSameCoursePlaceholder } from "../../lib/query/same-course-placeholder"
 
 type BankBundle = Awaited<ReturnType<typeof fetchFacultyQuestionBankBundle>>
 
@@ -21,14 +22,15 @@ function bankKey(scope: InstructorScope) {
 }
 
 export function useFacultyQuestionBank(scope: InstructorScope | null) {
+  const queryKey = scope
+    ? queryKeys.faculty.questionBank.list(facultyQueryScopeFromInstructor(scope))
+    : (["faculty", "questionBank", "idle", "list"] as const)
   const query = useQuery({
-    queryKey: scope
-      ? queryKeys.faculty.questionBank.list(facultyQueryScopeFromInstructor(scope))
-      : ["faculty", "questionBank", "idle", "list"],
+    queryKey,
     queryFn: () => fetchFacultyQuestionBankBundle(scope!),
     enabled: Boolean(scope?.courseId),
     staleTime: STALE_BY_RESOURCE.facultyQuestionBank,
-    placeholderData: (previous) => previous,
+    placeholderData: (previous, previousQuery) => keepSameCoursePlaceholder(previous, previousQuery, queryKey),
   })
   const hasData = query.data != null
   return {

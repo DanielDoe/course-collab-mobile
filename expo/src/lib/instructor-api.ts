@@ -1,6 +1,17 @@
 import { API_BASE_URL } from "../constants"
 import { extractApiErrorMessage } from "./api-error-message"
 import { ApiError } from "./api"
+import { lectureCreateRequestBody } from "./faculty-lecture-create"
+import {
+  nextPlaygroundSessionsFetchPage,
+  PLAYGROUND_SESSIONS_FETCH_PAGE_SIZE,
+} from "./faculty-playground-utils"
+import {
+  isPlaygroundQuestionsPayloadRejected,
+  PLAYGROUND_SNAPSHOT_FALLBACK_MESSAGE,
+} from "./faculty-playground-session-questions"
+import { syllabusRemoteBody } from "./faculty-syllabus-save"
+import { instructorInstitutionHeaders } from "./instructor-institution-headers"
 import { reportMobileApiError } from "./system-log-client"
 import type { AssessmentAttemptResults } from "./assessment-results-api"
 import type { ForumReply, ForumThread } from "./collaboration-api"
@@ -20,6 +31,8 @@ import { getStoredSession } from "./session"
 import { mergeCookieHeaders, persistHttpCookiesFromResponse, studentHttpCookieHeader } from "./student-http-cookies"
 import { assessmentResultSectionHints, evaluationRowBelongsToCourse } from "./course-sections"
 import { headersHaveStudentSessionProof, STUDENT_REFRESH_HEADER } from "./student-session-proof"
+import { getStoredRefreshToken } from "./refresh-token-store"
+import type { InstructorCalendarPayload, InstructorCalendarView } from "./instructor-calendar"
 
 export type InstructorCourse = {
   id: number
@@ -145,6 +158,10 @@ export type InstructorAnnouncement = {
   comments_count?: number
   author_name?: string
   attachments?: InstructorAnnouncementAttachment[]
+  event_date?: string | null
+  event_time?: string | null
+  event_end?: string | null
+  event_location?: string | null
 }
 
 function normalizeInstructorAnnouncement(raw: Record<string, unknown>): InstructorAnnouncement {
@@ -182,7 +199,22 @@ function normalizeInstructorAnnouncement(raw: Record<string, unknown>): Instruct
     author_name: typeof raw.author_name === "string" ? raw.author_name : undefined,
     attachments: Array.isArray(raw.attachments)
       ? (raw.attachments as InstructorAnnouncementAttachment[])
-      : undefined}
+      : undefined,
+    event_date:
+      typeof raw.event_date === "string"
+        ? raw.event_date
+        : typeof raw.eventDate === "string"
+          ? raw.eventDate
+          : null,
+    event_time: typeof raw.event_time === "string" ? raw.event_time : typeof raw.eventTime === "string" ? raw.eventTime : null,
+    event_end: typeof raw.event_end === "string" ? raw.event_end : typeof raw.eventEnd === "string" ? raw.eventEnd : null,
+    event_location:
+      typeof raw.event_location === "string"
+        ? raw.event_location
+        : typeof raw.eventLocation === "string"
+          ? raw.eventLocation
+          : null,
+  }
 }
 
 export type InstructorNotification = {
@@ -1509,6 +1541,8 @@ export type InstructorScope = {
   sessionId?: number | null
   sessionCode?: string | null
   academicTermId?: number | null
+  /** Faculty session `universityId`. Not a second course-context system. */
+  institutionId?: number | null
 }
 
 type Scope = InstructorScope
@@ -1546,11 +1580,19 @@ export async function instructorAuthenticatedHeaders(
 
   const stored = await getStoredSession()
   const faculty = stored?.portal === "faculty" ? stored : undefined
+  const institutionId =
+    scoped.institutionId != null && scoped.institutionId > 0
+      ? scoped.institutionId
+      : faculty?.universityId
+  Object.assign(headers, instructorInstitutionHeaders(institutionId))
   const jarCookie = await studentHttpCookieHeader()
   const trust = await mfaTrustRequestHeadersForInstructor(faculty)
   Object.assign(headers, mergeCookieHeaders(trust.Cookie, jarCookie))
   const refresh =
-    refreshTokenFromCookieHeader(jarCookie) ?? refreshTokenFromCookieHeader(trust.Cookie)
+    refreshTokenFromCookieHeader(jarCookie) ??
+    refreshTokenFromCookieHeader(trust.Cookie) ??
+    (await getStoredRefreshToken()) ??
+    undefined
   if (refresh) headers[STUDENT_REFRESH_HEADER] = refresh
   if (!headersHaveStudentSessionProof(headers)) {
     throw new ApiError("Instructor authentication required", 401)
@@ -1966,6 +2008,10 @@ export const instructorApi = {
       target_session?: string
       expires_at?: string | null
       attachments?: InstructorAnnouncementAttachment[]
+      event_date?: string | null
+      event_time?: string | null
+      event_end?: string | null
+      event_location?: string | null
     },
   ) =>
     instructorRequest<{ announcement: Record<string, unknown> }>("/api/announcements", scope, {
@@ -1979,6 +2025,10 @@ export const instructorApi = {
         target_session: payload.target_session ?? "all",
         expires_at: payload.expires_at ?? null,
         attachments: payload.attachments ?? [],
+        event_date: payload.event_date ?? null,
+        event_time: payload.event_time ?? null,
+        event_end: payload.event_end ?? null,
+        event_location: payload.event_location ?? null,
         course_id: scope.courseId})}).then((r) => normalizeInstructorAnnouncement(r.announcement)),
 
   getAnnouncementById: (scope: Scope, id: number) =>
@@ -1999,6 +2049,10 @@ export const instructorApi = {
       target_session: string
       expires_at: string | null
       attachments: InstructorAnnouncementAttachment[]
+      event_date: string | null
+      event_time: string | null
+      event_end: string | null
+      event_location: string | null
     }>,
   ) =>
     instructorRequest<{ announcement: Record<string, unknown> }>(`/api/announcements/${id}`, scope, {
@@ -2325,7 +2379,10 @@ export const instructorApi = {
     const trust = await mfaTrustRequestHeadersForInstructor(faculty)
     Object.assign(headers, mergeCookieHeaders(trust.Cookie, jarCookie))
     const refresh =
-      refreshTokenFromCookieHeader(jarCookie) ?? refreshTokenFromCookieHeader(trust.Cookie)
+      refreshTokenFromCookieHeader(jarCookie) ??
+      refreshTokenFromCookieHeader(trust.Cookie) ??
+      (await getStoredRefreshToken()) ??
+      undefined
     if (refresh) headers[STUDENT_REFRESH_HEADER] = refresh
     if (!headersHaveStudentSessionProof(headers)) {
       throw new ApiError("Instructor authentication required", 401)
@@ -2674,6 +2731,58 @@ export const instructorApi = {
       { method: "DELETE", requireAuthHeader: true },
     ),
 
+  getCalendar: (
+    scope: Scope,
+    range: { startDate: Date; endDate: Date },
+    view: InstructorCalendarView = "all",
+  ) => {
+    const params = new URLSearchParams({
+      startDate: range.startDate.toISOString(),
+      endDate: range.endDate.toISOString(),
+      scope: view === "selected" ? "selected" : "all",
+    })
+    return instructorRequest<InstructorCalendarPayload & { success?: boolean }>(
+      `/api/instructor/calendar?${params.toString()}`,
+      scope,
+    ).then((payload) => ({
+      events: Array.isArray(payload.events) ? payload.events : [],
+      scheduleText: typeof payload.scheduleText === "string" ? payload.scheduleText : null,
+      location: typeof payload.location === "string" ? payload.location : null,
+      openAdjustments: Array.isArray(payload.openAdjustments) ? payload.openAdjustments : [],
+      calendarScope: payload.calendarScope === "selected" ? "selected" as const : "all" as const,
+      scheduleSummaries: Array.isArray(payload.scheduleSummaries) ? payload.scheduleSummaries : [],
+    }))
+  },
+
+  getCalendarFeed: (scope: Scope) =>
+    instructorRequest<{
+      success?: boolean
+      token: string
+      httpsUrl: string
+      webcalUrl: string
+      beforeMinutes: number
+      atStart: boolean
+    }>("/api/instructor/calendar/feed", scope).then((payload) => ({
+      token: payload.token,
+      httpsUrl: payload.httpsUrl,
+      webcalUrl: payload.webcalUrl,
+      beforeMinutes: payload.beforeMinutes === 0 ? 0 : 15,
+      atStart: payload.atStart !== false,
+    })),
+
+  updateCalendarFeed: (scope: Scope, prefs: { beforeMinutes?: number; atStart?: boolean }) =>
+    instructorRequest<{
+      success?: boolean
+      token: string
+      httpsUrl: string
+      webcalUrl: string
+      beforeMinutes: number
+      atStart: boolean
+    }>("/api/instructor/calendar/feed", scope, {
+      method: "PATCH",
+      body: JSON.stringify(prefs),
+    }),
+
   getOfficeHours: (scope: Scope) =>
     instructorRequest<{ requests: OfficeHourRequest[] }>(
       "/api/instructor/office-hours",
@@ -2782,11 +2891,33 @@ export const instructorApi = {
           resolution_comment: resolutionComment?.trim() || undefined})},
     ),
 
-  getPlaygroundSessions: (scope: Scope) =>
-    instructorRequest<{ sessions: PlaygroundSession[] }>(
-      "/api/instructor/playground/sessions",
-      scope,
-    ).then((r) => r.sessions ?? []),
+  getPlaygroundSessions: async (scope: Scope) => {
+    const pageSize = PLAYGROUND_SESSIONS_FETCH_PAGE_SIZE
+    const first = await instructorRequest<{
+      sessions?: PlaygroundSession[]
+      total?: number
+    }>(`/api/instructor/playground/sessions?page=1&limit=${pageSize}`, scope)
+    const sessions = [...(first.sessions ?? [])]
+    const total = Number.isFinite(first.total) ? Number(first.total) : sessions.length
+    let page = 1
+    while (true) {
+      const nextPage = nextPlaygroundSessionsFetchPage({
+        collected: sessions.length,
+        total,
+        currentPage: page,
+      })
+      if (nextPage == null) break
+      const more = await instructorRequest<{ sessions?: PlaygroundSession[] }>(
+        `/api/instructor/playground/sessions?page=${nextPage}&limit=${pageSize}`,
+        scope,
+      )
+      const chunk = more.sessions ?? []
+      if (chunk.length === 0) break
+      sessions.push(...chunk)
+      page = nextPage
+    }
+    return sessions
+  },
 
   playgroundSessionAction: (
     scope: Scope,
@@ -2850,16 +2981,40 @@ export const instructorApi = {
       questions: PlaygroundSessionQuestion[]
     }>(`/api/instructor/playground/sessions/${sessionId}/questions`, scope),
 
-  updatePlaygroundSessionQuestions: (
+  updatePlaygroundSessionQuestions: async (
     scope: Scope,
     sessionId: number,
-    payload: { questionIds: number[]; durationSec?: number },
-  ) =>
-    instructorRequest<{ success: boolean; questionCount: number; durationSec: number }>(
-      `/api/instructor/playground/sessions/${sessionId}/questions`,
-      scope,
-      { method: "PUT", body: JSON.stringify(payload) },
-    ),
+    payload: {
+      questionIds: number[]
+      durationSec?: number
+      questions?: PlaygroundSessionQuestion[]
+    },
+  ) => {
+    const path = `/api/instructor/playground/sessions/${sessionId}/questions`
+    const base = {
+      questionIds: payload.questionIds,
+      ...(payload.durationSec != null ? { durationSec: payload.durationSec } : {}),
+    }
+    const hasSnapshots = (payload.questions?.length ?? 0) > 0
+    const body = hasSnapshots ? { ...base, questions: payload.questions } : base
+    try {
+      return await instructorRequest<{ success: boolean; questionCount: number; durationSec: number }>(
+        path,
+        scope,
+        { method: "PUT", body: JSON.stringify(body) },
+      )
+    } catch (err) {
+      if (!hasSnapshots || !(err instanceof ApiError) || !isPlaygroundQuestionsPayloadRejected(err.status)) {
+        throw err
+      }
+      await instructorRequest<{ success: boolean; questionCount: number; durationSec: number }>(
+        path,
+        scope,
+        { method: "PUT", body: JSON.stringify(base) },
+      )
+      throw new ApiError(PLAYGROUND_SNAPSHOT_FALLBACK_MESSAGE, err.status, err.details)
+    }
+  },
 
   getPlaygroundTopics: (scope: Scope) =>
     instructorRequest<{ topics: Array<Record<string, unknown>> }>("/api/instructor/playground/topics", scope).then(
@@ -2893,6 +3048,8 @@ export const instructorApi = {
   saveSyllabus: (
     scope: Scope,
     payload: {
+      id?: number
+      courseId?: number
       title?: string
       term?: string
       contentMode?: string
@@ -2903,7 +3060,15 @@ export const instructorApi = {
     instructorRequest<{ syllabus: InstructorSyllabus; success?: boolean }>(
       "/api/instructor/syllabus",
       scope,
-      { method: "PUT", body: JSON.stringify(payload) },
+      {
+        method: "PUT",
+        body: JSON.stringify(
+          syllabusRemoteBody({
+            ...payload,
+            courseId: payload.courseId ?? scope.courseId ?? 0,
+          }),
+        ),
+      },
     ),
 
   getLectures: (scope: Scope, week?: number) => {
@@ -2928,7 +3093,18 @@ export const instructorApi = {
   ) =>
     instructorRequest<{ lecture: InstructorLecture }>("/api/instructor/lectures", scope, {
       method: "POST",
-      body: JSON.stringify({ ...payload, slides: payload.slides ?? [] })}),
+      body: JSON.stringify({
+        ...lectureCreateRequestBody({
+          title: payload.title,
+          week: payload.week,
+          description: payload.description,
+          objectives: payload.objectives ?? [],
+          is_published: payload.is_published ?? false,
+        }),
+        ...(payload.session_access ? { session_access: payload.session_access } : {}),
+        ...(payload.slides?.length ? { slides: payload.slides } : {}),
+      }),
+    }),
 
   updateLecture: (
     scope: Scope,
@@ -3032,7 +3208,7 @@ export const instructorApi = {
     ),
 
   deleteLecture: (scope: Scope, lectureId: number) =>
-    instructorRequest<{ success?: boolean }>(`/api/instructor/lectures?id=${lectureId}`, scope, {
+    instructorRequest<{ success?: boolean }>(`/api/instructor/lectures/${lectureId}`, scope, {
       method: "DELETE",
     }),
 
@@ -3929,7 +4105,12 @@ export const instructorApi = {
     instructorRequest<{ success: boolean; createdCount: number; questionIds: number[] }>(
       "/api/instructor/question-bank/bulk-create",
       scope,
-      { method: "POST", body: JSON.stringify({ questions }) },
+      {
+        method: "POST",
+        body: JSON.stringify({
+          questions: questions.map(({ draftId: _draftId, ...item }) => item),
+        }),
+      },
     ),
 
   getDeletedAssessments: (scope: Scope, assessmentType?: string) => {

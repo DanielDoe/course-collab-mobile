@@ -457,6 +457,12 @@ export function FacultySettingsHubScreen() {
           onPress={() => setActiveSheet("notifications")}
         />
         <SettingsRow
+          icon="calendar-outline"
+          label="Calendar alerts"
+          detail="Reminders and subscribe"
+          onPress={() => router.push("/module/course-settings" as never)}
+        />
+        <SettingsRow
           icon="color-palette-outline"
           label="Appearance & themes"
           detail={appearanceSummary}
@@ -467,6 +473,12 @@ export function FacultySettingsHubScreen() {
 
       <SettingsSectionHeader title="Teaching tools" />
       <SettingsGroup>
+        <SettingsRow
+          icon="bar-chart-outline"
+          label="Institution Intelligence"
+          detail="Analytics & Cora usage"
+          onPress={() => router.push("/institution/analytics" as never)}
+        />
         <SettingsRow
           icon="sparkles-outline"
           label="Cora Assistant Settings"

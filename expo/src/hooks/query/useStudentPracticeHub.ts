@@ -1,17 +1,19 @@
 import { useQuery } from "@tanstack/react-query"
 import { fetchPracticeHubBundle } from "../../lib/query/prefetch"
 import { queryKeys, studentQueryScope, STALE_BY_RESOURCE } from "../../lib/query"
+import { keepSameCoursePlaceholder } from "../../lib/query/same-course-placeholder"
 import type { StudentSession } from "../../lib/session"
 
 export function useStudentPracticeHub(session: StudentSession | null, enabled = true) {
+  const queryKey = session
+    ? queryKeys.student.practice.hub(studentQueryScope(session))
+    : (["student", "practice", "idle", "hub"] as const)
   const query = useQuery({
-    queryKey: session
-      ? queryKeys.student.practice.hub(studentQueryScope(session))
-      : ["student", "practice", "idle", "hub"],
+    queryKey,
     queryFn: () => fetchPracticeHubBundle(session!),
     enabled: Boolean(session) && enabled,
     staleTime: STALE_BY_RESOURCE.practice,
-    placeholderData: (previous) => previous,
+    placeholderData: (previous, previousQuery) => keepSameCoursePlaceholder(previous, previousQuery, queryKey),
   })
   const hasData = query.data != null
   return {

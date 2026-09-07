@@ -6,7 +6,7 @@
 > These accounts **do not** see live ELEG 1304 / ECE 2202 student rosters.
 > Course content (assessments, lectures, flashcards, notes, question bank) is cloned into demo courses owned by the review instructor.
 
-**Last updated:** 2026-08-19
+**Last updated:** 2026-09-04
 
 ---
 
@@ -103,8 +103,14 @@ Summer Camp sign-in shows “Coming soon” — intentional for this release.
 Student/faculty/career AI features call our production API; demo accounts have sandbox context only.
 Privacy: Settings → Privacy & Security → Cora privacy.
 
-── PAYMENTS ──
-Membership upgrades use Stripe Payment Sheet. No Apple IAP (Guideline 3.1.3(b) multiplatform).
+── PAYMENTS (iOS) ──
+The iOS app does NOT process payments of any kind. No Apple IAP, no Apple Pay / PassKit, no Stripe Payment Sheet, and no in-app links to web checkout for memberships or Cora credits. Purchase / upgrade buttons are hidden on iOS; checkout routes redirect to read-only account screens. Users may view existing plan tier and credit balance synced from course-collab.com. New purchases are completed independently on the website (Guideline 3.1.1 reader / account-management model).
+
+── PAYMENTS (Android) ──
+Membership and Cora credits may use native Stripe Payment Sheet (Google Pay supported).
+
+── APPLE PAY / PASSKIT ──
+Removed. This build has no Apple Pay merchant entitlement and no PassKit usage.
 
 ── ACCOUNT DELETION ──
 Settings → Privacy & Security → Delete account (in-app flow).

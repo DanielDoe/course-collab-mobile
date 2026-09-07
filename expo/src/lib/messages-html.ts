@@ -15,11 +15,12 @@ export function stripMessageHtml(html: string): string {
     .trim()
 }
 
-export function messagePreviewText(body: string, max = 120): string {
-  const importPreview = messageCourseImportPreview(body, max)
+export function messagePreviewText(body: string | null | undefined, max = 120): string {
+  const raw = body == null ? "" : String(body)
+  const importPreview = messageCourseImportPreview(raw, max)
   if (importPreview) return importPreview
 
-  const text = stripMessageHtml(body) || body.trim()
+  const text = stripMessageHtml(raw) || raw.trim()
   if (text.length <= max) return text
   return `${text.slice(0, max)}…`
 }

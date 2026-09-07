@@ -11,7 +11,9 @@ import { useFacultyOfficeHours } from "../../hooks/query/useFacultyOfficeHours"
 import { QueryRefreshBanner } from "../query/QueryRefreshBanner"
 import { QuerySkeleton } from "../query/QuerySkeleton"
 import { useFacultyShell } from "../../context/FacultyShellContext"
-import { useNotificationModuleRefresh } from "../../lib/notifications/notification-events"
+import { emitModuleRefresh, useNotificationModuleRefresh } from "../../lib/notifications/notification-events"
+import { getQueryClient } from "../../lib/query/client"
+import { facultyQueryScopeFromInstructor, invalidateByAction } from "../../lib/query"
 import { NATIVE, SYSTEM } from "../../constants/faculty-native-theme"
 import { FacultyEmptyState, FacultyStatusPill } from "./faculty-shared"
 import { FacultyOfficeHourCreateModal } from "./FacultyOfficeHourCreateModal"
@@ -31,7 +33,9 @@ import {
   useSheetPlaceholderColor,
 } from "./faculty-collab-sheet-ui"
 import { SHEET_SECTION } from "./faculty-sheet-semantics"
+import { useFacultyListPager } from "../../hooks/useFacultyListPager"
 import { useModuleTheme } from "../../lib/themed-module-shell"
+import { FacultyListPagerFooter } from "./FacultyListPagerFooter"
 import {
   FACULTY_OFFICE_HOURS_COLOR,
   facultyOfficeHoursRequestStatus,
@@ -83,6 +87,12 @@ export function FacultyOfficeHoursScreen() {
     }
   }, [hoursQuery.refetch, refreshFacultyData])
 
+  const syncHoursToCalendar = useCallback(() => {
+    if (!scope) return
+    invalidateByAction(getQueryClient(), facultyQueryScopeFromInstructor(scope), "faculty.officeHours.mutate")
+    emitModuleRefresh(["office-hours", "calendar"])
+  }, [scope])
+
   useNotificationModuleRefresh("office-hours", handleRefresh)
 
   const pending = useMemo(
@@ -107,6 +117,8 @@ export function FacultyOfficeHoursScreen() {
       [slot.dayName, slot.startTime, slot.endTime].join(" ").toLowerCase().includes(q),
     )
   }, [regularHours, search])
+  const requestPager = useFacultyListPager(filtered, `${search}:requests`, "requests")
+  const schedulePager = useFacultyListPager(filteredRegularHours, `${search}:schedule`, "hours")
 
   const searchPlaceholder =
     tab === "schedule" ? "Search regular hours…" : "Search student, topic, or notes…"
@@ -122,6 +134,7 @@ export function FacultyOfficeHoursScreen() {
       await instructorApi.updateOfficeHourRequest(scope, request.id, { status, ...extra })
       setSelected(null)
       await handleRefresh()
+      syncHoursToCalendar()
       const approved = status === "approved"
       AppAlert.alert(
         approved ? "Request approved" : "Request declined",
@@ -246,13 +259,14 @@ export function FacultyOfficeHoursScreen() {
             />
           ) : (
             <View style={styles.scheduleList}>
-              {filteredRegularHours.map((slot) => (
+              {schedulePager.items.map((slot) => (
                 <FacultyOfficeHoursScheduleCard
                   key={slot.id}
                   slot={slot}
                   onPress={() => setRegularHoursOpen(true)}
                 />
               ))}
+              <FacultyListPagerFooter pager={schedulePager} />
               <Pressable
                 style={({ pressed }) => [
                   styles.editAllBtn,
@@ -287,7 +301,7 @@ export function FacultyOfficeHoursScreen() {
               />
             ) : (
               <View style={styles.requestList}>
-                {filtered.map((request) => (
+                {requestPager.items.map((request) => (
                   <FacultyOfficeHoursRequestCard
                     key={request.id}
                     request={request}
@@ -295,6 +309,7 @@ export function FacultyOfficeHoursScreen() {
                     onDecline={() => confirmDecline(request)}
                   />
                 ))}
+                <FacultyListPagerFooter pager={requestPager} />
               </View>
             )}
           </>
@@ -440,7 +455,10 @@ export function FacultyOfficeHoursScreen() {
         visible={createOpen}
         scope={scope}
         onClose={() => setCreateOpen(false)}
-        onCreated={() => void handleRefresh()}
+        onCreated={() => {
+          void handleRefresh()
+          syncHoursToCalendar()
+        }}
       />
 
       <FacultyRegularOfficeHoursSheet
@@ -450,6 +468,7 @@ export function FacultyOfficeHoursScreen() {
         onClose={() => setRegularHoursOpen(false)}
         onSaved={() => {
           void handleRefresh()
+          syncHoursToCalendar()
         }}
       />
     </View>

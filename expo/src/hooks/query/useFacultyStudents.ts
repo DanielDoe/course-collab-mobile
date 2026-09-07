@@ -3,6 +3,7 @@ import { instructorApi } from "../../lib/instructor-api"
 import type { InstructorScope } from "../../lib/instructor-api"
 import { effectiveFacultySectionCode, fetchFacultyTermSessions } from "../../lib/faculty-section-scope"
 import { facultyQueryScopeFromInstructor, queryKeys, STALE_BY_RESOURCE } from "../../lib/query"
+import { keepSameCoursePlaceholder } from "../../lib/query/same-course-placeholder"
 
 export async function fetchFacultyStudentsBundle(scope: InstructorScope, sessionFilter: string) {
   const sessions = await fetchFacultyTermSessions(scope)
@@ -19,14 +20,15 @@ export async function fetchFacultyStudentsBundle(scope: InstructorScope, session
 }
 
 export function useFacultyStudents(scope: InstructorScope | null, sessionFilter: string) {
+  const queryKey = scope
+    ? [...queryKeys.faculty.students.list(facultyQueryScopeFromInstructor(scope)), sessionFilter]
+    : (["faculty", "students", "idle", "list", sessionFilter] as const)
   const query = useQuery({
-    queryKey: scope
-      ? [...queryKeys.faculty.students.list(facultyQueryScopeFromInstructor(scope)), sessionFilter]
-      : ["faculty", "students", "idle", "list", sessionFilter],
+    queryKey,
     queryFn: () => fetchFacultyStudentsBundle(scope!, sessionFilter),
     enabled: Boolean(scope?.courseId),
     staleTime: STALE_BY_RESOURCE.facultyStudents,
-    placeholderData: (previous) => previous,
+    placeholderData: (previous, previousQuery) => keepSameCoursePlaceholder(previous, previousQuery, queryKey),
   })
   const hasData = query.data != null
   return {

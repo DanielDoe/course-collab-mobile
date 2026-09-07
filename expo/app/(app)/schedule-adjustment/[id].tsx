@@ -1,19 +1,17 @@
-import { Pressable, StyleSheet, Text, View } from "react-native"
-import { useLocalSearchParams, useRouter } from "expo-router"
+import { StyleSheet, Text, View } from "react-native"
+import { useLocalSearchParams } from "expo-router"
 import { ScheduleAdjustmentDetailScreen } from "../../../src/components/course-info/ScheduleAdjustmentDetailScreen"
-import { useCourseInfoTheme } from "../../../src/components/course-info/course-info-shared"
+import { useThemedNative } from "../../../src/context/AppearanceProvider"
 import { useNativeType } from "../../../src/lib/themed-module-theme"
 
 function InvalidScheduleAdjustment() {
-  const router = useRouter()
-  const theme = useCourseInfoTheme()
+  const native = useThemedNative()
   const type = useNativeType()
   return (
-    <View style={styles.center}>
-      <Text style={type.secondary}>Request not found.</Text>
-      <Pressable onPress={() => router.back()} style={styles.backBtn}>
-        <Text style={{ color: theme.primary }}>Go back</Text>
-      </Pressable>
+    <View style={[styles.screen, { backgroundColor: native.groupedBackground }]}>
+      <View style={styles.center}>
+        <Text style={type.secondary}>Request not found.</Text>
+      </View>
     </View>
   )
 }
@@ -28,6 +26,6 @@ export default function ScheduleAdjustmentDetailRoute() {
 }
 
 const styles = StyleSheet.create({
+  screen: { flex: 1 },
   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
-  backBtn: { marginTop: 12 },
 })

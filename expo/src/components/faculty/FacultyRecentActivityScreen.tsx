@@ -23,7 +23,9 @@ import {
   FacultyRecentActivityKpiRow,
 } from "./FacultyAnalyticsListCards"
 import { FACULTY_ACTIVITY_COLOR } from "../../lib/faculty-recent-activity-theme"
+import { useFacultyListPager } from "../../hooks/useFacultyListPager"
 import { useModuleTheme } from "../../lib/themed-module-shell"
+import { FacultyListPagerFooter } from "./FacultyListPagerFooter"
 import {
   useFacultyStickyHeaderScrollLayout,
   FacultyModuleStickyHeader,
@@ -98,6 +100,7 @@ export function FacultyRecentActivityScreen() {
     () => filterRecentActivity(courseActivity, filter, search),
     [courseActivity, filter, search],
   )
+  const pager = useFacultyListPager(filtered, `${filter}:${search}`, "events")
 
   const tabs = ACTIVITY_TABS.map((t) => ({
     ...t,
@@ -171,13 +174,14 @@ export function FacultyRecentActivityScreen() {
         />
       ) : (
         <View style={styles.list}>
-          {filtered.map((item) => (
+          {pager.items.map((item) => (
             <FacultyRecentActivityCard
               key={item.id}
               item={item}
               onPress={() => setSelectedActivity(item)}
             />
           ))}
+          <FacultyListPagerFooter pager={pager} />
         </View>
       )}
       </ScrollView>

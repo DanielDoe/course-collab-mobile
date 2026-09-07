@@ -706,13 +706,42 @@ export function FlashcardStudyScreen() {
         </View>
       </View>
 
-      <View style={[styles.modeTabs, isTablet && { maxWidth: studyContentWidth, alignSelf: "center", width: "100%" }]}>
-        <MobbinPillSegmentControl
-          options={modeOptions}
-          value={studyMode}
-          onChange={selectMode}
-        />
-      </View>
+      {(!finished && studyMode === "quiz") || batchQuizActive ? (
+        <View
+          style={[
+            styles.quizSessionHead,
+            isTablet && { maxWidth: studyContentWidth, alignSelf: "center", width: "100%" },
+          ]}
+        >
+          <Text style={[type.caption, styles.quizKicker, { color: tokens.accent }]}>Quiz</Text>
+          <Text style={[type.bodyEmphasis, { color: native.label }]}>
+            Question {progressLabel.replace(" / ", " of ")}
+          </Text>
+          <View style={[styles.quizTrack, { backgroundColor: native.fill }]}>
+            <View
+              style={[
+                styles.quizFill,
+                {
+                  backgroundColor: tokens.accent,
+                  width: `${
+                    cardPositionTotal > 0
+                      ? Math.min(100, Math.round((cardPositionIndex / cardPositionTotal) * 100))
+                      : 0
+                  }%`,
+                },
+              ]}
+            />
+          </View>
+        </View>
+      ) : (
+        <View style={[styles.modeTabs, isTablet && { maxWidth: studyContentWidth, alignSelf: "center", width: "100%" }]}>
+          <MobbinPillSegmentControl
+            options={modeOptions}
+            value={studyMode}
+            onChange={selectMode}
+          />
+        </View>
+      )}
 
       {lockedCardCount > 0 ? (
         <View
@@ -957,6 +986,27 @@ const styles = StyleSheet.create({
     width: "100%",
     alignSelf: "center",
     marginBottom: 16,
+  },
+  quizSessionHead: {
+    width: "100%",
+    alignSelf: "center",
+    paddingHorizontal: 20,
+    marginBottom: 16,
+    gap: 6,
+  },
+  quizKicker: {
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+  },
+  quizTrack: {
+    height: 6,
+    borderRadius: 999,
+    overflow: "hidden",
+  },
+  quizFill: {
+    height: "100%",
+    borderRadius: 999,
   },
   accessBanner: {
     flexDirection: "row",

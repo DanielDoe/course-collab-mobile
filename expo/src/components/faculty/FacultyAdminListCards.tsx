@@ -18,7 +18,7 @@ export function FacultyMyCourseCard({
 }) {
   const type = useNativeType()
   const thumb = facultyAdminCourseThumb(course.course_id)
-  const meta = [course.term_label ?? course.semester].filter(Boolean).join(" · ")
+  const meta = [course.term_label ?? course.semester, course.session_code].filter(Boolean).join(" · ")
 
   return (
     <FacultySignatureListCard

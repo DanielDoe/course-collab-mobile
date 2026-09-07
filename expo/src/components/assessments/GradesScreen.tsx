@@ -1,7 +1,8 @@
-import { useCallback, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { Pressable, StyleSheet, Text, View } from "react-native"
 import { Ionicons } from "@/components/icons/AppIcon"
 import type { Ionicons as IoniconsType } from "@expo/vector-icons"
+import { useGlobalSearchParams } from "expo-router"
 import { ModuleScreen } from "../modules/ModuleScreen"
 import { useStudentGrades } from "../../hooks/query/useStudentGrades"
 import { QueryRefreshBanner } from "../query/QueryRefreshBanner"
@@ -37,7 +38,6 @@ import { SolidListThumbTile } from "../theme/SolidListThumbTile"
 import { GradeHeroCard } from "./GradeHeroCard"
 import { GradeCategoryBreakdownSheet } from "./GradeCategoryBreakdownSheet"
 import { ModuleSection, ModuleSectionHeader } from "../modules/ModuleScreen"
-import { FacultyStatusPill } from "../faculty/faculty-shared"
 
 function useStudentSession(): StudentSession | null {
   const { session } = useSession()
@@ -103,14 +103,14 @@ function CategoryCard({
       </View>
 
       <View style={styles.categoryMeta}>
-        <View style={styles.metaItem}>
+        <View style={styles.metaBlock}>
           <Text style={[type.secondary, styles.metaLabel, { color: SN.secondaryLabel }]}>Contribution</Text>
           <Text style={[type.callout, styles.metaValue, { fontWeight: "600", fontSize: 13, color: categoryAccent }]}>
-            {category.pending ? "—" : `+${category.contribution.toFixed(2)}%`}
+            {category.pending ? "Pending" : `+${category.contribution.toFixed(2)}%`}
           </Text>
         </View>
         {category.classAverage > 0 ? (
-          <View style={styles.metaItem}>
+          <View style={styles.metaBlock}>
             <Text style={[type.secondary, styles.metaLabel, { color: SN.secondaryLabel }]}>Class avg</Text>
             <View style={styles.classAvgRow}>
               <Text style={[type.callout, styles.metaValue, { fontWeight: "600", fontSize: 13 }]}>
@@ -123,9 +123,6 @@ function CategoryCard({
               ) : null}
             </View>
           </View>
-        ) : null}
-        {category.pending ? (
-          <FacultyStatusPill label="Pending" tone="warning" />
         ) : null}
         <Ionicons name="chevron-forward" size={16} color={tokens.textMuted} style={styles.categoryChevron} />
       </View>
@@ -148,6 +145,9 @@ export function GradesScreen() {
       : ""
   const [selectedCategory, setSelectedCategory] = useState<GradeCategoryView | null>(null)
   const [gradeLens, setGradeLens] = useState<"pending" | "final">("pending")
+  const params = useGlobalSearchParams<{ focus?: string | string[] }>()
+  const focus =
+    typeof params.focus === "string" ? params.focus : Array.isArray(params.focus) ? params.focus[0] : ""
 
   const onRefresh = useCallback(async () => {
     await gradesQuery.refetch()
@@ -187,6 +187,12 @@ export function GradesScreen() {
       (cat) => cat.weight > 0 || cat.score > 0 || cat.contribution > 0 || cat.pending,
     )
   }, [payload])
+
+  useEffect(() => {
+    if (!focus || selectedCategory) return
+    const match = categories.find((cat) => cat.key === focus || (focus === "engagement" && cat.isEngagement))
+    if (match) setSelectedCategory(match)
+  }, [categories, focus, selectedCategory])
 
   const contributions = useMemo(
     () => categories.filter((cat) => cat.contribution > 0 && !cat.pending),
@@ -344,11 +350,10 @@ const styles = StyleSheet.create({
   progressFill: { height: "100%", borderRadius: 999 },
   categoryMeta: {
     flexDirection: "row",
-    flexWrap: "wrap",
     alignItems: "center",
-    gap: 12,
+    gap: 16,
   },
-  metaItem: { gap: 2 },
+  metaBlock: { gap: 2, minWidth: 0 },
   metaLabel: {},
   metaValue: {},
   classAvgRow: { flexDirection: "row", alignItems: "center", gap: 4 },

@@ -16,6 +16,7 @@ import {
   playgroundSessionHasLeaderboard,
   playgroundSessionLabel,
   playgroundSessionPhase,
+  playgroundSessionQuestionsEditable,
   playgroundSessionStatusLabel,
   playgroundSessionStatusTone,
   playgroundSessionSubtitle,
@@ -43,6 +44,12 @@ import { SHEET_METRIC } from "./faculty-sheet-semantics"
 import { FacultySignatureTabBar } from "./faculty-module-shell"
 import { useModuleTheme } from "../../lib/themed-module-shell"
 import { useSuppressModuleSearchDock } from "../../context/ModuleSearchDockContext"
+import {
+  buildPlaygroundSessionQuestionsPutBody,
+  PLAYGROUND_SNAPSHOT_FALLBACK_MESSAGE,
+  playgroundSessionQuestionsHaveSnapshotEdits,
+} from "../../lib/faculty-playground-session-questions"
+import { FacultyPlaygroundQuestionEditorModal } from "./FacultyPlaygroundQuestionEditorModal"
 
 type Scope = { instructorId: number; courseId: number }
 
@@ -113,12 +120,15 @@ export function FacultyPlaygroundSessionDetailModal({
 
   const [questionsLoading, setQuestionsLoading] = useState(false)
   const [questions, setQuestions] = useState<PlaygroundSessionQuestion[]>([])
+  const [baselineQuestions, setBaselineQuestions] = useState<PlaygroundSessionQuestion[]>([])
   const [draftDuration, setDraftDuration] = useState(10)
   const [questionsDirty, setQuestionsDirty] = useState(false)
   const [savingQuestions, setSavingQuestions] = useState(false)
   const [loadError, setLoadError] = useState("")
+  const [editingQuestion, setEditingQuestion] = useState<PlaygroundSessionQuestion | null>(null)
 
   const phase = session ? playgroundSessionPhase(session) : "ended"
+  const questionsEditable = playgroundSessionQuestionsEditable(phase)
   const label = session ? playgroundSessionLabel(session) : ""
   const displayPasscode = passcode ?? session?.join_passcode ?? null
 
@@ -159,17 +169,22 @@ export function FacultyPlaygroundSessionDetailModal({
   )
 
   const loadQuestions = useCallback(async () => {
-    if (!scope || !session) return
+    if (!scope || !session) return []
     setQuestionsLoading(true)
     try {
       const res = await instructorApi.getPlaygroundSessionQuestions(scope, session.id)
-      setQuestions(res.questions ?? [])
+      const nextQuestions = res.questions ?? []
+      setQuestions(nextQuestions)
+      setBaselineQuestions(nextQuestions)
       setDraftDuration(res.session?.durationSec ?? session.duration_sec ?? 10)
       setQuestionsDirty(false)
       setLoadError("")
+      return nextQuestions
     } catch (err) {
       setQuestions([])
+      setBaselineQuestions([])
       setLoadError(err instanceof ApiError ? err.message : "Could not load session questions.")
+      return []
     } finally {
       setQuestionsLoading(false)
     }
@@ -183,7 +198,9 @@ export function FacultyPlaygroundSessionDetailModal({
       setLeaderboard([])
       setLeaderboardStats(null)
       setQuestions([])
+      setBaselineQuestions([])
       setQuestionsDirty(false)
+      setEditingQuestion(null)
       return
     }
     setPasscode(session.join_passcode ?? null)
@@ -300,17 +317,38 @@ export function FacultyPlaygroundSessionDetailModal({
 
   async function saveQuestions() {
     if (!scope || !session) return
+    if (!playgroundSessionQuestionsEditable(playgroundSessionPhase(session))) {
+      AppAlert.alert("Session is live", "End the live game before editing its questions.")
+      return
+    }
     setSavingQuestions(true)
+    const includeSnapshots = playgroundSessionQuestionsHaveSnapshotEdits(baselineQuestions, questions)
+    const sent = questions
     try {
-      await instructorApi.updatePlaygroundSessionQuestions(scope, session.id, {
-        questionIds: questions.map((q) => q.bankQuestionId),
-        durationSec: draftDuration})
-      setQuestionsDirty(false)
-      AppAlert.alert("Saved", "Session questions updated.")
+      await instructorApi.updatePlaygroundSessionQuestions(
+        scope,
+        session.id,
+        buildPlaygroundSessionQuestionsPutBody({
+          questions,
+          durationSec: draftDuration,
+          includeSnapshots,
+        }),
+      )
       onUpdated()
-      await loadQuestions()
+      const loaded = await loadQuestions()
+      if (includeSnapshots && playgroundSessionQuestionsHaveSnapshotEdits(sent, loaded)) {
+        AppAlert.alert("Saved with limits", PLAYGROUND_SNAPSHOT_FALLBACK_MESSAGE)
+      } else {
+        AppAlert.alert("Saved", "Session questions updated.")
+      }
     } catch (err) {
-      AppAlert.alert("Save failed", err instanceof ApiError ? err.message : "Try again.")
+      if (err instanceof ApiError && err.message === PLAYGROUND_SNAPSHOT_FALLBACK_MESSAGE) {
+        onUpdated()
+        await loadQuestions()
+        AppAlert.alert("Saved with limits", err.message)
+      } else {
+        AppAlert.alert("Save failed", err instanceof ApiError ? err.message : "Try again.")
+      }
     } finally {
       setSavingQuestions(false)
     }
@@ -541,8 +579,8 @@ export function FacultyPlaygroundSessionDetailModal({
 
           {tab === "questions" ? (
             <View style={layoutStyles.sectionGap}>
-              {phase !== "ended" ? (
-                <FacultySheetNotice tone="warning" message="Stop the session before editing questions." />
+              {!questionsEditable ? (
+                <FacultySheetNotice tone="warning" message="End the live game before editing questions." />
               ) : (
                 <View
                   style={[
@@ -581,6 +619,7 @@ export function FacultyPlaygroundSessionDetailModal({
                 </View>
               )}
 
+              <FacultySheetNotice message="Edit changes this session’s copy only. The source Question Bank question is not updated." />
               {questionsLoading ? (
                 <ActivityIndicator color={FACULTY_PLAYGROUND_COLOR.link} />
               ) : questions.length === 0 ? (
@@ -622,8 +661,16 @@ export function FacultyPlaygroundSessionDetailModal({
                     <Text style={[type.bodyEmphasis, { color: native.label, lineHeight: 20, fontSize: 14 }]}>
                       {stripQuestionPreview(question.questionText)}
                     </Text>
-                    {phase === "ended" ? (
+                    {questionsEditable ? (
                       <View style={layoutStyles.questionActions}>
+                        <Pressable
+                          style={[layoutStyles.iconBtn, { backgroundColor: native.fill }]}
+                          onPress={() => setEditingQuestion(question)}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Edit session question ${index + 1}`}
+                        >
+                          <Ionicons name="create-outline" size={16} color={native.label} />
+                        </Pressable>
                         <Pressable
                           style={[layoutStyles.iconBtn, { backgroundColor: native.fill }]}
                           onPress={() => moveQuestion(index, -1)}
@@ -654,7 +701,7 @@ export function FacultyPlaygroundSessionDetailModal({
                 ))
               )}
 
-              {phase === "ended" && questions.length > 0 ? (
+              {questionsEditable && questions.length > 0 ? (
                 <FacultySheetSubmitButton
                   label="Save question changes"
                   onPress={() => void saveQuestions()}
@@ -666,6 +713,15 @@ export function FacultyPlaygroundSessionDetailModal({
           ) : null}
         </ScrollView>
       </FacultySheetContainer>
+      <FacultyPlaygroundQuestionEditorModal
+        question={editingQuestion}
+        onClose={() => setEditingQuestion(null)}
+        onSave={(next) => {
+          setQuestions((prev) => prev.map((item) => (item.id === next.id ? next : item)))
+          setQuestionsDirty(true)
+          setEditingQuestion(null)
+        }}
+      />
       <AppAlertHost />
     </Modal>
   )

@@ -9,8 +9,12 @@ import {
   countPendingAccessRequests,
   filterAccessRequestsBySection,
   filterAccessRequestsSearch,
+  mergeAccessRequestRows,
+  recommendationGuestAsAccountRequest,
+  summerCampRequestAsAccountRequest,
   type AccessRequestSection,
 } from "../../lib/faculty-access-requests-utils"
+import { useFacultyListPager } from "../../hooks/useFacultyListPager"
 import {
   formatFacultyRelativeTime,
   instructorApi,
@@ -18,8 +22,8 @@ import {
 } from "../../lib/instructor-api"
 import { useFacultyScope } from "../../hooks/useFacultyScope"
 import { useNotificationModuleRefresh } from "../../lib/notifications/notification-events"
-import { NATIVE } from "../../constants/faculty-native-theme"
 import { FacultyEmptyState } from "./faculty-shared"
+import { FacultyListPagerFooter } from "./FacultyListPagerFooter"
 import { FacultyStudentRequestCard } from "./FacultyStudentsListCards"
 import { FacultyAccountRequestActionSheet } from "./FacultyStudentsActionSheets"
 import { useModuleTheme } from "../../lib/themed-module-shell"
@@ -57,7 +61,25 @@ export function FacultyAccessRequestsScreen() {
   const load = useCallback(async () => {
     if (!scope) return
     setError("")
-    setRows(await instructorApi.getAccountRequests(scope))
+    const [account, summer, guests] = await Promise.allSettled([
+      instructorApi.getAccountRequests(scope),
+      instructorApi.getSummerCampers(scope, "requests"),
+      instructorApi.getRecommendationGuestAccountRequests(scope),
+    ])
+    const accountRows = account.status === "fulfilled" ? account.value : []
+    const summerRows =
+      summer.status === "fulfilled"
+        ? (summer.value.requests ?? []).map(summerCampRequestAsAccountRequest)
+        : []
+    const guestRows =
+      guests.status === "fulfilled"
+        ? guests.value.map(recommendationGuestAsAccountRequest)
+        : []
+    if (account.status === "rejected" && summer.status === "rejected" && guests.status === "rejected") {
+      const first = account.reason
+      throw first instanceof Error ? first : new Error("Could not load access requests.")
+    }
+    setRows(mergeAccessRequestRows(accountRows, summerRows, guestRows))
   }, [scope])
 
   useNotificationModuleRefresh("students", load)
@@ -88,6 +110,10 @@ export function FacultyAccessRequestsScreen() {
     const scoped = filterAccessRequestsBySection(rows, section)
     return filterAccessRequestsSearch(scoped, search)
   }, [rows, section, search])
+
+  const sectionNoun =
+    section === "career_members" ? "career members" : section === "summer_students" ? "summer students" : "students"
+  const pager = useFacultyListPager(filtered, `${section}:${search}`, sectionNoun)
 
   const tabItems = useMemo(
     () =>
@@ -132,8 +158,8 @@ export function FacultyAccessRequestsScreen() {
   }
 
   const listRows = useMemo(
-    () => filtered.map((row) => ({ key: String(row.id), row })),
-    [filtered],
+    () => pager.items.map((row) => ({ key: String(row.id), row })),
+    [pager.items],
   )
 
   if (!ready) {
@@ -164,7 +190,7 @@ export function FacultyAccessRequestsScreen() {
       <ModuleFlashList
         data={listRows}
         keyExtractor={(item) => item.key}
-        extraData={section}
+        extraData={`${section}:${pager.page}:${search}`}
         contentContainerStyle={[styles.content, listScrollPad, { paddingBottom: insets.bottom + 24 }]}
         ListHeaderComponent={
           error ? (
@@ -182,7 +208,11 @@ export function FacultyAccessRequestsScreen() {
             <FacultyEmptyState
               icon="mail-open-outline"
               title="No requests"
-              body={`No ${SECTIONS.find((s) => s.id === section)?.label.toLowerCase() ?? "access"} requests in your authority.`}
+              body={
+                search.trim()
+                  ? "Try another search term."
+                  : `No ${SECTIONS.find((s) => s.id === section)?.label.toLowerCase() ?? "access"} requests in your authority.`
+              }
             />
           )
         }
@@ -194,6 +224,7 @@ export function FacultyAccessRequestsScreen() {
             {...(chromeTop > 0 ? { progressViewOffset: chromeTop } : {})}
           />
         }
+        ListFooterComponent={<FacultyListPagerFooter pager={pager} />}
         renderItem={({ item }) => {
           const row = item.row
           return (

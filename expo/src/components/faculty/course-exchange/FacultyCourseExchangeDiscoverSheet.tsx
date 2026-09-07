@@ -27,6 +27,7 @@ import {
   FacultySheetField,
   FacultySheetHero,
   FacultySheetModal,
+  FacultySheetFormLayout,
   FacultySheetNotice,
   FacultySheetSection,
   FacultySheetStatChip,
@@ -134,19 +135,31 @@ export function FacultyCourseExchangeDiscoverSheet({
   }
 
   return (
-    <FacultySheetModal visible={visible} onRequestClose={onClose}>
+    <FacultySheetModal visible={visible} onRequestClose={onClose} layout="glassBottom" keyboardAvoiding>
       <FacultySheetChrome
         topInset={insets.top}
         title={step === "details" ? "Course details" : "Request modules"}
         subtitle={`${course.courseCode}${course.autoApprove ? " · Instant import" : " · Creator review"}`}
         onClose={onClose}
         accentColor={FACULTY_COURSE_EXCHANGE_COLOR.action}
+        pageSheet
       />
-      <ScrollView
+      <FacultySheetFormLayout
         contentContainerStyle={[collabSheetStyles.scroll, { paddingBottom: insets.bottom + 24 }]}
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
-        showsVerticalScrollIndicator={false}
+        footer={
+          step === "request" ? (
+            <View style={styles.footerActions}>
+              <AppButton label="Back" variant="secondary" onPress={() => setStep("details")} />
+              <AppButton
+                label={course.autoApprove ? "Import now" : "Send request"}
+                onPress={() => void handleSubmit()}
+                disabled={loading || !destinationCourseId || selected.length === 0}
+                loading={loading}
+                backgroundColor={FACULTY_COURSE_EXCHANGE_COLOR.action}
+              />
+            </View>
+          ) : undefined
+        }
       >
         {step === "details" ? (
           <>
@@ -306,19 +319,9 @@ export function FacultyCourseExchangeDiscoverSheet({
                 })}
               </View>
             </FacultySheetSection>
-            <View style={styles.footerActions}>
-              <AppButton label="Back" variant="secondary" onPress={() => setStep("details")} />
-              <AppButton
-                label={course.autoApprove ? "Import now" : "Send request"}
-                onPress={() => void handleSubmit()}
-                disabled={loading || !destinationCourseId || selected.length === 0}
-                loading={loading}
-                backgroundColor={FACULTY_COURSE_EXCHANGE_COLOR.action}
-              />
-            </View>
           </>
         )}
-      </ScrollView>
+      </FacultySheetFormLayout>
     </FacultySheetModal>
   )
 }
@@ -333,5 +336,5 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: StyleSheet.hairlineWidth,
   },
-  footerActions: { flexDirection: "row", gap: 10, marginTop: 8 },
+  footerActions: { flexDirection: "row", gap: 10 },
 })

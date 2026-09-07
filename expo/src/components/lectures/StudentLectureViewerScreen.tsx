@@ -24,6 +24,7 @@ import { FacultyEmptyState } from "../faculty/faculty-shared"
 import { lectureViewerRootStyle, lectureViewerWebHostStyle } from "./lecture-viewer-layout"
 import type { LectureSamplePracticeConfig, LectureWorkspaceConfig } from "../../lib/lecture-types"
 import type { StudentLectureDetail } from "../../lib/student-api"
+import { useLectureSlideProgressSync } from "../../hooks/useLectureSlideProgressSync"
 import { lectureDisplayTitle } from "./lecture-list-utils"
 
 type Props = {
@@ -66,6 +67,8 @@ export function StudentLectureViewerScreen({ lectureId, week }: Props) {
   const [downloading, setDownloading] = useState(false)
   const [savingCompletion, setSavingCompletion] = useState(false)
 
+  const slideProgress = useLectureSlideProgressSync(session, lectureId)
+
   const load = useCallback(async () => {
     if (!session) return
     setError("")
@@ -91,7 +94,7 @@ export function StudentLectureViewerScreen({ lectureId, week }: Props) {
     load().finally(() => setLoading(false))
   }, [session, load])
 
-  const title = lecture ? lectureDisplayTitle(lecture) : `Week ${week}`
+  const title = lecture ? lectureDisplayTitle(lecture, session?.courseCode) : `Week ${week}`
   const samplePracticeLabel = samplePractice?.button_label?.trim() || "Sample Practice"
   const workspaceLabel = resolveWorkspaceDisplayLabel(workspace, samplePracticeLabel)
   const samplePracticeCount = samplePractice?.questions.length ?? 0
@@ -172,6 +175,9 @@ export function StudentLectureViewerScreen({ lectureId, week }: Props) {
             deckUrl={deckRequestUri}
             headers={deckHeaders}
             cacheKey={`student-lecture-${lectureId}`}
+            initialPage={slideProgress.progressHydrated ? slideProgress.initialPage : 1}
+            onDocumentLoaded={slideProgress.onDocumentLoaded}
+            onPageChange={slideProgress.onPageChange}
           />
           <StudentLectureCoraOverlay
             session={session}

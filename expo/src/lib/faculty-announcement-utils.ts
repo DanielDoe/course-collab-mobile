@@ -94,6 +94,12 @@ export const ANNOUNCEMENT_TYPE_OPTIONS = [
   { id: "alert", label: "Alert" },
 ] as const
 
+export const ANNOUNCEMENT_EVENT_TYPES = new Set(["exam", "alert"])
+
+export function announcementTypeHasEventFields(type?: string | null): boolean {
+  return ANNOUNCEMENT_EVENT_TYPES.has((type ?? "").toLowerCase())
+}
+
 export const ANNOUNCEMENT_PRIORITY_OPTIONS = [
   { id: "low", label: "Low" },
   { id: "medium", label: "Medium" },

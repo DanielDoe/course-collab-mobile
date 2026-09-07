@@ -1,28 +1,21 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
-import {
-  ActivityIndicator,
-  Pressable,
-  RefreshControl,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native"
-import { ScrollView } from "react-native-gesture-handler"
+import { StyleSheet, Text, View } from "react-native"
 import { useRouter } from "expo-router"
 import { useSession } from "../../context/SessionProvider"
 import { mergeAssessmentHistoryById, quizHistoryToAssessmentItems } from "../../lib/assessment-history-map"
 import { ApiError, studentApi, type AssessmentHistoryItem } from "../../lib/student-api"
 import type { StudentSession } from "../../lib/session"
-import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
-import { useModuleScrollContentPadding } from "../../context/ChromeInsetContext"
-import { NATIVE } from "../../constants/faculty-native-theme"
+import { enrichStudentContentSession } from "../../lib/student-content-session"
+import { useThemedNative } from "../../context/AppearanceProvider"
 import { useNativeType, useThemedStudentNative } from "../../lib/themed-module-theme"
-import { CommEmptyState } from "../faculty/faculty-communication-ui"
+import { ModuleScreen } from "../modules/ModuleScreen"
 import { HistoryFilterBar } from "./HistoryFilterBar"
 import { AssessmentHistoryTimelineItem } from "./AssessmentHistoryTimelineItem"
 import { formatAssessmentType } from "./assessment-config"
 import { openHistoryItem } from "./assessment-navigation"
 import { useNotificationModuleRefresh } from "../../lib/notifications/notification-events"
+import { useFacultyListPager } from "../../hooks/useFacultyListPager"
+import { FacultyListPagerFooter } from "../faculty/FacultyListPagerFooter"
 
 function useStudentSession(): StudentSession | null {
   const { session } = useSession()
@@ -87,10 +80,8 @@ export function QuizHistoryScreen() {
   const session = useStudentSession()
   const router = useRouter()
   const native = useThemedNative()
-  const tokens = useAppThemeTokens()
   const type = useNativeType()
   const SN = useThemedStudentNative()
-  const scrollPad = useModuleScrollContentPadding()
 
   const [items, setItems] = useState<AssessmentHistoryItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -103,12 +94,13 @@ export function QuizHistoryScreen() {
     if (!session) return
     setError("")
     try {
-      const quizPayload = await studentApi.getQuizHistory(session)
+      const contentSession = await enrichStudentContentSession(session)
+      const quizPayload = await studentApi.getQuizHistory(contentSession)
       const mapped = quizHistoryToAssessmentItems(quizPayload.quizHistory ?? quizPayload)
 
       let assessmentRows: AssessmentHistoryItem[] = []
       try {
-        const assessmentPayload = await studentApi.getAssessmentHistory(session)
+        const assessmentPayload = await studentApi.getAssessmentHistory(contentSession)
         assessmentRows = assessmentPayload.history ?? assessmentPayload.assessmentHistory ?? []
       } catch {
         // assessment-history is optional overlay; quiz-history is the required list.
@@ -150,21 +142,14 @@ export function QuizHistoryScreen() {
       if (typeFilter !== "all" && item.assessment_type !== typeFilter) return false
       if (!q) return true
       return (
-        item.title.toLowerCase().includes(q) ||
+        (item.title ?? "").toLowerCase().includes(q) ||
         formatAssessmentType(item.assessment_type).toLowerCase().includes(q)
       )
     })
     return list.sort((a, b) => historySortTime(b) - historySortTime(a))
   }, [items, search, typeFilter])
 
-  const scrollContentStyle = useMemo(
-    () => ({
-      paddingHorizontal: NATIVE.pagePadding,
-      paddingBottom: scrollPad.paddingBottom,
-      flexGrow: 1,
-    }),
-    [scrollPad.paddingBottom],
-  )
+  const historyPager = useFacultyListPager(filtered, `${search}|${typeFilter}`, "entries")
 
   if (!session) {
     return (
@@ -175,81 +160,36 @@ export function QuizHistoryScreen() {
   }
 
   return (
-    <View style={[styles.root, { backgroundColor: native.groupedBackground }]}>
-      <View
-        style={[
-          styles.chrome,
-          {
-            paddingTop: scrollPad.paddingTop ?? NATIVE.pagePadding,
-            paddingHorizontal: NATIVE.pagePadding,
-          },
-        ]}
+    <>
+      <HistoryFilterBar
+        search={search}
+        onSearchChange={setSearch}
+        typeFilter={typeFilter}
+        onTypeFilterChange={setTypeFilter}
+        types={types}
+      />
+      <ModuleScreen
+        loading={loading}
+        refreshing={refreshing}
+        onRefresh={() => void onRefresh()}
+        error={error}
+        empty={!loading && !error && items.length === 0}
+        emptyTitle="No assessment history"
+        emptyBody="Your completed quizzes and exams will appear here."
+        emptyIcon="time-outline"
       >
-        {error ? (
-          <View style={[styles.errorBox, { backgroundColor: `${tokens.danger}18` }]}>
-            <Text style={[type.destructive, styles.errorText]}>{error}</Text>
-            <Pressable
-              onPress={() => void onRefresh()}
-              accessibilityRole="button"
-              accessibilityLabel="Try again"
-              hitSlop={8}
-            >
-              <Text style={[type.callout, { color: tokens.accent, fontWeight: "600" }]}>Try again</Text>
-            </Pressable>
-          </View>
-        ) : null}
-
-        <HistoryFilterBar
-          search={search}
-          onSearchChange={setSearch}
-          typeFilter={typeFilter}
-          onTypeFilterChange={setTypeFilter}
-          types={types}
-        />
-      </View>
-
-      {loading && !refreshing ? (
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={tokens.accent} />
-          <Text style={[type.caption, { color: SN.secondaryLabel }]}>Loading history…</Text>
-        </View>
-      ) : (
-        <ScrollView
-          style={styles.scroll}
-          contentContainerStyle={
-            items.length === 0 ? [scrollContentStyle, styles.emptyScroll] : scrollContentStyle
-          }
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={tokens.accent} />
-          }
-        >
-          {items.length === 0 ? (
-            <View style={styles.emptyBlock}>
-              <CommEmptyState
-                icon="time-outline"
-                title="No assessment history"
-                body="Your completed quizzes and exams will appear here."
-              />
-              <Pressable
-                onPress={() => void onRefresh()}
-                accessibilityRole="button"
-                accessibilityLabel="Try again"
-                hitSlop={8}
-              >
-                <Text style={[type.callout, { color: tokens.accent, fontWeight: "600" }]}>Try again</Text>
-              </Pressable>
-            </View>
-          ) : filtered.length > 0 ? (
+        {filtered.length > 0 ? (
+          <>
             <View style={styles.timelineList}>
-              {filtered.map((item, index) => (
+              {historyPager.items.map((item, index) => (
                 <AssessmentHistoryTimelineItem
                   key={`${item.id}-${item.assessment_type}`}
                   item={item}
-                  index={index}
-                  last={index === filtered.length - 1}
+                  index={historyPager.page * historyPager.pageSize + index}
+                  last={
+                    index === historyPager.items.length - 1 &&
+                    historyPager.page >= historyPager.pageCount - 1
+                  }
                   bestScore={historyBestScore(item)}
                   completedAt={historyCompletedAt(item)}
                   statusLabel={historyStatusLabel(item)}
@@ -260,23 +200,22 @@ export function QuizHistoryScreen() {
                 />
               ))}
             </View>
-          ) : (
-            <View style={styles.emptyFilter}>
-              <Text style={[type.caption, { color: SN.secondaryLabel }]}>
-                No history matches your search or filter.
-              </Text>
-            </View>
-          )}
-        </ScrollView>
-      )}
-    </View>
+            <FacultyListPagerFooter pager={historyPager} />
+          </>
+        ) : (
+          <View style={styles.emptyFilter}>
+            <Text style={[type.caption, { color: SN.secondaryLabel }]}>
+              No history matches your search or filter.
+            </Text>
+          </View>
+        )}
+      </ModuleScreen>
+    </>
   )
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  chrome: { gap: 12, paddingBottom: 4 },
-  scroll: { flex: 1 },
   center: {
     flex: 1,
     alignItems: "center",
@@ -284,8 +223,6 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingVertical: 48,
   },
-  errorBox: { padding: 12, borderRadius: NATIVE.sectionRadius, gap: 8 },
-  errorText: { fontSize: 14, lineHeight: 20 },
   timelineList: {
     paddingTop: 4,
     paddingBottom: 8,
@@ -293,13 +230,5 @@ const styles = StyleSheet.create({
   emptyFilter: {
     paddingHorizontal: 14,
     paddingVertical: 16,
-  },
-  emptyScroll: {
-    justifyContent: "center",
-  },
-  emptyBlock: {
-    alignItems: "center",
-    gap: 12,
-    paddingVertical: 24,
   },
 })

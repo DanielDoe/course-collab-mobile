@@ -17,6 +17,7 @@ export function useFacultyScope() {
       sessionId: selectedCourse.session_id ?? null,
       sessionCode: selectedCourse.session_code ?? null,
       academicTermId: selectedCourse.academic_term_id ?? null,
+      institutionId: facultySession.universityId ?? null,
     }
   }, [facultySession, selectedCourse])
 
@@ -24,5 +25,11 @@ export function useFacultyScope() {
     session: facultySession,
     course: selectedCourse,
     scope,
-    ready: Boolean(facultySession && selectedCourse && scope)}
+    ready: Boolean(facultySession && selectedCourse && scope),
+    hasCourse: Boolean(selectedCourse?.id),
+    institutionId: facultySession?.universityId ?? null,
+    courseId: selectedCourse?.id ?? null,
+    termId: selectedCourse?.academic_term_id ?? null,
+    sectionId: selectedCourse?.session_id ?? null,
+  }
 }

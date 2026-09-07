@@ -1,5 +1,6 @@
 import { ApiError } from "./api"
 import { studentHttpCookieHeader } from "./student-http-cookies"
+import { getStoredRefreshToken } from "./refresh-token-store"
 import {
   headersHaveStudentSessionProof,
   STUDENT_REFRESH_HEADER,
@@ -23,7 +24,7 @@ export async function adminAuthenticatedHeaders(
   }
   const jarCookie = await studentHttpCookieHeader()
   if (jarCookie) headers.Cookie = jarCookie
-  const refresh = refreshTokenFromCookieHeader(jarCookie)
+  const refresh = refreshTokenFromCookieHeader(jarCookie) ?? (await getStoredRefreshToken()) ?? undefined
   if (refresh) headers[STUDENT_REFRESH_HEADER] = refresh
   if (!headersHaveStudentSessionProof(headers)) {
     throw new ApiError("Admin authentication required", 401)

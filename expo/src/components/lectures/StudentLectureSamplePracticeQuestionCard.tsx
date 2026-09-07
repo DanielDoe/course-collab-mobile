@@ -257,7 +257,7 @@ export function StudentLectureSamplePracticeQuestionCard({
               <View style={styles.optionsStack}>
                 {options.map(({ letter, text }) => {
                   const isSelected = selectedLetters.includes(letter)
-                  const { isCorrect: isOptionCorrect, showWrongSelection } =
+                  const { isCorrect: isOptionCorrect, showWrongSelection, showPartialCreditSelection } =
                     samplePracticeOptionReviewState(
                       letter,
                       selectedLetters,
@@ -279,6 +279,10 @@ export function StudentLectureSamplePracticeQuestionCard({
                           borderColor: SYSTEM.green.color,
                           backgroundColor: hexToRgba(SYSTEM.green.color, 0.08),
                         },
+                        showPartialCreditSelection && {
+                          borderColor: SYSTEM.orange.color,
+                          backgroundColor: hexToRgba(SYSTEM.orange.color, 0.08),
+                        },
                         showWrongSelection && {
                           borderColor: SYSTEM.red.color,
                           backgroundColor: hexToRgba(SYSTEM.red.color, 0.06),
@@ -295,13 +299,19 @@ export function StudentLectureSamplePracticeQuestionCard({
                           { backgroundColor: native.secondaryGrouped, borderColor: tokens.border },
                           isSelected && !submitted && { backgroundColor: tokens.accent, borderColor: tokens.accent },
                           isOptionCorrect && { backgroundColor: SYSTEM.green.color, borderColor: SYSTEM.green.color },
+                          showPartialCreditSelection && {
+                            backgroundColor: SYSTEM.orange.color,
+                            borderColor: SYSTEM.orange.color,
+                          },
                         ]}
                       >
                         <Text
                           style={[
                             styles.optionLetterText,
                             { color: native.secondaryLabel },
-                            (isSelected && !submitted) || isOptionCorrect ? styles.optionLetterTextSelected : null,
+                            (isSelected && !submitted) || isOptionCorrect || showPartialCreditSelection
+                              ? styles.optionLetterTextSelected
+                              : null,
                           ]}
                         >
                           {letter}
@@ -317,11 +327,13 @@ export function StudentLectureSamplePracticeQuestionCard({
                           color={
                             showWrongSelection
                               ? SYSTEM.red.color
-                              : isOptionCorrect
-                                ? SYSTEM.green.color
-                                : isSelected
-                                  ? tokens.accent
-                                  : native.tertiaryLabel
+                              : showPartialCreditSelection
+                                ? SYSTEM.orange.color
+                                : isOptionCorrect
+                                  ? SYSTEM.green.color
+                                  : isSelected
+                                    ? tokens.accent
+                                    : native.tertiaryLabel
                           }
                         />
                       ) : isSelected ? (

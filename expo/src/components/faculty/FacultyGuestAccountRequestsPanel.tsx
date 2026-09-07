@@ -17,6 +17,8 @@ import {
 } from "../../lib/faculty-guest-account-requests-utils"
 import type { useFacultyScope } from "../../hooks/useFacultyScope"
 import { FacultyEmptyState } from "./faculty-shared"
+import { useFacultyListPager } from "../../hooks/useFacultyListPager"
+import { FacultyListPagerFooter } from "./FacultyListPagerFooter"
 import { useModuleTheme } from "../../lib/themed-module-shell"
 import { FACULTY_RECOMMENDATIONS_COLOR } from "../../lib/faculty-recommendations-theme"
 import { FacultyGuestRecommendationRequestCard } from "./FacultyRecommendationsListCards"
@@ -147,6 +149,7 @@ export function FacultyGuestAccountRequestsPanel({
     () => filterGuestAccountRequests(rows, search, statusFilter, sort),
     [rows, search, statusFilter, sort],
   )
+  const pager = useFacultyListPager(filtered, `${search}:${statusFilter}:${sort}`, "guest requests")
 
   async function approve(id: number) {
     if (!scope) return
@@ -202,13 +205,14 @@ export function FacultyGuestAccountRequestsPanel({
         />
       ) : (
         <View style={localStyles.list}>
-          {filtered.map((row) => (
+          {pager.items.map((row) => (
             <FacultyGuestRecommendationRequestCard
               key={row.id}
               row={row}
               onPress={() => setSelectedGuest(row)}
             />
           ))}
+          <FacultyListPagerFooter pager={pager} />
         </View>
       )}
 

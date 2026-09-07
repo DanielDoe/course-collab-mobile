@@ -3,17 +3,22 @@ import { useEffect } from "react"
 import { useLocalSearchParams, usePathname, useRouter } from "expo-router"
 import { isImmersiveStudentWebPath, resolveStudentNativeRouteFromWebPath } from "../../constants/student-nav"
 import { StudentShellProvider } from "../../context/StudentShellContext"
+import { StudentActiveCourseProvider } from "../../context/StudentActiveCourseContext"
 import { useThemedNative } from "../../context/AppearanceProvider"
 import { useStudentShellRefresh } from "../../hooks/useStudentShellRefresh"
+import { usePurchaseReturnRefresh } from "../../hooks/usePurchaseReturnRefresh"
 import { useStudentShell } from "../../context/StudentShellContext"
 import type { StudentSession } from "../../lib/session"
+import { studentEnrollmentPickerKey } from "../../lib/student-enrollment"
 import { CoraProvider } from "../cora/CoraProvider"
+import { StudentCoursePicker } from "./StudentCoursePicker"
 import { NotificationShellSync } from "./NotificationShellSync"
 import { AppShellFrame } from "./AppShellFrame"
 import { StudentDrawer } from "./StudentDrawer"
 import { ProfileMenu } from "./ProfileMenu"
 import { StudentNotificationsSheet } from "./NotificationsSheetHost"
 import { StudentTopBar } from "./StudentTopBar"
+import { ShellDrawerMotionProvider } from "../navigation/ShellDrawerMotionProvider"
 
 type Props = {
   session: StudentSession
@@ -34,7 +39,6 @@ function isImmersiveRoute(pathname: string, webPath?: string) {
   if (/^\/rewards\/classroom-point\//.test(pathname)) return true
   if (/^\/rewards\/classroom-task\//.test(pathname)) return true
   if (/^\/flashcards\//.test(pathname)) return true
-  // Immersive announcement detail — match with or without trailing slash / group prefixes.
   if (/\/announcements\/[^/]+\/?$/.test(pathname)) return true
   if (/^\/practice\//.test(pathname)) return true
   if (/^\/membership/.test(pathname)) return true
@@ -48,7 +52,7 @@ function StudentAppShellInner({ session, children }: Props) {
   const pathname = usePathname()
   const router = useRouter()
   const { path: webPathParam } = useLocalSearchParams<{ path?: string }>()
-  const { refreshStudentData } = useStudentShell()
+  const { refreshStudentData, drawerOpen, openDrawer, closeDrawer } = useStudentShell()
   const webPath =
     typeof webPathParam === "string"
       ? decodeURIComponent(webPathParam)
@@ -56,6 +60,7 @@ function StudentAppShellInner({ session, children }: Props) {
   const immersive = isImmersiveRoute(pathname, webPath)
   const native = useThemedNative()
   useStudentShellRefresh(session)
+  usePurchaseReturnRefresh()
 
   useEffect(() => {
     if (pathname !== "/web") return
@@ -64,32 +69,43 @@ function StudentAppShellInner({ session, children }: Props) {
   }, [pathname, webPath, router])
 
   return (
-    <AppShellFrame
-      backgroundColor={native.groupedBackground}
-      immersive={immersive}
-      topBar={<StudentTopBar session={session} />}
-      overlays={
-        <>
-          <StudentDrawer session={session} />
-          <ProfileMenu session={session} />
-          <StudentNotificationsSheet session={session} />
-          <NotificationShellSync
-            onRefresh={() => refreshStudentData?.({ force: true }) ?? Promise.resolve()}
-          />
-        </>
-      }
+    <ShellDrawerMotionProvider
+      drawerOpen={drawerOpen}
+      openDrawer={openDrawer}
+      closeDrawer={closeDrawer}
     >
-      {children}
-    </AppShellFrame>
+      <AppShellFrame
+        backgroundColor={native.groupedBackground}
+        immersive={immersive}
+        topBar={<StudentTopBar session={session} />}
+        drawerEdge={{ portal: "student", immersive, drawerOpen }}
+        overlays={
+          <>
+            <StudentDrawer session={session} />
+            <ProfileMenu session={session} />
+            <StudentNotificationsSheet session={session} />
+            <StudentCoursePicker />
+            <NotificationShellSync
+              onRefresh={() => refreshStudentData?.({ force: true }) ?? Promise.resolve()}
+            />
+          </>
+        }
+      >
+        {children}
+      </AppShellFrame>
+    </ShellDrawerMotionProvider>
   )
 }
 
 export function StudentAppShell({ session, children }: Props) {
+  const coraKey = studentEnrollmentPickerKey(session.courseId ?? 0, session.section)
   return (
     <StudentShellProvider>
-      <CoraProvider>
-        <StudentAppShellInner session={session}>{children}</StudentAppShellInner>
-      </CoraProvider>
+      <StudentActiveCourseProvider>
+        <CoraProvider key={coraKey}>
+          <StudentAppShellInner session={session}>{children}</StudentAppShellInner>
+        </CoraProvider>
+      </StudentActiveCourseProvider>
     </StudentShellProvider>
   )
 }

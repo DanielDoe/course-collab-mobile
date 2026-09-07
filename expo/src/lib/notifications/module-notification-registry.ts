@@ -28,6 +28,7 @@ export const MODULE_NOTIFICATION_KEYS: Record<string, NotificationModule[]> = {
   "trade-center": ["trade-center"],
   announcements: ["announcements"],
   calendar: ["calendar"],
+  "schedule-adjustment": ["schedule-adjustment", "calendar"],
   "office-hours": ["office-hours"],
   "progress-review": ["progress-review"],
   syllabus: ["syllabus"],

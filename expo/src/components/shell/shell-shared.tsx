@@ -108,6 +108,61 @@ export function getStudentCourseLine(
   return getCourseDisplayLine(session.courseCode, session.courseTitle)
 }
 
+/** Compact top-bar course chip — opens the existing course picker. */
+export function HeaderCourseChip({
+  label,
+  onPress,
+  interactive,
+}: {
+  label: string
+  onPress: () => void
+  interactive: boolean
+}) {
+  const tokens = useAppThemeTokens()
+  const chrome = useShellChrome()
+  const text = label.trim() || "Course"
+  return (
+    <Pressable
+      onPress={interactive ? onPress : undefined}
+      disabled={!interactive}
+      accessibilityRole={interactive ? "button" : "text"}
+      accessibilityLabel={interactive ? `Current course ${text}. Switch course` : `Current course ${text}`}
+      hitSlop={6}
+      style={({ pressed }) => [
+        headerCourseChipStyles.chip,
+        {
+          backgroundColor: tokens.accentSoft,
+          borderColor: tokens.border,
+          opacity: pressed && interactive ? 0.86 : 1,
+        },
+      ]}
+    >
+      <Text style={[headerCourseChipStyles.label, { color: chrome.label }]} numberOfLines={1}>
+        {text}
+      </Text>
+      {interactive ? <Ionicons name="chevron-down" size={12} color={chrome.secondaryLabel} /> : null}
+    </Pressable>
+  )
+}
+
+const headerCourseChipStyles = StyleSheet.create({
+  chip: {
+    maxWidth: 108,
+    minHeight: 32,
+    paddingHorizontal: 8,
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+  },
+  label: {
+    fontSize: 12,
+    fontWeight: "700",
+    flexShrink: 1,
+  },
+})
+
 export function formatFacultyRoleLabel(role?: string | null): string {
   const trimmed = role?.trim()
   if (!trimmed) return "Instructor"

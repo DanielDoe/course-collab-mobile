@@ -1,5 +1,5 @@
 import * as SecureStore from "./secure-store-client"
-import { syncAppearanceSetupFromServer } from "./appearance-setup"
+import { hasSessionCompletedAppearanceSetup } from "./appearance-setup"
 import { resolveFacultyPostLoginRoute } from "./faculty-post-login"
 import { sessionNeedsPasswordChange } from "./navigation-reset"
 import type { AppSession } from "./session"
@@ -52,7 +52,7 @@ export async function isOnboardingStepComplete(
 ): Promise<boolean> {
   if (step === "appearance") {
     if (session.portal !== "student") return true
-    return syncAppearanceSetupFromServer(session)
+    return hasSessionCompletedAppearanceSetup(session)
   }
   if (isLegalConsentStep(step)) {
     const flags = await Promise.all(

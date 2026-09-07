@@ -1,0 +1,8 @@
+appId: com.coursecollab.app
+---
+- openLink: coursecollab://dev-faculty-login?force=1
+- extendedWaitUntil:
+    visible: "Open navigation menu|CourseCollab"
+    timeout: 60000
+- assertNotVisible: "Build 1"
+- assertNotVisible: "Build ?"

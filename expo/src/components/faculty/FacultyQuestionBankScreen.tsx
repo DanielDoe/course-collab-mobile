@@ -34,6 +34,12 @@ import { FacultyQuestionBankPreviewModal } from "./FacultyQuestionBankPreviewMod
 import { FacultyQuestionBankEditorModal } from "./FacultyQuestionBankEditorModal"
 import { FacultyQuestionBankCreateWizard } from "./question-bank/FacultyQuestionBankCreateWizard"
 import { FacultyCoraQuestionBankDraftModal } from "./cora/FacultyCoraQuestionBankDraftModal"
+import {
+  filterBankTopics,
+  filterBankTypes,
+} from "../../lib/faculty-question-bank-topics"
+import { useFacultyListPager } from "../../hooks/useFacultyListPager"
+import { FacultyListPagerFooter } from "./FacultyListPagerFooter"
 import { consumeFacultyCoraPending } from "../../lib/faculty-cora-pending"
 import type { DraftQuestionBankItem } from "../../lib/question-bank-ai-types"
 import { useModuleTheme } from "../../lib/themed-module-shell"
@@ -59,7 +65,7 @@ const TABS: Array<{ id: QuestionBankTab; label: string; icon: keyof typeof Ionic
 ]
 
 export function FacultyQuestionBankScreen() {
-  const { styles: moduleStyles, tokens, type } = useModuleTheme()
+  const { styles: moduleStyles, native, tokens, type } = useModuleTheme()
   const insets = useSafeAreaInsets()
   const { listScrollPad } = useFacultyStickyHeaderScrollLayout()
   const { scope, ready } = useFacultyScope()
@@ -130,7 +136,28 @@ export function FacultyQuestionBankScreen() {
     )
   }, [deleted, search])
 
+  const filteredTopics = useMemo(() => filterBankTopics(topics, search), [topics, search])
+
   const typeGroups = useMemo(() => groupQuestionsByType(questions), [questions])
+  const typeBrowseRows = useMemo(() => {
+    const custom = customTypes.map((ct) => ({
+      key: `custom-${ct.id}`,
+      kind: "customType" as const,
+      customType: ct,
+      label: ct.label,
+      type: ct.typeId,
+      description: ct.description,
+    }))
+    const builtIn = typeGroups.map((row) => ({
+      key: row.type,
+      kind: "type" as const,
+      type: row.type,
+      label: row.label,
+      count: row.count,
+    }))
+    return [...custom, ...builtIn]
+  }, [customTypes, typeGroups])
+  const filteredTypes = useMemo(() => filterBankTypes(typeBrowseRows, search), [typeBrowseRows, search])
 
   type BankListRow =
     | { key: string; kind: "question"; question: InstructorBankQuestion; deleted?: boolean }
@@ -156,22 +183,22 @@ export function FacultyQuestionBankScreen() {
       }))
     }
     if (tab === "topics") {
-      return topics.map((topic) => ({ key: topic.name, kind: "topic", topic }))
+      return filteredTopics.map((topic) => ({ key: topic.name, kind: "topic", topic }))
     }
-    const customTypeRows: BankListRow[] = customTypes.map((ct) => ({
-      key: `custom-${ct.id}`,
-      kind: "customType",
-      customType: ct,
-    }))
-    const builtInTypeRows: BankListRow[] = typeGroups.map((row) => ({
-      key: row.type,
-      kind: "type",
-      type: row.type,
-      label: row.label,
-      count: row.count,
-    }))
-    return [...customTypeRows, ...builtInTypeRows]
-  }, [loading, tab, filteredAll, filteredDeleted, topics, typeGroups, customTypes])
+    return filteredTypes.map((row) =>
+      row.kind === "customType"
+        ? { key: row.key, kind: "customType" as const, customType: row.customType }
+        : { key: row.key, kind: "type" as const, type: row.type, label: row.label, count: row.count },
+    )
+  }, [loading, tab, filteredAll, filteredDeleted, filteredTopics, filteredTypes])
+
+  const bankNoun =
+    tab === "topics" ? "topics" : tab === "types" ? "types" : tab === "deleted" ? "deleted questions" : "questions"
+  const pager = useFacultyListPager(
+    listRows,
+    `${tab}:${search}:${typeFilter}:${difficultyFilter}:${topicFilter ?? ""}`,
+    bankNoun,
+  )
 
   const listEmptyMeta = useMemo(() => {
     if (loading) return null
@@ -188,15 +215,21 @@ export function FacultyQuestionBankScreen() {
     if (tab === "topics") {
       return {
         icon: "folder-outline" as const,
-        title: "No topics yet",
-        body: "Questions grouped by topic will appear here.",
+        title: topics.length === 0 ? "No topics yet" : "No matches",
+        body:
+          topics.length === 0
+            ? "Questions grouped by topic will appear here."
+            : "Try another search term.",
       }
     }
     if (tab === "types") {
+      const hasTypes = customTypes.length > 0 || typeGroups.length > 0
       return {
         icon: "filter-outline" as const,
-        title: "No question types",
-        body: "Question type breakdown will appear once you add questions.",
+        title: hasTypes ? "No matches" : "No question types",
+        body: hasTypes
+          ? "Try another search term."
+          : "Question type breakdown will appear once you add questions.",
       }
     }
     return {
@@ -204,7 +237,7 @@ export function FacultyQuestionBankScreen() {
       title: "No deleted questions",
       body: "Soft-deleted questions can be restored from here.",
     }
-  }, [loading, tab, questions.length])
+  }, [loading, tab, questions.length, topics.length, customTypes.length, typeGroups.length])
 
   const filtersActive = typeFilter !== "ALL" || difficultyFilter !== "ALL" || topicFilter != null
 
@@ -361,11 +394,19 @@ export function FacultyQuestionBankScreen() {
           </View>
         ) : null}
 
-        {tab === "all" || tab === "deleted" ? (
+        {tab === "all" || tab === "deleted" || tab === "topics" || tab === "types" ? (
           <FacultySearchToolbar
             value={search}
             onChange={setSearch}
-            placeholder={tab === "deleted" ? "Search deleted questions…" : "Search question text, topic, type…"}
+            placeholder={
+              tab === "topics"
+                ? "Search topics…"
+                : tab === "types"
+                  ? "Search types…"
+                  : tab === "deleted"
+                    ? "Search deleted questions…"
+                    : "Search question text, topic, type…"
+            }
             filterActive={tab === "all" ? filtersActive : false}
             onOpenFilter={tab === "all" ? () => setFilterSheetOpen(true) : undefined}
             showFilter={tab === "all"}
@@ -381,13 +422,14 @@ export function FacultyQuestionBankScreen() {
       </FacultyModuleStickyHeader>
 
       <ModuleFlashList
-        data={listRows}
+        data={pager.items}
         keyExtractor={(item) => item.key}
         renderItem={renderBankRow}
-        extraData={tab}
+        extraData={`${tab}:${pager.page}:${search}`}
         ItemSeparatorComponent={BankCardSeparator}
         contentContainerStyle={[styles.content, listScrollPad]}
         ListHeaderComponent={listHeader}
+        ListFooterComponent={<FacultyListPagerFooter pager={pager} />}
         ListEmptyComponent={
           loading ? (
             <QuerySkeleton />

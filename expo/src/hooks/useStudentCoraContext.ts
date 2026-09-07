@@ -73,17 +73,25 @@ export function useStudentCoraContext(options: { session: StudentSession | null;
     }
 
     const studentId = session.databaseId
-    setContext((current) => (current?.studentId === studentId ? current : null))
+    const courseId = session.courseId
+    setContext((current) =>
+      current?.studentId === studentId && current.courseId === courseId ? current : null,
+    )
     setStatus("loading")
     setError(null)
 
     let cancelled = false
 
     void (async () => {
-      const stored = await loadStudentCoraContext(studentId)
+      const stored = await loadStudentCoraContext(studentId, courseId)
       if (cancelled) return
 
-      if (stored?.setupComplete && stored.studentId === studentId && setupToken === 0) {
+      if (
+        stored?.setupComplete &&
+        stored.studentId === studentId &&
+        stored.courseId === courseId &&
+        setupToken === 0
+      ) {
         setContext(stored)
         setStatus("ready")
         return
@@ -97,7 +105,7 @@ export function useStudentCoraContext(options: { session: StudentSession | null;
             if (!cancelled) setSetupStep(step)
           },
         })
-        if (cancelled || built.studentId !== studentId) return
+        if (cancelled || built.studentId !== studentId || built.courseId !== courseId) return
         await persistStudentCoraContext(built)
         setContext(built)
         setStatus("ready")
@@ -105,7 +113,7 @@ export function useStudentCoraContext(options: { session: StudentSession | null;
         if (cancelled) return
         try {
           const built = await buildFallbackStudentCoraContext(session)
-          if (cancelled || built.studentId !== studentId) return
+          if (cancelled || built.studentId !== studentId || built.courseId !== courseId) return
           await persistStudentCoraContext(built)
           setContext(built)
           setStatus("ready")
@@ -122,7 +130,7 @@ export function useStudentCoraContext(options: { session: StudentSession | null;
     return () => {
       cancelled = true
     }
-  }, [enabled, session?.databaseId, setupToken])
+  }, [enabled, session?.databaseId, session?.courseId, session?.section, setupToken])
 
   const retrySetup = useCallback(() => {
     setSetupToken((value) => value + 1)

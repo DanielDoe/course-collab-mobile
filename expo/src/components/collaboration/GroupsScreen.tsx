@@ -19,6 +19,8 @@ import { CollabSearch } from "./collab-shared"
 import { CommEmptyState, CommSectionFooter } from "../faculty/faculty-communication-ui"
 import { SignatureListCard } from "../theme/SignatureListCard"
 import { TabbedModuleLayout, signatureListStyles } from "../theme/TabbedModuleLayout"
+import { useFacultyListPager } from "../../hooks/useFacultyListPager"
+import { FacultyListPagerFooter } from "../faculty/FacultyListPagerFooter"
 
 function useStudentSession(): StudentSession | null {
   const { session } = useSession()
@@ -100,6 +102,40 @@ export function GroupsScreen() {
     return groups.filter((g) => isMyGroup(g, session))
   }, [groups, session])
 
+  const allGroupsFiltered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return groups
+    return groups.filter(
+      (g) =>
+        g.name.toLowerCase().includes(q) ||
+        (g.leader_name ?? "").toLowerCase().includes(q),
+    )
+  }, [groups, search])
+
+  const mineGroupsFiltered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return myGroups
+    return myGroups.filter(
+      (g) =>
+        g.name.toLowerCase().includes(q) ||
+        (g.leader_name ?? "").toLowerCase().includes(q),
+    )
+  }, [myGroups, search])
+
+  const discoverFiltered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return discover
+    return discover.filter(
+      (g) =>
+        g.name.toLowerCase().includes(q) ||
+        (g.leader_name ?? "").toLowerCase().includes(q),
+    )
+  }, [discover, search])
+
+  const allGroupsPager = useFacultyListPager(allGroupsFiltered, `all:${search}`, "groups")
+  const mineGroupsPager = useFacultyListPager(mineGroupsFiltered, `mine:${search}`, "groups")
+  const discoverPager = useFacultyListPager(discoverFiltered, `discover:${search}`, "groups")
+
   const navTabs = useMemo(
     () => [
       { id: "all" as const, label: "All", icon: "grid-outline" as const },
@@ -109,20 +145,11 @@ export function GroupsScreen() {
     [],
   )
 
-  function filterGroups(source: GroupFilter) {
-    const visible = source === "mine" ? myGroups : source === "discover" ? discover : groups
-    const q = search.trim().toLowerCase()
-    if (!q) return visible
-    return visible.filter(
-      (g) =>
-        g.name.toLowerCase().includes(q) ||
-        (g.leader_name ?? "").toLowerCase().includes(q),
-    )
-  }
-
-  function renderGroupPage(source: GroupFilter) {
-    const filtered = filterGroups(source)
-    if (filtered.length === 0) {
+  function renderGroupPage(
+    source: GroupFilter,
+    pager: ReturnType<typeof useFacultyListPager<GroupRecord>>,
+  ) {
+    if (pager.total === 0) {
       return (
         <>
           <CommEmptyState
@@ -142,16 +169,17 @@ export function GroupsScreen() {
     return (
       <>
         <View style={signatureListStyles.list}>
-          {filtered.map((group, index) => (
+          {pager.items.map((group, index) => (
             <GroupListCard
               key={group.id}
-              index={index}
+              index={pager.page * pager.pageSize + index}
               group={group}
               isDiscover={source === "discover"}
               onPress={() => router.push(`/collaboration/groups/${group.id}` as never)}
             />
           ))}
         </View>
+        <FacultyListPagerFooter pager={pager} />
         <CommSectionFooter>
           {source === "discover"
             ? "Groups accepting members"
@@ -193,7 +221,11 @@ export function GroupsScreen() {
         />
         </>
       }
-      pages={[renderGroupPage("all"), renderGroupPage("mine"), renderGroupPage("discover")]}
+      pages={[
+        renderGroupPage("all", allGroupsPager),
+        renderGroupPage("mine", mineGroupsPager),
+        renderGroupPage("discover", discoverPager),
+      ]}
     />
   )
 }

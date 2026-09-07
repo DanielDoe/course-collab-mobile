@@ -7,15 +7,24 @@ import { useThemedNative } from "../../context/AppearanceProvider"
 import { ApiError, type OfficeHoursRequest } from "../../lib/student-api"
 import type { StudentSession } from "../../lib/session"
 import { formatListDate } from "../../lib/course-info-api"
-import { useCreateStudentOfficeHours, useStudentOfficeHours } from "../../hooks/query/useStudentOfficeHours"
+import {
+  useCancelStudentOfficeHours,
+  useCreateStudentOfficeHours,
+  useStudentOfficeHours,
+} from "../../hooks/query/useStudentOfficeHours"
 import { QueryRefreshBanner } from "../query/QueryRefreshBanner"
 import { useNativeType } from "../../lib/themed-module-theme"
 import { TabbedModuleLayout } from "../theme/TabbedModuleLayout"
+import { StudentFilterSheet, StudentSearchToolbar } from "../student/student-search-toolbar"
+import { useOptionalStudentActiveCourse } from "../../context/StudentActiveCourseContext"
+import { useResetOnScopeChange } from "../../hooks/use-reset-on-scope-change"
 import { EmptyBlock } from "../rewards/rewards-shared"
 import { COURSE_INFO_ACTION, COURSE_INFO_OFFICE_HOURS } from "../../lib/course-info-color-theme"
 import { InfoSectionCard, StatusBadge, statusTone, useCourseInfoTheme } from "./course-info-shared"
 import { FacultySummerCampDatePicker } from "../faculty/FacultySummerCampDatePicker"
 import { useNotificationModuleRefresh } from "../../lib/notifications/notification-events"
+import { useFacultyListPager } from "../../hooks/useFacultyListPager"
+import { FacultyListPagerFooter } from "../faculty/FacultyListPagerFooter"
 
 function useStudentSession(): StudentSession | null {
   const { session } = useSession()
@@ -31,7 +40,20 @@ const PRIORITIES = [
   { id: "urgent", label: "Urgent" },
 ]
 
-function RequestRow({ req }: { req: OfficeHoursRequest }) {
+function canCancelOfficeHours(status?: string): boolean {
+  const normalized = (status ?? "pending").toLowerCase()
+  return normalized === "pending" || normalized === "submitted" || normalized === "open"
+}
+
+function RequestRow({
+  req,
+  onCancel,
+  cancelling,
+}: {
+  req: OfficeHoursRequest
+  onCancel?: (req: OfficeHoursRequest) => void
+  cancelling?: boolean
+}) {
   const theme = useCourseInfoTheme()
   const native = useThemedNative()
   const type = useNativeType()
@@ -57,6 +79,17 @@ function RequestRow({ req }: { req: OfficeHoursRequest }) {
           .filter(Boolean)
           .join(" · ")}
       </Text>
+      {onCancel && canCancelOfficeHours(req.status) ? (
+        <Pressable
+          onPress={() => onCancel(req)}
+          disabled={cancelling}
+          accessibilityRole="button"
+          accessibilityLabel="Cancel request"
+          style={({ pressed }) => [styles.cancelBtn, { opacity: pressed || cancelling ? 0.7 : 1 }]}
+        >
+          <Text style={[type.caption, styles.cancelBtnText]}>Cancel request</Text>
+        </Pressable>
+      ) : null}
     </View>
   )
 }
@@ -67,9 +100,33 @@ export function OfficeHoursScreen() {
   const native = useThemedNative()
   const type = useNativeType()
   const [tab, setTab] = useState<Tab>("new")
+  const [search, setSearch] = useState("")
+  const [statusFilter, setStatusFilter] = useState("all")
+  const [filterOpen, setFilterOpen] = useState(false)
+  const courseKey = useOptionalStudentActiveCourse()?.activeCourse?.pickerKey
+  useResetOnScopeChange(courseKey, useCallback(() => {
+    setSearch("")
+    setStatusFilter("all")
+  }, []))
   const hoursQuery = useStudentOfficeHours(session)
   const createHours = useCreateStudentOfficeHours(session)
-  const requests = hoursQuery.requests
+  const cancelHours = useCancelStudentOfficeHours(session)
+  const requests = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return hoursQuery.requests.filter((req) => {
+      const status = (req.status ?? "pending").toLowerCase()
+      if (statusFilter !== "all" && status !== statusFilter) return false
+      if (!q) return true
+      return [req.topic, req.area_of_concern, req.description, req.status]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+        .includes(q)
+    })
+  }, [hoursQuery.requests, search, statusFilter])
+
+  const requestsPager = useFacultyListPager(requests, `${search}|${statusFilter}`, "requests")
+
   const [topic, setTopic] = useState("")
   const [area, setArea] = useState("")
   const [description, setDescription] = useState("")
@@ -165,6 +222,7 @@ export function OfficeHoursScreen() {
           value={preferredDate}
           onChange={setPreferredDate}
           accessibilityLabel="Preferred date"
+          yearPolicy="upcoming"
         />
         <Text style={[type.sectionHeader, styles.label]}>Priority</Text>
         <View style={styles.priorityRow}>
@@ -211,8 +269,12 @@ export function OfficeHoursScreen() {
       return (
         <EmptyBlock
           icon="time-outline"
-          title="No requests yet"
-          body="Submit a new request when you need help from your instructor."
+          title={search.trim() || statusFilter !== "all" ? "No matching requests" : "No requests yet"}
+          body={
+            search.trim() || statusFilter !== "all"
+              ? "Try a different search or reset filters."
+              : "Submit a new request when you need help from your instructor."
+          }
         />
       )
     }
@@ -224,14 +286,76 @@ export function OfficeHoursScreen() {
         iconThumb={COURSE_INFO_OFFICE_HOURS.requests}
         theme={theme}
       >
-        {requests.map((req) => (
-          <RequestRow key={req.id} req={req} />
+        {requestsPager.items.map((req) => (
+          <RequestRow
+            key={req.id}
+            req={req}
+            cancelling={cancelHours.isPending}
+            onCancel={(item) => {
+              AppAlert.alert(
+                "Cancel office hours request?",
+                "Your instructor will no longer see this as an active request.",
+                [
+                  { text: "Keep Request", style: "cancel" },
+                  {
+                    text: "Cancel Request",
+                    style: "destructive",
+                    onPress: () => {
+                      void cancelHours.mutateAsync(item.id).catch((err) => {
+                        AppAlert.alert(
+                          "Could not cancel",
+                          err instanceof ApiError ? err.message : "Try again.",
+                        )
+                      })
+                    },
+                  },
+                ],
+              )
+            }}
+          />
         ))}
+        <FacultyListPagerFooter pager={requestsPager} />
       </InfoSectionCard>
     )
   }
 
   return (
+    <>
+    <StudentSearchToolbar
+      value={search}
+      onChange={(value) => {
+        setSearch(value)
+        if (value.trim()) setTab("requests")
+      }}
+      placeholder="Search topic, status, or date…"
+      filterActive={statusFilter !== "all"}
+      filterLabel="Filter office hours"
+      onOpenFilter={() => setFilterOpen(true)}
+      trailingAction={{
+        onPress: () => setTab("new"),
+        accessibilityLabel: "New office hour request",
+        icon: "add",
+      }}
+    />
+    <StudentFilterSheet
+      visible={filterOpen}
+      title="Filter requests"
+      value={statusFilter}
+      onSelect={(value) => {
+        setStatusFilter(value)
+        setFilterOpen(false)
+        setTab("requests")
+      }}
+      onClose={() => setFilterOpen(false)}
+      options={[
+        { value: "all", label: "All statuses" },
+        { value: "pending", label: "Pending" },
+        { value: "approved", label: "Approved" },
+        { value: "scheduled", label: "Scheduled" },
+        { value: "completed", label: "Completed" },
+        { value: "cancelled", label: "Cancelled" },
+      ]}
+    />
     <TabbedModuleLayout
       tabs={tabs}
       tab={tab}
@@ -243,6 +367,7 @@ export function OfficeHoursScreen() {
       chrome={<QueryRefreshBanner visible={hoursQuery.refreshFailed} onRetry={() => void onRefresh()} />}
       pages={[renderNewRequestPage(), renderRequestsPage()]}
     />
+    </>
   )
 }
 
@@ -284,4 +409,11 @@ const styles = StyleSheet.create({
   requestHead: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
   requestTitle: { flex: 1 },
   requestBody: { lineHeight: 20 },
+  cancelBtn: {
+    alignSelf: "flex-start",
+    minHeight: 36,
+    justifyContent: "center",
+    paddingVertical: 6,
+  },
+  cancelBtnText: { fontWeight: "700", color: "#b91c1c" },
 })

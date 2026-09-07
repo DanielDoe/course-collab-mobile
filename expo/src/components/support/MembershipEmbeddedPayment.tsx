@@ -1,5 +1,5 @@
 import { useMemo } from "react"
-import { StyleSheet, Text, View } from "react-native"
+import { Platform, StyleSheet, Text, View } from "react-native"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
 import { isStripeNativeAvailable } from "../../lib/stripe-native"
@@ -15,6 +15,10 @@ export function MembershipEmbeddedPayment(props: MembershipEmbeddedPaymentProps)
   const tokens = useAppThemeTokens()
   const native = useThemedNative()
   const nativeReady = useMemo(() => isStripeNativeAvailable(), [])
+
+  if (Platform.OS === "ios") {
+    return null
+  }
 
   if (!nativeReady) {
     return (

@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useState } from "react"
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import {
+  ActivityIndicator,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native"
 import { AppAlert } from '../../lib/app-alert'
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useLocalSearchParams, useRouter } from "expo-router"
@@ -13,6 +20,7 @@ import { useThemedStudentNative } from "../../lib/themed-module-theme"
 import { collaborationApi, type GroupRecord } from "../../lib/collaboration-api"
 import { CollabScreenTitle } from "./collab-nav"
 import { useCollabTheme } from "./collab-module-ui"
+import { KeyboardAwareForm } from "../ui/KeyboardAwareForm"
 
 function useStudentSession(): StudentSession | null {
   const { session } = useSession()
@@ -119,108 +127,124 @@ export function ProjectSubmitScreen() {
 
   const groupOptions = groups.map((g) => ({ value: String(g.id), label: g.name }))
 
+  const canSubmit =
+    Boolean(title.trim()) &&
+    (Boolean(editProjectId) || Boolean(selectedGroupId)) &&
+    !loading &&
+    !submitting
+
   return (
-    <ScrollView contentContainerStyle={[styles.content, scrollPad]}>
+    <KeyboardAwareForm
+      style={styles.screen}
+      contentContainerStyle={[styles.content, scrollPad]}
+      extraBottomPadding={Math.max(scrollPad.paddingBottom ?? 24, 32)}
+      footer={
+        loading ? null : (
+          <Pressable
+            style={[styles.submitBtn, { backgroundColor: theme.primary }, !canSubmit && styles.submitDisabled]}
+            onPress={() => void submit()}
+            disabled={!canSubmit}
+            accessibilityRole="button"
+            accessibilityLabel={editProjectId ? "Save changes" : "Submit project"}
+          >
+            {submitting ? (
+              <ActivityIndicator color="#ffffff" />
+            ) : (
+              <>
+                <Ionicons name="cloud-upload-outline" size={18} color="#ffffff" />
+                <Text style={styles.submitText}>
+                  {editProjectId ? "Save changes" : "Submit project"}
+                </Text>
+              </>
+            )}
+          </Pressable>
+        )
+      }
+    >
       <CollabScreenTitle
         title={editProjectId ? "Edit project" : "Submit project"}
         subtitle="Group deliverable proposal"
       />
-        {error ? <Text style={styles.errorText}>{error}</Text> : null}
-        {loading ? (
-          <ActivityIndicator color={theme.primary} />
-        ) : (
-          <>
-            {!editProjectId ? (
-              <>
-                <Text style={[styles.label, { color: theme.primaryDark }]}>Group</Text>
-                {groupOptions.length === 0 ? (
-                  <Text style={[styles.hint, { color: SN.secondaryLabel }]}>
-                    You need an approved group you lead to submit a project.
-                  </Text>
-                ) : (
-                  <NativeSelect
-                    label=""
-                    placeholder="Select group"
-                    value={selectedGroupId}
-                    options={groupOptions}
-                    onChange={setSelectedGroupId}
-                  />
-                )}
-              </>
-            ) : null}
-
-            <Text style={[styles.label, { color: theme.primaryDark }]}>Title</Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: SN.secondaryGrouped, borderColor: SN.separator }]}
-              value={title}
-              onChangeText={setTitle}
-              placeholder="Project title"
-              placeholderTextColor="#94a3b8"
-            />
-
-            <Text style={[styles.label, { color: theme.primaryDark }]}>Summary</Text>
-            <TextInput
-              style={[styles.input, styles.area, { backgroundColor: SN.secondaryGrouped, borderColor: SN.separator }]}
-              value={summary}
-              onChangeText={setSummary}
-              placeholder="Brief overview"
-              placeholderTextColor="#94a3b8"
-              multiline
-            />
-
-            <Text style={[styles.label, { color: theme.primaryDark }]}>Deliverables</Text>
-            <TextInput
-              style={[styles.input, styles.area, { backgroundColor: SN.secondaryGrouped, borderColor: SN.separator }]}
-              value={deliverables}
-              onChangeText={setDeliverables}
-              placeholder="What will you deliver?"
-              placeholderTextColor="#94a3b8"
-              multiline
-            />
-
-            <Text style={[styles.label, { color: theme.primaryDark }]}>Target platform</Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: SN.secondaryGrouped, borderColor: SN.separator }]}
-              value={targetPlatform}
-              onChangeText={setTargetPlatform}
-              placeholder="Web, mobile, embedded…"
-              placeholderTextColor="#94a3b8"
-            />
-
-            <Text style={[styles.label, { color: theme.primaryDark }]}>Project link (optional)</Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: SN.secondaryGrouped, borderColor: SN.separator }]}
-              value={projectLink}
-              onChangeText={setProjectLink}
-              placeholder="https://github.com/…"
-              placeholderTextColor="#94a3b8"
-              autoCapitalize="none"
-            />
-
-            <Pressable
-              style={[styles.submitBtn, { backgroundColor: theme.primary }, submitting && styles.submitDisabled]}
-              onPress={submit}
-              disabled={submitting}
-            >
-              {submitting ? (
-                <ActivityIndicator color="#ffffff" />
+      {error ? <Text style={styles.errorText}>{error}</Text> : null}
+      {loading ? (
+        <ActivityIndicator color={theme.primary} />
+      ) : (
+        <>
+          {!editProjectId ? (
+            <>
+              <Text style={[styles.label, { color: theme.primaryDark }]}>Group</Text>
+              {groupOptions.length === 0 ? (
+                <Text style={[styles.hint, { color: SN.secondaryLabel }]}>
+                  You need an approved group you lead to submit a project.
+                </Text>
               ) : (
-                <>
-                  <Ionicons name="cloud-upload-outline" size={18} color="#ffffff" />
-                  <Text style={styles.submitText}>
-                    {editProjectId ? "Save changes" : "Submit project"}
-                  </Text>
-                </>
+                <NativeSelect
+                  label=""
+                  placeholder="Select group"
+                  value={selectedGroupId}
+                  options={groupOptions}
+                  onChange={setSelectedGroupId}
+                />
               )}
-            </Pressable>
-          </>
-        )}
-      </ScrollView>
+            </>
+          ) : null}
+
+          <Text style={[styles.label, { color: theme.primaryDark }]}>Title</Text>
+          <TextInput
+            style={[styles.input, { backgroundColor: SN.secondaryGrouped, borderColor: SN.separator }]}
+            value={title}
+            onChangeText={setTitle}
+            placeholder="Project title"
+            placeholderTextColor="#94a3b8"
+          />
+
+          <Text style={[styles.label, { color: theme.primaryDark }]}>Summary</Text>
+          <TextInput
+            style={[styles.input, styles.area, { backgroundColor: SN.secondaryGrouped, borderColor: SN.separator }]}
+            value={summary}
+            onChangeText={setSummary}
+            placeholder="Brief overview"
+            placeholderTextColor="#94a3b8"
+            multiline
+          />
+
+          <Text style={[styles.label, { color: theme.primaryDark }]}>Deliverables</Text>
+          <TextInput
+            style={[styles.input, styles.area, { backgroundColor: SN.secondaryGrouped, borderColor: SN.separator }]}
+            value={deliverables}
+            onChangeText={setDeliverables}
+            placeholder="What will you deliver?"
+            placeholderTextColor="#94a3b8"
+            multiline
+          />
+
+          <Text style={[styles.label, { color: theme.primaryDark }]}>Target platform</Text>
+          <TextInput
+            style={[styles.input, { backgroundColor: SN.secondaryGrouped, borderColor: SN.separator }]}
+            value={targetPlatform}
+            onChangeText={setTargetPlatform}
+            placeholder="Web, mobile, embedded…"
+            placeholderTextColor="#94a3b8"
+          />
+
+          <Text style={[styles.label, { color: theme.primaryDark }]}>Project link (optional)</Text>
+          <TextInput
+            style={[styles.input, { backgroundColor: SN.secondaryGrouped, borderColor: SN.separator }]}
+            value={projectLink}
+            onChangeText={setProjectLink}
+            placeholder="https://github.com/…"
+            placeholderTextColor="#94a3b8"
+            autoCapitalize="none"
+          />
+        </>
+      )}
+    </KeyboardAwareForm>
   )
 }
 
 const styles = StyleSheet.create({
-  content: { padding: 16, gap: 8 },
+  screen: { flex: 1 },
+  content: { padding: 16, gap: 8, flexGrow: 1 },
   label: { fontSize: 13, fontWeight: "700", marginTop: 8 },
   hint: { fontSize: 13, marginBottom: 8 },
   errorText: { fontSize: 13, color: "#b91c1c" },
@@ -238,7 +262,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 8,
     paddingVertical: 14,
-    borderRadius: 16,
-    marginTop: 16},
+    borderRadius: 16},
   submitDisabled: { opacity: 0.6 },
   submitText: { color: "#ffffff", fontSize: 15, fontWeight: "700" }})

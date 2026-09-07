@@ -71,6 +71,12 @@ for (const key of [
 }
 
 const entitlements = readText("ios/CourseCollab/CourseCollab.entitlements")
+if (entitlements.includes("com.apple.developer.in-app-payments")) {
+  fail("apple-pay-entitlement", "Remove com.apple.developer.in-app-payments — iOS uses web checkout only")
+} else {
+  pass("apple-pay-entitlement", "Apple Pay merchant entitlement absent")
+}
+
 if (entitlements.includes("<string>production</string>")) pass("aps-environment", "production")
 else if (entitlements.includes("development")) fail("aps-environment", "development — use production for App Store release")
 else fail("aps-environment", "aps-environment not found")
@@ -89,7 +95,8 @@ for (const rel of [
   "app/(app)/settings/privacy-security.tsx",
   "app/(app)/settings/delete-account.tsx",
   "src/lib/account-deletion-api.ts",
-  "src/lib/compliance/ios-purchase-policy.ts",
+  "src/lib/purchase-navigation.ts",
+  "src/hooks/usePurchaseReturnRefresh.ts",
   "src/components/support/IosExternalPurchaseScreen.tsx",
   "docs/APP_STORE_REVIEW_CREDENTIALS.md",
 ]) {
@@ -121,6 +128,13 @@ for (const route of [
   else warn(`api-${route}`, `unexpected status ${status}`)
 }
 
+const appJsonStripe = JSON.stringify(appJson.expo?.plugins ?? [])
+if (appJsonStripe.includes("merchantIdentifier")) {
+  fail("stripe-apple-pay-config", "Remove merchantIdentifier from @stripe/stripe-react-native plugin on iOS")
+} else {
+  pass("stripe-apple-pay-config", "Stripe plugin has no Apple Pay merchant identifier")
+}
+
 printSection("Payments compliance")
 const paymentsConfig = readText("src/config/payments.ts")
 if (paymentsConfig.includes("iosNativeDigitalCheckout: false")) {
@@ -129,12 +143,43 @@ if (paymentsConfig.includes("iosNativeDigitalCheckout: false")) {
   fail("ios-native-checkout-disabled", "expected iosNativeDigitalCheckout: false")
 }
 
-const checkoutRoute = readText("app/(app)/membership/checkout.tsx")
-if (checkoutRoute.includes("IosExternalPurchaseScreen") && checkoutRoute.includes('Platform.OS === "ios"')) {
-  pass("ios-membership-external-checkout", "iOS membership uses external web checkout")
+if (paymentsConfig.includes("merchant.com.coursecollab.app")) {
+  fail("payments-merchant-id", "Remove merchant.com.coursecollab.app from payments config")
 } else {
-  fail("ios-membership-external-checkout", "iOS membership checkout guard missing")
+  pass("payments-merchant-id", "No Apple Pay merchant id in payments config")
 }
+
+const purchaseNav = readText("src/lib/purchase-navigation.ts")
+if (purchaseNav.includes("requiresExternalWebPurchase") && purchaseNav.includes("openPurchaseWebPath")) {
+  pass("purchase-navigation-service", "Central iOS purchase redirect service present")
+} else {
+  fail("purchase-navigation-service", "purchase-navigation.ts missing required exports")
+}
+
+const stripeProvider = readText("src/context/StripeAppProvider.tsx")
+if (stripeProvider.includes('Platform.OS !== "android"') || stripeProvider.includes('Platform.OS === "ios"')) {
+  pass("stripe-ios-disabled", "Stripe provider skipped on iOS")
+} else {
+  fail("stripe-ios-disabled", "StripeAppProvider must not initialize Stripe on iOS")
+}
+
+const checkoutRoute = readText("app/(app)/membership/checkout.tsx")
+const guestCreditsCheckout = readText("app/(app)/guest/cora-credits/checkout.tsx")
+const guestCareerCheckout = readText("app/(app)/guest/cora-career/checkout.tsx")
+function iosCheckoutBlocked(source, label) {
+  if (
+    source.includes('Platform.OS === "ios"') &&
+    (source.includes("<Redirect") || source.includes("IosExternalPurchaseScreen"))
+  ) {
+    pass(label, "iOS checkout route blocked or redirected")
+    return true
+  }
+  fail(label, "iOS checkout guard missing")
+  return false
+}
+iosCheckoutBlocked(checkoutRoute, "ios-membership-checkout-blocked")
+iosCheckoutBlocked(guestCreditsCheckout, "ios-guest-credits-checkout-blocked")
+iosCheckoutBlocked(guestCareerCheckout, "ios-guest-career-checkout-blocked")
 
 const iosPolicyStatus = await fetchStatus(`${apiBase}/api/compliance/ios-purchase-policy`)
 if (iosPolicyStatus >= 200 && iosPolicyStatus < 400) pass("ios-purchase-policy-api", `(${iosPolicyStatus})`)

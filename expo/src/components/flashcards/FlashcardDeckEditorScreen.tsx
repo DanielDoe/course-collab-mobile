@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { AppAlert } from '../../lib/app-alert'
 import { Ionicons } from "@/components/icons/AppIcon"
@@ -17,6 +17,7 @@ import {
   useUpdateStudentFlashcardDeck,
 } from "../../hooks/query/useStudentFlashcards"
 import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
+import { useAppToast } from "../../context/AppToastProvider"
 import { useNativeType } from "../../lib/themed-module-theme"
 import { safeRouterBack } from "../../lib/safe-router-back"
 import { NATIVE } from "../../constants/faculty-native-theme"
@@ -25,7 +26,8 @@ import { FlashcardFlipCard } from "./FlashcardFlipCard"
 import { FlashcardDifficultyPicker } from "./FlashcardDifficultyPicker"
 import { FlashcardDifficultyBadge } from "./FlashcardDifficultyBadge"
 import type { FlashcardDifficulty } from "../../lib/flashcard-difficulty"
-
+import { useFacultyListPager } from "../../hooks/useFacultyListPager"
+import { FacultyListPagerFooter } from "../faculty/FacultyListPagerFooter"
 const FLASHCARDS_HOME = "/module/flashcards"
 
 function useStudentSession(): StudentSession | null {
@@ -42,6 +44,7 @@ export function FlashcardDeckEditorScreen() {
   const tokens = useAppThemeTokens()
   const native = useThemedNative()
   const type = useNativeType()
+  const { showSuccess } = useAppToast()
 
   const deckQuery = useStudentFlashcardDeck(session, deckId)
   const updateDeckMutation = useUpdateStudentFlashcardDeck(session)
@@ -61,6 +64,8 @@ export function FlashcardDeckEditorScreen() {
   const [cardDifficulty, setCardDifficulty] = useState<FlashcardDifficulty>("medium")
   const [addingCard, setAddingCard] = useState(false)
   const [previewFlipped, setPreviewFlipped] = useState(false)
+
+  const cardsPager = useFacultyListPager(cards, String(deckId), "cards")
 
   const load = useCallback(async () => {
     if (!session || !Number.isFinite(deckId)) return
@@ -101,6 +106,7 @@ export function FlashcardDeckEditorScreen() {
         topic: topic.trim() || undefined,
       })
       setDeck(res.deck)
+      showSuccess("Deck saved")
     } catch (err) {
       AppAlert.alert("Save failed", err instanceof ApiError ? err.message : "Try again.")
     } finally {
@@ -129,6 +135,7 @@ export function FlashcardDeckEditorScreen() {
       setBackText("")
       setPreviewFlipped(false)
       setDeck((prev) => (prev ? { ...prev, cardCount: prev.cardCount + 1 } : prev))
+      showSuccess("Card added")
     } catch (err) {
       AppAlert.alert("Add failed", err instanceof ApiError ? err.message : "Try again.")
     } finally {
@@ -262,7 +269,7 @@ export function FlashcardDeckEditorScreen() {
 
         <Text style={[type.caption, styles.sectionLabel, { color: native.secondaryLabel }]}>Cards</Text>
         <View style={styles.cardList}>
-          {cards.map((card) => (
+          {cardsPager.items.map((card) => (
             <View
               key={card.id}
               style={[styles.cardRow, { backgroundColor: native.secondaryGrouped, borderColor: native.separator }]}
@@ -284,6 +291,7 @@ export function FlashcardDeckEditorScreen() {
             </View>
           ))}
         </View>
+        <FacultyListPagerFooter pager={cardsPager} />
 
         <Text style={[type.caption, styles.sectionLabel, { color: native.secondaryLabel }]}>Add card</Text>
         {(frontText.trim() || backText.trim()) ? (

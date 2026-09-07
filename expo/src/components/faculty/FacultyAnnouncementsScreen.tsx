@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useAppToast } from "../../context/AppToastProvider"
 import { AppAlert } from '../../lib/app-alert'
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
@@ -31,6 +32,9 @@ import { FacultyAnnouncementDetailModal } from "./FacultyAnnouncementDetailModal
 import { FacultyEmptyState } from "./faculty-shared"
 import { useFacultyModuleScrollPadding, FacultyFilterSheet, FacultySearchToolbar } from "./faculty-module-shell"
 import { useModuleTheme } from "../../lib/themed-module-shell"
+import { useFacultyListPager } from "../../hooks/useFacultyListPager"
+import { FacultyListPagerFooter } from "./FacultyListPagerFooter"
+import { ModuleListItemMotion } from "../ModuleFlashList"
 
 const FILTER_OPTIONS: Array<{
   id: FacultyAnnouncementFilter
@@ -43,6 +47,7 @@ const FILTER_OPTIONS: Array<{
 
 export function FacultyAnnouncementsScreen() {
   const insets = useSafeAreaInsets()
+  const { showSuccess } = useAppToast()
   const scrollPad = useFacultyModuleScrollPadding(88)
   const tokens = useAppThemeTokens()
   const styles = useFacultyModuleStyles()
@@ -74,6 +79,7 @@ export function FacultyAnnouncementsScreen() {
     () => applyFacultyAnnouncementQuery(announcements, { search, filter }),
     [announcements, search, filter],
   )
+  const pager = useFacultyListPager(filtered, `${search}:${filter}`, "announcements")
 
   const filtersActive = filter !== "all"
   const hasActiveQuery = Boolean(search.trim()) || filtersActive
@@ -98,6 +104,10 @@ export function FacultyAnnouncementsScreen() {
           target_session: "all",
           expires_at: "",
           attachments: [],
+          event_date: "",
+          event_time: "",
+          event_end: "",
+          event_location: "",
         })
         setEditing(null)
         setComposerOpen(true)
@@ -132,6 +142,10 @@ export function FacultyAnnouncementsScreen() {
         target_session: draft.target_session || "all",
         expires_at: draft.expires_at || null,
         attachments: draft.attachments,
+        event_date: draft.event_date || null,
+        event_time: draft.event_time || null,
+        event_end: draft.event_end || null,
+        event_location: draft.event_location || null,
       }
       await saveAnnouncement.mutateAsync({
         editingId: editing?.id,
@@ -139,6 +153,7 @@ export function FacultyAnnouncementsScreen() {
       })
       setComposerOpen(false)
       setEditing(null)
+      showSuccess(editing ? "Announcement updated" : "Announcement published")
     } catch (err) {
       AppAlert.alert(
         editing ? "Could not save" : "Could not publish",
@@ -152,6 +167,7 @@ export function FacultyAnnouncementsScreen() {
     try {
       await deleteAnnouncement.mutateAsync(item)
       setSelected(null)
+      showSuccess("Announcement deleted")
     } catch (err) {
       AppAlert.alert("Could not delete", err instanceof ApiError ? err.message : "Try again.")
     }
@@ -266,14 +282,19 @@ export function FacultyAnnouncementsScreen() {
           />
         ) : (
           <View style={localStyles.list}>
-            {filtered.map((item, index) => (
-              <FacultyAnnouncementCard
-                key={item.id}
-                item={item}
-                index={index}
-                onPress={() => setSelected(item)}
-              />
-            ))}
+            {pager.items.map((item, index) => {
+              const rowIndex = pager.page * pager.pageSize + index
+              return (
+                <ModuleListItemMotion key={item.id} index={rowIndex}>
+                  <FacultyAnnouncementCard
+                    item={item}
+                    index={rowIndex}
+                    onPress={() => setSelected(item)}
+                  />
+                </ModuleListItemMotion>
+              )
+            })}
+            <FacultyListPagerFooter pager={pager} />
           </View>
         )}
       </ScrollView>

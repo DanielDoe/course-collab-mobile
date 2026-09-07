@@ -187,6 +187,13 @@ export function WebModuleScreen({
       ) : null}
 
       <WebView
+        key={
+          session?.portal === "student"
+            ? `student-${session.courseId ?? "none"}-${session.section || "none"}`
+            : session?.portal === "faculty"
+              ? `faculty-${facultyCourse?.id ?? "none"}`
+              : session?.portal ?? "web"
+        }
         ref={webRef}
         source={{ uri }}
         injectedJavaScriptBeforeContentLoaded={combinedInjectScript}

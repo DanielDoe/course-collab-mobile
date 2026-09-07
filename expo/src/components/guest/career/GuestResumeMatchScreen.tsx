@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react"
 import { KeyboardAvoidingView, Platform, StyleSheet, Text, View } from "react-native"
+import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { useRouter } from "expo-router"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { ModuleScreen, ModuleSectionHeader } from "../../modules/ModuleScreen"
@@ -48,6 +49,7 @@ export function GuestResumeMatchScreen() {
   const native = useThemedNative()
   const tokens = useAppThemeTokens()
   const type = useNativeType()
+  const insets = useSafeAreaInsets()
 
   const { masterResume, loadingResume, uploading, resumeError, refreshResume, pickAndUpload } =
     useMasterResume(guestSession)
@@ -109,8 +111,8 @@ export function GuestResumeMatchScreen() {
     <View style={[styles.screenRoot, { backgroundColor: native.groupedBackground }]}>
       <KeyboardAvoidingView
         style={styles.body}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 64 : 0}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? insets.top + 56 : 0}
       >
         <ModuleScreen
           refreshing={refreshing}

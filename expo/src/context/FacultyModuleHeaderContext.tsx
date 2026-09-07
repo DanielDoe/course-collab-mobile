@@ -1,5 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from "react"
-import { usePathname } from "expo-router"
+import { createContext, useCallback, useContext, useLayoutEffect, useMemo, useState, type ReactNode } from "react"
 
 export type FacultyModuleNestedHeader = {
   title: string
@@ -14,12 +13,7 @@ type FacultyModuleHeaderContextValue = {
 const FacultyModuleHeaderContext = createContext<FacultyModuleHeaderContextValue | null>(null)
 
 export function FacultyModuleHeaderProvider({ children }: { children: ReactNode }) {
-  const pathname = usePathname()
   const [nestedHeader, setNestedHeaderState] = useState<FacultyModuleNestedHeader | null>(null)
-
-  useEffect(() => {
-    setNestedHeaderState(null)
-  }, [pathname])
 
   const setNestedHeader = useCallback((header: FacultyModuleNestedHeader | null) => {
     setNestedHeaderState(header)

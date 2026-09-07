@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { LayoutChangeEvent, Platform, Pressable, StyleSheet, View } from "react-native"
 import { ScrollView } from "react-native-gesture-handler"
 import Animated, {
+  interpolate,
   interpolateColor,
   type SharedValue,
   useAnimatedStyle,
@@ -11,6 +12,7 @@ import Animated, {
 import { Ionicons, type IoniconName } from "@/components/icons/AppIcon"
 import { hexToRgba } from "../../constants/app-themes"
 import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
+import { spring, triggerMotionHaptic, useAppReducedMotion } from "../../lib/motion"
 
 export type MobbinPillSegmentOption<T extends string> = {
   id: T
@@ -34,7 +36,7 @@ type Props<T extends string> = {
 }
 
 const TRACK_PADDING = 4
-const THUMB_SPRING = { damping: 20, stiffness: 260, mass: 0.85 }
+const PILL_SPRING = spring.pill
 const ICON_SIZE = 16
 const ICON_SIZE_COMPACT = 14
 
@@ -59,6 +61,20 @@ function segmentFocus(index: number, scrollX: SharedValue<number> | undefined, p
   return 0
 }
 
+function segmentFocusValue(
+  index: number,
+  active: boolean,
+  scrollX: SharedValue<number> | undefined,
+  pageWidth: number | undefined,
+  progress: SharedValue<number>,
+) {
+  "worklet"
+  if (scrollX && pageWidth && pageWidth > 0) {
+    return segmentFocus(index, scrollX, pageWidth)
+  }
+  return active ? progress.value : 0
+}
+
 function SegmentIcon({
   name,
   index,
@@ -79,26 +95,35 @@ function SegmentIcon({
   compact?: boolean
 }) {
   const size = compact ? ICON_SIZE_COMPACT : ICON_SIZE
-  const inactiveOpacity = useAnimatedStyle(() => {
-    if (scrollX && pageWidth && pageWidth > 0) {
-      return { opacity: 1 - segmentFocus(index, scrollX, pageWidth) }
+  const progress = useSharedValue(active ? 1 : 0)
+
+  useEffect(() => {
+    if (scrollX && pageWidth && pageWidth > 0) return
+    progress.value = withSpring(active ? 1 : 0, PILL_SPRING)
+  }, [active, pageWidth, progress, scrollX])
+
+  const inactiveStyle = useAnimatedStyle(() => {
+    const t = segmentFocusValue(index, active, scrollX, pageWidth, progress)
+    return {
+      opacity: 1 - t,
+      transform: [{ scale: interpolate(t, [0, 1], [1, 0.86]) }],
     }
-    return { opacity: active ? 0 : 1 }
   })
 
-  const activeOpacity = useAnimatedStyle(() => {
-    if (scrollX && pageWidth && pageWidth > 0) {
-      return { opacity: segmentFocus(index, scrollX, pageWidth) }
+  const activeStyle = useAnimatedStyle(() => {
+    const t = segmentFocusValue(index, active, scrollX, pageWidth, progress)
+    return {
+      opacity: t,
+      transform: [{ scale: interpolate(t, [0, 1], [0.86, 1.08]) }],
     }
-    return { opacity: active ? 1 : 0 }
   })
 
   return (
     <View style={[styles.iconSlot, compact && styles.iconSlotCompact]}>
-      <Animated.View style={inactiveOpacity}>
+      <Animated.View style={inactiveStyle}>
         <Ionicons name={name} size={size} color={inactiveColor} />
       </Animated.View>
-      <Animated.View style={[styles.iconOverlay, activeOpacity]} pointerEvents="none">
+      <Animated.View style={[styles.iconOverlay, activeStyle]} pointerEvents="none">
         <Ionicons name={name} size={size} color={activeColor} />
       </Animated.View>
     </View>
@@ -128,15 +153,15 @@ function SegmentLabel({
 
   useEffect(() => {
     if (scrollX && pageWidth && pageWidth > 0) return
-    progress.value = withSpring(active ? 1 : 0, THUMB_SPRING)
+    progress.value = withSpring(active ? 1 : 0, PILL_SPRING)
   }, [active, pageWidth, progress, scrollX])
 
   const labelStyle = useAnimatedStyle(() => {
-    if (scrollX && pageWidth && pageWidth > 0) {
-      const t = segmentFocus(index, scrollX, pageWidth)
-      return { color: interpolateColor(t, [0, 1], [inactiveColor, activeColor]) }
+    const t = segmentFocusValue(index, active, scrollX, pageWidth, progress)
+    return {
+      color: interpolateColor(t, [0, 1], [inactiveColor, activeColor]),
+      transform: [{ scale: interpolate(t, [0, 1], [0.96, 1]) }],
     }
-    return { color: interpolateColor(progress.value, [0, 1], [inactiveColor, activeColor]) }
   })
 
   return (
@@ -154,6 +179,42 @@ function SegmentLabel({
   )
 }
 
+function SegmentContent({
+  index,
+  active,
+  scrollX,
+  pageWidth,
+  children,
+}: {
+  index: number
+  active: boolean
+  scrollX?: SharedValue<number>
+  pageWidth?: number
+  children: ReactNode
+}) {
+  const progress = useSharedValue(active ? 1 : 0)
+
+  useEffect(() => {
+    if (scrollX && pageWidth && pageWidth > 0) return
+    progress.value = withSpring(active ? 1 : 0, PILL_SPRING)
+  }, [active, pageWidth, progress, scrollX])
+
+  const contentStyle = useAnimatedStyle(() => {
+    const t =
+      scrollX && pageWidth && pageWidth > 0
+        ? segmentFocus(index, scrollX, pageWidth)
+        : active
+          ? progress.value
+          : 0
+    return {
+      transform: [{ scale: interpolate(t, [0, 1], [0.94, 1]) }],
+      opacity: interpolate(t, [0, 1], [0.72, 1]),
+    }
+  })
+
+  return <Animated.View style={[styles.segmentContent, contentStyle]}>{children}</Animated.View>
+}
+
 /** Pill segmented control with optional icons and theme-accent styling. */
 export function MobbinPillSegmentControl<T extends string>({
   options,
@@ -167,6 +228,7 @@ export function MobbinPillSegmentControl<T extends string>({
 }: Props<T>) {
   const native = useThemedNative()
   const tokens = useAppThemeTokens()
+  const reduceMotion = useAppReducedMotion()
 
   const scrollRef = useRef<ScrollView>(null)
   const tabScrollXRef = useRef(0)
@@ -174,6 +236,7 @@ export function MobbinPillSegmentControl<T extends string>({
   const [trackWidth, setTrackWidth] = useState(0)
   const thumbX = useSharedValue(0)
   const thumbW = useSharedValue(0)
+  const thumbPulse = useSharedValue(1)
   const segmentWidthShared = useSharedValue(0)
   const layoutsShared = useSharedValue<Array<{ x: number; width: number }>>([])
 
@@ -197,8 +260,16 @@ export function MobbinPillSegmentControl<T extends string>({
   useEffect(() => {
     if (scrollX && pageWidth > 0) return
     if (segmentWidth <= 0) return
-    thumbX.value = withSpring(activeIndex * segmentWidth, THUMB_SPRING)
-  }, [activeIndex, pageWidth, scrollX, segmentWidth, thumbX])
+    thumbX.value = reduceMotion
+      ? activeIndex * segmentWidth
+      : withSpring(activeIndex * segmentWidth, PILL_SPRING)
+  }, [activeIndex, pageWidth, reduceMotion, scrollX, segmentWidth, thumbX])
+
+  useEffect(() => {
+    if (reduceMotion) return
+    thumbPulse.value = 1.05
+    thumbPulse.value = withSpring(1, { damping: 16, stiffness: 420, mass: 0.55 })
+  }, [activeIndex, reduceMotion, thumbPulse])
 
   const palette = useMemo(() => {
     const accent = tokens.accent
@@ -227,6 +298,9 @@ export function MobbinPillSegmentControl<T extends string>({
 
   const thumbStyle = useAnimatedStyle(() => {
     const items = layoutsShared.value
+    let translateX = thumbX.value
+    let width = scrollable ? thumbW.value : segmentWidthShared.value
+
     if (scrollable && scrollX && pageWidth > 0 && items.length > 0) {
       const progress = Math.max(0, Math.min(items.length - 1, scrollX.value / pageWidth))
       const i = Math.floor(progress)
@@ -234,18 +308,21 @@ export function MobbinPillSegmentControl<T extends string>({
       const a = items[i]
       const b = items[Math.min(i + 1, items.length - 1)]
       if (!a) return { opacity: 0 }
-      const x = a.x + ((b?.x ?? a.x) - a.x) * t
-      const w = a.width + ((b?.width ?? a.width) - a.width) * t
-      return { width: w, transform: [{ translateX: x - TRACK_PADDING }] }
+      translateX = a.x + ((b?.x ?? a.x) - a.x) * t - TRACK_PADDING
+      width = a.width + ((b?.width ?? a.width) - a.width) * t
+    } else if (scrollable && thumbW.value > 0) {
+      translateX = thumbX.value - TRACK_PADDING
+    } else if (scrollX && pageWidth > 0 && segmentWidthShared.value > 0) {
+      translateX = (scrollX.value / pageWidth) * segmentWidthShared.value
     }
-    if (scrollable && thumbW.value > 0) {
-      return { width: thumbW.value, transform: [{ translateX: thumbX.value - TRACK_PADDING }] }
+
+    const pulseX = interpolate(thumbPulse.value, [1, 1.05], [1, 1.04])
+    const pulseY = interpolate(thumbPulse.value, [1, 1.05], [1, 0.97])
+
+    return {
+      width,
+      transform: [{ translateX }, { scaleX: pulseX }, { scaleY: pulseY }],
     }
-    const segW = segmentWidthShared.value
-    if (scrollX && pageWidth > 0 && segW > 0) {
-      return { transform: [{ translateX: (scrollX.value / pageWidth) * segW }] }
-    }
-    return { transform: [{ translateX: thumbX.value }] }
   })
 
   function onTrackLayout(event: LayoutChangeEvent) {
@@ -293,6 +370,11 @@ export function MobbinPillSegmentControl<T extends string>({
     }
   }, [activeIndex, scrollable, viewportWidth])
 
+  function handleSelect(next: T) {
+    if (next !== value) triggerMotionHaptic("selection")
+    onChange(next)
+  }
+
   const track = (
     <View
       style={[styles.track, { backgroundColor: palette.trackBg }]}
@@ -325,37 +407,39 @@ export function MobbinPillSegmentControl<T extends string>({
               dense && styles.segmentDense,
               pressed && !active && styles.segmentPressed,
             ]}
-            onPress={() => onChange(option.id)}
+            onPress={() => handleSelect(option.id)}
             onLayout={(event) => onSegmentLayout(index, event)}
             accessibilityRole="tab"
             accessibilityState={{ selected: active }}
             accessibilityLabel={option.label}
             android_ripple={{ color: palette.ripple, borderless: false }}
           >
-            <View style={[styles.segmentInner, compact && styles.segmentInnerCompact, dense && styles.segmentInnerDense]}>
-              {option.icon ? (
-                <SegmentIcon
-                  name={option.icon}
+            <SegmentContent index={index} active={active} scrollX={scrollX} pageWidth={pageWidth}>
+              <View style={[styles.segmentInner, compact && styles.segmentInnerCompact, dense && styles.segmentInnerDense]}>
+                {option.icon ? (
+                  <SegmentIcon
+                    name={option.icon}
+                    index={index}
+                    active={active}
+                    scrollX={scrollX}
+                    pageWidth={pageWidth}
+                    activeColor={palette.activeIcon}
+                    inactiveColor={palette.inactiveLabel}
+                    compact={compact}
+                  />
+                ) : null}
+                <SegmentLabel
+                  label={option.label}
                   index={index}
                   active={active}
                   scrollX={scrollX}
                   pageWidth={pageWidth}
-                  activeColor={palette.activeIcon}
+                  activeColor={palette.activeLabel}
                   inactiveColor={palette.inactiveLabel}
                   compact={compact}
                 />
-              ) : null}
-              <SegmentLabel
-                label={option.label}
-                index={index}
-                active={active}
-                scrollX={scrollX}
-                pageWidth={pageWidth}
-                activeColor={palette.activeLabel}
-                inactiveColor={palette.inactiveLabel}
-                compact={compact}
-              />
-            </View>
+              </View>
+            </SegmentContent>
           </Pressable>
         )
       })}
@@ -375,7 +459,7 @@ export function MobbinPillSegmentControl<T extends string>({
           contentContainerStyle={styles.scrollContent}
           showsHorizontalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
+          keyboardDismissMode="on-drag"
           directionalLockEnabled
           decelerationRate="fast"
           scrollEventThrottle={16}
@@ -439,6 +523,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     minHeight: 36,
   },
+  segmentContent: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
   segmentInner: {
     flexDirection: "row",
     alignItems: "center",
@@ -467,7 +555,7 @@ const styles = StyleSheet.create({
     height: ICON_SIZE_COMPACT,
   },
   iconOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: "center",
     justifyContent: "center",
   },

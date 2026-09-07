@@ -32,6 +32,18 @@ describe("invalidation graph", () => {
     assert.ok(INVALIDATION_GRAPH["cora.message.send"].includes("student.messages"))
   })
 
+  it("refreshes calendars when office hours change", () => {
+    assert.ok(INVALIDATION_GRAPH["faculty.officeHours.mutate"].includes("faculty.calendar"))
+    assert.ok(INVALIDATION_GRAPH["faculty.officeHours.mutate"].includes("student.calendar"))
+  })
+
+  it("refreshes faculty and student calendars after a schedule is finalized", () => {
+    assert.deepEqual(INVALIDATION_GRAPH["faculty.scheduleAdjustment.finalize"], [
+      "faculty.calendar",
+      "student.calendar",
+    ])
+  })
+
   it("refreshes gated student modules after Stripe membership activation", () => {
     assert.deepEqual(INVALIDATION_GRAPH["student.membership.activate"], [
       "student.flashcards",

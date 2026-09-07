@@ -13,6 +13,7 @@ const PERSISTABLE_PREFIXES = [
   ["faculty", "notes"],
   ["faculty", "flashcards"],
   ["faculty", "announcements"],
+  ["faculty", "calendar"],
 ] as const
 
 const NEVER_PERSIST_SEGMENTS = new Set([

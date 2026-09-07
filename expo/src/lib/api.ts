@@ -83,6 +83,7 @@ export type UniversityStudentLoginRequest = {
   password: string
   rememberMe?: boolean
   courseId?: number
+  section?: string
 }
 
 export type ActivateStudentAccountRequest = {
@@ -324,6 +325,7 @@ export const api = {
         password,
         rememberMe: Boolean(payload.rememberMe),
         ...(payload.courseId != null ? { courseId: payload.courseId } : {}),
+        ...(payload.section?.trim() ? { section: payload.section.trim() } : {}),
       }),
     })
     const record = data as Record<string, unknown>
@@ -380,7 +382,11 @@ export const api = {
       body: JSON.stringify(payload),
     }),
 
-  instructorLogin: async (username: string, password: string) => {
+  instructorLogin: async (
+    username: string,
+    password: string,
+    options?: { universityId?: number; rememberMe?: boolean },
+  ) => {
     const authId = normalizeLoginIdentifier(username)
     const normalizedPassword = normalizeLoginPassword(password)
     const loginKey = instructorMfaLoginKey(authId)
@@ -389,7 +395,12 @@ export const api = {
     const data = await request<InstructorLoginResponse>("/api/instructor/login", {
       method: "POST",
       headers: trustHeaders,
-      body: JSON.stringify({ username: authId, password: normalizedPassword }),
+      body: JSON.stringify({
+        username: authId,
+        password: normalizedPassword,
+        rememberMe: Boolean(options?.rememberMe),
+        universityId: options?.universityId,
+      }),
     })
     const record = data as Record<string, unknown>
     if (isMfaGatedResponse(record)) {
@@ -503,9 +514,18 @@ export const api = {
     return data
   },
 
-  /** Revoke server refresh/MFA-trust cookies (no-op if none were set). */
-  logout: () =>
-    request<{ ok: boolean }>("/api/auth/logout", { method: "POST" }),
+  /** Revoke server refresh tokens and MFA device trust. */
+  logout: async () => {
+    const { getStoredRefreshToken, REFRESH_TOKEN_HEADER } = await import("./refresh-token-store")
+    const token = await getStoredRefreshToken()
+    const headers: Record<string, string> = {}
+    if (token) headers[REFRESH_TOKEN_HEADER] = token
+    return request<{ ok: boolean }>("/api/auth/logout", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ explicit: true }),
+    })
+  },
 
   getAnnouncements: (studentId: string) =>
     request<{ announcements: Announcement[] }>(

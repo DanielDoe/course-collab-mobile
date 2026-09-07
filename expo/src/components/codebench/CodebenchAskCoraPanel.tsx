@@ -12,6 +12,7 @@ import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProv
 import { useNativeType, useThemedStudentNative } from "../../lib/themed-module-theme"
 import { NATIVE } from "../../constants/faculty-native-theme"
 import { useAuthFlowContentStyle } from "../../lib/responsive-layout"
+import { chatKeyboardAvoidingBehavior } from "../../lib/motion"
 import { hexToRgba } from "../../constants/app-themes"
 import {
   formatAttachmentsForMessage,
@@ -484,7 +485,7 @@ export function CodebenchAskCoraPanel({
       <Modal visible animationType="fade" statusBarTranslucent presentationStyle="fullScreen">
         <KeyboardAvoidingView
           style={styles.fullscreenHost}
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          behavior={chatKeyboardAvoidingBehavior}
         >
           <LinearGradient colors={[...ambientColors]} style={StyleSheet.absoluteFill} />
           <IosEdgeBackSwipe onBack={onCollapse ?? onClose ?? (() => {})} topInset={insets.top} />
@@ -500,7 +501,7 @@ export function CodebenchAskCoraPanel({
   return (
     <KeyboardAvoidingView
       style={[styles.root, expanded && styles.rootExpanded]}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      behavior={chatKeyboardAvoidingBehavior}
     >
       <LinearGradient colors={[...ambientColors]} style={StyleSheet.absoluteFill} />
       {body}

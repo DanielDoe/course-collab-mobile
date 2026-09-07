@@ -1,6 +1,17 @@
-import { type ReactNode, useEffect, useState } from "react"
-import { Keyboard, Platform, StyleSheet, View } from "react-native"
+import { type ReactNode } from "react"
+import { StyleSheet, View } from "react-native"
+import { LinearGradient } from "expo-linear-gradient"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
+import Animated, { useAnimatedStyle } from "react-native-reanimated"
+import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
+import { useAnimatedKeyboardHeight } from "../../lib/motion"
+import {
+  SEARCH_DOCK_VEIL_FADE,
+  searchDockGutterColor,
+  searchDockReadableBorder,
+  searchDockReadableWash,
+  searchDockVeilColors,
+} from "../../lib/glass-search-dock-veil"
 import { GLASS_FLOATING_PILL_HEIGHT, GlassFloatingPill } from "./GlassFloatingPill"
 
 /** Horizontal inset from screen edges — equal left and right. */
@@ -18,40 +29,51 @@ type Props = {
 }
 
 /**
- * Floating bottom search capsule — native Liquid Glass so list content scrolls underneath.
+ * Floating bottom search capsule.
+ * A reading veil fades list content into the page color so Liquid Glass
+ * stays visible without card text competing with the search icons.
  */
 export function GlassBottomSearchDock({ children }: Props) {
   const insets = useSafeAreaInsets()
-  const [keyboardHeight, setKeyboardHeight] = useState(0)
-  const bottomPad = Math.max(insets.bottom, LIQUID_GLASS_SEARCH_DOCK_FLOAT_GAP)
+  const native = useThemedNative()
+  const tokens = useAppThemeTokens()
+  const keyboardHeight = useAnimatedKeyboardHeight()
+  const restingBottom = Math.max(insets.bottom - LIQUID_GLASS_SEARCH_DOCK_FLOAT_GAP, 0)
+  const veilColors = searchDockVeilColors(native.groupedBackground)
+  const gutterColor = searchDockGutterColor(native.groupedBackground)
 
-  useEffect(() => {
-    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow"
-    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide"
-    const show = Keyboard.addListener(showEvent, (event) => {
-      setKeyboardHeight(event.endCoordinates.height)
-    })
-    const hide = Keyboard.addListener(hideEvent, () => setKeyboardHeight(0))
-    return () => {
-      show.remove()
-      hide.remove()
-    }
-  }, [])
+  const hostStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: -Math.max(keyboardHeight.value - restingBottom, 0) }],
+  }))
 
   return (
-    <View
+    <Animated.View
       style={[
         styles.host,
-        keyboardHeight > 0
-          ? { bottom: keyboardHeight, paddingBottom: LIQUID_GLASS_SEARCH_DOCK_FLOAT_GAP }
-          : { paddingBottom: bottomPad },
+        { bottom: restingBottom, paddingBottom: LIQUID_GLASS_SEARCH_DOCK_FLOAT_GAP },
+        hostStyle,
       ]}
       pointerEvents="box-none"
     >
-      <GlassFloatingPill glassEffectStyle="regular" frosted>
-        {children}
-      </GlassFloatingPill>
-    </View>
+      <LinearGradient
+        colors={veilColors}
+        locations={[0, 0.42, 1]}
+        pointerEvents="none"
+        style={styles.veil}
+      />
+      <View pointerEvents="none" style={[styles.gutter, { backgroundColor: gutterColor }]} />
+      <View style={styles.pillWrap} pointerEvents="box-none">
+        <GlassFloatingPill
+          glassEffectStyle="regular"
+          frosted
+          readableFrost
+          washColor={searchDockReadableWash(tokens.isDark)}
+          borderColor={searchDockReadableBorder(tokens.isDark)}
+        >
+          {children}
+        </GlassFloatingPill>
+      </View>
+    </Animated.View>
   )
 }
 
@@ -62,8 +84,25 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     zIndex: 25,
+    paddingTop: SEARCH_DOCK_VEIL_FADE,
+    alignItems: "stretch",
+  },
+  veil: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: 0,
+    height: SEARCH_DOCK_VEIL_FADE,
+  },
+  gutter: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: SEARCH_DOCK_VEIL_FADE,
+    bottom: 0,
+  },
+  pillWrap: {
     paddingHorizontal: LIQUID_GLASS_SEARCH_DOCK_H_INSET,
     paddingTop: LIQUID_GLASS_SEARCH_DOCK_FLOAT_GAP,
-    alignItems: "stretch",
   },
 })

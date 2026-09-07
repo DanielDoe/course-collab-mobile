@@ -62,6 +62,7 @@ import { useCoraBalance } from "../../hooks/useCoraBalance"
 import { CoraUsagePanel } from "../cora/CoraUsagePanel"
 import { CoraCreditPacksPanel } from "../cora/CoraCreditPacksPanel"
 import { CoraCreditBalanceBadge } from "../cora/CoraCreditBalanceBadge"
+import { shouldShowPurchaseCta } from "../../lib/purchase-navigation"
 
 const TIER_ORDER: MembershipTier[] = ["Trailblazer", "Explorer", "Scholar"]
 const CARD_RADIUS = 20
@@ -172,6 +173,7 @@ function CurrentMembershipSummary({
   onExplore,
   onBilling,
   tokens,
+  showPurchaseActions,
 }: {
   plan: MembershipPlan
   semesterCents: number
@@ -180,6 +182,7 @@ function CurrentMembershipSummary({
   onExplore: () => void
   onBilling: () => void
   tokens: AppThemeTokens
+  showPurchaseActions: boolean
 }) {
   const hero = useMemo(
     () => membershipTierHeroCardStyle(plan.id, tokens),
@@ -243,7 +246,7 @@ function CurrentMembershipSummary({
                     ? `Valid through ${formatMembershipDate(expiresAt)}`
                     : "Active this semester"}
               </Text>
-              {!isFreeTier && semesterCents > 0 ? (
+              {showPurchaseActions && !isFreeTier && semesterCents > 0 ? (
                 <Text style={[styles.currentPrice, { color: hero.subtitle }]}>
                   {formatSemesterPrice(semesterCents)} · semester access
                 </Text>
@@ -271,7 +274,7 @@ function CurrentMembershipSummary({
             >
               <Text style={[styles.currentActionText, { color: hero.exploreBtnText }]}>Explore plan</Text>
             </Pressable>
-            {!isFreeTier ? (
+            {!isFreeTier && showPurchaseActions ? (
               <Pressable
                 style={[styles.currentActionBtn, { backgroundColor: hero.billingBtnBg, borderWidth: 0 }]}
                 onPress={onBilling}
@@ -296,6 +299,7 @@ function SubtlePlanCard({
   onUpgrade,
   tokens,
   index,
+  showPurchaseActions,
 }: {
   plan: MembershipPlan
   semesterCents: number
@@ -306,6 +310,7 @@ function SubtlePlanCard({
   onUpgrade: (plan: MembershipPlan) => void
   tokens: AppThemeTokens
   index: number
+  showPurchaseActions: boolean
 }) {
   const native = useThemedNative()
   const isCurrent = plan.id === currentTier
@@ -332,18 +337,22 @@ function SubtlePlanCard({
             </Text>
           </View>
           <View style={styles.planPriceBlock}>
-            {listCents > semesterCents && semesterCents > 0 ? (
+            {showPurchaseActions && listCents > semesterCents && semesterCents > 0 ? (
               <Text style={[styles.planListPrice, { color: native.tertiaryLabel }]}>
                 {formatPriceFromCents(listCents)}
               </Text>
             ) : null}
-            <Text style={[styles.planPrice, { color: native.secondaryLabel }]}>
-              {planPriceLabel(semesterCents)}
-            </Text>
-            {semesterCents > 0 ? (
-              <Text style={[styles.planPriceCadence, { color: native.tertiaryLabel }]}>
-                {listCents > semesterCents ? "save $10 / semester" : "/ semester"}
-              </Text>
+            {showPurchaseActions ? (
+              <>
+                <Text style={[styles.planPrice, { color: native.secondaryLabel }]}>
+                  {planPriceLabel(semesterCents)}
+                </Text>
+                {semesterCents > 0 ? (
+                  <Text style={[styles.planPriceCadence, { color: native.tertiaryLabel }]}>
+                    {listCents > semesterCents ? "save $10 / semester" : "/ semester"}
+                  </Text>
+                ) : null}
+              </>
             ) : null}
           </View>
         </View>
@@ -371,7 +380,7 @@ function SubtlePlanCard({
           </Text>
         </Pressable>
 
-        {canUpgrade ? (
+        {canUpgrade && showPurchaseActions ? (
           <Pressable style={styles.upgradeLink} onPress={() => onUpgrade(plan)}>
             <Text style={[styles.upgradeLinkText, { color: plan.accent }]}>
               Get {plan.name} for {formatPriceFromCents(semesterCents)}
@@ -615,6 +624,7 @@ export function MembershipScreen() {
     error: coraError,
     refresh: refreshCora,
   } = useCoraBalance({ role: "student", session, enabled: Boolean(session) })
+  const showPurchaseActions = shouldShowPurchaseCta()
 
   return (
     <View style={[styles.screenRoot, { backgroundColor: native.groupedBackground }]}>
@@ -650,6 +660,7 @@ export function MembershipScreen() {
           onExplore={() => openPlanExplorer(currentPlan)}
           onBilling={() => router.push("/membership/manage" as never)}
           tokens={tokens}
+          showPurchaseActions={showPurchaseActions}
         />
 
         <Animated.View entering={FadeInDown.delay(120).duration(340)} style={{ marginBottom: 16 }}>
@@ -665,19 +676,30 @@ export function MembershipScreen() {
             activityLoadingPage={coraActivityLoadingPage}
             onActivityPageChange={(page) => void goToCoraActivityPage(page)}
           />
-          <CoraCreditPacksPanel
-            audience="student"
-            session={session}
-            onPurchased={() => void refreshCora({ force: true, includeActivity: true })}
-          />
+          {showPurchaseActions ? (
+            <CoraCreditPacksPanel
+              audience="student"
+              session={session}
+              onPurchased={() => void refreshCora({ force: true, includeActivity: true })}
+            />
+          ) : null}
         </Animated.View>
 
-        <Animated.Text
-          entering={FadeInDown.delay(180).duration(340)}
-          style={[styles.allPlansLabel, { color: native.secondaryLabel }]}
-        >
-          All plans · $10 student discount this semester
-        </Animated.Text>
+        {showPurchaseActions ? (
+          <Animated.Text
+            entering={FadeInDown.delay(180).duration(340)}
+            style={[styles.allPlansLabel, { color: native.secondaryLabel }]}
+          >
+            All plans · $10 student discount this semester
+          </Animated.Text>
+        ) : (
+          <Animated.Text
+            entering={FadeInDown.delay(180).duration(340)}
+            style={[styles.allPlansLabel, { color: native.secondaryLabel }]}
+          >
+            All plans
+          </Animated.Text>
+        )}
 
         <View style={styles.planStack}>
         {themedSortedPlans.map((plan, index) => (
@@ -692,11 +714,12 @@ export function MembershipScreen() {
             onUpgrade={handlePlanSelect}
             tokens={tokens}
             index={index}
+            showPurchaseActions={showPurchaseActions}
           />
         ))}
       </View>
 
-      {hasPaidMembership ? (
+      {hasPaidMembership && showPurchaseActions ? (
         <Animated.View entering={FadeInDown.delay(300).duration(340).springify()}>
           <Pressable
             style={[styles.manageRow, { borderColor: tokens.border }]}

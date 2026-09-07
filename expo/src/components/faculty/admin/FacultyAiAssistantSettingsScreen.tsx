@@ -237,6 +237,7 @@ function FacultyAiAssistantSettingsContent() {
         successMessage={successMessage}
         onSave={handleSave}
         onRefresh={() => void handleRefresh()}
+        suppressSearchDock={false}
       >
         <FacultyModuleTabBar tabs={SETTINGS_TABS} tab={tab} onChange={setTab} scrollable />
 

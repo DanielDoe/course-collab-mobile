@@ -15,6 +15,10 @@ export function normalizeFacultyCourseOfferings(
   for (const row of raw) {
     const courseId = Number(row.course_id ?? row.id ?? 0)
     if (!Number.isFinite(courseId) || courseId <= 0) continue
+    const sessionId =
+      row.session_id != null && Number.isFinite(Number(row.session_id))
+        ? Number(row.session_id)
+        : null
     rows.push({
       id: courseId,
       course_id: courseId,
@@ -35,17 +39,32 @@ export function normalizeFacultyCourseOfferings(
             : null,
       is_active_term: row.is_active_term === true,
       description: row.description != null ? String(row.description) : null,
+      session_id: sessionId,
+      session_code: row.session_code != null && String(row.session_code).trim()
+        ? String(row.session_code)
+        : null,
+      picker_key: row.picker_key != null ? String(row.picker_key) : undefined,
     })
   }
   return rows
 }
 
-/** One row per course offering (course + term), sorted by title. */
+/** One row per course + term + section. Identical API duplicates collapse. */
 export function flattenFacultyCourseOfferings(offerings: FacultyCourseOfferingRow[]): FacultyCourseOfferingRow[] {
-  return [...offerings].sort((a, b) => {
+  const unique = new Map<string, FacultyCourseOfferingRow>()
+  for (const offering of offerings) {
+    const key = facultyOfferingKey(offering)
+    const existing = unique.get(key)
+    if (!existing || (offering.is_active_term && !existing.is_active_term)) {
+      unique.set(key, offering)
+    }
+  }
+  return [...unique.values()].sort((a, b) => {
     const title = a.course_title.localeCompare(b.course_title)
     if (title !== 0) return title
-    return (a.term_label ?? "").localeCompare(b.term_label ?? "")
+    const term = (a.term_label ?? "").localeCompare(b.term_label ?? "")
+    if (term !== 0) return term
+    return (a.session_code ?? "").localeCompare(b.session_code ?? "")
   })
 }
 
@@ -61,6 +80,18 @@ export function dedupeFacultyCourseOfferings(offerings: FacultyCourseOfferingRow
   return [...byCourse.values()].sort((a, b) => a.course_title.localeCompare(b.course_title))
 }
 
-export function facultyOfferingKey(courseId: number, academicTermId?: number | null): string {
-  return `${courseId}:${academicTermId ?? 0}`
+export function facultyOfferingKey(
+  row: Pick<
+    FacultyCourseOfferingRow,
+    "course_id" | "academic_term_id" | "session_id" | "session_code" | "picker_key"
+  >,
+): string {
+  if (row.picker_key) return row.picker_key
+  const sessionPart =
+    row.session_id != null && Number.isFinite(row.session_id)
+      ? `s${row.session_id}`
+      : row.session_code
+        ? `c${row.session_code}`
+        : ""
+  return `${row.course_id}:${row.academic_term_id ?? 0}:${sessionPart}`
 }

@@ -12,6 +12,7 @@ import {
   resourceVersionKey,
   STALE_BY_RESOURCE,
 } from "../../lib/query"
+import { keepSameCoursePlaceholder } from "../../lib/query/same-course-placeholder"
 
 type AssessmentsBundle = Awaited<ReturnType<typeof fetchFacultyAssessmentsBundle>>
 
@@ -20,14 +21,15 @@ function assessmentsKey(scope: InstructorScope, assessmentType: string) {
 }
 
 export function useFacultyAssessments(scope: InstructorScope | null, assessmentType: string) {
+  const queryKey = scope
+    ? queryKeys.faculty.quizzes.list(facultyQueryScopeFromInstructor(scope), assessmentType)
+    : (["faculty", "quizzes", "idle", "list", assessmentType] as const)
   const query = useQuery({
-    queryKey: scope
-      ? queryKeys.faculty.quizzes.list(facultyQueryScopeFromInstructor(scope), assessmentType)
-      : ["faculty", "quizzes", "idle", "list", assessmentType],
+    queryKey,
     queryFn: () => fetchFacultyAssessmentsBundle(scope!, assessmentType),
     enabled: Boolean(scope?.courseId),
     staleTime: STALE_BY_RESOURCE.facultyAssessments,
-    placeholderData: (previous) => previous,
+    placeholderData: (previous, previousQuery) => keepSameCoursePlaceholder(previous, previousQuery, queryKey),
   })
   const hasData = query.data != null
   return {

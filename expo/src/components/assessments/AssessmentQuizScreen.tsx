@@ -5,6 +5,7 @@ import { Ionicons } from "@/components/icons/AppIcon"
 import { useRouter } from "expo-router"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { hexToRgba } from "../../constants/app-themes"
+import { SYSTEM } from "../../constants/faculty-native-theme"
 import { useAppThemeTokens } from "../../context/AppearanceProvider"
 import { useThemedStudentNative } from "../../lib/themed-module-theme"
 import { useSession } from "../../context/SessionProvider"
@@ -17,6 +18,14 @@ import { NotetakerScreenHeader } from "../notetaker/NotetakerScreenHeader"
 import { QuestionPrepareGate } from "../questions/QuestionPrepareGate"
 import { useAssessmentFocusGuard } from "../../hooks/useAssessmentFocusGuard"
 import { extractAssessmentQuizQuestionTexts } from "../../lib/question-prepare"
+import {
+  buildPartialCreditFallbackReview,
+  isEvalPartialCredit,
+  practiceAnswerReviewOptionState,
+  practiceHubFeedbackSummary,
+  resolveObjectiveAnswerReview,
+} from "../../lib/lecture-sample-practice-grading"
+import type { PracticeAnswerReview } from "../../lib/lecture-types"
 import { assessmentQuizApi } from "../../lib/assessment-quiz/assessment-quiz-api"
 import {
   buildAnswerForSubmit,
@@ -96,6 +105,7 @@ export function AssessmentQuizScreen({ quizId, assessmentType, takeAction }: Pro
   const [submittingFinal, setSubmittingFinal] = useState(false)
   const [savingLater, setSavingLater] = useState(false)
   const [answeredIds, setAnsweredIds] = useState<Set<number>>(new Set())
+  const [answerReviews, setAnswerReviews] = useState<Record<number, PracticeAnswerReview>>({})
   const questionStartRef = useRef<Record<number, number>>({})
 
   const questions = quizSession?.questions ?? []
@@ -144,7 +154,6 @@ export function AssessmentQuizScreen({ quizId, assessmentType, takeAction }: Pro
       }
       setQuizSession(sessionData)
 
-      const restored = new Set<number>()
       let resumeIndex = 0
       const savedMap = new Map<number, SavedAnswer>()
 
@@ -158,7 +167,6 @@ export function AssessmentQuizScreen({ quizId, assessmentType, takeAction }: Pro
 
           for (const row of savedAnswers) {
             savedMap.set(row.questionId, row)
-            if (row.answer?.trim()) restored.add(row.questionId)
           }
           setSavedAnswersByQuestion(savedMap)
 
@@ -167,11 +175,50 @@ export function AssessmentQuizScreen({ quizId, assessmentType, takeAction }: Pro
           }
 
           const submitted = state.submittedQuestionIds ?? state.answeredQuestionIds ?? []
-          for (const qid of submitted) restored.add(Number(qid))
-
-          setAnsweredIds(restored)
+          const submittedSet = new Set<number>()
+          for (const qid of submitted) submittedSet.add(Number(qid))
+          setAnsweredIds(submittedSet)
           setCurrentIndex(resumeIndex)
-          applySavedSelection(take.questions[resumeIndex], savedMap.get(take.questions[resumeIndex]?.id))
+
+          const restoredReviews: Record<number, PracticeAnswerReview> = {}
+          for (const row of savedAnswers) {
+            if (!submittedSet.has(row.questionId)) continue
+            const question = take.questions.find((q) => q.id === row.questionId)
+            if (!question || !row.answer) continue
+            const sel = restoreSelectionFromSavedAnswer(question, row.answer)
+            const maxPoints = question.max_points ?? question.points ?? 1
+            const evalMeta = {
+              isCorrect: row.isCorrect,
+              pointsEarned: row.pointsEarned,
+              maxPoints,
+              score:
+                row.pointsEarned != null && maxPoints > 0
+                  ? (row.pointsEarned / maxPoints) * 100
+                  : undefined,
+            }
+            let review = resolveObjectiveAnswerReview({
+              question,
+              selectedLetters: sel.letters,
+              selectedLetter: sel.letter,
+              serverReview: null,
+              evalResult: evalMeta,
+            })
+            if (!review) {
+              review = buildPartialCreditFallbackReview({
+                question,
+                selectedLetters: sel.letters,
+                evalResult: evalMeta,
+              })
+            }
+            if (review) restoredReviews[row.questionId] = review
+          }
+          setAnswerReviews(restoredReviews)
+          applyQuestionUi(
+            take.questions[resumeIndex],
+            savedMap.get(take.questions[resumeIndex]?.id),
+            restoredReviews,
+            submittedSet,
+          )
         } catch {
           /* resume metadata optional */
         }
@@ -204,18 +251,53 @@ export function AssessmentQuizScreen({ quizId, assessmentType, takeAction }: Pro
     enabled: Boolean(quizSession) && !submittingFinal,
   })
 
-  const applySavedSelection = (question: AssessmentQuestion | undefined, saved?: SavedAnswer) => {
+  const applyQuestionUi = (
+    question: AssessmentQuestion | undefined,
+    saved: SavedAnswer | undefined,
+    reviews: Record<number, PracticeAnswerReview>,
+    answered: Set<number>,
+  ) => {
     resetSelection(question)
-    if (!question || !saved?.answer) return
-    if (isCircuitSubmissionQuestion(question)) {
-      setCircuitAnswerJson(saved.answer)
-      return
+    if (!question) return
+
+    if (saved?.answer) {
+      if (isCircuitSubmissionQuestion(question)) {
+        setCircuitAnswerJson(saved.answer)
+      } else if (!isUnsupportedQuestion(question)) {
+        const sel = restoreSelectionFromSavedAnswer(question, saved.answer)
+        setSelectedLetter(sel.letter)
+        setSelectedLetters(sel.letters)
+        setTextAnswer(sel.text)
+      }
     }
-    if (isUnsupportedQuestion(question)) return
-    const sel = restoreSelectionFromSavedAnswer(question, saved.answer)
-    setSelectedLetter(sel.letter)
-    setSelectedLetters(sel.letters)
-    setTextAnswer(sel.text)
+
+    if (answered.has(question.id)) {
+      const review = reviews[question.id]
+      const maxPoints = question.max_points ?? question.points ?? 1
+      const evalMeta = {
+        isCorrect: saved?.isCorrect,
+        pointsEarned: saved?.pointsEarned,
+        maxPoints,
+        score:
+          saved?.pointsEarned != null && maxPoints > 0
+            ? (saved.pointsEarned / maxPoints) * 100
+            : undefined,
+      }
+      const partial = isEvalPartialCredit(evalMeta, review)
+      setShowFeedback(true)
+      setIsCorrect(review?.isCorrect ?? saved?.isCorrect ?? false)
+      setFeedbackText(
+        practiceHubFeedbackSummary(
+          review,
+          partial ? "Partial credit." : saved?.isCorrect ? "Correct!" : "Answer recorded.",
+          evalMeta,
+        ),
+      )
+    }
+  }
+
+  const applySavedSelection = (question: AssessmentQuestion | undefined, saved?: SavedAnswer) => {
+    applyQuestionUi(question, saved, answerReviews, answeredIds)
   }
 
   const nativeQuestions = useMemo(
@@ -357,14 +439,65 @@ export function AssessmentQuizScreen({ quizId, assessmentType, takeAction }: Pro
       })
 
       setAnsweredIds((prev) => new Set(prev).add(currentQuestion.id))
+
+      const scorePct =
+        typeof evalResult.score === "number"
+          ? evalResult.score
+          : evalResult.maxPoints && typeof evalResult.pointsEarned === "number"
+            ? (evalResult.pointsEarned / evalResult.maxPoints) * 100
+            : undefined
+
+      const evalMeta = {
+        isCorrect: !!evalResult.isCorrect,
+        score: scorePct,
+        pointsEarned: evalResult.pointsEarned,
+        maxPoints: evalResult.maxPoints,
+      }
+
+      let review = resolveObjectiveAnswerReview({
+        question: currentQuestion,
+        selectedLetters,
+        selectedLetter,
+        serverReview: evalResult.answerReview ?? null,
+        evalResult: evalMeta,
+      })
+      if (!review) {
+        review = buildPartialCreditFallbackReview({
+          question: currentQuestion,
+          selectedLetters,
+          evalResult: evalMeta,
+        })
+      }
+      if (review) {
+        setAnswerReviews((prev) => ({ ...prev, [currentQuestion.id]: review }))
+      }
+
+      setSavedAnswersByQuestion((prev) => {
+        const next = new Map(prev)
+        next.set(currentQuestion.id, {
+          questionId: currentQuestion.id,
+          answer:
+            typeof answerToSubmit === "string"
+              ? answerToSubmit
+              : JSON.stringify(answerToSubmit),
+          isCorrect: evalResult.isCorrect,
+          pointsEarned: evalResult.pointsEarned,
+          aiFeedback: evalResult.aiFeedback,
+        })
+        return next
+      })
+
+      const partial = isEvalPartialCredit(evalMeta, review)
       setIsCorrect(!!evalResult.isCorrect)
       setFeedbackText(
         evalResult.feedback ??
           (evalResult.requiresManualReview
             ? "Submission recorded for review."
-            : evalResult.isCorrect
-              ? "Correct!"
-              : "Answer recorded."),
+            : practiceHubFeedbackSummary(
+                review,
+                partial ? "Partial credit." : evalResult.isCorrect ? "Correct!" : "Answer recorded.",
+                evalMeta,
+              )),
       )
       setShowFeedback(true)
 
@@ -621,6 +754,18 @@ export function AssessmentQuizScreen({ quizId, assessmentType, takeAction }: Pro
       qType === "code_output" ||
       qType === "trace_output")
   const locked = answeredIds.has(currentQuestion.id)
+  const currentReview = answerReviews[currentQuestion.id] ?? null
+  const savedRow = savedAnswersByQuestion.get(currentQuestion.id)
+  const questionMaxPoints = currentQuestion.max_points ?? currentQuestion.points ?? 1
+  const isPartial = isEvalPartialCredit(
+    {
+      isCorrect: savedRow?.isCorrect ?? currentReview?.isCorrect,
+      pointsEarned: savedRow?.pointsEarned ?? currentReview?.pointsEarned,
+      maxPoints: currentReview?.maxPoints ?? questionMaxPoints,
+      score: currentReview?.score,
+    },
+    currentReview,
+  )
   const circuitConfig = parseCircuitSubmissionConfig(currentQuestion.solution_upload_config)
   const circuitReady = circuitSubmissionHasRequiredUpload(circuitAnswerJson, circuitConfig)
   const canGoPrevious = currentIndex > 0
@@ -656,11 +801,16 @@ export function AssessmentQuizScreen({ quizId, assessmentType, takeAction }: Pro
   )
 
   const feedbackBlock = showFeedback ? (
-    <View style={[styles.feedbackBox, isCorrect ? styles.feedbackCorrect : styles.feedbackWrong]}>
+    <View
+      style={[
+        styles.feedbackBox,
+        isCorrect ? styles.feedbackCorrect : isPartial ? styles.feedbackPartial : styles.feedbackWrong,
+      ]}
+    >
       <Ionicons
-        name={isCorrect ? "checkmark-circle" : "information-circle"}
+        name={isCorrect ? "checkmark-circle" : isPartial ? "alert-circle" : "close-circle"}
         size={20}
-        color={isCorrect ? "#15803d" : "#b45309"}
+        color={isCorrect ? "#15803d" : isPartial ? "#b45309" : tokens.danger}
       />
       <View style={styles.feedbackCopy}>
         <QuestionContentWebView text={feedbackText} embedded compact />
@@ -860,15 +1010,33 @@ export function AssessmentQuizScreen({ quizId, assessmentType, takeAction }: Pro
           ) : (
             options.map(({ letter, text }) => {
               const selected = isMulti ? selectedLetters.includes(letter) : selectedLetter === letter
+              const reviewState =
+                locked && currentReview
+                  ? practiceAnswerReviewOptionState(currentReview, letter)
+                  : null
+              const showReview = reviewState != null
+
               return (
                 <Pressable
                   key={letter}
                   style={[
                     styles.option,
                     { borderColor: tokens.border, backgroundColor: tokens.background },
-                    selected && {
+                    selected && !showReview && {
                       borderColor: tokens.accent,
                       backgroundColor: hexToRgba(tokens.accent, 0.06),
+                    },
+                    reviewState?.showPartialCreditSelection && {
+                      borderColor: SYSTEM.orange.color,
+                      backgroundColor: hexToRgba(SYSTEM.orange.color, 0.08),
+                    },
+                    reviewState?.isCorrect && {
+                      borderColor: SYSTEM.green.color,
+                      backgroundColor: hexToRgba(SYSTEM.green.color, 0.08),
+                    },
+                    reviewState?.showWrongSelection && {
+                      borderColor: SYSTEM.red.color,
+                      backgroundColor: hexToRgba(SYSTEM.red.color, 0.06),
                     },
                     locked && styles.optionLocked,
                   ]}
@@ -888,14 +1056,31 @@ export function AssessmentQuizScreen({ quizId, assessmentType, takeAction }: Pro
                     style={[
                       styles.optionLetter,
                       { backgroundColor: tokens.surface, borderColor: tokens.border },
-                      selected && { backgroundColor: tokens.accent, borderColor: tokens.accent },
+                      selected && !showReview && { backgroundColor: tokens.accent, borderColor: tokens.accent },
+                      reviewState?.showPartialCreditSelection && {
+                        backgroundColor: SYSTEM.orange.color,
+                        borderColor: SYSTEM.orange.color,
+                      },
+                      reviewState?.isCorrect && {
+                        backgroundColor: SYSTEM.green.color,
+                        borderColor: SYSTEM.green.color,
+                      },
+                      reviewState?.showWrongSelection && {
+                        backgroundColor: SYSTEM.red.color,
+                        borderColor: SYSTEM.red.color,
+                      },
                     ]}
                   >
                     <Text
                       style={[
                         styles.optionLetterText,
                         { color: SN.secondaryLabel },
-                        selected && styles.optionLetterTextSelected,
+                        (selected && !showReview) ||
+                        reviewState?.isCorrect ||
+                        reviewState?.showPartialCreditSelection ||
+                        reviewState?.showWrongSelection
+                          ? styles.optionLetterTextSelected
+                          : null,
                       ]}
                     >
                       {letter}
@@ -904,7 +1089,23 @@ export function AssessmentQuizScreen({ quizId, assessmentType, takeAction }: Pro
                   <View style={styles.optionTextWrap}>
                     <QuestionContentWebView text={text} embedded compact secure />
                   </View>
-                  {selected ? <Ionicons name="checkmark-circle" size={20} color={tokens.accent} /> : null}
+                  {selected ? (
+                    <Ionicons
+                      name="checkmark-circle"
+                      size={20}
+                      color={
+                        reviewState?.showWrongSelection
+                          ? SYSTEM.red.color
+                          : reviewState?.showPartialCreditSelection
+                            ? SYSTEM.orange.color
+                            : reviewState?.isCorrect
+                              ? SYSTEM.green.color
+                              : tokens.accent
+                      }
+                    />
+                  ) : isMulti && reviewState?.isCorrect ? (
+                    <Ionicons name="square-outline" size={20} color={SYSTEM.green.color} />
+                  ) : null}
                 </Pressable>
               )
             })
@@ -1217,7 +1418,8 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   feedbackCorrect: { backgroundColor: "#dcfce7" },
-  feedbackWrong: { backgroundColor: "#fef3c7" },
+  feedbackPartial: { backgroundColor: "#fef3c7" },
+  feedbackWrong: { backgroundColor: "#fee2e2" },
   feedbackCopy: { flex: 1, minWidth: 0 },
   feedbackText: { flex: 1, fontSize: 13, lineHeight: 18, color: "#0f172a" },
   footer: {

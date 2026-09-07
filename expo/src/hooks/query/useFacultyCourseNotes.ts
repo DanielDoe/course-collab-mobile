@@ -15,18 +15,20 @@ import {
   rollbackIfCurrent,
   STALE_BY_RESOURCE,
 } from "../../lib/query"
+import { keepSameCoursePlaceholder } from "../../lib/query/same-course-placeholder"
 
 type NotesBundle = Awaited<ReturnType<typeof fetchFacultyNotesBundle>>
 
 export function useFacultyCourseNotes(scope: InstructorScope | null, topicSession: string) {
+  const queryKey = scope
+    ? queryKeys.faculty.notes.bundle(facultyQueryScopeFromInstructor(scope), topicSession)
+    : (["faculty", "notes", "idle", "bundle", topicSession] as const)
   const query = useQuery({
-    queryKey: scope
-      ? queryKeys.faculty.notes.bundle(facultyQueryScopeFromInstructor(scope), topicSession)
-      : ["faculty", "notes", "idle", "bundle", topicSession],
+    queryKey,
     queryFn: () => fetchFacultyNotesBundle(scope!, topicSession),
     enabled: Boolean(scope?.courseId),
     staleTime: STALE_BY_RESOURCE.facultyCourseNotes,
-    placeholderData: (previous) => previous,
+    placeholderData: (previous, previousQuery) => keepSameCoursePlaceholder(previous, previousQuery, queryKey),
   })
   const hasData = query.data != null
   return {

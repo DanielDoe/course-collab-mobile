@@ -11,15 +11,17 @@ import { ApiError, type LectureItem } from "../../lib/student-api"
 import { useNotificationModuleRefresh } from "../../lib/notifications/notification-events"
 import type { StudentSession } from "../../lib/session"
 import { useStudentLectures } from "../../hooks/query/useStudentLectures"
+import { useFacultyListPager } from "../../hooks/useFacultyListPager"
 import { QueryRefreshBanner } from "../query/QueryRefreshBanner"
 import { QuerySkeleton } from "../query/QuerySkeleton"
 import {
-  formatCourseLabel,
+  formatLectureIndexLabel,
   lectureDisplayTitle,
   lectureListDisplayTitle,
   matchesLectureFilter,
   type LectureFilter,
 } from "./lecture-list-utils"
+import { NotificationListPager } from "../faculty/faculty-notifications-ui"
 
 function useStudentSession(): StudentSession | null {
   const { session } = useSession()
@@ -48,7 +50,7 @@ const FILTER_OPTIONS: Array<{ value: LectureFilter; label: string }> = [
 export function LecturesScreen() {
   const session = useStudentSession()
   const router = useRouter()
-  const courseLabel = formatCourseLabel(session)
+  const courseCode = session?.courseCode ?? null
 
   const listQuery = useStudentLectures(session)
   const lectures = listQuery.lectures
@@ -74,13 +76,17 @@ export function LecturesScreen() {
       if (!q) return true
       return (
         lecture.title.toLowerCase().includes(q) ||
-        lectureDisplayTitle(lecture).toLowerCase().includes(q) ||
-        lectureListDisplayTitle(lecture, lectures).toLowerCase().includes(q) ||
-        String(lecture.week).includes(q) ||
-        courseLabel.toLowerCase().includes(q)
+        lectureDisplayTitle(lecture, courseCode).toLowerCase().includes(q) ||
+        lectureListDisplayTitle(lecture, lectures, courseCode).toLowerCase().includes(q) ||
+        formatLectureIndexLabel(lecture.week, { title: lecture.title, courseCode })
+          .toLowerCase()
+          .includes(q) ||
+        String(lecture.week).includes(q)
       )
     })
-  }, [lectures, search, filter, courseLabel])
+  }, [lectures, search, filter, courseCode])
+
+  const pager = useFacultyListPager(filtered, `${search}|${filter}`, "lectures", { preset: "lecture" })
 
   function openSlides(lecture: LectureItem) {
     openLectureViewer(router, lecture.id, lecture.week)
@@ -144,16 +150,17 @@ export function LecturesScreen() {
         />
       ) : (
         <View style={styles.list}>
-          {filtered.map((lecture, index) => (
+          {pager.items.map((lecture, index) => (
             <LectureListCard
               key={lecture.id}
               lecture={lecture}
-              courseLabel={courseLabel}
-              index={index}
+              courseCode={courseCode}
+              index={pager.page * pager.pageSize + index}
               siblings={filtered}
               onPress={() => openSlides(lecture)}
             />
           ))}
+          <NotificationListPager page={pager.page} pageCount={pager.pageCount} onPageChange={pager.setPage} />
         </View>
       )}
     </ModuleScreen>

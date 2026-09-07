@@ -3,27 +3,39 @@ import {
   ActivityIndicator,
   Modal,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View} from "react-native"
+import * as DocumentPicker from "expo-document-picker"
+import * as ImagePicker from "expo-image-picker"
 import { Ionicons } from "@/components/icons/AppIcon"
+import { AppAlert } from "../../lib/app-alert"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { ApiError } from "../../lib/api"
-import { instructorApi, type InstructorLecture } from "../../lib/instructor-api"
+import { instructorApi, type InstructorLecture, type InstructorScope } from "../../lib/instructor-api"
 import {
-  WORKSPACE_CATEGORIES,
   defaultWorkspaceConfig,
   emptyWorkspaceQuestion,
+  type LectureWorkspaceCategory,
   type LectureWorkspaceConfig,
   type LectureWorkspaceQuestion} from "../../lib/lecture-types"
 import {
+  categoryLabel,
   parseLectureWorkspace,
   solutionLinesToText,
   textToSolutionLines,
 } from "../../lib/lecture-workspace-utils"
+
+const WORKSPACE_CATEGORIES: Array<{ value: LectureWorkspaceCategory; label: string }> = [
+  { value: "nodal", label: categoryLabel("nodal") },
+  { value: "mesh", label: categoryLabel("mesh") },
+  { value: "thevenin_norton", label: categoryLabel("thevenin_norton") },
+]
 import { useFacultyScope } from "../../hooks/useFacultyScope"
+import { createEmptyWorkspace } from "../../lib/circuit-workspace"
+import { CircuitWorkspaceEditor } from "../ink/CircuitWorkspaceEditor"
+import { workspaceUploadError } from "../../lib/workspace-upload"
 import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
 import {
   FacultySheetContainer,
@@ -32,6 +44,7 @@ import {
   FacultySheetChrome,
   FacultySheetErrorBanner,
   FacultySheetField,
+  FacultySheetFormLayout,
   FacultySheetSaveAction,
   FacultySheetSection,
   FacultySheetToggleRow,
@@ -49,15 +62,98 @@ type Props = {
 function QuestionEditor({
   question,
   onChange,
-  onRemove}: {
+  onRemove,
+  scope,
+}: {
   question: LectureWorkspaceQuestion
   onChange: (q: LectureWorkspaceQuestion) => void
   onRemove: () => void
+  scope: InstructorScope | null
 }) {
   const collabSheetStyles = useCollabSheetStyles()
   const tokens = useAppThemeTokens()
   const native = useThemedNative()
   const solutionText = solutionLinesToText(question.step_by_step_solution.content)
+  const [uploading, setUploading] = useState(false)
+  const inkWorkspace = question.instructor_solution_workspace ?? createEmptyWorkspace()
+
+  async function attachSolutionFile(uri: string, name: string, mime: string, size?: number) {
+    if (!scope) return
+    const invalid = workspaceUploadError({ name, mime, size })
+    if (invalid) {
+      AppAlert.alert("File not supported", invalid)
+      return
+    }
+    setUploading(true)
+    try {
+      const uploaded = await instructorApi.uploadQuestionMedia(scope, {
+        uri,
+        name,
+        type: mime,
+      })
+      onChange({
+        ...question,
+        question_media: {
+          media_enabled: true,
+          media_url: uploaded.url,
+          media_type: uploaded.media_type ?? (mime.includes("pdf") ? "pdf" : "image"),
+          media_caption: name,
+          media_alt_text: name,
+        },
+      })
+    } catch (err) {
+      AppAlert.alert("Upload failed", err instanceof ApiError ? err.message : "Could not attach this file.")
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  async function pickSolutionFile() {
+    const result = await DocumentPicker.getDocumentAsync({
+      copyToCacheDirectory: true,
+      multiple: false,
+      type: ["application/pdf", "image/*"],
+    })
+    if (result.canceled || !result.assets?.[0]) return
+    const asset = result.assets[0]
+    await attachSolutionFile(
+      asset.uri,
+      asset.name ?? "solution.pdf",
+      asset.mimeType ?? "application/pdf",
+      asset.size,
+    )
+  }
+
+  async function pickSolutionPhoto(fromCamera: boolean) {
+    if (fromCamera) {
+      const perm = await ImagePicker.requestCameraPermissionsAsync()
+      if (!perm.granted) {
+        AppAlert.alert("Camera access", "Allow camera access to photograph a worked solution.")
+        return
+      }
+    } else {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync()
+      if (!perm.granted) {
+        AppAlert.alert("Photos access", "Allow photo library access to attach a solution image.")
+        return
+      }
+    }
+    const result = fromCamera
+      ? await ImagePicker.launchCameraAsync({ quality: 0.85, allowsEditing: false })
+      : await ImagePicker.launchImageLibraryAsync({
+          quality: 0.85,
+          allowsEditing: false,
+          mediaTypes: ["images"],
+        })
+    if (result.canceled || !result.assets?.[0]) return
+    const asset = result.assets[0]
+    await attachSolutionFile(
+      asset.uri,
+      asset.fileName ?? `solution-${Date.now()}.jpg`,
+      asset.mimeType ?? "image/jpeg",
+      asset.fileSize,
+    )
+  }
 
   return (
     <>
@@ -154,9 +250,69 @@ function QuestionEditor({
             placeholderTextColor={sheetPlaceholderColor}
           />
         </FacultySheetField>
+        <FacultySheetField label="Worked solution">
+          <Text style={[collabSheetStyles.bodyText, { marginBottom: 8 }]}>
+            Draw digitally, or upload a photo/PDF of a board or paper solution.
+          </Text>
+          <CircuitWorkspaceEditor
+            workspace={inkWorkspace}
+            onChange={(instructor_solution_workspace) =>
+              onChange({ ...question, instructor_solution_workspace })
+            }
+          />
+          <View style={localStyles.attachRow}>
+            <Pressable
+              style={[localStyles.attachBtn, { borderColor: tokens.border, backgroundColor: native.secondaryGrouped }]}
+              onPress={() => void pickSolutionPhoto(true)}
+              disabled={uploading || !scope}
+              accessibilityRole="button"
+              accessibilityLabel="Take photo"
+            >
+              <Ionicons name="camera-outline" size={16} color={tokens.accent} />
+              <Text style={[localStyles.attachLabel, { color: native.label }]}>Take photo</Text>
+            </Pressable>
+            <Pressable
+              style={[localStyles.attachBtn, { borderColor: tokens.border, backgroundColor: native.secondaryGrouped }]}
+              onPress={() => void pickSolutionPhoto(false)}
+              disabled={uploading || !scope}
+              accessibilityRole="button"
+              accessibilityLabel="Choose photo"
+            >
+              <Ionicons name="images-outline" size={16} color={tokens.accent} />
+              <Text style={[localStyles.attachLabel, { color: native.label }]}>Choose photo</Text>
+            </Pressable>
+            <Pressable
+              style={[localStyles.attachBtn, { borderColor: tokens.border, backgroundColor: native.secondaryGrouped }]}
+              onPress={() => void pickSolutionFile()}
+              disabled={uploading || !scope}
+              accessibilityRole="button"
+              accessibilityLabel="Choose file"
+            >
+              <Ionicons name="document-outline" size={16} color={tokens.accent} />
+              <Text style={[localStyles.attachLabel, { color: native.label }]}>
+                {uploading ? "Uploading…" : "Choose file"}
+              </Text>
+            </Pressable>
+          </View>
+          {question.question_media?.media_url ? (
+            <View style={localStyles.mediaRow}>
+              <Text style={[collabSheetStyles.bodyText, { flex: 1 }]} numberOfLines={1}>
+                {question.question_media.media_caption || question.question_media.media_url}
+              </Text>
+              <Pressable
+                onPress={() => onChange({ ...question, question_media: undefined })}
+                accessibilityRole="button"
+                accessibilityLabel="Remove attached solution"
+                hitSlop={8}
+              >
+                <Ionicons name="close-circle" size={18} color={tokens.danger} />
+              </Pressable>
+            </View>
+          ) : null}
+        </FacultySheetField>
         <FacultySheetToggleRow
-          label="Unlock step-by-step for students"
-          hint={
+          title="Unlock step-by-step for students"
+          subtitle={
             question.solution_unlocked
               ? "Students can reveal the written solution in class."
               : "Students see a locked message until you unlock this problem."
@@ -219,30 +375,30 @@ export function FacultyLectureWorkspaceModal({ visible, lecture, onClose }: Prop
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <FacultySheetContainer>
-        <FacultySheetChrome
-          topInset={insets.top}
-          title="Workspace problems"
-          onClose={onClose}
-          rightSlot={
-            <FacultySheetSaveAction
-              label="Save"
-              saving={saving}
-              disabled={loading}
-              onPress={() => void save()}
+        <FacultySheetFormLayout
+          header={
+            <FacultySheetChrome
+              topInset={insets.top}
+              title="Workspace problems"
+              onClose={onClose}
+              rightSlot={
+                <FacultySheetSaveAction
+                  label="Save"
+                  saving={saving}
+                  disabled={loading}
+                  onPress={() => void save()}
+                />
+              }
             />
           }
-        />
-
+          contentContainerStyle={collabSheetStyles.scroll}
+        >
         {loading ? (
           <View style={localStyles.loadingBox}>
             <ActivityIndicator color={tokens.accent} />
           </View>
         ) : (
-          <ScrollView
-            contentContainerStyle={[collabSheetStyles.scroll, { paddingBottom: insets.bottom + 24 }]}
-            keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
-          >
+          <>
             {error ? <FacultySheetErrorBanner message={error} /> : null}
 
             <FacultySheetSection label="Workspace settings" hint={lecture.title} tone={SHEET_SECTION.tools}>
@@ -298,6 +454,7 @@ export function FacultyLectureWorkspaceModal({ visible, lecture, onClose }: Prop
               <QuestionEditor
                 key={`${q.id}-${idx}`}
                 question={q}
+                scope={scope}
                 onChange={(next) => {
                   const questions = [...config.questions]
                   questions[idx] = next
@@ -308,8 +465,9 @@ export function FacultyLectureWorkspaceModal({ visible, lecture, onClose }: Prop
                 }
               />
             ))}
-          </ScrollView>
+          </>
         )}
+        </FacultySheetFormLayout>
       </FacultySheetContainer>
     </Modal>
   )
@@ -327,4 +485,17 @@ const localStyles = StyleSheet.create({
   chipText: { fontSize: 12, fontWeight: "700" },
   solutionArea: { minHeight: 180 },
   empty: { alignItems: "center", gap: 8, paddingVertical: 12 },
+  attachRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 },
+  attachBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    minHeight: 40,
+  },
+  attachLabel: { fontSize: 13, fontWeight: "600" },
+  mediaRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 8 },
 })

@@ -222,6 +222,8 @@ export function gradeSelectAllAnswer(
     is_mcq_correct,
     answerReview: {
       isCorrect: is_mcq_correct,
+      isPartialCredit: mcq_earned_fraction > 0 && mcq_earned_fraction < 1,
+      score: Math.round(mcq_earned_fraction * 100),
       correctLetters,
       correctTexts,
       options,
@@ -535,6 +537,60 @@ export function optionLetterIsCorrectForEvaluateResult(
 export type SamplePracticeOptionReviewState = {
   isCorrect: boolean
   showWrongSelection: boolean
+  showPartialCreditSelection?: boolean
+}
+
+export function isPracticePartialCredit(review: PracticeAnswerReview | null | undefined): boolean {
+  if (!review || review.isCorrect) return false
+  if (review.isPartialCredit === true) return true
+  if (typeof review.score === "number" && review.score > 0 && review.score < 100) return true
+  if (
+    typeof review.pointsEarned === "number" &&
+    review.pointsEarned > 0 &&
+    (review.maxPoints ?? 1) > review.pointsEarned
+  ) {
+    return true
+  }
+  return false
+}
+
+/** Per-option highlight state from a practice / hub answerReview payload. */
+export function practiceAnswerReviewOptionState(
+  review: PracticeAnswerReview | null | undefined,
+  letter: string,
+): SamplePracticeOptionReviewState {
+  if (!review) return { isCorrect: false, showWrongSelection: false }
+
+  const upper = letter.toUpperCase()
+  const row = review.options.find((opt) => opt.letter.toUpperCase() === upper)
+  if (!row) return { isCorrect: false, showWrongSelection: false }
+
+  const partial = isPracticePartialCredit(review)
+  if (partial && row) {
+    const hasKnownCorrect = review.options.some((opt) => opt.isCorrect)
+    if (!hasKnownCorrect) {
+      return {
+        isCorrect: false,
+        showWrongSelection: false,
+        showPartialCreditSelection: row.isSelected === true,
+      }
+    }
+    return {
+      isCorrect: row.isCorrect && !row.isSelected,
+      showWrongSelection: row.isSelected && !row.isCorrect,
+      showPartialCreditSelection: row.isSelected && row.isCorrect,
+    }
+  }
+  if (review.isCorrect) {
+    return {
+      isCorrect: row.isCorrect && row.isSelected,
+      showWrongSelection: row.isSelected && !row.isCorrect,
+    }
+  }
+  return {
+    isCorrect: row.isCorrect,
+    showWrongSelection: row.isSelected && !row.isCorrect,
+  }
 }
 
 /** Prefer server `answerReview`; fall back to quiz-taker letter/text matching. */
@@ -542,26 +598,18 @@ export function samplePracticeOptionReviewState(
   letter: string,
   selectedLetters: string[],
   result: {
-    answerReview?: {
-      options: Array<{ letter: string; isSelected: boolean; isCorrect: boolean }>
-    } | null
+    answerReview?: PracticeAnswerReview | null
     parts?: Array<{ correct_answer?: string | string[] | null }>
   } | null,
   options: McqOption[],
 ): SamplePracticeOptionReviewState {
   if (!result) return { isCorrect: false, showWrongSelection: false }
 
-  const upper = letter.toUpperCase()
-  const reviewRow = result.answerReview?.options.find(
-    (row) => row.letter.toUpperCase() === upper,
-  )
-  if (reviewRow) {
-    return {
-      isCorrect: reviewRow.isCorrect,
-      showWrongSelection: reviewRow.isSelected && !reviewRow.isCorrect,
-    }
+  if (result.answerReview?.options?.length) {
+    return practiceAnswerReviewOptionState(result.answerReview, letter)
   }
 
+  const upper = letter.toUpperCase()
   const labels = subquestionOptionLabels({ options })
   const match = labels.find((l) => l.letter.toUpperCase() === upper)
   const correctAnswer = result.parts?.[0]?.correct_answer ?? null
@@ -609,4 +657,287 @@ export function samplePracticeResultSummary(
     return `Partially correct (${Math.round(result.mcq_earned_fraction * 100)}%). Select all that apply: ${correctAnswerLabel}.`
   }
   return `Not quite. The correct answer${isSelectAll ? "s are" : " is"} ${correctAnswerLabel}.`
+}
+
+type ObjectiveQuestionShape = {
+  id: number
+  question_type: string
+  option_a?: string | null
+  option_b?: string | null
+  option_c?: string | null
+  option_d?: string | null
+  option_e?: string | null
+  correct_answer?: string | null
+}
+
+export function objectiveQuestionToGradableMcq(question: ObjectiveQuestionShape): GradableMcqSubQuestion {
+  const options: StructuredMcqOption[] = []
+  for (const letter of ["A", "B", "C", "D", "E"] as const) {
+    const text = question[`option_${letter.toLowerCase()}` as keyof ObjectiveQuestionShape]
+    if (typeof text === "string" && text.trim()) {
+      options.push({ id: letter, text })
+    }
+  }
+  const qType = question.question_type.toLowerCase()
+  const base: GradableMcqSubQuestion = {
+    id: String(question.id),
+    type: question.question_type,
+    prompt: "",
+    options,
+  }
+
+  if (qType === "select_all" || qType === "multi_output") {
+    const parsed = question.correct_answer
+      ? parseStoredSelectAllCorrectAnswers(question.correct_answer)
+      : []
+    return {
+      ...base,
+      correct_answers: parsed.length > 0 ? parsed : undefined,
+      correct_answer: question.correct_answer ?? undefined,
+    }
+  }
+
+  return {
+    ...base,
+    correct_answer: question.correct_answer ?? undefined,
+  }
+}
+
+export function normalizePracticeHubAnswerReview(
+  serverReview: PracticeAnswerReview,
+  evalResult: {
+    isCorrect?: boolean
+    score?: number
+    pointsEarned?: number
+    maxPoints?: number
+  },
+): PracticeAnswerReview {
+  const score =
+    typeof evalResult.score === "number"
+      ? evalResult.score
+      : typeof serverReview.score === "number"
+        ? serverReview.score
+        : undefined
+  const pointsEarned =
+    typeof evalResult.pointsEarned === "number"
+      ? evalResult.pointsEarned
+      : serverReview.pointsEarned
+  const maxPoints =
+    typeof evalResult.maxPoints === "number"
+      ? evalResult.maxPoints
+      : serverReview.maxPoints
+  const isCorrect = evalResult.isCorrect ?? serverReview.isCorrect
+  const isPartialCredit =
+    !isCorrect &&
+    ((typeof score === "number" && score > 0 && score < 100) ||
+      (typeof pointsEarned === "number" &&
+        pointsEarned > 0 &&
+        (maxPoints ?? 1) > pointsEarned))
+
+  return {
+    ...serverReview,
+    isCorrect,
+    isPartialCredit,
+    score,
+    pointsEarned,
+    maxPoints,
+  }
+}
+
+export function buildLocalObjectiveAnswerReview(input: {
+  question: ObjectiveQuestionShape
+  selectedLetters: string[]
+  selectedLetter?: string
+  isCorrect: boolean
+  score?: number
+  pointsEarned?: number
+  maxPoints?: number
+}): PracticeAnswerReview | null {
+  const qType = input.question.question_type.toLowerCase()
+  if (
+    qType !== "select_all" &&
+    qType !== "multi_output" &&
+    qType !== "mcq" &&
+    qType !== "true_false" &&
+    qType !== "multiple_choice"
+  ) {
+    return null
+  }
+
+  const gradable = objectiveQuestionToGradableMcq(input.question)
+  const letters =
+    qType === "select_all" || qType === "multi_output"
+      ? input.selectedLetters
+      : input.selectedLetter?.trim()
+        ? [input.selectedLetter.trim().toUpperCase()]
+        : input.selectedLetters
+
+  if (qType === "select_all" || qType === "multi_output") {
+    const graded = gradeSelectAllAnswer({ ...gradable, type: "select_all" }, letters)
+    return {
+      ...graded.answerReview,
+      pointsEarned: input.pointsEarned,
+      maxPoints: input.maxPoints,
+      score: typeof input.score === "number" ? input.score : graded.answerReview.score,
+    }
+  }
+
+  const correctLetter = resolveMcqCorrectLetter(gradable)
+  if (!correctLetter) return null
+  const labels = subquestionOptionLabels(gradable)
+  const selectedSet = new Set(letters.map((l) => l.toUpperCase()))
+  const options = labels.map(({ letter, text }) => ({
+    letter: letter.toUpperCase(),
+    text,
+    isSelected: selectedSet.has(letter.toUpperCase()),
+    isCorrect: letter.toUpperCase() === correctLetter.toUpperCase(),
+  }))
+
+  return {
+    isCorrect: input.isCorrect,
+    isPartialCredit: false,
+    score: input.isCorrect ? 100 : 0,
+    pointsEarned: input.pointsEarned,
+    maxPoints: input.maxPoints,
+    correctLetters: [correctLetter.toUpperCase()],
+    correctTexts: options.filter((row) => row.isCorrect).map((row) => row.text),
+    options,
+    summary: input.isCorrect ? "Correct!" : `Correct: ${correctLetter.toUpperCase()}`,
+  }
+}
+
+export function isEvalPartialCredit(
+  evalResult: {
+    isCorrect?: boolean
+    score?: number
+    pointsEarned?: number
+    maxPoints?: number
+  },
+  review?: PracticeAnswerReview | null,
+): boolean {
+  if (review && isPracticePartialCredit(review)) return true
+  if (evalResult.isCorrect) return false
+  if (typeof evalResult.score === "number" && evalResult.score > 0 && evalResult.score < 100) {
+    return true
+  }
+  if (
+    typeof evalResult.pointsEarned === "number" &&
+    evalResult.pointsEarned > 0 &&
+    (evalResult.maxPoints ?? 1) > evalResult.pointsEarned
+  ) {
+    return true
+  }
+  return false
+}
+
+export function buildPartialCreditFallbackReview(input: {
+  question: ObjectiveQuestionShape
+  selectedLetters: string[]
+  evalResult: {
+    isCorrect?: boolean
+    score?: number
+    pointsEarned?: number
+    maxPoints?: number
+  }
+}): PracticeAnswerReview | null {
+  if (!isEvalPartialCredit(input.evalResult, null)) return null
+
+  const gradable = objectiveQuestionToGradableMcq(input.question)
+  const labels = subquestionOptionLabels(gradable)
+  const selectedSet = new Set(input.selectedLetters.map((letter) => letter.toUpperCase()))
+  const score =
+    typeof input.evalResult.score === "number"
+      ? input.evalResult.score
+      : input.evalResult.maxPoints && typeof input.evalResult.pointsEarned === "number"
+        ? (input.evalResult.pointsEarned / input.evalResult.maxPoints) * 100
+        : undefined
+
+  const options = labels.map(({ letter, text }) => ({
+    letter: letter.toUpperCase(),
+    text,
+    isSelected: selectedSet.has(letter.toUpperCase()),
+    isCorrect: false,
+  }))
+
+  return {
+    isCorrect: false,
+    isPartialCredit: true,
+    score,
+    pointsEarned: input.evalResult.pointsEarned,
+    maxPoints: input.evalResult.maxPoints,
+    correctLetters: [],
+    correctTexts: [],
+    options,
+    summary:
+      typeof score === "number"
+        ? `Partial credit (${Math.round(score)}%).`
+        : "Partial credit — some selections were correct.",
+  }
+}
+
+export function resolveObjectiveAnswerReview(input: {
+  question: ObjectiveQuestionShape
+  selectedLetters: string[]
+  selectedLetter?: string
+  serverReview?: PracticeAnswerReview | null
+  evalResult: {
+    isCorrect?: boolean
+    score?: number
+    pointsEarned?: number
+    maxPoints?: number
+  }
+}): PracticeAnswerReview | null {
+  if (input.serverReview) {
+    return normalizePracticeHubAnswerReview(input.serverReview, input.evalResult)
+  }
+  if (input.question.correct_answer) {
+    const local = buildLocalObjectiveAnswerReview({
+      question: input.question,
+      selectedLetters: input.selectedLetters,
+      selectedLetter: input.selectedLetter,
+      isCorrect: Boolean(input.evalResult.isCorrect),
+      score: input.evalResult.score,
+      pointsEarned: input.evalResult.pointsEarned,
+      maxPoints: input.evalResult.maxPoints,
+    })
+    if (local) return local
+  }
+  return buildPartialCreditFallbackReview({
+    question: input.question,
+    selectedLetters: input.selectedLetters,
+    evalResult: input.evalResult,
+  })
+}
+
+export function practiceHubFeedbackSummary(
+  review: PracticeAnswerReview | null | undefined,
+  fallback: string,
+  evalResult?: {
+    isCorrect?: boolean
+    score?: number
+    pointsEarned?: number
+    maxPoints?: number
+  },
+): string {
+  if (review) {
+    if (review.summary?.trim()) return review.summary.trim()
+    if (isPracticePartialCredit(review)) {
+      return typeof review.score === "number"
+        ? `Partial credit (${Math.round(review.score)}%).`
+        : "Partial credit — some selections were correct."
+    }
+    return review.isCorrect ? "Correct!" : fallback
+  }
+  if (evalResult && isEvalPartialCredit(evalResult, null)) {
+    const score =
+      typeof evalResult.score === "number"
+        ? evalResult.score
+        : evalResult.maxPoints && typeof evalResult.pointsEarned === "number"
+          ? (evalResult.pointsEarned / evalResult.maxPoints) * 100
+          : undefined
+    return typeof score === "number"
+      ? `Partial credit (${Math.round(score)}%).`
+      : "Partial credit — some selections were correct."
+  }
+  return fallback
 }

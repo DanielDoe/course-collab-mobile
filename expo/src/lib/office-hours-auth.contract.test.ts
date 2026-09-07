@@ -20,6 +20,17 @@ describe("office hours client auth contract", () => {
     assert.doesNotMatch(source, /pending deploy/)
   })
 
+  it("cancelOfficeHours PATCHes the bound student request", () => {
+    const source = readFileSync(join(here, "student-api.ts"), "utf8")
+    const start = source.indexOf("cancelOfficeHours:")
+    assert.ok(start >= 0, "cancelOfficeHours not found")
+    const end = source.indexOf("getRecommendationMeta:", start)
+    const block = end > start ? source.slice(start, end) : source.slice(start, start + 500)
+    assert.match(block, /studentRequest/)
+    assert.match(block, /\/api\/student\/office-hours\/\$\{requestId\}/)
+    assert.match(block, /status: "cancelled"/)
+  })
+
   it("getOfficeHours / createOfficeHours use studentRequest", () => {
     const source = readFileSync(join(here, "student-api.ts"), "utf8")
     const getStart = source.indexOf("getOfficeHours:")

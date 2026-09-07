@@ -28,6 +28,14 @@ import { fetchCoraServerPrivacy, DEFAULT_CORA_SERVER_PRIVACY } from "../lib/cora
 import type { StudentSession } from "../lib/session"
 import { hasNavAccess } from "../constants/student-nav"
 import { CORA_NAME } from "../lib/cora-constants"
+import {
+  insufficientCreditsAlertButtons,
+  iosCoraLiteNotice,
+  iosInsufficientCoraCreditsNotice,
+  iosMembershipRequiredNotice,
+  isIosPurchaseUiHidden,
+  tierLockedAlertButtons,
+} from "../lib/purchase-navigation"
 import type { MembershipTier } from "../types/dashboard"
 import { isCoraLiteEligible } from "../lib/cora/credits/economy"
 
@@ -129,21 +137,23 @@ export function useStudentSamplePracticeCoraChat(options: {
 
       if (!membershipTierLoaded) return
       if (!hasNavAccess(membershipTier, "Explorer")) {
-        AppAlert.alert("Upgrade required", `${CORA_NAME} requires Explorer or Trailblazer membership.`, [
-          { text: "Cancel", style: "cancel" },
-          { text: "View plans", onPress: () => router.push("/membership" as never) },
-        ])
+        AppAlert.alert(
+          isIosPurchaseUiHidden() ? "Membership required" : "Upgrade required",
+          isIosPurchaseUiHidden()
+            ? iosMembershipRequiredNotice("Explorer or Trailblazer")
+            : `${CORA_NAME} requires Explorer or Trailblazer membership.`,
+          tierLockedAlertButtons(() => router.push("/membership" as never)),
+        )
         return
       }
 
       if (credits?.coraMode === "lite" && trimmed && !isCoraLiteEligible(trimmed)) {
         AppAlert.alert(
           "Cora Lite",
-          "Premium generation needs Cora Credits. Buy a pack on Plans, or ask about grades, deadlines, and navigation.",
-          [
-            { text: "Not now", style: "cancel" },
-            { text: "View packs", onPress: () => router.push("/membership" as never) },
-          ],
+          isIosPurchaseUiHidden()
+            ? iosCoraLiteNotice()
+            : "Premium generation needs Cora Credits. Buy a pack on Plans, or ask about grades, deadlines, and navigation.",
+          insufficientCreditsAlertButtons(() => router.push("/membership" as never)),
         )
         return
       }
@@ -151,11 +161,10 @@ export function useStudentSamplePracticeCoraChat(options: {
       if (credits && credits.coraMode !== "lite" && credits.credits <= 0) {
         AppAlert.alert(
           "No credits left",
-          `You've used your ${CORA_NAME} credits for this period. Buy a pack or wait for your monthly refresh.`,
-          [
-            { text: "Not now", style: "cancel" },
-            { text: "View packs", onPress: () => router.push("/membership" as never) },
-          ],
+          isIosPurchaseUiHidden()
+            ? iosInsufficientCoraCreditsNotice()
+            : `You've used your ${CORA_NAME} credits for this period. Buy a pack or wait for your monthly refresh.`,
+          insufficientCreditsAlertButtons(() => router.push("/membership" as never)),
         )
         return
       }

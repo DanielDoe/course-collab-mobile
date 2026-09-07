@@ -188,6 +188,9 @@ export const courseInfoApi = {
       description: payload.description,
       preferredDates: payload.preferredDates}),
 
+  cancelOfficeHours: (session: StudentSession, requestId: number) =>
+    studentApi.cancelOfficeHours(session, requestId),
+
   getCalendarEvents: async (session: StudentSession, range?: { startDate: Date; endDate: Date }) => {
     const data = await studentApi.getCalendarEvents(session, range)
     return (data.events ?? []) as CalendarEvent[]

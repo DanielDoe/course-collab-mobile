@@ -9,7 +9,8 @@ import type {
 import { parseMembershipTier } from "./membership-tier"
 import type { StudentSession } from "./session"
 import { ApiError, studentAuthenticatedRequest, type QuizListRolloverPolicy } from "./student-api"
-import { studentContentPath } from "./student-content-context"
+import { studentContentPath, normalizedStudentDatabaseId } from "./student-content-context"
+import { enrichStudentContentSession } from "./student-content-session"
 import {
   buildStudentDashboardFromRaw,
   type DashboardRawData,
@@ -31,12 +32,28 @@ function markUnavailable(
 }
 
 /** Dual-role auth misses and empty-term 500s are 0, not a failed widget. */
+function isDashboardSoftMiss(err: unknown): boolean {
+  if (err instanceof ApiError) {
+    return (
+      err.status === 400 ||
+      err.status === 401 ||
+      err.status === 403 ||
+      err.status === 404 ||
+      err.status === 500 ||
+      err.status === 503 ||
+      err.status === 0
+    )
+  }
+  if (err instanceof Error) {
+    if (err.message === "Student authentication required") return true
+    if (err.name === "AbortError") return true
+  }
+  return false
+}
+
 function emptyIfSoftMiss<T>(promise: Promise<T>, empty: T): Promise<T> {
   return promise.catch((err) => {
-    if (
-      err instanceof ApiError &&
-      (err.status === 401 || err.status === 403 || err.status === 404 || err.status === 500)
-    ) {
+    if (isDashboardSoftMiss(err)) {
       return empty
     }
     throw err
@@ -44,60 +61,71 @@ function emptyIfSoftMiss<T>(promise: Promise<T>, empty: T): Promise<T> {
 }
 
 async function fetchStudentDashboardRawData(session: StudentSession): Promise<DashboardRawData> {
-  const homeworkStudentId = session.id || session.databaseId
+  const contentSession = await enrichStudentContentSession(session)
+  const homeworkStudentId =
+    normalizedStudentDatabaseId(contentSession) || contentSession.id?.trim() || ""
 
   const results = await Promise.allSettled([
     emptyIfSoftMiss(
       studentAuthenticatedRequest<GradePayload>(
-        session,
-        studentContentPath(session, "/api/grades/student"),
+        contentSession,
+        studentContentPath(contentSession, "/api/grades/student"),
       ),
       {},
     ),
     emptyIfSoftMiss(
       studentAuthenticatedRequest<{ quizHistory?: NonNullable<DashboardRawData["quizHistory"]> }>(
-        session,
-        studentContentPath(session, "/api/student/quiz-history"),
+        contentSession,
+        studentContentPath(contentSession, "/api/student/quiz-history"),
       ),
       { quizHistory: [] },
     ),
     homeworkStudentId
-      ? studentAuthenticatedRequest<{
-          homeworkHistory?: NonNullable<DashboardRawData["homeworkHistory"]>
-          stats?: { overdue?: number; pending?: number }
-        }>(
-          session,
-          studentContentPath(session, "/api/student/homework-history", {
-            studentId: homeworkStudentId,
-          }),
+      ? emptyIfSoftMiss(
+          studentAuthenticatedRequest<{
+            homeworkHistory?: NonNullable<DashboardRawData["homeworkHistory"]>
+            stats?: { overdue?: number; pending?: number }
+          }>(
+            contentSession,
+            studentContentPath(contentSession, "/api/student/homework-history", {
+              studentId: homeworkStudentId,
+            }),
+          ),
+          { homeworkHistory: [], stats: { overdue: 0, pending: 0 } },
         )
       : Promise.resolve(null),
     emptyIfSoftMiss(
       studentAuthenticatedRequest<{ attendance?: Record<string, number> }>(
-        session,
-        studentContentPath(session, "/api/attendance/score"),
+        contentSession,
+        studentContentPath(contentSession, "/api/attendance/score"),
       ),
       { attendance: {} },
     ),
     emptyIfSoftMiss(
       studentAuthenticatedRequest<{ streak?: { currentStreak?: number } }>(
-        session,
-        studentContentPath(session, "/api/attendance/streaks"),
+        contentSession,
+        studentContentPath(contentSession, "/api/attendance/streaks"),
       ),
       { streak: { currentStreak: 0 } },
     ),
-    studentAuthenticatedRequest<{ quizzes?: { available_until?: string }[]; rollover_policy?: QuizListRolloverPolicy }>(
-      session,
-      studentContentPath(session, "/api/student/quizzes", { assessmentType: "quiz" }),
+    emptyIfSoftMiss(
+      studentAuthenticatedRequest<{ quizzes?: { available_until?: string }[]; rollover_policy?: QuizListRolloverPolicy }>(
+        contentSession,
+        studentContentPath(contentSession, "/api/student/quizzes", { assessmentType: "quiz" }),
+      ),
+      { quizzes: [] },
     ),
-    studentAuthenticatedRequest<{ finals?: { status?: string }[] }>(
-      session,
-      studentContentPath(session, "/api/student/finals", { studentId: homeworkStudentId }),
+    emptyIfSoftMiss(
+      studentAuthenticatedRequest<{ finals?: { status?: string }[] }>(
+        contentSession,
+        studentContentPath(contentSession, "/api/student/finals", { studentId: homeworkStudentId }),
+      ),
+      { finals: [] },
     ),
     emptyIfSoftMiss(
       studentAuthenticatedRequest<{ summary?: { total_points?: number | string } }>(
-        session,
-        studentContentPath(session, "/api/classroom-points"),
+        contentSession,
+        studentContentPath(contentSession, "/api/classroom-points"),
       ),
       { summary: { total_points: 0 } },
     ),
@@ -185,12 +213,19 @@ export async function fetchPerformanceInsights(session: StudentSession): Promise
 }
 
 export async function fetchMembershipTier(session: StudentSession): Promise<MembershipTier> {
-  const payload = await studentAuthenticatedRequest<{ membership?: { tier?: string } }>(
-    session,
-    `/api/student/membership?studentId=${encodeURIComponent(session.databaseId)}`,
-  )
-  if (payload.membership?.tier) {
-    return parseMembershipTier(payload.membership.tier)
+  const databaseId = normalizedStudentDatabaseId(session)
+  if (databaseId) {
+    try {
+      const payload = await studentAuthenticatedRequest<{ membership?: { tier?: string } }>(
+        session,
+        `/api/student/membership?studentId=${encodeURIComponent(databaseId)}`,
+      )
+      if (payload.membership?.tier) {
+        return parseMembershipTier(payload.membership.tier)
+      }
+    } catch {
+      /* fall through to /api/student/info */
+    }
   }
 
   if (session.id) {
@@ -208,10 +243,12 @@ export async function fetchMembershipTier(session: StudentSession): Promise<Memb
 
 export async function fetchClassroomPoints(session: StudentSession): Promise<number> {
   const enc = encodeURIComponent
+  const databaseId = normalizedStudentDatabaseId(session)
+  if (!databaseId) return 0
   const path =
     session.section && session.section !== "ALL"
-      ? `/api/classroom-points?studentId=${enc(session.databaseId)}&session=${enc(session.section)}`
-      : `/api/classroom-points?studentId=${enc(session.databaseId)}`
+      ? `/api/classroom-points?studentId=${enc(databaseId)}&session=${enc(session.section)}`
+      : `/api/classroom-points?studentId=${enc(databaseId)}`
   const payload = await studentAuthenticatedRequest<{ summary?: { total_points?: number | string } }>(
     session,
     path,
@@ -220,11 +257,13 @@ export async function fetchClassroomPoints(session: StudentSession): Promise<num
 }
 
 export async function fetchNotificationCount(session: StudentSession): Promise<number> {
+  const databaseId = normalizedStudentDatabaseId(session)
+  if (!databaseId) return 0
   const payload = await studentAuthenticatedRequest<{
     notifications?: { is_read?: boolean }[]
     unreadCount?: number
     unread_count?: number
-  }>(session, `/api/student/notifications?studentId=${encodeURIComponent(session.databaseId)}&limit=50`)
+  }>(session, `/api/student/notifications?studentId=${encodeURIComponent(databaseId)}&limit=50`)
   if (typeof payload.unread_count === "number") return payload.unread_count
   if (typeof payload.unreadCount === "number") return payload.unreadCount
   return Array.isArray(payload.notifications)

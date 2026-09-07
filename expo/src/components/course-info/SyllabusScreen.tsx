@@ -12,6 +12,7 @@ import {
   filterSyllabusSections,
   getSyllabusSectionDisplayTitle,
   getSyllabusSectionId,
+  isUnpublishedSyllabusMessage,
   normalizeSearchQuery,
   prepareSyllabusForDisplay,
   type SyllabusSection,
@@ -108,6 +109,14 @@ export function SyllabusScreen() {
       setCourseInfo(data.courseInfo)
       setOpenIds(defaultExpandedSectionIds(prepared.sections))
     } catch (err) {
+      if (isUnpublishedSyllabusMessage(err)) {
+        setSections([])
+        setMeta({})
+        setCourseInfo(null)
+        setOpenIds(new Set())
+        setError("")
+        return
+      }
       setError(err instanceof ApiError ? err.message : "Failed to load syllabus.")
     }
   }, [session])
@@ -160,9 +169,10 @@ export function SyllabusScreen() {
     <ModuleScreen
       loading={loading}
       error={error}
-      empty={!loading && sections.length === 0}
+      empty={!loading && !error && sections.length === 0}
       emptyTitle="Syllabus not published"
-      emptyBody="Your instructor has not published the syllabus yet."
+      emptyBody="Your instructor has not published the syllabus for this course yet. This is not an error — check back after it is posted."
+      emptyIcon="document-text-outline"
       refreshing={refreshing}
       onRefresh={() => {
         setRefreshing(true)

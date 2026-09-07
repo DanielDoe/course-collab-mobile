@@ -38,6 +38,7 @@ export function ProfileMenu({ session }: Props) {
     profileOpen,
     closeProfile,
     openNotifications,
+    openCoursePicker,
     membershipTier,
     membershipTierLoaded,
     classroomPoints,
@@ -127,6 +128,16 @@ export function ProfileMenu({ session }: Props) {
             onPress={() => {
               closeProfile()
               openNotifications()
+            }}
+            showSeparator
+          />
+          <GlassMenuRow
+            icon="book-outline"
+            label="Switch course"
+            detail={courseLine ?? undefined}
+            onPress={() => {
+              closeProfile()
+              openCoursePicker()
             }}
             showSeparator
           />

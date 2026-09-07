@@ -276,7 +276,8 @@ export function GuestRecommendationDetailScreen() {
       <NotetakerScreenHeader title="Letter workspace" fallbackHref="/module/recommendations" />
       <KeyboardAvoidingView
         style={{ flex: 1, backgroundColor: native.groupedBackground }}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? insets.top + 56 : 0}
       >
       <ScrollView
         style={[collabSheetStyles.root, { backgroundColor: native.groupedBackground }]}

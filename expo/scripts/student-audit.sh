@@ -125,7 +125,7 @@ relaunch() {
 
 login_student() {
   echo "▸ signing in as student (dmdoe@cougarnet.uh.edu) …"
-  open_route "/dev-student-login"
+  open_route "/dev-student-login?force=1"
   sleep 6
 }
 

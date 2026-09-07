@@ -1,6 +1,8 @@
+import type { UniversityRecord } from "./api"
 import * as SecureStore from "./secure-store-client"
 
 const CREDENTIALS_KEY = "rememberedFacultyAuth"
+const UNIVERSITY_KEY = "rememberedFacultyUniversity"
 
 export type RememberedFacultyCredentials = {
   username: string
@@ -41,6 +43,33 @@ export async function persistRememberedFacultyCredentials(
 export async function clearRememberedFacultyCredentials(): Promise<void> {
   try {
     await SecureStore.deleteItemAsync(CREDENTIALS_KEY)
+  } catch {
+    // ignore
+  }
+}
+
+export async function readRememberedFacultyUniversity(): Promise<UniversityRecord | null> {
+  try {
+    const raw = await SecureStore.getItemAsync(UNIVERSITY_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as UniversityRecord
+    if (!parsed?.id || !parsed?.short_name) return null
+    return parsed
+  } catch {
+    return null
+  }
+}
+
+export async function persistRememberedFacultyUniversity(
+  university: UniversityRecord,
+): Promise<void> {
+  if (!university?.id || !university.short_name) return
+  await SecureStore.setItemAsync(UNIVERSITY_KEY, JSON.stringify(university))
+}
+
+export async function clearRememberedFacultyUniversity(): Promise<void> {
+  try {
+    await SecureStore.deleteItemAsync(UNIVERSITY_KEY)
   } catch {
     // ignore
   }

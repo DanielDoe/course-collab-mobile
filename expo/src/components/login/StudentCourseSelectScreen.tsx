@@ -7,6 +7,8 @@ import { ApiError, api, type UniversityStudentLoginResponse } from "../../lib/ap
 import { parseAccessLifecyclePayload } from "../../lib/access-governance"
 import { formatStudentLoginApiError } from "../../lib/student-login-errors"
 import { completeStudentUniversityLogin } from "../../lib/student-login-completion"
+import { enrollmentsFromLoginOptions } from "../../lib/student-enrollments-api"
+import { stashStudentEnrollments } from "../../lib/student-enrollments-cache"
 import { normalizeLoginIdentifier, normalizeLoginPassword } from "../../lib/login-credentials"
 import {
   clearPendingStudentCourseLogin,
@@ -94,6 +96,14 @@ export function StudentCourseSelectScreen() {
   }
 
   async function finishLogin(data: Extract<UniversityStudentLoginResponse, { student: unknown }>) {
+    const loginEnrollments = enrollmentsFromLoginOptions(data.enrollments ?? pending!.enrollments, {
+      courseId: data.enrollment?.courseId ?? pending!.enrollments[0]?.courseId,
+      courseCode: data.enrollment?.courseCode ?? pending!.enrollments[0]?.courseCode,
+      courseTitle: data.enrollment?.courseTitle ?? pending!.enrollments[0]?.courseTitle,
+      section: data.enrollment?.section ?? data.student.section ?? pending!.enrollments[0]?.section,
+      sessionId: data.enrollment?.sessionId ?? pending!.enrollments[0]?.sessionId,
+      studentRowId: data.enrollment?.studentRowId ?? pending!.enrollments[0]?.studentRowId,
+    })
     clearPendingStudentCourseLogin()
     await completeStudentUniversityLogin({
       data,
@@ -103,9 +113,12 @@ export function StudentCourseSelectScreen() {
       rememberMe: pending!.rememberMe,
       signIn,
     })
+    if (loginEnrollments.length > 0) {
+      stashStudentEnrollments(loginEnrollments)
+    }
   }
 
-  async function selectCourse(courseId: number) {
+  async function selectCourse(course: { courseId: number; section?: string }) {
     if (!pending) return
     const id = normalizeLoginIdentifier(pending.identifier)
     const pw = normalizeLoginPassword(pending.password)
@@ -118,7 +131,8 @@ export function StudentCourseSelectScreen() {
         identifier: id,
         password: pw,
         rememberMe: pending.rememberMe,
-        courseId,
+        courseId: course.courseId,
+        section: course.section,
       })
 
       if (isCourseSelectionResponse(data)) {
@@ -204,9 +218,9 @@ export function StudentCourseSelectScreen() {
           <View style={styles.uniList}>
             {pending.enrollments.map((course) => (
               <Pressable
-                key={course.courseId}
+                key={`${course.courseId}-${course.section ?? ""}`}
                 disabled={submitting}
-                onPress={() => void selectCourse(course.courseId)}
+                onPress={() => void selectCourse({ courseId: course.courseId, section: course.section })}
                 style={({ pressed }) => [
                   styles.uniRow,
                   {
@@ -219,7 +233,9 @@ export function StudentCourseSelectScreen() {
               >
                 <View style={styles.uniText}>
                   <Text style={[loginType.stepLabel, { color: LOGIN.label }]}>{course.courseTitle}</Text>
-                  <Text style={[loginType.info, { color: LOGIN.secondaryLabel }]}>{course.courseCode}</Text>
+                  <Text style={[loginType.info, { color: LOGIN.secondaryLabel }]}>
+                    {[course.courseCode, course.section].filter(Boolean).join(" • ")}
+                  </Text>
                 </View>
                 <Ionicons name="chevron-forward" size={18} color={linkAccent} />
               </Pressable>

@@ -21,6 +21,7 @@ export type InvalidationTarget =
   | "faculty.students"
   | "faculty.flashcards"
   | "faculty.officeHours"
+  | "faculty.calendar"
   | "student.practice"
   | "student.groups"
   | "student.projects"
@@ -67,7 +68,9 @@ export const INVALIDATION_GRAPH: Record<string, InvalidationTarget[]> = {
   "cora.lecture.createShell": ["student.lectures"],
   "cora.personalPracticeQuiz.create": ["student.practice"],
   "student.officeHours.create": ["student.officeHours", "faculty.officeHours"],
-  "faculty.officeHours.mutate": ["faculty.officeHours", "student.officeHours"],
+  "student.officeHours.cancel": ["student.officeHours", "faculty.officeHours"],
+  "faculty.officeHours.mutate": ["faculty.officeHours", "student.officeHours", "faculty.calendar", "student.calendar"],
+  "faculty.scheduleAdjustment.finalize": ["faculty.calendar", "student.calendar"],
   "student.groups.mutate": ["student.groups"],
   "student.projects.mutate": ["student.projects"],
   "cora.personalCalendar.createEvents": ["student.calendar"],
@@ -151,6 +154,9 @@ export function invalidateTargets(
         break
       case "faculty.officeHours":
         void queryClient.invalidateQueries({ queryKey: queryKeys.faculty.officeHours.root(scope) })
+        break
+      case "faculty.calendar":
+        void queryClient.invalidateQueries({ queryKey: queryKeys.faculty.calendar.root(scope) })
         break
       case "student.practice":
         void queryClient.invalidateQueries({ queryKey: queryKeys.student.practice.root(scope) })

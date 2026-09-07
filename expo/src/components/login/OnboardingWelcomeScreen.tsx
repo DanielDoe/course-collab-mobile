@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
-import { Pressable, StyleSheet, Text, View } from "react-native"
+import { StyleSheet, Text, View } from "react-native"
 import { useRouter } from "expo-router"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useSession } from "../../context/SessionProvider"
@@ -91,81 +91,94 @@ export function OnboardingWelcomeScreen() {
       pillLabel="Getting started"
       icon="hand-left-outline"
       title={firstName ? `Welcome, ${firstName}` : "Welcome to CourseCollab"}
-      subtitle="Before your dashboard, we'll walk through legal agreements, AI settings, and a few preferences."
-      scrollable
+      subtitle="Legal agreements, AI settings, and a few preferences — about two minutes."
+      compact
+      scrollable={steps.length > 4}
       footer={
-        <LoginButton
-          label="Get started"
-          icon="arrow-forward"
-          onPress={() => void handleContinue()}
-          loading={continuing}
-        />
+        <View style={styles.footerStack}>
+          <View style={[styles.note, { backgroundColor: LOGIN.fill, borderColor: LOGIN.separator }]}>
+            <Ionicons name="information-circle-outline" size={16} color={LOGIN.purple} />
+            <Text style={[loginType.info, styles.noteText, { color: LOGIN.secondaryLabel }]}>
+              Review Privacy, Terms, and AI disclosures anytime under Settings → Privacy & legal.
+            </Text>
+          </View>
+          <LoginButton
+            label="Get started"
+            icon="arrow-forward"
+            onPress={() => void handleContinue()}
+            loading={continuing}
+          />
+        </View>
       }
     >
-      <View style={styles.cards}>
-        {steps.map((step, index) => {
-          const card = STEP_CARDS[step]
-          return (
-            <View
-              key={step}
-              style={[styles.card, { backgroundColor: LOGIN.grouped, borderColor: LOGIN.separator }]}
-            >
-              <View style={[styles.iconTile, { backgroundColor: LOGIN.soft }]}>
-                <Ionicons name={card.icon} size={20} color={LOGIN.purple} />
-              </View>
-              <View style={styles.cardCopy}>
-                <Text style={[loginType.stepLabel, { color: LOGIN.label }]}>
-                  {index + 1}. {card.label}
-                </Text>
-                <Text style={[loginType.info, { color: LOGIN.secondaryLabel, lineHeight: 20 }]}>
-                  {card.description}
-                </Text>
-              </View>
-            </View>
-          )
-        })}
-      </View>
-
-      <Pressable
-        style={[styles.note, { backgroundColor: LOGIN.fill, borderColor: LOGIN.separator }]}
-        accessibilityRole="text"
-      >
-        <Ionicons name="information-circle-outline" size={18} color={LOGIN.purple} />
-        <Text style={[loginType.body, styles.noteText, { color: LOGIN.label }]}>
-          You can review Privacy, Terms, and AI disclosures anytime under Settings → Privacy & legal.
+      <View style={styles.section}>
+        <Text style={[loginType.fieldLabel, styles.sectionLabel, { color: LOGIN.secondaryLabel }]}>
+          What&apos;s next
         </Text>
-      </Pressable>
+        <View style={[styles.checklist, { backgroundColor: LOGIN.grouped, borderColor: LOGIN.separator }]}>
+          {steps.map((step, index) => {
+            const card = STEP_CARDS[step]
+            const last = index === steps.length - 1
+            return (
+              <View
+                key={step}
+                style={[
+                  styles.checklistRow,
+                  !last && { borderBottomColor: LOGIN.separator, borderBottomWidth: StyleSheet.hairlineWidth },
+                ]}
+              >
+                <View style={[styles.iconTile, { backgroundColor: LOGIN.soft }]}>
+                  <Ionicons name={card.icon} size={18} color={LOGIN.purple} />
+                </View>
+                <View style={styles.rowCopy}>
+                  <Text style={[loginType.stepLabel, { color: LOGIN.label }]}>
+                    {index + 1}. {card.label}
+                  </Text>
+                  <Text style={[loginType.info, { color: LOGIN.secondaryLabel, lineHeight: 18 }]}>
+                    {card.description}
+                  </Text>
+                </View>
+              </View>
+            )
+          })}
+        </View>
+      </View>
     </OnboardingShell>
   )
 }
 
 const styles = StyleSheet.create({
-  cards: { gap: 10 },
-  card: {
+  section: { gap: 8 },
+  sectionLabel: { paddingHorizontal: 2 },
+  checklist: {
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: "hidden",
+  },
+  checklistRow: {
     flexDirection: "row",
     alignItems: "flex-start",
     gap: 12,
-    padding: 14,
-    borderRadius: 16,
-    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 12,
+    paddingVertical: 13,
   },
   iconTile: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+    width: 36,
+    height: 36,
+    borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
   },
-  cardCopy: { flex: 1, gap: 4 },
+  rowCopy: { flex: 1, gap: 2 },
+  footerStack: { gap: 10, width: "100%" },
   note: {
     flexDirection: "row",
     alignItems: "flex-start",
-    gap: 12,
-    marginTop: 18,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    borderRadius: 14,
+    gap: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    borderRadius: 12,
     borderWidth: StyleSheet.hairlineWidth,
   },
-  noteText: { flex: 1, lineHeight: 22 },
+  noteText: { flex: 1, lineHeight: 18 },
 })

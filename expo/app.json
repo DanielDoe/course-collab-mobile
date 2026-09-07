@@ -6,12 +6,8 @@
     "orientation": "portrait",
     "icon": "./assets/logo-mark.png",
     "scheme": "coursecollab",
-    "newArchEnabled": true,
     "userInterfaceStyle": "automatic",
     "backgroundColor": "#582c83",
-    "splash": {
-      "backgroundColor": "#582c83"
-    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.coursecollab.app",
@@ -25,7 +21,6 @@
       ],
       "infoPlist": {
         "UIUserInterfaceStyle": "Automatic",
-        "LSMinimumSystemVersion": "15.1",
         "NSCalendarsUsageDescription": "CourseCollab adds your class schedule to Apple Calendar and sends class reminders.",
         "NSCalendarsFullAccessUsageDescription": "CourseCollab adds your class schedule to Apple Calendar and sends class reminders.",
         "NSUserNotificationsUsageDescription": "CourseCollab sends class reminders, quiz deadlines, announcements, and course messages.",
@@ -34,12 +29,17 @@
         "NSCameraUsageDescription": "CourseCollab uses the camera when you choose to capture and upload coursework or profile content.",
         "NSPhotoLibraryUsageDescription": "CourseCollab needs photo access when you choose to upload coursework or profile content.",
         "NSFaceIDUsageDescription": "CourseCollab uses Face ID to protect your saved login session in Secure Store.",
+        "ITSAppUsesNonExemptEncryption": false,
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoads": false,
           "NSAllowsLocalNetworking": false
         },
         "UIBackgroundModes": [
           "remote-notification"
+        ],
+        "LSApplicationQueriesSchemes": [
+          "webcal",
+          "webcals"
         ]
       }
     },
@@ -49,6 +49,7 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.coursecollab.app",
+      "softwareKeyboardLayoutMode": "resize",
       "versionCode": 1,
       "permissions": [
         "android.permission.POST_NOTIFICATIONS",
@@ -71,7 +72,10 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#582c83"
+          "backgroundColor": "#582c83",
+          "image": "./assets/logo-mark.png",
+          "imageWidth": 120,
+          "resizeMode": "contain"
         }
       ],
       "expo-asset",
@@ -110,7 +114,6 @@
       [
         "@stripe/stripe-react-native",
         {
-          "merchantIdentifier": "merchant.com.coursecollab.app",
           "enableGooglePay": true
         }
       ],
@@ -118,12 +121,18 @@
         "expo-build-properties",
         {
           "ios": {
-            "buildReactNativeFromSource": true
+            "deploymentTarget": "16.4",
+            "buildReactNativeFromSource": true,
+            "newArchEnabled": true
+          },
+          "android": {
+            "newArchEnabled": true
           }
         }
       ],
       "@config-plugins/react-native-pdf",
-      "@config-plugins/react-native-blob-util"
+      "@config-plugins/react-native-blob-util",
+      "expo-image"
     ],
     "owner": "danieldoe"
   }

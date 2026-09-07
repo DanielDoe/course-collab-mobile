@@ -24,6 +24,7 @@ import type { GuestSession } from "../../lib/session"
 import { useNativeType } from "../../lib/themed-module-theme"
 import { NATIVE } from "../../constants/faculty-native-theme"
 import { GUEST_FREE_STARTER_CORA_CREDITS } from "../../lib/guest-membership-config"
+import { shouldShowPurchaseCta } from "../../lib/purchase-navigation"
 
 export function GuestCoraCreditsScreen() {
   const router = useRouter()
@@ -63,12 +64,13 @@ export function GuestCoraCreditsScreen() {
   const buyPack = useCallback(
     (packId: string) => {
       if (!guestSession) return
-      openGuestCoraCreditsCheckout(router, packId)
+      openGuestCoraCreditsCheckout(router, packId, guestSession)
     },
     [guestSession, router],
   )
 
   if (!guestSession) return null
+  const showPurchaseActions = shouldShowPurchaseCta()
 
   return (
     <View style={[styles.screenRoot, { backgroundColor: native.groupedBackground }]}>
@@ -93,7 +95,7 @@ export function GuestCoraCreditsScreen() {
             isLow={entitlements.coraCredits.isLow}
           />
 
-          {entitlements.plan !== "cora_career" ? (
+          {showPurchaseActions && entitlements.plan !== "cora_career" ? (
             <Pressable
               style={[
                 styles.upgradeBanner,
@@ -102,7 +104,7 @@ export function GuestCoraCreditsScreen() {
                   borderColor: creditsTheme.secondaryBorder,
                 },
               ]}
-              onPress={() => openGuestCoraCareerCheckout(router)}
+              onPress={() => openGuestCoraCareerCheckout(router, guestSession)}
             >
               <View
                 style={[
@@ -122,35 +124,43 @@ export function GuestCoraCreditsScreen() {
             </Pressable>
           ) : null}
 
-          <View style={styles.packHeader}>
-            <View
-              style={[
-                styles.packHeaderIcon,
-                { backgroundColor: hexToRgba(creditsTheme.creditsAccent, tokens.isDark ? 0.18 : 0.12) },
-              ]}
-            >
-              <Ionicons name="flash" size={18} color={creditsTheme.creditsAccent} />
-            </View>
-            <View style={styles.packHeaderCopy}>
-              <Text style={[type.bodyEmphasis, { color: native.label }]}>Cora Credit Packs</Text>
-              <Text style={[type.caption, { color: native.secondaryLabel, lineHeight: 18 }]}>
-                Purchased credits stack on your balance and work across eligible Cora tools.
-              </Text>
-            </View>
-          </View>
+          {showPurchaseActions ? (
+            <>
+              <View style={styles.packHeader}>
+                <View
+                  style={[
+                    styles.packHeaderIcon,
+                    { backgroundColor: hexToRgba(creditsTheme.creditsAccent, tokens.isDark ? 0.18 : 0.12) },
+                  ]}
+                >
+                  <Ionicons name="flash" size={18} color={creditsTheme.creditsAccent} />
+                </View>
+                <View style={styles.packHeaderCopy}>
+                  <Text style={[type.bodyEmphasis, { color: native.label }]}>Cora Credit Packs</Text>
+                  <Text style={[type.caption, { color: native.secondaryLabel, lineHeight: 18 }]}>
+                    Purchased credits stack on your balance and work across eligible Cora tools.
+                  </Text>
+                </View>
+              </View>
 
-          <View style={styles.packList}>
-            {packs.map((pack, index) => (
-              <CreditPackCard
-                key={pack.id}
-                creditsTheme={creditsTheme}
-                pack={pack}
-                packIndex={index}
-                highlight={pack.highlight}
-                onBuy={() => buyPack(pack.id)}
-              />
-            ))}
-          </View>
+              <View style={styles.packList}>
+                {packs.map((pack, index) => (
+                  <CreditPackCard
+                    key={pack.id}
+                    creditsTheme={creditsTheme}
+                    pack={pack}
+                    packIndex={index}
+                    highlight={pack.highlight}
+                    onBuy={() => buyPack(pack.id)}
+                  />
+                ))}
+              </View>
+            </>
+          ) : entitlements.coraCredits.available <= 0 ? (
+            <Text style={[type.caption, { color: native.secondaryLabel, lineHeight: 20, marginTop: 8 }]}>
+              Your available Cora credits have been used.
+            </Text>
+          ) : null}
         </ModuleScreen>
       </View>
     </View>

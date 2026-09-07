@@ -1,4 +1,5 @@
 import type { AppSession, FacultySession, StudentSession } from "../session"
+import { normalizedStudentDatabaseId } from "../student-content-context"
 
 export type QueryPortal = "student" | "faculty" | "admin" | "guest" | "summer"
 
@@ -9,12 +10,20 @@ export type QueryScope = {
   section: string | null
 }
 
-export function queryScopeFromSession(session: AppSession, facultyCourseId?: number | null): QueryScope {
+export function queryScopeFromSession(
+  session: AppSession,
+  courseIdOverride?: number | null,
+  sectionOverride?: string | null,
+): QueryScope {
   if (session.portal === "student") {
-    return studentQueryScope(session)
+    return studentQueryScope({
+      ...session,
+      ...(courseIdOverride != null ? { courseId: courseIdOverride } : {}),
+      ...(sectionOverride != null ? { section: sectionOverride } : {}),
+    })
   }
   if (session.portal === "faculty") {
-    return facultyQueryScope(session, facultyCourseId ?? null)
+    return facultyQueryScope(session, courseIdOverride ?? null)
   }
   if (session.portal === "admin") {
     return {
@@ -33,9 +42,11 @@ export function queryScopeFromSession(session: AppSession, facultyCourseId?: num
 }
 
 export function studentQueryScope(session: StudentSession): QueryScope {
+  const userId =
+    normalizedStudentDatabaseId(session) ?? session.id?.trim() ?? session.databaseId?.trim() ?? ""
   return {
     portal: "student",
-    userId: session.databaseId,
+    userId,
     courseId: session.courseId ?? null,
     section: session.section?.trim() || null,
   }
@@ -57,8 +68,9 @@ export function studentInboxScope(session: {
 export function facultyQueryScopeFromInstructor(scope: {
   instructorId: number
   courseId?: number | null
+  sessionCode?: string | null
 }): QueryScope {
-  return facultyQueryScope({ id: scope.instructorId }, scope.courseId ?? null)
+  return facultyQueryScope({ id: scope.instructorId }, scope.courseId ?? null, scope.sessionCode ?? null)
 }
 
 export function facultyQueryScope(

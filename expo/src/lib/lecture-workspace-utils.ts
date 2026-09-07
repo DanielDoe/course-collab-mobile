@@ -283,6 +283,19 @@ export function parseLectureWorkspaceStudentApiResponse(raw: unknown): LectureWo
   const labelSource = record.button_label ?? configRecord?.button_label
   const enabledSource = record.enabled ?? configRecord?.enabled
 
+  const drafts: Record<string, string> = {}
+  const rawDrafts = Array.isArray(record.drafts) ? record.drafts : []
+  for (const row of rawDrafts) {
+    if (!row || typeof row !== "object") continue
+    const draft = row as { question_id?: unknown; student_answer?: unknown }
+    const questionId = String(draft.question_id ?? "").trim()
+    if (!questionId) continue
+    drafts[questionId] =
+      typeof draft.student_answer === "string"
+        ? draft.student_answer
+        : JSON.stringify(draft.student_answer ?? {})
+  }
+
   return {
     enabled: enabledSource !== false,
     title:
@@ -292,6 +305,7 @@ export function parseLectureWorkspaceStudentApiResponse(raw: unknown): LectureWo
         ? labelSource.trim()
         : DEFAULT_BUTTON_LABEL,
     questions,
+    drafts,
   }
 }
 

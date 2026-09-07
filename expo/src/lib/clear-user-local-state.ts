@@ -1,3 +1,5 @@
+import { queryScopeFromSession } from "./query/scope"
+import { clearPersistedQueryCache, clearPersistedQueryCacheForUser } from "./query/persist"
 import { resetAppBootstrapState } from "./post-login-bootstrap"
 import { clearCachedMembershipTier } from "./membership-tier-cache"
 import { clearCachedFacultyMembershipTier } from "./faculty-membership-tier-cache"
@@ -12,6 +14,9 @@ import * as SecureStore from "./secure-store-client"
 import { clearStoredPushToken } from "./notifications/notification-service"
 import { unregisterPushTokenForSession } from "./notifications/push-registration"
 import { clearStoredFacultyCourseId, getStoredFacultyCourseId } from "./faculty-course-storage"
+import { clearStoredStudentCourseId, getStoredStudentCourseId } from "./student-course-storage"
+import { clearStashedStudentEnrollments } from "./student-enrollments-cache"
+import { setStudentQueryCourse } from "./query/student-course"
 import { setStoredDrawerExpandedGroup } from "./drawer-nav-memory"
 import { setStoredFacultyDrawerExpandedGroup } from "./faculty-drawer-memory"
 import { clearNotificationInboxPrefs } from "./notification-inbox-prefs"
@@ -29,15 +34,25 @@ function sessionKey(session: AppSession): string {
   return `${session.portal}:${session.portal === "faculty" || session.portal === "admin" ? session.id : session.databaseId}`
 }
 
+export type ClearUserLocalStateOptions = {
+  /** Keep HTTP cookies and refresh token (login just minted new server credentials). */
+  preserveAuthCredentials?: boolean
+}
+
 /**
  * Clears user-specific local state on logout, account switch, and account deletion.
  * Keeps remembered login identifiers and MFA device trust (login convenience, not academic data).
  */
-export async function clearUserLocalState(session: AppSession | null): Promise<void> {
+export async function clearUserLocalState(
+  session: AppSession | null,
+  options?: ClearUserLocalStateOptions,
+): Promise<void> {
   resetAppBootstrapState()
+  clearStashedStudentEnrollments()
+  setStudentQueryCourse(null)
 
   const tasks: Promise<unknown>[] = [
-    clearStudentHttpCookies(),
+    ...(options?.preserveAuthCredentials ? [] : [clearStudentHttpCookies()]),
     clearGuestCoraConversations(),
     clearCoraActivity(),
     clearPlaygroundSessionLock(),
@@ -48,10 +63,18 @@ export async function clearUserLocalState(session: AppSession | null): Promise<v
 
   if (session) {
     tasks.push(unregisterPushTokenForSession(sessionKey(session)))
+    const scope = queryScopeFromSession(session)
+    tasks.push(clearPersistedQueryCache(scope))
+    tasks.push(clearPersistedQueryCacheForUser(scope.portal, scope.userId))
 
     if (session.portal === "student") {
       tasks.push(clearCachedMembershipTier(session.databaseId))
-      tasks.push(clearStudentCoraContext(session.databaseId))
+      tasks.push(
+        getStoredStudentCourseId(session.databaseId).then(async (courseId) => {
+          await clearStudentCoraContext(session.databaseId, courseId ?? session.courseId)
+          await clearStoredStudentCourseId(session.databaseId)
+        }),
+      )
       tasks.push(setStoredDrawerExpandedGroup(session.databaseId, null))
       tasks.push(clearNotificationInboxPrefs("student", session.databaseId))
     } else if (session.portal === "guest" || session.portal === "summer") {

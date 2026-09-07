@@ -20,6 +20,7 @@ import {
 import { InfoSectionCard } from "../course-info/course-info-shared"
 import { SupportFieldLabel, SupportTip, useSupportTheme } from "./support-shared"
 import { FacultySheetAcknowledge } from "../faculty/faculty-collab-sheet-ui"
+import { SupportTicketAttachmentField } from "./SupportTicketAttachmentField"
 import { AdminOptionPickerModal } from "../faculty/admin/admin-option-picker"
 import { SupportTabBar, SupportTicketHistoryPanel } from "./SupportTicketHistoryPanel"
 
@@ -27,9 +28,9 @@ export type { SupportFormKind } from "../../lib/support-color-theme"
 
 type SupportTab = "submit" | "history"
 
-const TABS: Array<{ id: SupportTab; label: string }> = [
-  { id: "submit", label: "New" },
-  { id: "history", label: "History" },
+const TABS: Array<{ id: SupportTab; label: string; icon: "create-outline" | "time-outline" }> = [
+  { id: "submit", label: "New", icon: "create-outline" },
+  { id: "history", label: "History", icon: "time-outline" },
 ]
 
 const FORM_CONFIG: Record<
@@ -59,7 +60,7 @@ const FORM_CONFIG: Record<
     submitLabel: "Send ticket",
     tips: [
       "Include your course and section if the issue is class-specific.",
-      "Screenshots can be described in the message — we will ask if we need more.",
+      "Attach a screenshot or PDF when it helps explain the issue.",
     ],
     historyEmptyTitle: "No tickets yet",
     historyEmptyBody: "Submitted support tickets appear here with Open, In Progress, or Resolved status.",
@@ -128,6 +129,9 @@ export function SupportFormScreen({ kind }: { kind: SupportFormKind }) {
   const [subject, setSubject] = useState("")
   const [message, setMessage] = useState("")
   const [showSuccess, setShowSuccess] = useState(false)
+  const [attachments, setAttachments] = useState<
+    Array<{ id: string; url: string; name: string; mime?: string; size?: number; uploading?: boolean }>
+  >([])
   const [error, setError] = useState("")
   const [submitting, setSubmitting] = useState(false)
 
@@ -185,11 +189,15 @@ export function SupportFormScreen({ kind }: { kind: SupportFormKind }) {
         message: message.trim(),
         moduleId: moduleId || undefined,
         moduleName: selectedModule?.label,
+        attachments: attachments
+          .filter((file) => file.url && !file.uploading)
+          .map((file) => ({ url: file.url, name: file.name, mime: file.mime, size: file.size })),
       })
       setShowSuccess(true)
       setModuleId("")
       setSubject("")
       setMessage("")
+      setAttachments([])
       await loadHistory("refresh")
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not submit. Please try again.")
@@ -261,6 +269,14 @@ export function SupportFormScreen({ kind }: { kind: SupportFormKind }) {
               onChangeText={setSubject}
             />
 
+            <SupportFieldLabel>Attachments</SupportFieldLabel>
+            <SupportTicketAttachmentField
+              attachments={attachments}
+              onChange={setAttachments}
+              uploadFile={(file) => studentApi.uploadSupportTicketAttachment(session!, file)}
+              disabled={submitting || !session}
+            />
+
             <SupportFieldLabel>Details</SupportFieldLabel>
             <TextInput
               style={[inputStyle, styles.textArea]}
@@ -280,7 +296,7 @@ export function SupportFormScreen({ kind }: { kind: SupportFormKind }) {
                 submitting && styles.submitBtnDisabled,
               ]}
               onPress={() => void submit()}
-              disabled={submitting}
+              disabled={submitting || attachments.some((file) => file.uploading)}
             >
               <Ionicons name="paper-plane-outline" size={16} color="#ffffff" />
               <Text style={styles.submitText}>{submitting ? "Sending…" : config.submitLabel}</Text>
@@ -348,4 +364,24 @@ const styles = StyleSheet.create({
   submitText: { color: "#ffffff", fontSize: 15, fontWeight: "600" },
   tipRow: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
   tipText: { flex: 1, lineHeight: 19 },
+  attachRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  attachBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    minHeight: 40,
+  },
+  attachChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
 })

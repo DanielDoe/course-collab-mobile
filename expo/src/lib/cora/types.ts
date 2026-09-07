@@ -14,11 +14,16 @@ export type CoraProposalTool =
   | "account.passwordReset.approve"
   | "account.passwordReset.reject"
   | "personalFlashcards.createDeck"
+  | "flashcard.generateFromBank"
   | "personalNotes.create"
   | "personalCalendar.createEvents"
   | "calendar.createStudySessions"
   | "personalPracticeQuiz.create"
   | "personalStudyPlan.create"
+  // Server may issue registry capability IDs (e.g. "flashcards.create", "groups.join")
+  // via propose_student_capability / propose_faculty_capability. Proposals are signed
+  // server-side and confirmed by round-tripping the payload, so unknown IDs are safe.
+  | (string & {})
 
 export type CoraProposalPreviewField = {
   label: string
@@ -43,6 +48,9 @@ export type CoraProposalPreview = {
     | "calendar_events"
     | "practice_quiz"
     | "study_plan"
+    // New server entity types (registry capabilities) resolve routes best-effort;
+    // unknown values render the generic proposal card without an open-module link.
+    | (string & {})
 }
 
 export type CoraActionProposal = {

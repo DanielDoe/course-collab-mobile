@@ -8,7 +8,6 @@ import {
   View,
 } from "react-native"
 import Constants from "expo-constants"
-import * as SplashScreen from "expo-splash-screen"
 import {
   buildBootReportText,
   emailBootReport,
@@ -18,13 +17,14 @@ import {
   sendBootReportToServer,
   subscribeBootLogs,
 } from "../lib/boot-diagnostics"
+import { hideAppSplashFireAndForget } from "../lib/app-splash"
 import { startupBootDiagnosticId } from "../lib/startup-boot-id"
 
 type Props = {
   children: ReactNode
 }
 
-const WATCHDOG_MS = 6_000
+const WATCHDOG_MS = 12_000
 const AUTO_HIDE_AFTER_READY_MS = 1_500
 
 export function BootDiagnosticsShell({ children }: Props) {
@@ -48,7 +48,7 @@ export function BootDiagnosticsShell({ children }: Props) {
   }, [refreshLogs])
 
   const onPanelLayout = useCallback(() => {
-    void SplashScreen.hideAsync().catch(() => {})
+    hideAppSplashFireAndForget()
   }, [])
 
   useEffect(() => {
@@ -57,7 +57,7 @@ export function BootDiagnosticsShell({ children }: Props) {
       if (!isBootComplete()) {
         setWatchdog(true)
         setVisible(true)
-        void SplashScreen.hideAsync().catch(() => {})
+        hideAppSplashFireAndForget()
       }
     }, WATCHDOG_MS)
     return () => clearTimeout(timer)
@@ -91,89 +91,90 @@ export function BootDiagnosticsShell({ children }: Props) {
     }
   }, [refreshLogs])
 
-  if (!visible || dismissed) {
-    return <>{children}</>
-  }
-
   const version = Constants.expoConfig?.version ?? "1.0.0"
   const buildNumber = Constants.expoConfig?.ios?.buildNumber ?? "?"
 
   return (
-    <View style={styles.root}>
-      <View style={styles.panel} onLayout={onPanelLayout}>
-        <Text style={styles.brand}>CourseCollab — Boot Diagnostics</Text>
-        <Text style={styles.subtitle}>
-          TestFlight startup trace (build {version} / {buildNumber})
-        </Text>
-        <Text style={styles.diagnostic}>ID: {diagnosticId}</Text>
-        {watchdog ? (
-          <Text style={styles.watchdog}>
-            Startup is taking longer than expected. Send the report below so we can fix it.
-          </Text>
-        ) : (
-          <Text style={styles.watchdogMuted}>Loading app… this panel hides when boot completes.</Text>
-        )}
-        <ScrollView style={styles.logScroll} contentContainerStyle={styles.logContent}>
-          {logs.length === 0 ? (
-            <Text style={styles.logLine}>Waiting for first boot log…</Text>
-          ) : (
-            logs.map((entry, index) => (
-              <Text
-                key={`${entry.ts}-${index}`}
-                style={[
-                  styles.logLine,
-                  entry.level === "error" && styles.logError,
-                  entry.level === "warn" && styles.logWarn,
-                ]}
-              >
-                {formatBootLogLine(entry)}
+    <View style={styles.host}>
+      {children}
+      {visible && !dismissed ? (
+        <View style={styles.overlay} onLayout={onPanelLayout}>
+          <View style={styles.panel}>
+            <Text style={styles.brand}>CourseCollab — Boot Diagnostics</Text>
+            <Text style={styles.subtitle}>
+              TestFlight startup trace (build {version} / {buildNumber})
+            </Text>
+            <Text style={styles.diagnostic}>ID: {diagnosticId}</Text>
+            {watchdog ? (
+              <Text style={styles.watchdog}>
+                Startup is taking longer than expected. Send the report below so we can fix it.
               </Text>
-            ))
-          )}
-        </ScrollView>
-        <View style={styles.actions}>
-          <Pressable
-            style={[styles.btn, styles.btnPrimary]}
-            onPress={() => void handleEmail()}
-            disabled={sending !== null}
-          >
-            {sending === "email" ? (
-              <ActivityIndicator color="#FFFFFF" />
             ) : (
-              <Text style={styles.btnPrimaryText}>Email report</Text>
+              <Text style={styles.watchdogMuted}>Loading app… this panel hides when boot completes.</Text>
             )}
-          </Pressable>
-          <Pressable
-            style={[styles.btn, styles.btnSecondary]}
-            onPress={() => void handleServer()}
-            disabled={sending !== null}
-          >
-            {sending === "server" ? (
-              <ActivityIndicator color="#582c83" />
-            ) : (
-              <Text style={styles.btnSecondaryText}>Send to server</Text>
-            )}
-          </Pressable>
-          {isBootComplete() ? (
-            <Pressable style={[styles.btn, styles.btnGhost]} onPress={() => setDismissed(true)}>
-              <Text style={styles.btnGhostText}>Continue</Text>
-            </Pressable>
-          ) : null}
+            <ScrollView style={styles.logScroll} contentContainerStyle={styles.logContent}>
+              {logs.length === 0 ? (
+                <Text style={styles.logLine}>Waiting for first boot log…</Text>
+              ) : (
+                logs.map((entry, index) => (
+                  <Text
+                    key={`${entry.ts}-${index}`}
+                    style={[
+                      styles.logLine,
+                      entry.level === "error" && styles.logError,
+                      entry.level === "warn" && styles.logWarn,
+                    ]}
+                  >
+                    {formatBootLogLine(entry)}
+                  </Text>
+                ))
+              )}
+            </ScrollView>
+            <View style={styles.actions}>
+              <Pressable
+                style={[styles.btn, styles.btnPrimary]}
+                onPress={() => void handleEmail()}
+                disabled={sending !== null}
+              >
+                {sending === "email" ? (
+                  <ActivityIndicator color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.btnPrimaryText}>Email report</Text>
+                )}
+              </Pressable>
+              <Pressable
+                style={[styles.btn, styles.btnSecondary]}
+                onPress={() => void handleServer()}
+                disabled={sending !== null}
+              >
+                {sending === "server" ? (
+                  <ActivityIndicator color="#582c83" />
+                ) : (
+                  <Text style={styles.btnSecondaryText}>Send to server</Text>
+                )}
+              </Pressable>
+              {isBootComplete() ? (
+                <Pressable style={[styles.btn, styles.btnGhost]} onPress={() => setDismissed(true)}>
+                  <Text style={styles.btnGhostText}>Continue</Text>
+                </Pressable>
+              ) : null}
+            </View>
+            <Text selectable style={styles.reportPreview} numberOfLines={4}>
+              {buildBootReportText().slice(0, 280)}…
+            </Text>
+          </View>
         </View>
-        <Text selectable style={styles.reportPreview} numberOfLines={4}>
-          {buildBootReportText().slice(0, 280)}…
-        </Text>
-      </View>
-      <View style={styles.appUnderlay} pointerEvents="box-none">
-        {children}
-      </View>
+      ) : null}
     </View>
   )
 }
 
 const styles = StyleSheet.create({
-  root: {
+  host: {
     flex: 1,
+  },
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: "#582c83",
   },
   panel: {
@@ -272,9 +273,5 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontFamily: "Menlo",
     opacity: 0.8,
-  },
-  appUnderlay: {
-    ...StyleSheet.absoluteFillObject,
-    opacity: 0,
   },
 })

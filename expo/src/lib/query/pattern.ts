@@ -38,6 +38,7 @@ export const QUERY_MODULE_PATTERN = {
       "student.messages",
       "faculty.messages",
       "student.calendar",
+      "faculty.calendar",
       "student.grades",
       "faculty.students",
     ],

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
-import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { AppAlert } from '../../lib/app-alert'
 import { AppAlertHost } from "../../context/AppAlertProvider"
 import { Ionicons } from "@/components/icons/AppIcon"
@@ -10,12 +10,14 @@ import { summarizeAnnouncement } from "../../lib/announcement-summary"
 import { useModuleTheme } from "../../lib/themed-module-shell"
 import { FACULTY_ANNOUNCEMENT_COLOR } from "../../lib/faculty-announcement-theme"
 import { useSheetPlaceholderColor } from "./faculty-collab-sheet-ui"
+import { KeyboardAwareForm } from "../ui/KeyboardAwareForm"
 import { useSuppressModuleSearchDock } from "../../context/ModuleSearchDockContext"
 import { NativeSelect } from "../NativeSelect"
 import { FacultySummerCampDatePicker } from "./FacultySummerCampDatePicker"
 import {
   ANNOUNCEMENT_PRIORITY_OPTIONS,
   ANNOUNCEMENT_TYPE_OPTIONS,
+  announcementTypeHasEventFields,
 } from "../../lib/faculty-announcement-utils"
 import * as DocumentPicker from "expo-document-picker"
 
@@ -28,6 +30,10 @@ export type ComposerDraft = {
   target_session: string
   expires_at: string
   attachments: InstructorAnnouncementAttachment[]
+  event_date: string
+  event_time: string
+  event_end: string
+  event_location: string
 }
 
 type Props = {
@@ -51,6 +57,10 @@ const EMPTY_DRAFT: ComposerDraft = {
   target_session: "all",
   expires_at: "",
   attachments: [],
+  event_date: "",
+  event_time: "",
+  event_end: "",
+  event_location: "",
 }
 
 export function FacultyAnnouncementComposer({visible,
@@ -84,6 +94,10 @@ export function FacultyAnnouncementComposer({visible,
         target_session: editing.target_session ?? "all",
         expires_at: editing.expires_at?.slice(0, 10) ?? "",
         attachments: editing.attachments ?? [],
+        event_date: editing.event_date?.slice(0, 10) ?? "",
+        event_time: editing.event_time ?? "",
+        event_end: editing.event_end ?? "",
+        event_location: editing.event_location ?? "",
       })
       return
     }
@@ -119,11 +133,7 @@ export function FacultyAnnouncementComposer({visible,
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={handleClose}>
-      <KeyboardAvoidingView
-        style={moduleStyles.root}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 8 : 0}
-      >
+      <View style={moduleStyles.root}>
         <View
           style={[
             styles.header,
@@ -173,12 +183,7 @@ export function FacultyAnnouncementComposer({visible,
           </Pressable>
         </View>
 
-        <ScrollView
-          contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + 24 }]}
-          keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
-          showsVerticalScrollIndicator={false}
-        >
+        <KeyboardAwareForm contentContainerStyle={styles.body}>
           <Text style={type.caption} accessible={false}>
             Title
           </Text>
@@ -288,6 +293,45 @@ export function FacultyAnnouncementComposer({visible,
             accessibilityLabel="Expiration date"
           />
 
+          {announcementTypeHasEventFields(draft.type) ? (
+            <>
+              <Text style={type.caption} accessible={false}>Event date</Text>
+              <FacultySummerCampDatePicker
+                value={draft.event_date}
+                onChange={(event_date) => setDraft((prev) => ({ ...prev, event_date }))}
+                accessibilityLabel="Event date"
+                yearPolicy="upcoming"
+              />
+              <Text style={type.caption} accessible={false}>Event time</Text>
+              <TextInput
+                style={[styles.input, { color: native.label, borderColor: tokens.border, backgroundColor: native.fill }]}
+                value={draft.event_time}
+                onChangeText={(event_time) => setDraft((prev) => ({ ...prev, event_time }))}
+                placeholder="14:00"
+                placeholderTextColor={placeholderColor}
+                accessibilityLabel="Event time"
+              />
+              <Text style={type.caption} accessible={false}>End time (optional)</Text>
+              <TextInput
+                style={[styles.input, { color: native.label, borderColor: tokens.border, backgroundColor: native.fill }]}
+                value={draft.event_end}
+                onChangeText={(event_end) => setDraft((prev) => ({ ...prev, event_end }))}
+                placeholder="15:30"
+                placeholderTextColor={placeholderColor}
+                accessibilityLabel="Event end time"
+              />
+              <Text style={type.caption} accessible={false}>Location (optional)</Text>
+              <TextInput
+                style={[styles.input, { color: native.label, borderColor: tokens.border, backgroundColor: native.fill }]}
+                value={draft.event_location}
+                onChangeText={(event_location) => setDraft((prev) => ({ ...prev, event_location }))}
+                placeholder="Room or building"
+                placeholderTextColor={placeholderColor}
+                accessibilityLabel="Event location"
+              />
+            </>
+          ) : null}
+
           <Pressable
             style={[
               styles.pinRow,
@@ -366,8 +410,8 @@ export function FacultyAnnouncementComposer({visible,
           <Text style={[type.caption, { color: native.secondaryLabel, marginTop: 8 }]}>
             Students see plain text in the app. Rich formatting support is coming soon.
           </Text>
-        </ScrollView>
-      </KeyboardAvoidingView>
+        </KeyboardAwareForm>
+      </View>
       <AppAlertHost />
     </Modal>
   )

@@ -16,12 +16,13 @@ describe("trade-center client auth contract", () => {
     assert.doesNotMatch(source, /"x-student-id":\s*session\.databaseId/)
   })
 
-  it("student Trade Center search uses dock StudentSearchToolbar", () => {
+  it("student Trade Center search uses module search dock", () => {
     const source = readFileSync(
       join(here, "../components/rewards/TradeCenterScreen.tsx"),
       "utf8",
     )
-    assert.match(source, /StudentSearchToolbar/)
+    assert.match(source, /useModuleSearchDockRegistration/)
+    assert.match(source, /TradeCenterSearchDock/)
     assert.doesNotMatch(source, /CollabSearch/)
   })
 })

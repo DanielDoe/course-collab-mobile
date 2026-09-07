@@ -16,9 +16,14 @@ import { extractApiErrorMessage } from "./api-error-message"
 import { reportMobileApiError } from "./system-log-client"
 import { assertProductionHttpsUrl, createApiAbortSignal, noteApiFailure, sanitizeLogValue } from "./http"
 import { isNonSessionExpiryUnauthorized } from "./session-expiry"
+import { getStoredRefreshToken, REFRESH_TOKEN_HEADER } from "./refresh-token-store"
+
 import { observeHttpResponse } from "./perf/http"
-import { studentContentPath, studentProjectsListPath } from "./student-content-context"
+import { studentContentPath, studentProjectsListPath, normalizedStudentDatabaseId } from "./student-content-context"
+import { enrichStudentContentSession, studentEnrichedContentPath } from "./student-content-session"
 import { parseLectureWorkspaceStudentApiResponse } from "./lecture-workspace-utils"
+import { dedupeStudentLectureList } from "./lecture-list-dedupe"
+import { formatElegLectureDisplayTitle } from "./lecture-index-label"
 
 export class ApiError extends Error {
   constructor(
@@ -31,8 +36,6 @@ export class ApiError extends Error {
   }
 }
 
-const REFRESH_TOKEN_HEADER = "x-cc-refresh"
-
 function refreshTokenFromCookieHeader(cookie: string | undefined): string | undefined {
   if (!cookie) return undefined
   const match = cookie.match(/(?:^|;\s*)cc_refresh=([^;]+)/i)
@@ -44,7 +47,10 @@ async function studentHeaders(session: StudentAuthSession): Promise<Record<strin
   const headers: Record<string, string> = {
     Accept: "application/json",
     "Content-Type": "application/json",
-    "x-student-id": session.databaseId,
+  }
+  const databaseId = normalizedStudentDatabaseId(session)
+  if (databaseId) {
+    headers["x-student-id"] = databaseId
   }
   if (session.section) {
     headers["x-student-session"] = session.section
@@ -59,8 +65,14 @@ async function studentHeaders(session: StudentAuthSession): Promise<Record<strin
   const trust = await mfaTrustRequestHeadersForStudent(session)
   Object.assign(headers, mergeCookieHeaders(trust.Cookie, jarCookie))
   const refresh =
-    refreshTokenFromCookieHeader(jarCookie) ?? refreshTokenFromCookieHeader(trust.Cookie)
+    refreshTokenFromCookieHeader(jarCookie) ??
+    refreshTokenFromCookieHeader(trust.Cookie) ??
+    (await getStoredRefreshToken()) ??
+    undefined
   if (refresh) headers[REFRESH_TOKEN_HEADER] = refresh
+  if (headersHaveStudentSessionProof(headers)) {
+    delete headers["x-student-id"]
+  }
   return headers
 }
 
@@ -87,7 +99,10 @@ async function studentWorkspaceHeaders(session: StudentAuthSession): Promise<Rec
   const trust = await mfaTrustRequestHeadersForStudent(session)
   Object.assign(headers, mergeCookieHeaders(trust.Cookie, jarCookie))
   const refresh =
-    refreshTokenFromCookieHeader(jarCookie) ?? refreshTokenFromCookieHeader(trust.Cookie)
+    refreshTokenFromCookieHeader(jarCookie) ??
+    refreshTokenFromCookieHeader(trust.Cookie) ??
+    (await getStoredRefreshToken()) ??
+    undefined
   if (refresh) headers[REFRESH_TOKEN_HEADER] = refresh
   requireStudentSessionProof(headers)
   return headers
@@ -182,10 +197,12 @@ async function studentRequest<T>(
       (response.status === 404 && path.includes("/api/practice/generate")) ||
       (response.status === 401 && isNonSessionExpiryUnauthorized(path)) ||
       ((response.status === 404 || response.status === 500) &&
-        (/\/api\/attendance\/(score|streaks|leaderboard)(\?|$)/.test(path) ||
+        (/\/api\/attendance\/(score|streaks|leaderboard|student-sessions)(\?|$)/.test(path) ||
           path.includes("/api/attendance/score") ||
           path.includes("/api/attendance/streaks") ||
-          path.includes("/api/attendance/leaderboard"))) ||
+          path.includes("/api/attendance/leaderboard") ||
+          path.includes("/api/attendance/student-sessions") ||
+          path.includes("/api/student/attendance/structured-today"))) ||
       (path.includes("/api/classroom-points") &&
         (response.status === 401 ||
           response.status === 403 ||
@@ -198,7 +215,32 @@ async function studentRequest<T>(
       (response.status === 404 &&
         /\/api\/student\/lectures\/\d+(\/(?:viewer|content|workspace|sample-practice(?:\/evaluate)?))?(\?|$)/.test(
           path.split("?")[0] ?? path,
-        ))
+        )) ||
+      ((response.status === 404 || response.status === 500) &&
+        /\/api\/student\/(enrollments|active-enrollment)(\?|$)/.test(path.split("?")[0] ?? path)) ||
+      (response.status === 403 &&
+        (path.includes("/api/grades/student") ||
+          path.includes("/api/student/quiz-history") ||
+          path.includes("/api/student/homework-history") ||
+          path.includes("/api/student/quizzes") ||
+          path.includes("/api/student/finals") ||
+          path.includes("/api/attendance/score") ||
+          path.includes("/api/attendance/streaks") ||
+          path.includes("/api/student/flashcards/") ||
+          path.includes("/api/student/lectures") ||
+          path.includes("/api/student/notifications") ||
+          path.includes("/api/student/digital-notes") ||
+          path.includes("/api/student/course-notes") ||
+          path.includes("/api/student/office-hours") ||
+          path.includes("/api/announcements") ||
+          path.includes("/api/groups"))) ||
+      (response.status === 400 &&
+        (path.includes("/api/student/homework-history") ||
+          path.includes("/api/student/finals") ||
+          path.includes("/api/student/assessment-history") ||
+          path.includes("/api/groups/requests/discover") ||
+          path.includes("/api/groups?") ||
+          path.includes("/api/attendance/leaderboard")))
     if (!isExpectedClientMiss) {
       noteApiFailure(path, response.status, message)
     }
@@ -343,6 +385,7 @@ export type LectureItem = {
   week: number
   title: string
   description?: string
+  course_id?: number | null
   status?: string
   progress_percentage?: number
   session?: string
@@ -387,6 +430,11 @@ export type Announcement = {
   student_content_locked?: boolean
   content_summary?: string | null
   ai_summary?: string | null
+  event_date?: string | null
+  event_time?: string | null
+  event_end?: string | null
+  event_location?: string | null
+  calendar_event_id?: number | null
 }
 
 export type AnnouncementComment = {
@@ -415,6 +463,9 @@ export type OfficeHoursRequest = {
   description?: string
   preferredDates?: string[]
   created_at?: string
+  scheduled_date?: string | null
+  meeting_venue?: string | null
+  meeting_link?: string | null
 }
 
 export const studentApi = {
@@ -424,11 +475,13 @@ export const studentApi = {
       studentContentPath(session, "/api/student/quizzes", { type }),
     ),
 
-  getAssessmentHistory: (session: StudentSession) =>
-    studentRequest<{ history?: AssessmentHistoryItem[]; assessmentHistory?: AssessmentHistoryItem[] }>(
+  getAssessmentHistory: async (session: StudentSession) => {
+    const contentSession = await enrichStudentContentSession(session)
+    return studentRequest<{ history?: AssessmentHistoryItem[]; assessmentHistory?: AssessmentHistoryItem[] }>(
       session,
-      studentContentPath(session, "/api/student/assessment-history"),
-    ),
+      studentContentPath(contentSession, "/api/student/assessment-history"),
+    )
+  },
 
   getQuizHistory: (session: StudentSession) =>
     studentAuthenticatedRequest<{
@@ -479,11 +532,38 @@ export const studentApi = {
       `/api/engagement-credits?studentId=${encodeURIComponent(session.databaseId)}`,
     ),
 
-  getLectures: (session: StudentSession) =>
-    studentRequest<{ lectures: LectureItem[] }>(
+  getEnrollments: (session: StudentSession) =>
+    studentRequest<unknown>(session, "/api/student/enrollments"),
+
+  setActiveEnrollment: (
+    session: StudentSession,
+    enrollment: { courseId: number; section?: string; academicTermId?: number; studentRowId?: number | null },
+  ) =>
+    studentRequest<unknown>(session, "/api/student/active-enrollment", {
+      method: "POST",
+      body: JSON.stringify({
+        courseId: enrollment.courseId,
+        section: enrollment.section,
+        academicTermId: enrollment.academicTermId,
+        studentRowId: enrollment.studentRowId,
+      }),
+    }),
+
+  getLectures: async (session: StudentSession) => {
+    const data = await studentRequest<{ lectures: LectureItem[] }>(
       session,
       studentContentPath(session, "/api/student/lectures"),
-    ),
+    )
+    const lectures = dedupeStudentLectureList(data.lectures ?? [], {
+      courseId: session.courseId ?? 0,
+      courseCode: session.courseCode,
+      section: session.section,
+    }).map((lecture) => ({
+      ...lecture,
+      title: formatElegLectureDisplayTitle(lecture.title, session.courseCode),
+    }))
+    return { lectures }
+  },
 
   getLectureById: (session: StudentSession, lectureId: number) =>
     studentRequest<{ lecture: StudentLectureDetail }>(
@@ -597,19 +677,132 @@ export const studentApi = {
     throw new ApiError("Request failed.", 0, lastError)
   },
 
+  saveLectureWorkspaceDraft: (
+    session: StudentSession,
+    lectureId: number,
+    questionId: string,
+    studentAnswer: unknown,
+  ) =>
+    studentRequest<{ message?: string }>(
+      session,
+      `/api/student/lectures/${lectureId}/workspace`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({
+          studentId: session.databaseId,
+          questionId,
+          studentAnswer,
+        }),
+      },
+    ),
+
+  uploadLectureWorkspaceFile: async (
+    session: StudentSession,
+    lectureId: number,
+    file: { uri: string; name: string; mimeType: string; workspaceQuestionId: string; partId: string },
+  ) => {
+    const path = `/api/student/lectures/${lectureId}/workspace/upload`
+    const url = `${API_BASE_URL}${path}`
+    assertProductionHttpsUrl(url)
+    const form = new FormData()
+    form.append("studentId", session.databaseId)
+    form.append("workspaceQuestionId", file.workspaceQuestionId)
+    form.append("partId", file.partId)
+    form.append("file", {
+      uri: file.uri,
+      name: file.name,
+      type: file.mimeType,
+    } as unknown as Blob)
+    const headers = await studentAuthenticatedHeaders(session)
+    delete headers["Content-Type"]
+    const response = await fetch(url, {
+      method: "POST",
+      credentials: "include",
+      headers,
+      body: form,
+      signal: createApiAbortSignal(),
+    })
+    const text = await response.text()
+    let body: unknown = null
+    if (text) {
+      try {
+        body = JSON.parse(text)
+      } catch {
+        body = { error: text }
+      }
+    }
+    if (!response.ok) {
+      throw new ApiError(extractApiErrorMessage(body, response.status, path), response.status, body)
+    }
+    await persistHttpCookiesFromResponse(url, response.headers)
+    return body as { url: string; name?: string; mime?: string; uploaded_at?: string }
+  },
+
   updateLectureProgress: (
     session: StudentSession,
     lectureId: number,
     progressPercentage: number,
   ) =>
-    studentRequest<{ progress_percentage?: number }>(
+    studentRequest<{ progress_percentage?: number; status?: string }>(
       session,
       `/api/student/lectures/${lectureId}/progress`,
       {
         method: "POST",
         body: JSON.stringify({
-          studentId: session.id,
-          progress_percentage: progressPercentage,
+          studentId: session.databaseId,
+          student_id: session.databaseId,
+          current_slide: Math.max(1, Math.round(progressPercentage)),
+          total_slides: 100,
+          completed_slides: [],
+          time_spent_seconds: 30,
+        }),
+      },
+    ),
+
+  getLectureProgress: (session: StudentSession, lectureId: number) =>
+    studentRequest<{
+      progress: {
+        last_viewed_slide_order?: number
+        completed_slides?: number[] | string
+        progress_percentage?: number
+        status?: string
+      } | null
+      status?: string
+    }>(
+      session,
+      `/api/student/lectures/${lectureId}/progress?studentId=${encodeURIComponent(session.databaseId)}`,
+    ),
+
+  saveLectureSlideProgress: (
+    session: StudentSession,
+    lectureId: number,
+    payload: {
+      currentSlide: number
+      totalSlides: number
+      completedSlides: number[]
+      timeSpentSeconds?: number
+    },
+  ) =>
+    studentRequest<{
+      progress_percentage?: number
+      status?: string
+      completed_slides?: number[]
+      total_slides?: number
+    }>(
+      session,
+      `/api/student/lectures/${lectureId}/progress`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          studentId: session.databaseId,
+          student_id: session.databaseId,
+          current_slide: payload.currentSlide,
+          total_slides: payload.totalSlides,
+          completed_slides: payload.completedSlides,
+          bookmarked: false,
+          confused: false,
+          time_spent_seconds: payload.timeSpentSeconds ?? 30,
+          notes: "",
         }),
       },
     ),
@@ -622,17 +815,22 @@ export const studentApi = {
       {
         method: "POST",
         body: JSON.stringify({
-          studentId: session.id,
+          studentId: session.databaseId,
           mark_completed: completed,
         }),
       },
     ),
 
-  getAnnouncements: (session: StudentSession) =>
-    studentRequest<{ announcements: Announcement[] }>(
+  getAnnouncements: (session: StudentSession) => {
+    const studentId = normalizedStudentDatabaseId(session)
+    if (!studentId) {
+      return Promise.resolve({ announcements: [] as Announcement[] })
+    }
+    return studentRequest<{ announcements: Announcement[] }>(
       session,
-      `/api/announcements?studentId=${encodeURIComponent(session.databaseId)}`,
-    ),
+      `/api/announcements?studentId=${encodeURIComponent(studentId)}`,
+    )
+  },
 
   getAnnouncementById: (session: StudentSession, id: number) =>
     studentRequest<{ announcement: Announcement }>(
@@ -712,6 +910,25 @@ export const studentApi = {
         studentId: session.databaseId,
         currentPassword,
         newPassword})}),
+
+  getNotificationPreferences: (session: StudentSession) =>
+    studentRequest<import("./notification-preferences-sync").ServerNotificationPreferences>(
+      session,
+      `/api/student/notifications/preferences?studentId=${encodeURIComponent(session.databaseId)}`,
+    ),
+
+  updateNotificationPreferences: (
+    session: StudentSession,
+    preferences: import("./notification-preferences-sync").ServerNotificationPreferences,
+  ) =>
+    studentRequest<import("./notification-preferences-sync").ServerNotificationPreferences>(
+      session,
+      `/api/student/notifications/preferences?studentId=${encodeURIComponent(session.databaseId)}`,
+      {
+        method: "PUT",
+        body: JSON.stringify(preferences),
+      },
+    ),
 
   getMembership: (session: StudentSession) =>
     studentRequest<{
@@ -860,6 +1077,19 @@ export const studentApi = {
         preferredDates: payload.preferredDates,
         preferredTimes: payload.preferredTimes})}),
 
+  cancelOfficeHours: (session: StudentSession, requestId: number) =>
+    studentRequest<{ success?: boolean; request?: OfficeHoursRequest }>(
+      session,
+      `/api/student/office-hours/${requestId}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({
+          studentId: session.databaseId,
+          status: "cancelled",
+        }),
+      },
+    ),
+
   getRecommendationMeta: (session: StudentSession) =>
     studentRequest<{
       student?: Record<string, unknown>
@@ -906,7 +1136,7 @@ export const studentApi = {
     try {
       return await studentRequest<Record<string, unknown>>(
         session,
-        studentContentPath(session, "/api/attendance/records"),
+        await studentEnrichedContentPath(session, "/api/attendance/records"),
       )
     } catch (err) {
       if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
@@ -916,28 +1146,28 @@ export const studentApi = {
     }
   },
 
-  getAttendanceScore: (session: StudentSession) =>
+  getAttendanceScore: async (session: StudentSession) =>
     studentRequest<Record<string, unknown>>(
       session,
-      studentContentPath(session, "/api/attendance/score"),
+      await studentEnrichedContentPath(session, "/api/attendance/score"),
     ),
 
-  getAttendanceStreaks: (session: StudentSession) =>
+  getAttendanceStreaks: async (session: StudentSession) =>
     studentRequest<Record<string, unknown>>(
       session,
-      studentContentPath(session, "/api/attendance/streaks"),
+      await studentEnrichedContentPath(session, "/api/attendance/streaks"),
     ),
 
-  getClassroomPoints: (session: StudentSession) =>
+  getClassroomPoints: async (session: StudentSession) =>
     studentRequest<Record<string, unknown>>(
       session,
-      studentContentPath(session, "/api/classroom-points"),
+      await studentEnrichedContentPath(session, "/api/classroom-points"),
     ),
 
-  getClassroomPointsLeaderboard: (session: StudentSession) =>
+  getClassroomPointsLeaderboard: async (session: StudentSession) =>
     studentRequest<Record<string, unknown>>(
       session,
-      studentContentPath(session, "/api/classroom-points/leaderboard"),
+      await studentEnrichedContentPath(session, "/api/classroom-points/leaderboard"),
     ),
 
   getTradeCenterPoints: (session: StudentSession) =>
@@ -952,10 +1182,10 @@ export const studentApi = {
       `/api/forum/threads?studentId=${encodeURIComponent(session.databaseId)}&section=${encodeURIComponent(session.section)}`,
     ),
 
-  getGroups: (session: StudentSession) =>
+  getGroups: async (session: StudentSession) =>
     studentRequest<{ groups?: Record<string, unknown>[] }>(
       session,
-      studentContentPath(session, "/api/groups"),
+      await studentEnrichedContentPath(session, "/api/groups"),
     ),
 
   getProjects: (session: StudentSession) =>
@@ -987,6 +1217,59 @@ export const studentApi = {
       session,
       `/api/calendar/class-schedule?studentId=${encodeURIComponent(session.databaseId)}&startDate=${encodeURIComponent(range.startDate.toISOString())}&endDate=${encodeURIComponent(range.endDate.toISOString())}`,
     ),
+
+  createCalendarEvent: (
+    session: StudentSession,
+    payload: {
+      title: string
+      startTime: string
+      endTime?: string | null
+      location?: string | null
+      description?: string | null
+      eventType?: string
+      announcementId?: number
+    },
+  ) =>
+    studentRequest<{ event?: Record<string, unknown>; success?: boolean }>(
+      session,
+      "/api/calendar/events",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          studentId: session.databaseId,
+          title: payload.title,
+          start_time: payload.startTime,
+          end_time: payload.endTime ?? null,
+          location: payload.location ?? null,
+          description: payload.description ?? null,
+          event_type: payload.eventType ?? "announcement",
+          announcement_id: payload.announcementId,
+        }),
+      },
+    ),
+
+  getCalendarFeed: (session: StudentSession) =>
+    studentRequest<{
+      success?: boolean
+      token: string
+      httpsUrl: string
+      webcalUrl: string
+      beforeMinutes: number
+      atStart: boolean
+    }>(session, "/api/student/calendar/feed"),
+
+  updateCalendarFeed: (session: StudentSession, prefs: { beforeMinutes?: number; atStart?: boolean }) =>
+    studentRequest<{
+      success?: boolean
+      token: string
+      httpsUrl: string
+      webcalUrl: string
+      beforeMinutes: number
+      atStart: boolean
+    }>(session, "/api/student/calendar/feed", {
+      method: "PATCH",
+      body: JSON.stringify(prefs),
+    }),
 
   getPracticeProgress: (session: StudentSession) =>
     studentRequest<Record<string, unknown>>(
@@ -1207,6 +1490,7 @@ export const studentApi = {
       message: string
       moduleId?: string
       moduleName?: string
+      attachments?: Array<{ url: string; name: string; mime?: string; size?: number }>
     },
   ) =>
     studentRequest(session, "/api/student/support-tickets", {
@@ -1218,8 +1502,48 @@ export const studentApi = {
         description: payload.message,
         moduleId: payload.moduleId,
         moduleName: payload.moduleName,
+        attachments: payload.attachments ?? [],
       }),
     }),
+
+  uploadSupportTicketAttachment: async (
+    session: StudentSession,
+    file: { uri: string; name: string; mimeType: string },
+  ) => {
+    const path = "/api/student/support-tickets/attachments"
+    const url = `${API_BASE_URL}${path}`
+    assertProductionHttpsUrl(url)
+    const form = new FormData()
+    form.append("studentId", session.databaseId)
+    form.append("file", {
+      uri: file.uri,
+      name: file.name,
+      type: file.mimeType,
+    } as unknown as Blob)
+    const headers = await studentAuthenticatedHeaders(session)
+    delete headers["Content-Type"]
+    const response = await fetch(url, {
+      method: "POST",
+      credentials: "include",
+      headers,
+      body: form,
+      signal: createApiAbortSignal(),
+    })
+    const text = await response.text()
+    let body: unknown = null
+    if (text) {
+      try {
+        body = JSON.parse(text)
+      } catch {
+        body = { error: text }
+      }
+    }
+    if (!response.ok) {
+      throw new ApiError(extractApiErrorMessage(body, response.status, path), response.status, body)
+    }
+    await persistHttpCookiesFromResponse(url, response.headers)
+    return body as { url: string; name?: string; mime?: string; size?: number }
+  },
 }
 
 export type StudentRecommendationRequest = {

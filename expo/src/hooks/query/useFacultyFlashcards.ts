@@ -4,6 +4,7 @@ import { instructorFlashcardsApi, type InstructorScope } from "../../lib/instruc
 import { fetchFacultyTermSessions } from "../../lib/faculty-section-scope"
 import { filterMisplacedCircuitFlashcardDecks } from "../../lib/faculty-misplaced-circuit-content"
 import { facultyQueryScopeFromInstructor, queryKeys, STALE_BY_RESOURCE } from "../../lib/query"
+import { keepSameCoursePlaceholder } from "../../lib/query/same-course-placeholder"
 import { DEFAULT_FLASHCARD_BATCH_SIZE } from "../../lib/flashcard-batch-study"
 
 export async function fetchFacultyFlashcardsBundle(
@@ -37,18 +38,19 @@ export function useFacultyFlashcards(
   deckApiSession: string,
   topicApiSession: string,
 ) {
+  const queryKey = scope
+    ? queryKeys.faculty.flashcards.bundle(
+        facultyQueryScopeFromInstructor(scope),
+        deckApiSession || "ALL",
+        topicApiSession || "ALL",
+      )
+    : (["faculty", "flashcards", "idle", "bundle", deckApiSession, topicApiSession] as const)
   const query = useQuery({
-    queryKey: scope
-      ? queryKeys.faculty.flashcards.bundle(
-          facultyQueryScopeFromInstructor(scope),
-          deckApiSession || "ALL",
-          topicApiSession || "ALL",
-        )
-      : ["faculty", "flashcards", "idle", "bundle", deckApiSession, topicApiSession],
+    queryKey,
     queryFn: () => fetchFacultyFlashcardsBundle(scope!, deckApiSession || undefined, topicApiSession || undefined),
     enabled: Boolean(scope?.courseId),
     staleTime: STALE_BY_RESOURCE.facultyFlashcards,
-    placeholderData: (previous) => previous,
+    placeholderData: (previous, previousQuery) => keepSameCoursePlaceholder(previous, previousQuery, queryKey),
   })
   const hasData = query.data != null
   return {

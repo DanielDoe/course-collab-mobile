@@ -12,6 +12,7 @@ import {
 } from "react"
 import {
   ActivityIndicator,
+  KeyboardAvoidingView,
   Platform,
   Pressable,
   RefreshControl,
@@ -25,9 +26,9 @@ import { Ionicons } from "@/components/icons/AppIcon"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { MODERN, NATIVE } from "../../constants/faculty-native-theme"
 import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
+import { useOptionalAppToast } from "../../context/AppToastProvider"
 import {
   useChromeBottomInset,
-  useChromeTopInset,
   useModuleScrollContentPadding,
 } from "../../context/ChromeInsetContext"
 import { useRouter } from "expo-router"
@@ -36,6 +37,7 @@ import { useFacultyShell } from "../../context/FacultyShellContext"
 import { useFacultyScope } from "../../hooks/useFacultyScope"
 import { FACULTY_ADMIN_COLOR } from "../../lib/faculty-admin-theme"
 import { getFacultyNavUpgradePrompt } from "../../lib/faculty-membership-tier"
+import { isIosPurchaseUiHidden } from "../../lib/purchase-navigation"
 import type { FacultyMembershipTier } from "../../types/dashboard"
 import { solidListThumbFixed } from "../../lib/solid-list-thumb"
 import { semanticSoft, useNativeType } from "../../lib/themed-module-theme"
@@ -43,6 +45,8 @@ import { useModuleTheme } from "../../lib/themed-module-shell"
 import { NativeSwitch } from "../NativeSwitch"
 import { FacultyEmptyState } from "./faculty-shared"
 import { AdminOptionPickerModal } from "./admin/admin-option-picker"
+import { useSuppressModuleSearchDock } from "../../context/ModuleSearchDockContext"
+import { useKeyboardHeight } from "../ui/KeyboardAwareForm"
 
 /**
  * Shared faculty administration UI — grouped canvas, inset lists, save footer.
@@ -68,6 +72,7 @@ export function useAdminStyles() {
 }
 
 export function FacultyAdminCourseGate({ children }: { children: ReactNode }) {
+  const router = useRouter()
   const { ready } = useFacultyScope()
   const scrollPad = useModuleScrollContentPadding(32)
   const { styles: moduleStyles } = useModuleTheme()
@@ -78,7 +83,16 @@ export function FacultyAdminCourseGate({ children }: { children: ReactNode }) {
         <FacultyEmptyState
           icon="book-outline"
           title="Select a Course"
-          body="Choose a course from the drawer to manage settings for this module."
+          body="Choose a course in My Courses before opening course-scoped settings."
+          action={
+            <Pressable
+              onPress={() => router.push("/module/my-courses" as never)}
+              accessibilityRole="button"
+              accessibilityLabel="Go to My Courses"
+            >
+              <Text style={{ color: FACULTY_ADMIN_COLOR.link, fontWeight: "700" }}>Go to My Courses</Text>
+            </Pressable>
+          }
         />
       </View>
     )
@@ -115,14 +129,16 @@ export function FacultyAdminTierGate({
     return (
       <View style={[moduleStyles.root, adminStyles.screenRoot, scrollPad]}>
         <FacultyEmptyState icon="lock-closed-outline" title={prompt.title} body={prompt.message} />
-        <Pressable
-          style={({ pressed }) => [adminStyles.saveBtn, pressed && { opacity: NATIVE.pressedOpacity }]}
-          onPress={() => router.push("/membership" as never)}
-          accessibilityRole="button"
-          accessibilityLabel={`Upgrade to ${minTier}`}
-        >
-          <Text style={adminStyles.saveBtnText}>Upgrade to {minTier}</Text>
-        </Pressable>
+        {isIosPurchaseUiHidden() ? null : (
+          <Pressable
+            style={({ pressed }) => [adminStyles.saveBtn, pressed && { opacity: NATIVE.pressedOpacity }]}
+            onPress={() => router.push("/membership" as never)}
+            accessibilityRole="button"
+            accessibilityLabel={`Upgrade to ${minTier}`}
+          >
+            <Text style={adminStyles.saveBtnText}>Upgrade to {minTier}</Text>
+          </Pressable>
+        )}
       </View>
     )
   }
@@ -142,6 +158,8 @@ type FacultyAdminScreenProps = {
   onRefresh?: () => void
   children: ReactNode
   footerExtra?: ReactNode
+  /** Policy/form screens hide the dock. List screens that register FacultySearchToolbar must pass false. */
+  suppressSearchDock?: boolean
 }
 
 export function FacultyAdminScreen({
@@ -156,9 +174,9 @@ export function FacultyAdminScreen({
   onRefresh,
   children,
   footerExtra,
+  suppressSearchDock = true,
 }: FacultyAdminScreenProps) {
   const insets = useSafeAreaInsets()
-  const chromeTop = useChromeTopInset()
   const chromeBottom = useChromeBottomInset()
   const { styles: moduleStyles } = useModuleTheme()
   const adminStyles = useAdminStyles()
@@ -166,24 +184,25 @@ export function FacultyAdminScreen({
   const showFooter = Boolean(footerExtra || (dirty && onSave))
   const footerBarHeight = showFooter ? 72 : 0
   const scrollPad = useModuleScrollContentPadding(footerBarHeight + 32)
-  const toastTop = (chromeTop > 0 ? chromeTop : insets.top) + 8
+  const keyboardHeight = useKeyboardHeight()
+  useSuppressModuleSearchDock(suppressSearchDock)
 
   return (
-    <View style={[moduleStyles.root, adminStyles.screenRoot]}>
-      {successMessage ? (
-        <View style={[adminStyles.successToast, { top: toastTop }]}>
-          <Ionicons name="checkmark-circle" size={18} color={tokens.success} />
-          <Text style={adminStyles.successToastText} numberOfLines={2}>
-            {successMessage}
-          </Text>
-        </View>
-      ) : null}
-
+    <KeyboardAvoidingView
+      style={[moduleStyles.root, adminStyles.screenRoot]}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+    >
+      <View style={adminStyles.screenColumn}>
       <ScrollView
         style={[moduleStyles.scroll, adminStyles.screenScroll]}
-        contentContainerStyle={[adminStyles.screenContent, scrollPad]}
+        contentContainerStyle={[
+          adminStyles.screenContent,
+          scrollPad,
+          Platform.OS === "android" ? { paddingBottom: scrollPad.paddingBottom + keyboardHeight } : null,
+        ]}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
+        automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
         refreshControl={
           onRefresh ? (
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={FACULTY_ADMIN_COLOR.link} />
@@ -228,7 +247,8 @@ export function FacultyAdminScreen({
           ) : null}
         </View>
       ) : null}
-    </View>
+      </View>
+    </KeyboardAvoidingView>
   )
 }
 
@@ -498,6 +518,7 @@ export function useAdminSaveState() {
   const [error, setError] = useState("")
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const successTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const appToast = useOptionalAppToast()
 
   useEffect(() => {
     return () => {
@@ -509,11 +530,18 @@ export function useAdminSaveState() {
   const resetDirty = useCallback(() => setDirty(false), [])
   const clearError = useCallback(() => setError(""), [])
 
-  const showSuccess = useCallback((message = "Saved") => {
-    if (successTimer.current) clearTimeout(successTimer.current)
-    setSuccessMessage(message)
-    successTimer.current = setTimeout(() => setSuccessMessage(null), SUCCESS_TOAST_MS)
-  }, [])
+  const showSuccess = useCallback(
+    (message = "Saved") => {
+      if (appToast) {
+        appToast.showSuccess(message)
+        return
+      }
+      if (successTimer.current) clearTimeout(successTimer.current)
+      setSuccessMessage(message)
+      successTimer.current = setTimeout(() => setSuccessMessage(null), SUCCESS_TOAST_MS)
+    },
+    [appToast],
+  )
 
   const runSave = useCallback(
     async (saveFn: () => Promise<void>, options?: { successMessage?: string }) => {
@@ -555,6 +583,7 @@ function createAdminStyles(
   return {
     ...StyleSheet.create({
       screenRoot: { flex: 1 },
+      screenColumn: { flex: 1 },
       screenScroll: { flex: 1 },
       screenContent: {
         paddingHorizontal: NATIVE.pagePadding,
@@ -611,10 +640,6 @@ function createAdminStyles(
         color: native.label,
       },
       footer: {
-        position: "absolute",
-        left: 0,
-        right: 0,
-        bottom: 0,
         flexDirection: "row",
         gap: 10,
         paddingHorizontal: NATIVE.pagePadding,

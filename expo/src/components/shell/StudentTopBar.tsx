@@ -1,7 +1,12 @@
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native"
 import { Ionicons } from "@/components/icons/AppIcon"
-import { useLocalSearchParams, usePathname } from "expo-router"
+import { useLocalSearchParams, usePathname, useRouter } from "expo-router"
 import { useStudentShell } from "../../context/StudentShellContext"
+import { useOptionalStudentActiveCourse } from "../../context/StudentActiveCourseContext"
+import { studentEnrollmentCodeLabel } from "../../lib/student-enrollment"
+import { studentShellShowsBack } from "../navigation/student-shell-back"
+import { useStackHasHistory } from "../navigation/useStackHasHistory"
+import { safeRouterBack } from "../../lib/safe-router-back"
 import { useAppThemeTokens, useShellChrome } from "../../context/AppearanceProvider"
 import type { StudentSession } from "../../lib/session"
 import { getNavLabel, getWebNavLabel } from "../../constants/student-nav"
@@ -11,6 +16,7 @@ import { useCora } from "../cora/CoraProvider"
 import { NativeCountBadge } from "../faculty/faculty-shared"
 import { GlassChromeBar } from "../theme/GlassSurface"
 import {
+  HeaderCourseChip,
   HeaderProfileButton,
   NATIVE_HEADER_BAR_HEIGHT,
   shellTopBarStyles,
@@ -31,7 +37,11 @@ export function StudentTopBar({ session }: Props) {
   const isCoraModule = pathname === "/module/ai-tutor"
   const chrome = useShellChrome()
   const tokens = useAppThemeTokens()
-  const { openDrawer, toggleProfile, profileOpen, notificationCount } = useStudentShell()
+  const router = useRouter()
+  const { openDrawer, toggleProfile, profileOpen, notificationCount, openCoursePicker } = useStudentShell()
+  const courseCtx = useOptionalStudentActiveCourse()
+  const stackHasHistory = useStackHasHistory()
+  const showBack = studentShellShowsBack(pathname, stackHasHistory)
   const {
     overlaySection,
     setOverlaySection,
@@ -51,12 +61,12 @@ export function StudentTopBar({ session }: Props) {
             shellTopBarStyles.iconBtn,
             pressed && { backgroundColor: tokens.native.fill },
           ]}
-          onPress={openDrawer}
+          onPress={showBack ? () => safeRouterBack(router, "/dashboard") : openDrawer}
           hitSlop={6}
           accessibilityRole="button"
-          accessibilityLabel="Open navigation menu"
+          accessibilityLabel={showBack ? "Go back" : "Open navigation menu"}
         >
-          <Ionicons name="menu-outline" size={24} color={chrome.label} />
+          <Ionicons name={showBack ? "chevron-back" : "menu-outline"} size={24} color={chrome.label} />
         </Pressable>
 
         <View style={shellTopBarStyles.titleBlock}>
@@ -71,6 +81,11 @@ export function StudentTopBar({ session }: Props) {
           )}
         </View>
 
+        <HeaderCourseChip
+          label={studentEnrollmentCodeLabel(courseCtx?.activeCourse)}
+          onPress={openCoursePicker}
+          interactive
+        />
         <HeaderProfileButton
           name={session.name}
           active={profileOpen}

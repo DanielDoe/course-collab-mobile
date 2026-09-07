@@ -1,10 +1,21 @@
 import type { StudentSession } from "./session"
 import { normalizePlaygroundQuestions } from "./playground-question-utils"
 import { studentAuthenticatedRequest } from "./student-api"
-import { studentContentPath, studentProjectsListPath } from "./student-content-context"
+import { studentProjectsListPath } from "./student-content-context"
+import { enrichStudentContentSession, studentEnrichedContentPath } from "./student-content-session"
 
 function request<T>(session: StudentSession, path: string, init?: RequestInit): Promise<T> {
   return studentAuthenticatedRequest<T>(session, path, init)
+}
+
+async function requestContent<T>(
+  session: StudentSession,
+  path: string,
+  extra?: Record<string, string | number | undefined>,
+  init?: RequestInit,
+): Promise<T> {
+  const enrichedPath = await studentEnrichedContentPath(session, path, extra)
+  return request<T>(session, enrichedPath, init)
 }
 
 export type ForumThread = {
@@ -333,12 +344,12 @@ export const collaborationApi = {
         contactMethod: payload.contactMethod})}),
 
   // ── Groups ──
-  getGroups: (session: StudentSession, status?: string) => {
-    return request<{ groups?: GroupRecord[] }>(
+  getGroups: (session: StudentSession, status?: string) =>
+    requestContent<{ groups?: GroupRecord[] }>(
       session,
-      studentContentPath(session, "/api/groups", status ? { status } : undefined),
-    )
-  },
+      "/api/groups",
+      status ? { status } : undefined,
+    ),
 
   getGroup: (session: StudentSession, groupId: number) =>
     request<{ group?: GroupRecord }>(session, `/api/groups/${groupId}`),
@@ -382,9 +393,9 @@ export const collaborationApi = {
         requesterId: Number(session.databaseId)})}),
 
   getGroupsDiscover: (session: StudentSession) =>
-    request<{ openGroups?: GroupRecord[]; data?: DiscoverData }>(
+    requestContent<{ openGroups?: GroupRecord[]; data?: DiscoverData }>(
       session,
-      studentContentPath(session, "/api/groups/requests/discover"),
+      "/api/groups/requests/discover",
     ).then((body) => ({
       openGroups: body.openGroups ?? body.data?.openGroups ?? [],
       studentsWithoutGroup: body.data?.studentsWithoutGroup ?? [],
@@ -406,11 +417,13 @@ export const collaborationApi = {
   },
 
   // ── Projects ──
-  getProjects: (session: StudentSession) =>
-    request<{ projects?: ProjectRecord[] }>(
+  getProjects: async (session: StudentSession) => {
+    const contentSession = await enrichStudentContentSession(session)
+    return request<{ projects?: ProjectRecord[] }>(
       session,
-      studentProjectsListPath(session),
-    ),
+      studentProjectsListPath(contentSession),
+    )
+  },
 
   getProject: (session: StudentSession, projectId: number) =>
     request<{ project?: ProjectRecord }>(session, `/api/projects/${projectId}`),
@@ -492,24 +505,18 @@ export const collaborationApi = {
 
   // ── Playground ──
   getPlaygroundCredits: (session: StudentSession) =>
-    request<PlaygroundCredits>(
-      session,
-      studentContentPath(session, "/api/playground/credits"),
-    ),
+    requestContent<PlaygroundCredits>(session, "/api/playground/credits"),
 
   getPlaygroundPersonal: (session: StudentSession) =>
-    request<PlaygroundPersonalStats>(
-      session,
-      studentContentPath(session, "/api/playground/personal"),
-    ),
+    requestContent<PlaygroundPersonalStats>(session, "/api/playground/personal"),
 
   getPlaygroundPolicy: (session: StudentSession) =>
-    request<PlaygroundPolicyResponse>(session, studentContentPath(session, "/api/playground/policy")),
+    requestContent<PlaygroundPolicyResponse>(session, "/api/playground/policy"),
 
   getPlaygroundPracticeSets: (session: StudentSession) =>
-    request<{ practiceSets?: PlaygroundPracticeSet[] }>(
+    requestContent<{ practiceSets?: PlaygroundPracticeSet[] }>(
       session,
-      studentContentPath(session, "/api/playground/practice-sets"),
+      "/api/playground/practice-sets",
     ),
 
   joinPlayground: (

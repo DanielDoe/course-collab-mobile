@@ -108,7 +108,7 @@ export function GuestCoraCareerScreen() {
                 careerTheme={careerTheme}
                 tier={careerTier}
                 description={careerPlan?.description}
-                onCheckout={() => openGuestCoraCareerCheckout(router)}
+                onCheckout={() => openGuestCoraCareerCheckout(router, guestSession)}
               />
               <PlanPerksSection careerTheme={careerTheme} tier={careerTier} highlight />
               <PlanPerksSection careerTheme={careerTheme} tier={freeTier} current={entitlements.plan === "guest_free"} />

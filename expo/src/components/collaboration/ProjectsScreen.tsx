@@ -25,6 +25,8 @@ import { CommEmptyState, CommSectionFooter } from "../faculty/faculty-communicat
 import { AppButton } from "../theme/AppButton"
 import { SignatureListCard } from "../theme/SignatureListCard"
 import { TabbedModuleLayout, signatureListStyles } from "../theme/TabbedModuleLayout"
+import { useFacultyListPager } from "../../hooks/useFacultyListPager"
+import { FacultyListPagerFooter } from "../faculty/FacultyListPagerFooter"
 import { ModuleSectionHeader } from "../modules/ModuleScreen"
 import { useNotificationModuleRefresh } from "../../lib/notifications/notification-events"
 
@@ -218,6 +220,20 @@ export function ProjectsScreen() {
     )
   }
 
+  const allProjectsFiltered = useMemo(() => filterProjects("all"), [projects, mine, approved, search])
+  const mineProjectsFiltered = useMemo(() => filterProjects("mine"), [projects, mine, approved, search])
+  const approvedProjectsFiltered = useMemo(() => filterProjects("approved"), [projects, mine, approved, search])
+
+  const allProjectsPager = useFacultyListPager(allProjectsFiltered, `all:${search}`, "projects")
+  const mineProjectsPager = useFacultyListPager(mineProjectsFiltered, `mine:${search}`, "projects")
+  const approvedProjectsPager = useFacultyListPager(approvedProjectsFiltered, `approved:${search}`, "projects")
+
+  function projectsPager(tabId: ProjectTab) {
+    if (tabId === "mine") return mineProjectsPager
+    if (tabId === "approved") return approvedProjectsPager
+    return allProjectsPager
+  }
+
   function emptyCopy(tabId: ProjectTab, searching: boolean): { title: string; body: string } {
     if (searching) {
       return { title: "No matching projects", body: "Try a different name, group, or platform." }
@@ -252,6 +268,7 @@ export function ProjectsScreen() {
 
   function renderPage(tabId: ProjectTab) {
     const filtered = filterProjects(tabId)
+    const pager = projectsPager(tabId)
     const searching = search.trim().length > 0
     const showGettingStarted = tabId === "all" && !searching && projects.length === 0
 
@@ -292,15 +309,16 @@ export function ProjectsScreen() {
     return (
       <>
         <View style={signatureListStyles.list}>
-          {filtered.map((project, index) => (
+          {pager.items.map((project, index) => (
             <ProjectListCard
               key={project.id}
-              index={index}
+              index={pager.page * pager.pageSize + index}
               project={project}
               onPress={() => router.push(`/collaboration/projects/${project.id}` as never)}
             />
           ))}
         </View>
+        <FacultyListPagerFooter pager={pager} />
         <CommSectionFooter>{footerCopy(tabId, filtered.length)}</CommSectionFooter>
       </>
     )

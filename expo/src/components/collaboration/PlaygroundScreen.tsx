@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { Pressable, StyleSheet, Text, View } from "react-native"
 import { AppAlert } from "../../lib/app-alert"
 import { useRouter } from "expo-router"
@@ -30,9 +30,13 @@ import {
   PLAYGROUND_OUT_OF_CREDITS_MESSAGE,
 } from "../../lib/playground-credits"
 import { CollabSectionTitle } from "./collab-shared"
+import { StudentSearchToolbar } from "../student/student-search-toolbar"
+import { ModuleAddActionSheet } from "../modules/ModuleAddActionSheet"
 import { SignatureListCard } from "../theme/SignatureListCard"
 import { SolidListThumbTile } from "../theme/SolidListThumbTile"
 import { signatureListStyles } from "../theme/TabbedModuleLayout"
+import { useFacultyListPager } from "../../hooks/useFacultyListPager"
+import { FacultyListPagerFooter } from "../faculty/FacultyListPagerFooter"
 
 function useStudentSession(): StudentSession | null {
   const { session } = useSession()
@@ -75,6 +79,8 @@ export function PlaygroundScreen() {
   const type = useNativeType()
   const page = useModulePageLayout()
   const joinColors = playgroundJoinColors(tokens)
+  const [search, setSearch] = useState("")
+  const [addOpen, setAddOpen] = useState(false)
   const [credits, setCredits] = useState<PlaygroundCredits | null>(null)
   const [personal, setPersonal] = useState<PlaygroundPersonalStats | null>(null)
   const [loading, setLoading] = useState(true)
@@ -128,6 +134,16 @@ export function PlaygroundScreen() {
     router.push(`/collaboration/playground/join?mode=${mode}` as never)
   }
 
+  const recentGames = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return (personal?.recentGames ?? []).filter((game) => {
+      if (!q) return true
+      return `${game.questionsAnswered} ${game.correctAnswers} ${game.score}`.toLowerCase().includes(q)
+    })
+  }, [personal?.recentGames, search])
+
+  const recentGamesPager = useFacultyListPager(recentGames, search, "games")
+
   const openLeaderboard = useCallback(async () => {
     const lastSession = await getLastPlaygroundClassroomSession()
     if (lastSession) {
@@ -139,6 +155,39 @@ export function PlaygroundScreen() {
 
   return (
     <ModuleScreen loading={loading} refreshing={refreshing} onRefresh={onRefresh} error={error}>
+      <StudentSearchToolbar
+        value={search}
+        onChange={setSearch}
+        placeholder="Search recent games…"
+        showFilter={false}
+        trailingAction={{
+          onPress: () => setAddOpen(true),
+          accessibilityLabel: "Open playground actions",
+          icon: "add",
+        }}
+      />
+      <ModuleAddActionSheet
+        visible={addOpen}
+        title="Playground"
+        subtitle="Join a live classroom session or start solo practice."
+        onClose={() => setAddOpen(false)}
+        actions={[
+          {
+            id: "classroom",
+            label: "Join live session",
+            detail: "Enter an instructor session code",
+            icon: "people-outline",
+            onPress: () => openJoin("classroom"),
+          },
+          {
+            id: "personal",
+            label: "Solo practice",
+            detail: "Practice with your own question set",
+            icon: "person-outline",
+            onPress: () => openJoin("personal"),
+          },
+        ]}
+      />
       <View style={[styles.page, { gap: page.stackGap + 4 }]}>
       {credits ? (
         <View style={[styles.statsRow, { gap: page.cardGap, flexDirection: page.stackStats ? "column" : "row" }]}>
@@ -276,12 +325,19 @@ export function PlaygroundScreen() {
       <View style={[styles.recentBlock, { gap: page.cardGap }]}>
         <CollabSectionTitle title="Recent games" hint="Your last personal sessions" />
 
-        {personal?.recentGames && personal.recentGames.length > 0 ? (
-          <View style={signatureListStyles.list}>
-            {personal.recentGames.map((game, index) => (
-              <RecentGameCard key={index} game={game} index={index} />
-            ))}
-          </View>
+        {recentGames.length > 0 ? (
+          <>
+            <View style={signatureListStyles.list}>
+              {recentGamesPager.items.map((game, index) => (
+                <RecentGameCard
+                  key={index}
+                  game={game}
+                  index={recentGamesPager.page * recentGamesPager.pageSize + index}
+                />
+              ))}
+            </View>
+            <FacultyListPagerFooter pager={recentGamesPager} />
+          </>
         ) : (
           <View
             style={[

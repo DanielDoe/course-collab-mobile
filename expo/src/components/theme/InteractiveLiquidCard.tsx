@@ -7,7 +7,7 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from "react-native-reanimated"
-import * as Haptics from "expo-haptics"
+import { PRESS_SCALE, timing, useAppReducedMotion } from "../../lib/motion"
 import type { GlassStyle } from "expo-glass-effect"
 import { useAppThemeTokens } from "../../context/AppearanceProvider"
 import { GlassSurface, useGlassChromeActive } from "./GlassSurface"
@@ -32,18 +32,8 @@ function intensityToBlur(intensity: LiquidGlassIntensity): number {
   return 32
 }
 
-function triggerLightHaptic() {
-  if (Platform.OS !== "ios") return
-  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-}
-
-function triggerSuccessHaptic() {
-  if (Platform.OS !== "ios") return
-  void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
-}
-
 /**
- * Pressable liquid card with scale animation and iOS haptic feedback.
+ * Pressable liquid card with subtle scale. No per-tap haptics.
  */
 export function InteractiveLiquidCard({
   title,
@@ -55,6 +45,7 @@ export function InteractiveLiquidCard({
 }: Props) {
   const tokens = useAppThemeTokens()
   const glassActive = useGlassChromeActive()
+  const reduceMotion = useAppReducedMotion()
   const scale = useSharedValue(1)
   const titleColor = tokens.isDark ? "#FFFFFF" : tokens.native.label
   const bodyColor = tokens.isDark ? "rgba(255,255,255,0.72)" : tokens.native.secondaryLabel
@@ -63,15 +54,13 @@ export function InteractiveLiquidCard({
     .enabled(Boolean(onPress))
     .maxDuration(250)
     .onBegin(() => {
-      scale.value = withTiming(0.97, { duration: 90 })
-      runOnJS(triggerLightHaptic)()
+      if (!reduceMotion) scale.value = withTiming(PRESS_SCALE, timing.pressIn)
     })
     .onFinalize(() => {
-      scale.value = withTiming(1, { duration: 140 })
+      if (!reduceMotion) scale.value = withTiming(1, timing.pressOut)
     })
     .onEnd(() => {
       if (onPress) runOnJS(onPress)()
-      runOnJS(triggerSuccessHaptic)()
     })
 
   const animatedStyle = useAnimatedStyle(() => ({

@@ -62,8 +62,8 @@ export function StudentLectureWorkspacePanel({
           </View>
         </View>
         <Text style={[type.secondary, styles.introBody, { color: native.secondaryLabel }]}>
-          Expand each problem to view the circuit prompt, your instructor&apos;s ink workspace, and the
-          step-by-step solution. This is view-only — no student notes are saved here.
+          Expand each problem to draw, photograph, or upload your work. Drafts save to this lecture
+          and stay on your account. Instructor ink and unlocked solutions stay available below.
         </Text>
       </View>
 
@@ -85,6 +85,7 @@ export function StudentLectureWorkspacePanel({
                   index={sectionOffsets[sectionIndex] + index}
                   expanded={expandedId === question.id}
                   onToggle={() => onToggle(question.id)}
+                  savedAnswer={config.drafts?.[question.id] ?? null}
                 />
               ))}
             </View>

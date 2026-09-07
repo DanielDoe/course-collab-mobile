@@ -8,6 +8,7 @@ import {
   type PracticeLeaderboardDisplay,
   type PracticeLeaderboardPrivacy,
 } from "./practice-leaderboard-normalize"
+import type { PracticeAnswerReview } from "./lecture-types"
 import type { StudentSession } from "./session"
 import { studentAuthenticatedRequest } from "./student-api"
 import { studentContentFields, studentContentPath } from "./student-content-context"
@@ -61,7 +62,29 @@ export type EvaluateResult = {
   aiGraded?: boolean
   requiresManualReview?: boolean
   pointsEarned?: number
+  maxPoints?: number
+  score?: number
+  answerReview?: PracticeAnswerReview | null
   autoApproved?: boolean
+  xpEarned?: number
+  locallyVerified?: boolean
+  attemptFinalized?: boolean
+  attemptProgress?: { answered?: number; total?: number }
+}
+
+export type PracticeAttemptStateAnswer = {
+  questionId: number
+  studentAnswer: string | string[]
+  isCorrect: boolean
+  questionType?: string
+  topic?: string
+}
+
+export type PracticeAttemptState = {
+  attemptId: number
+  totalQuestions: number
+  completedAt?: string | null
+  answers: PracticeAttemptStateAnswer[]
 }
 
 export type SubmitPracticeResult = {
@@ -184,18 +207,31 @@ export const practiceApi = {
       mcqEarnedFraction?: number
     },
   ) => {
-    const body: Record<string, unknown> = { ...payload }
+    const body: Record<string, unknown> = {
+      ...studentContentFields(session),
+      ...payload,
+    }
     if (
       payload.mcqEarnedFraction != null &&
       Number.isFinite(payload.mcqEarnedFraction)
     ) {
       body.mcqEarnedFraction = Math.max(0, Math.min(1, payload.mcqEarnedFraction))
     }
-    return studentAuthenticatedRequest<EvaluateResult>(session, "/api/practice/evaluate", {
-      method: "POST",
-      body: JSON.stringify(body),
-    })
+    return studentAuthenticatedRequest<EvaluateResult>(
+      session,
+      studentContentPath(session, "/api/practice/evaluate"),
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+      },
+    )
   },
+
+  getAttemptState: (session: StudentSession, attemptId: number) =>
+    studentAuthenticatedRequest<PracticeAttemptState>(
+      session,
+      practicePath(session, `/api/practice/attempt/${attemptId}/state`),
+    ),
 
   submit: (session: StudentSession, attemptId: number) =>
     studentAuthenticatedRequest<SubmitPracticeResult>(session, "/api/student/practice/submit", {

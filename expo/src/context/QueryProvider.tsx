@@ -12,7 +12,14 @@ import {
   setFacultyQueryCourseId,
   subscribeFacultyQueryCourse,
 } from "../lib/query/faculty-course"
+import {
+  getStudentQueryCourse,
+  setStudentQueryCourse,
+  subscribeStudentQueryCourse,
+} from "../lib/query/student-course"
 import { getStoredFacultyCourseId } from "../lib/faculty-course-storage"
+import { getStoredStudentCourse } from "../lib/student-course-storage"
+import { normalizedStudentDatabaseId } from "../lib/student-content-context"
 import { QueryUndoHost } from "../components/query/QueryUndoHost"
 
 const queryClient = getQueryClient()
@@ -20,10 +27,12 @@ const queryClient = getQueryClient()
 export function QueryProvider({ children }: { children: ReactNode }) {
   const { session } = useSession()
   const [facultyCourseId, setFacultyCourseId] = useState<number | null>(getFacultyQueryCourseId)
+  const [studentCourse, setStudentCourse] = useState(getStudentQueryCourse)
   const scopeRef = useRef<QueryScope | null>(null)
   const persistTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => subscribeFacultyQueryCourse(setFacultyCourseId), [])
+  useEffect(() => subscribeStudentQueryCourse(setStudentCourse), [])
 
   useEffect(() => {
     if (session?.portal !== "faculty") {
@@ -36,7 +45,23 @@ export function QueryProvider({ children }: { children: ReactNode }) {
   }, [session])
 
   useEffect(() => {
-    const nextScope = session ? queryScopeFromSession(session, facultyCourseId) : null
+    if (session?.portal !== "student") {
+      setStudentQueryCourse(null)
+      return
+    }
+    const databaseId = normalizedStudentDatabaseId(session)
+    if (!databaseId) return
+    void getStoredStudentCourse(databaseId).then((stored) => {
+      if (stored) setStudentQueryCourse({ courseId: stored.courseId, section: stored.section })
+    })
+  }, [session?.portal, session?.portal === "student" ? session.databaseId : null])
+
+  useEffect(() => {
+    const nextScope = session
+      ? session.portal === "student"
+        ? queryScopeFromSession(session, studentCourse.courseId, studentCourse.section)
+        : queryScopeFromSession(session, facultyCourseId)
+      : null
     const previous = scopeRef.current
     if (scopesEqual(previous, nextScope)) return
 
@@ -70,7 +95,7 @@ export function QueryProvider({ children }: { children: ReactNode }) {
         })
       }
     })()
-  }, [session, facultyCourseId])
+  }, [session, facultyCourseId, studentCourse])
 
   useEffect(() => {
     const persistSoon = () => {

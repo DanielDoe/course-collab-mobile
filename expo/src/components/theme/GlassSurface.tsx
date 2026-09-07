@@ -331,11 +331,15 @@ function splitSheetPadding(style?: StyleProp<ViewStyle>) {
 
 /** Frosted pageSheet / bottom-menu tint derived from the active appearance theme. */
 export function resolveSheetOverlayColor(tokens: AppThemeTokens, menuSheet = false): string {
-  const glassSurface = tokens.surfaceGlass ?? tokens.glass?.surface
-  if (glassSurface) return glassSurface
-
   const base = tokens.chrome.sheetBg ?? tokens.native.secondaryGrouped ?? tokens.surface
-  const alpha = menuSheet ? (tokens.isDark ? 0.96 : 0.98) : tokens.isDark ? 0.92 : 0.94
+  const alpha = menuSheet ? (tokens.isDark ? 0.97 : 0.98) : tokens.isDark ? 0.94 : 0.96
+  if (base.startsWith("rgba(")) return base
+  return hexToRgba(base, alpha)
+}
+
+function resolveSheetPlateColor(tokens: AppThemeTokens, menuSheet = false): string {
+  const base = tokens.chrome.sheetBg ?? tokens.native.secondaryGrouped ?? tokens.surface
+  const alpha = menuSheet ? (tokens.isDark ? 0.97 : 0.98) : tokens.isDark ? 0.94 : 0.96
   if (base.startsWith("rgba(")) return base
   return hexToRgba(base, alpha)
 }
@@ -343,26 +347,34 @@ export function resolveSheetOverlayColor(tokens: AppThemeTokens, menuSheet = fal
 /** Bottom sheet / modal chrome — regular glass + frosted tint for readable menus over busy content. */
 export function GlassSheetBackground({ style, children, menuSheet = false, fillHeight = false }: GlassSheetProps) {
   const tokens = useAppThemeTokens()
-  const sheetTint = resolveSheetOverlayColor(tokens, menuSheet)
+  const { backend } = useGlassChromeMode(tokens)
+  const plateColor = resolveSheetPlateColor(tokens, menuSheet)
+  const sheetTint =
+    backend === "solid"
+      ? plateColor
+      : hexToRgba(
+          tokens.chrome.sheetBg ?? tokens.native.secondaryGrouped ?? tokens.surface,
+          tokens.isDark ? 0.22 : 0.14,
+        )
   const blurIntensity = tokens.isDark ? 64 : menuSheet ? 96 : 88
   const { rootStyle, foregroundPadding, topRadius } = splitSheetPadding(style)
+  const topRadii = {
+    borderTopLeftRadius: topRadius,
+    borderTopRightRadius: topRadius,
+  }
 
   return (
-    <View style={[styles.sheetRoot, rootStyle]}>
-      <View
-        style={[
-          styles.sheetBgClip,
-          { borderTopLeftRadius: topRadius, borderTopRightRadius: topRadius },
-        ]}
-        pointerEvents="none"
-      >
-        <GlassSurface
-          style={StyleSheet.absoluteFillObject}
-          glassEffectStyle="regular"
-          overlayColor={sheetTint}
-          intensity={blurIntensity}
-        />
-      </View>
+    <View style={[styles.sheetRoot, topRadii, rootStyle, { backgroundColor: plateColor }]}>
+      {backend !== "solid" ? (
+        <View style={[styles.sheetBgClip, topRadii]} pointerEvents="none">
+          <GlassSurface
+            style={StyleSheet.absoluteFillObject}
+            glassEffectStyle="regular"
+            overlayColor={sheetTint}
+            intensity={blurIntensity}
+          />
+        </View>
+      ) : null}
       <View
         style={[
           fillHeight ? styles.sheetForegroundFill : styles.sheetForeground,
@@ -396,13 +408,16 @@ const styles = StyleSheet.create({
   },
   sheetRoot: {
     width: "100%",
-    overflow: "visible",
+    position: "relative",
+    overflow: "hidden",
   },
   sheetBgClip: {
     ...StyleSheet.absoluteFillObject,
     overflow: "hidden",
   },
   sheetForeground: {
+    position: "relative",
+    zIndex: 1,
     overflow: "visible",
   },
   sheetForegroundFill: {

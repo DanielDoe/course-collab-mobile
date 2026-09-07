@@ -1,7 +1,10 @@
-import type { ReactNode } from "react"
-import { Keyboard, Platform, Pressable, StyleSheet, TextInput, View, type StyleProp, type ViewStyle } from "react-native"
+import { useState, type ReactNode } from "react"
+import { Keyboard, Platform, StyleSheet, TextInput, View, type StyleProp, type ViewStyle } from "react-native"
+import Animated, { FadeIn, FadeOut } from "react-native-reanimated"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useAppThemeTokens } from "../../context/AppearanceProvider"
+import { FabPressableScale, PressableScale } from "../motion/PressableScale"
+import { motion, useAppReducedMotion } from "../../lib/motion"
 
 const ICON_SLOT = 22
 
@@ -29,8 +32,10 @@ export function LiquidGlassSearchIconButton({
       ? "rgba(235, 235, 245, 0.88)"
       : "rgba(60, 60, 67, 0.72)"
 
+  const Scale = icon === "add" ? FabPressableScale : PressableScale
+
   return (
-    <Pressable
+    <Scale
       style={[
         styles.iconBtn,
         active && {
@@ -43,7 +48,7 @@ export function LiquidGlassSearchIconButton({
       hitSlop={12}
     >
       <Ionicons name={icon} size={20} color={iconColor} />
-    </Pressable>
+    </Scale>
   )
 }
 
@@ -74,8 +79,10 @@ export function LiquidGlassSearchField({
   accentColor,
 }: LiquidGlassSearchFieldProps) {
   const tokens = useAppThemeTokens()
+  const reduceMotion = useAppReducedMotion()
+  const [focused, setFocused] = useState(false)
   const accent = accentColor ?? tokens.accent
-  const iconColor = tokens.isDark ? "rgba(235, 235, 245, 0.62)" : "rgba(60, 60, 67, 0.55)"
+  const idleIcon = tokens.isDark ? "rgba(235, 235, 245, 0.62)" : "rgba(60, 60, 67, 0.55)"
   const textColor = tokens.isDark ? "#FFFFFF" : tokens.text
   const placeholderColor = tokens.isDark ? "rgba(235, 235, 245, 0.42)" : "rgba(60, 60, 67, 0.42)"
   const dividerColor = tokens.isDark ? "rgba(255, 255, 255, 0.18)" : "rgba(0, 0, 0, 0.12)"
@@ -87,7 +94,7 @@ export function LiquidGlassSearchField({
       ) : (
         <View style={styles.field}>
           <View style={styles.iconSlot}>
-            <Ionicons name="search" size={17} color={iconColor} />
+            <Ionicons name="search" size={17} color={focused ? accent : idleIcon} />
           </View>
           <TextInput
             style={[styles.input, { color: textColor }]}
@@ -105,9 +112,15 @@ export function LiquidGlassSearchField({
             returnKeyType="search"
             clearButtonMode="never"
             underlineColorAndroid="transparent"
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
           />
           {value.length > 0 ? (
-            <View style={styles.clearSlot}>
+            <Animated.View
+              style={styles.clearSlot}
+              entering={reduceMotion ? undefined : FadeIn.duration(motion.fast)}
+              exiting={reduceMotion ? undefined : FadeOut.duration(motion.fast)}
+            >
               <LiquidGlassSearchIconButton
                 icon="close-circle"
                 onPress={() => {
@@ -116,7 +129,7 @@ export function LiquidGlassSearchField({
                 }}
                 accessibilityLabel="Clear search"
               />
-            </View>
+            </Animated.View>
           ) : null}
         </View>
       )}

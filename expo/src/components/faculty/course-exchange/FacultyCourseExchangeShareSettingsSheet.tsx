@@ -71,13 +71,14 @@ export function FacultyCourseExchangeShareSettingsSheet({
   const canSave = !saving && (!discoverable || draftModules.length > 0)
 
   return (
-    <FacultySheetModal visible={visible} onRequestClose={onClose}>
+    <FacultySheetModal visible={visible} onRequestClose={onClose} layout="glassBottom">
       <FacultySheetChrome
         topInset={insets.top}
         title="Share Course"
         subtitle={course.courseCode}
         onClose={onClose}
         accentColor={FACULTY_COURSE_EXCHANGE_COLOR.action}
+        pageSheet
       />
 
       <ScrollView

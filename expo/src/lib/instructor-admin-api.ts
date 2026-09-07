@@ -1,5 +1,11 @@
+import { API_BASE_URL } from "../constants"
 import { ApiError } from "./api"
-import { instructorAuthenticatedRequest } from "./instructor-api"
+import { assertProductionHttpsUrl, createApiAbortSignal } from "./http"
+import {
+  instructorAuthenticatedHeaders,
+  instructorAuthenticatedRequest,
+} from "./instructor-api"
+import { persistHttpCookiesFromResponse } from "./student-http-cookies"
 import type { AssessmentPolicy } from "./assessment-policy-settings"
 import type { AssessmentPrivilegeSource } from "./assessment-governance"
 import type {
@@ -427,6 +433,7 @@ export const instructorAdminApi = {
       priority?: string
       moduleId?: string
       moduleName?: string
+      attachments?: Array<{ url: string; name: string; mime?: string; size?: number }>
     },
   ) => {
     const body = {
@@ -437,6 +444,7 @@ export const instructorAdminApi = {
       priority: payload.priority ?? "medium",
       moduleId: payload.moduleId,
       moduleName: payload.moduleName,
+      attachments: payload.attachments ?? [],
     }
     try {
       return await instructorRequestWithoutCourse<{ success: boolean; message?: string }>(
@@ -459,6 +467,7 @@ export const instructorAdminApi = {
             priority: payload.priority ?? "medium",
             moduleId: payload.moduleId,
             moduleName: payload.moduleName,
+            attachments: payload.attachments ?? [],
             instructorId,
             audience: "instructor",
           }),
@@ -486,5 +495,49 @@ export const instructorAdminApi = {
       if (!(err instanceof ApiError) || (err.status !== 404 && err.status !== 405)) throw err
       return { tickets: [] as import("./support-tickets").SupportTicket[] }
     }
+  },
+
+  uploadSupportTicketAttachment: async (
+    instructorId: number,
+    file: { uri: string; name: string; mimeType: string },
+  ) => {
+    const path = "/api/instructor/support-tickets/attachments"
+    const url = `${API_BASE_URL}${path}`
+    assertProductionHttpsUrl(url)
+    const form = new FormData()
+    form.append("file", {
+      uri: file.uri,
+      name: file.name,
+      type: file.mimeType,
+    } as unknown as Blob)
+    const headers = await instructorAuthenticatedHeaders({ instructorId }, { omitCourseId: true })
+    delete headers["Content-Type"]
+    const response = await fetch(url, {
+      method: "POST",
+      credentials: "include",
+      headers,
+      body: form,
+      signal: createApiAbortSignal(),
+    })
+    const text = await response.text()
+    let body: unknown = null
+    if (text) {
+      try {
+        body = JSON.parse(text)
+      } catch {
+        body = { error: text }
+      }
+    }
+    if (!response.ok) {
+      throw new ApiError(
+        typeof body === "object" && body !== null && "error" in body && typeof (body as { error: unknown }).error === "string"
+          ? (body as { error: string }).error
+          : `Upload failed (${response.status})`,
+        response.status,
+        body,
+      )
+    }
+    await persistHttpCookiesFromResponse(url, response.headers)
+    return body as { url: string; name?: string; mime?: string; size?: number }
   },
 }

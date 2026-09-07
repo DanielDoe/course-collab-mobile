@@ -5,6 +5,7 @@ import {
   Text,
   View,
 } from "react-native"
+import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { useFocusEffect, useRouter } from "expo-router"
 import { useSession } from "../../context/SessionProvider"
 import {
@@ -13,11 +14,14 @@ import {
 } from "../../lib/messages-api"
 import { presentApiError, type ApiErrorPresentation } from "../../lib/present-api-error"
 import { applyLocalThreadStateToThreads, reconcileLocalThreadReadState } from "../../lib/messages-local-state"
-import { onMessagesRefresh } from "../../lib/notifications/notification-events"
+import {
+  onMessagesRefresh,
+  shouldRefetchInboxOnMessageRefresh,
+} from "../../lib/notifications/notification-events"
 import { usePresenceTracking } from "../../hooks/usePresenceTracking"
 import { useModuleTheme } from "../../lib/themed-module-shell"
 import { FACULTY_COMMUNICATION_COLOR } from "../../lib/faculty-communication-theme"
-import { useChromeTopInset, useModuleScrollContentPadding } from "../../context/ChromeInsetContext"
+import { useChromeBottomInset, useChromeTopInset, useModuleHeaderContentTop } from "../../context/ChromeInsetContext"
 import { CommEmptyState } from "../faculty/faculty-communication-ui"
 import { AppErrorNotice } from "../errors/AppErrorNotice"
 import {
@@ -29,15 +33,18 @@ import { messagePreviewText } from "../../lib/messages-html"
 import { MessageThreadRow } from "./messages-ui"
 import { MessagesComposeModal } from "./MessagesComposeModal"
 import { ModuleFlashList } from "../ModuleFlashList"
+import type { FlashListRef } from "@shopify/flash-list"
+import { useFacultyListPager } from "../../hooks/useFacultyListPager"
 import { useMessagesInbox } from "../../hooks/query/useMessagesInbox"
+import { FacultyListPagerFooter } from "../faculty/FacultyListPagerFooter"
 import { QueryRefreshBanner } from "../query/QueryRefreshBanner"
 import { QuerySkeleton } from "../query/QuerySkeleton"
+import { useMessagesLayout } from "../../hooks/useMessagesLayout"
+import { MessagesErrorBoundary } from "./MessagesErrorBoundary"
 
 type StatusFilter = "all" | "unread"
 type RoleFilter = "all" | "faculty" | "students"
 
-/** Intentional space between the Messages header divider and the first conversation card. */
-const MESSAGES_HEADER_TO_LIST_GAP = 28
 /** Bottom clearance for the floating search dock + home indicator. */
 const MESSAGES_LIST_BOTTOM_EXTRA = 88
 
@@ -53,13 +60,24 @@ export function MessagesInboxScreen() {
   )
   const router = useRouter()
   const { styles: moduleStyles, type } = useModuleTheme()
+  const layout = useMessagesLayout()
   const chromeTop = useChromeTopInset()
-  const scrollPad = useModuleScrollContentPadding(MESSAGES_LIST_BOTTOM_EXTRA, MESSAGES_HEADER_TO_LIST_GAP)
+  const chromeBottom = useChromeBottomInset()
+  const headerContentTop = useModuleHeaderContentTop()
+  const insets = useSafeAreaInsets()
+  const listContentPad = useMemo(
+    () => ({
+      paddingBottom: insets.bottom + MESSAGES_LIST_BOTTOM_EXTRA + chromeBottom,
+      paddingTop: headerContentTop,
+    }),
+    [chromeBottom, headerContentTop, insets.bottom],
+  )
   const inboxQuery = useMessagesInbox(auth)
   const threads = inboxQuery.threads
   const setThreads = inboxQuery.setThreads
   const loading = inboxQuery.isInitialLoading
-  const refreshing = inboxQuery.isRefreshing && !inboxQuery.isInitialLoading
+  const [pullRefreshing, setPullRefreshing] = useState(false)
+  const listRef = useRef<FlashListRef<ThreadSummary>>(null)
   const error = inboxQuery.error
     ? presentApiError(inboxQuery.error, {
         feature: "Messages",
@@ -74,7 +92,10 @@ export function MessagesInboxScreen() {
   const skipNextFocusRefresh = useRef(true)
 
   const presenceParticipants = useMemo(
-    () => threads.map((thread) => ({ kind: thread.otherParticipant.kind, id: thread.otherParticipant.id })),
+    () =>
+      threads
+        .filter((thread) => thread.otherParticipant?.id)
+        .map((thread) => ({ kind: thread.otherParticipant.kind, id: thread.otherParticipant.id })),
     [threads],
   )
   const { getStatus } = usePresenceTracking(presenceParticipants)
@@ -85,6 +106,7 @@ export function MessagesInboxScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      listRef.current?.scrollToOffset({ offset: 0, animated: false })
       if (!auth) return
       if (skipNextFocusRefresh.current) {
         skipNextFocusRefresh.current = false
@@ -105,13 +127,29 @@ export function MessagesInboxScreen() {
           ),
         )
       }
-      void load()
+      if (shouldRefetchInboxOnMessageRefresh(payload)) void load()
     })
   }, [load, setThreads])
 
-  async function handleRefresh() {
-    await load()
-  }
+  const openCompose = useCallback(() => setComposeOpen(true), [])
+  const openFilter = useCallback(() => setFilterSheetOpen(true), [])
+  const trailingAction = useMemo(
+    () => ({
+      onPress: openCompose,
+      accessibilityLabel: "New message",
+      icon: "add" as const,
+    }),
+    [openCompose],
+  )
+
+  const handleRefresh = useCallback(async () => {
+    setPullRefreshing(true)
+    try {
+      await load()
+    } finally {
+      setPullRefreshing(false)
+    }
+  }, [load])
 
   const filterGroups = useMemo<StudentFilterGroup[]>(
     () => [
@@ -166,6 +204,7 @@ export function MessagesInboxScreen() {
       return haystack.includes(q)
     })
   }, [roleFilter, search, statusFilter, threads])
+  const pager = useFacultyListPager(filtered, `${statusFilter}:${roleFilter}:${search}`, "conversations")
 
   const unreadTotal = useMemo(
     () => threads.reduce((sum, thread) => sum + (thread.unreadCount ?? 0), 0),
@@ -187,7 +226,6 @@ export function MessagesInboxScreen() {
             presentation={error}
             variant="compact"
             onRetry={() => void handleRefresh()}
-            onDismiss={() => setError(null)}
             style={styles.inlineError}
           />
         ) : null}
@@ -201,12 +239,12 @@ export function MessagesInboxScreen() {
       <MessageThreadRow
         thread={item}
         isFirst={index === 0}
-        isLast={index === filtered.length - 1}
+        isLast={index === pager.items.length - 1}
         presenceStatus={getStatus(item.otherParticipant.kind, item.otherParticipant.id)}
         onPress={() => router.push(`/messages/${item.id}` as never)}
       />
     ),
-    [filtered.length, getStatus, router],
+    [getStatus, pager.items.length, router],
   )
 
   if (!auth) {
@@ -222,6 +260,7 @@ export function MessagesInboxScreen() {
   }
 
   return (
+    <MessagesErrorBoundary feature="Messages">
     <View style={moduleStyles.root}>
       <StudentSearchToolbar
         value={search}
@@ -229,12 +268,8 @@ export function MessagesInboxScreen() {
         placeholder="Search conversations…"
         showFilter
         filterActive={filterActive}
-        onOpenFilter={() => setFilterSheetOpen(true)}
-        trailingAction={{
-          onPress: () => setComposeOpen(true),
-          accessibilityLabel: "New message",
-          icon: "add",
-        }}
+        onOpenFilter={openFilter}
+        trailingAction={trailingAction}
       />
       <QueryRefreshBanner visible={inboxQuery.refreshFailed} onRetry={() => void handleRefresh()} />
 
@@ -251,13 +286,18 @@ export function MessagesInboxScreen() {
       />
 
       <ModuleFlashList
-        data={loading || showBlockingError ? [] : filtered}
+        ref={listRef}
+        animateItems
+        refreshContentGrow={filtered.length === 0 || loading || showBlockingError}
+        data={loading || showBlockingError ? [] : pager.items}
         keyExtractor={(item) => String(item.id)}
         renderItem={renderThreadRow}
-        extraData={{ filteredLength: filtered.length, unreadTotal }}
+        extraData={{ filteredLength: pager.items.length, unreadTotal, page: pager.page }}
         contentContainerStyle={[
           styles.content,
-          scrollPad,
+          layout.contentStyle,
+          listContentPad,
+          { paddingHorizontal: layout.horizontalPadding },
           // Only grow when empty/loading — otherwise FlashList paints a tall empty card.
           (loading || showBlockingError || filtered.length === 0) && styles.contentGrow,
           showBlockingError && styles.contentBlockingError,
@@ -267,6 +307,9 @@ export function MessagesInboxScreen() {
         automaticallyAdjustContentInsets={false}
         automaticallyAdjustsScrollIndicatorInsets={false}
         ListHeaderComponent={listHeader}
+        ListFooterComponent={
+          loading || showBlockingError ? null : <FacultyListPagerFooter pager={pager} />
+        }
         ListEmptyComponent={
           loading ? (
             <QuerySkeleton />
@@ -275,7 +318,6 @@ export function MessagesInboxScreen() {
               <AppErrorNotice
                 presentation={error}
                 onRetry={() => void handleRefresh()}
-                onDismiss={() => setError(null)}
               />
             </View>
           ) : (
@@ -284,7 +326,7 @@ export function MessagesInboxScreen() {
               title={threads.length === 0 ? "No conversations yet" : "No matches"}
               body={
                 threads.length === 0
-                  ? "Tap + in the search bar to start a new message."
+                  ? "Messages with students and course participants will appear here."
                   : "Try a different search or filter."
               }
             />
@@ -292,7 +334,7 @@ export function MessagesInboxScreen() {
         }
         refreshControl={
           <RefreshControl
-            refreshing={refreshing}
+            refreshing={pullRefreshing}
             onRefresh={() => void handleRefresh()}
             tintColor={FACULTY_COMMUNICATION_COLOR.link}
             {...(chromeTop > 0 ? { progressViewOffset: chromeTop } : {})}
@@ -311,6 +353,7 @@ export function MessagesInboxScreen() {
         }}
       />
     </View>
+    </MessagesErrorBoundary>
   )
 }
 
@@ -319,8 +362,8 @@ const styles = StyleSheet.create({
   content: {},
   contentGrow: { flexGrow: 1 },
   contentBlockingError: { justifyContent: "center" },
-  unreadNote: { paddingHorizontal: 16, fontWeight: "600", marginBottom: 8 },
-  inlineError: { marginHorizontal: 16, marginBottom: 8 },
+  unreadNote: { fontWeight: "600", marginBottom: 8 },
+  inlineError: { marginBottom: 8 },
   blockingErrorWrap: { paddingVertical: 12 },
   loadingBox: { paddingVertical: 48, alignItems: "center" },
 })

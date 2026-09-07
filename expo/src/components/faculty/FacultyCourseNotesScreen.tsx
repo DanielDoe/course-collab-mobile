@@ -29,6 +29,8 @@ import {
 import { NativeSelect } from "../NativeSelect"
 import { MarkdownNotePreview } from "../notes/MarkdownNotePreview"
 import { FacultyAdminStatRow } from "./faculty-admin-ui"
+import { useFacultyListPager } from "../../hooks/useFacultyListPager"
+import { FacultyListPagerFooter } from "./FacultyListPagerFooter"
 import { CircuitWorkspaceEditor } from "../ink/CircuitWorkspaceEditor"
 import { CircuitWorkspaceViewer } from "../ink/CircuitWorkspaceViewer"
 import {
@@ -124,6 +126,7 @@ export function FacultyCourseNotesScreen() {
   const [showPreview, setShowPreview] = useState(false)
   const [contentTab, setContentTab] = useState<ContentTab>("typed")
   const [inkWorkspace, setInkWorkspace] = useState<CircuitWorkspace>(() => createEmptyWorkspace())
+  const [inkDrawing, setInkDrawing] = useState(false)
   const [editorBaseline, setEditorBaseline] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [loadingEditor, setLoadingEditor] = useState(false)
@@ -235,6 +238,9 @@ export function FacultyCourseNotesScreen() {
       )
     })
   }, [notes, search])
+
+  const notesPager = useFacultyListPager(filteredNotes, search, "notes")
+  const topicsPager = useFacultyListPager(topics, topicSession, "topics")
 
   function openCreate() {
     const emptyInk = createEmptyWorkspace()
@@ -477,7 +483,7 @@ export function FacultyCourseNotesScreen() {
               />
             ) : (
               <View style={localStyles.list}>
-                {filteredNotes.map((note, index) => (
+                {notesPager.items.map((note, index) => (
                   <FacultyCourseNoteListCard
                     key={note.id}
                     note={note}
@@ -486,6 +492,7 @@ export function FacultyCourseNotesScreen() {
                     onDelete={() => deleteNote(note)}
                   />
                 ))}
+                <FacultyListPagerFooter pager={notesPager} />
               </View>
             )
           ) : null}
@@ -505,7 +512,7 @@ export function FacultyCourseNotesScreen() {
                   options={topicSessionOptions}
                   onChange={setTopicSession}
                 />
-                {topics.map((row) => {
+                {topicsPager.items.map((row) => {
                   const availability = row.availability?.[topicSession] ?? row.availability?.ALL
                   const enabled = availability?.is_available !== false
                   return (
@@ -524,6 +531,7 @@ export function FacultyCourseNotesScreen() {
                     </View>
                   )
                 })}
+                <FacultyListPagerFooter pager={topicsPager} />
               </>
             )
           ) : null}
@@ -590,8 +598,12 @@ export function FacultyCourseNotesScreen() {
               <Text style={[type.bodyEmphasis, { color: tokens.accent }]}>{saving ? "…" : "Save"}</Text>
             </Pressable>
           </View>
-          <ScrollView contentContainerStyle={localStyles.editorBody} keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag">
+          <ScrollView
+            contentContainerStyle={localStyles.editorBody}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+            scrollEnabled={contentTab !== "ink"}
+          >
             {loadingEditor ? (
               <View style={localStyles.loadingBox}>
                 <ActivityIndicator color={tokens.accent} />
@@ -656,7 +668,10 @@ export function FacultyCourseNotesScreen() {
                   localStyles.segmentBtn,
                   contentTab === "typed" && [localStyles.segmentBtnActive, { backgroundColor: native.secondaryGrouped }],
                 ]}
-                onPress={() => setContentTab("typed")}
+                onPress={() => {
+                  setInkDrawing(false)
+                  setContentTab("typed")
+                }}
                 accessibilityRole="button"
                 accessibilityState={{ selected: contentTab === "typed" }}
                 accessibilityLabel="Typed"
@@ -705,7 +720,11 @@ export function FacultyCourseNotesScreen() {
                 style={[localStyles.bodyInput, { color: native.label, borderColor: native.separator }]}
               />
             ) : (
-              <CircuitWorkspaceEditor workspace={inkWorkspace} onChange={setInkWorkspace} />
+              <CircuitWorkspaceEditor
+                workspace={inkWorkspace}
+                onChange={setInkWorkspace}
+                onDrawingActiveChange={setInkDrawing}
+              />
             )}
             {editing ? (
               <Pressable

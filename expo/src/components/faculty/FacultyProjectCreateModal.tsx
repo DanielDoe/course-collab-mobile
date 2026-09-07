@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
-import { ActivityIndicator, Modal, Pressable, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, Modal, Pressable, Text, View } from "react-native";
 import { AppAlert } from '../../lib/app-alert'
 import { AppAlertHost } from "../../context/AppAlertProvider"
 import { Ionicons } from "@/components/icons/AppIcon"
@@ -21,6 +21,7 @@ import {
   useCollabSheetStyles,
 
 } from "./faculty-collab-sheet-ui"
+import { KeyboardAwareForm } from "../ui/KeyboardAwareForm"
 import { useSuppressModuleSearchDock } from "../../context/ModuleSearchDockContext"
 import { SHEET_SECTION } from "./faculty-sheet-semantics"
 
@@ -172,11 +173,7 @@ export function FacultyProjectCreateModal({ visible, scope, onClose, onCreated }
       <FacultySheetContainer>
         <FacultySheetChrome topInset={insets.top} title="Create project" onClose={onClose} />
 
-        <ScrollView
-          contentContainerStyle={[collabSheetStyles.scroll, { paddingBottom: insets.bottom + 24 }]}
-          keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
-        >
+        <KeyboardAwareForm contentContainerStyle={[collabSheetStyles.scroll, { paddingBottom: insets.bottom + 24 }]}>
           <FacultySheetNotice message="Creates a project under an approved group where the selected student is the group leader." />
 
           <FacultySheetSection label="Project leader" tone={SHEET_SECTION.roster}>
@@ -349,7 +346,7 @@ export function FacultyProjectCreateModal({ visible, scope, onClose, onCreated }
             disabled={submitting || !leaderId || !groupId || !title.trim()}
             loading={submitting}
           />
-        </ScrollView>
+        </KeyboardAwareForm>
         <AppAlertHost />
       </FacultySheetContainer>
     </Modal>

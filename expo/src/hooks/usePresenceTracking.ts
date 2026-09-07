@@ -28,20 +28,28 @@ export function usePresenceTracking(participants: ParticipantRef[]) {
   const [statuses, setStatuses] = useState<PresenceMap>({})
   const [lastSeenAt, setLastSeenAt] = useState<PresenceLastSeenMap>({})
 
-  const keys = useMemo(() => {
-    const unique = new Map<string, ParticipantRef>()
-    for (const p of participants) {
-      if (Number.isFinite(p.id) && p.id > 0) {
-        unique.set(presenceKey(p.kind, p.id), p)
-      }
-    }
-    return [...unique.values()]
-  }, [participants])
+  const participantKey = useMemo(
+    () =>
+      participants
+        .filter((p) => Number.isFinite(p.id) && p.id > 0)
+        .map((p) => presenceKey(p.kind, p.id))
+        .sort()
+        .join("|"),
+    [participants],
+  )
+
+  const keys = useMemo((): ParticipantRef[] => {
+    if (!participantKey) return []
+    return participantKey.split("|").map((entry) => {
+      const [kind, id] = entry.split(":")
+      return { kind: kind as ParticipantKind, id: Number(id) }
+    })
+  }, [participantKey])
 
   const refresh = useCallback(async () => {
     if (!auth || keys.length === 0) {
-      setStatuses({})
-      setLastSeenAt({})
+      setStatuses((prev) => (Object.keys(prev).length === 0 ? prev : {}))
+      setLastSeenAt((prev) => (Object.keys(prev).length === 0 ? prev : {}))
       return
     }
     try {

@@ -27,6 +27,7 @@ import { SignatureListCard } from "../theme/SignatureListCard"
 import { TabbedModuleLayout, signatureListStyles } from "../theme/TabbedModuleLayout"
 import { StudentFilterSheet, StudentSearchToolbar } from "../student/student-search-toolbar"
 import { useNotificationModuleRefresh } from "../../lib/notifications/notification-events"
+import { useModuleListPageSize } from "../../hooks/useModuleListPageSize"
 
 function useStudentSession(): StudentSession | null {
   const { session } = useSession()
@@ -101,7 +102,6 @@ function LeaderboardListCard({ entry, rank, index }: { entry: ForumLeaderboardEn
 }
 
 /** TabbedModuleLayout pages are plain ScrollViews — page long lists instead of mounting every row. */
-const LIST_PAGE_SIZE = 20
 
 export function ForumScreen() {
   const session = useStudentSession()
@@ -122,9 +122,11 @@ export function ForumScreen() {
   const [showTutorForm, setShowTutorForm] = useState(false)
   const [tutorSubject, setTutorSubject] = useState("")
   const [filterSheetOpen, setFilterSheetOpen] = useState(false)
-  const [threadCount, setThreadCount] = useState(LIST_PAGE_SIZE)
-  const [tutoringCount, setTutoringCount] = useState(LIST_PAGE_SIZE)
-  const [leaderboardCount, setLeaderboardCount] = useState(LIST_PAGE_SIZE)
+  const listPageSize = useModuleListPageSize({ preset: "standard" })
+  const leaderboardPageSize = useModuleListPageSize({ preset: "compact" })
+  const [threadCount, setThreadCount] = useState(listPageSize)
+  const [tutoringCount, setTutoringCount] = useState(listPageSize)
+  const [leaderboardCount, setLeaderboardCount] = useState(leaderboardPageSize)
 
   const load = useCallback(async () => {
     if (!session) return
@@ -171,10 +173,10 @@ export function ForumScreen() {
   useNotificationModuleRefresh("forum", onRefresh)
 
   useEffect(() => {
-    setThreadCount(LIST_PAGE_SIZE)
-    setTutoringCount(LIST_PAGE_SIZE)
-    setLeaderboardCount(LIST_PAGE_SIZE)
-  }, [search, sortBy, lbView])
+    setThreadCount(listPageSize)
+    setTutoringCount(listPageSize)
+    setLeaderboardCount(leaderboardPageSize)
+  }, [search, sortBy, lbView, listPageSize, leaderboardPageSize])
 
   const leaderboard = lbView === "weekly" ? weeklyLb : allTimeLb
 
@@ -285,7 +287,7 @@ export function ForumScreen() {
             <ModuleShowMoreRow
               variant="card"
               remaining={threads.length - threadCount}
-              onPress={() => setThreadCount((prev) => prev + LIST_PAGE_SIZE)}
+              onPress={() => setThreadCount((prev) => prev + listPageSize)}
             />
           </View>
         )}
@@ -311,7 +313,7 @@ export function ForumScreen() {
             <ModuleShowMoreRow
               variant="card"
               remaining={filteredTutoring.length - tutoringCount}
-              onPress={() => setTutoringCount((prev) => prev + LIST_PAGE_SIZE)}
+              onPress={() => setTutoringCount((prev) => prev + listPageSize)}
             />
           </View>
         )}
@@ -355,7 +357,7 @@ export function ForumScreen() {
         <ModuleShowMoreRow
           variant="card"
           remaining={filteredLeaderboard.length - leaderboardCount}
-          onPress={() => setLeaderboardCount((prev) => prev + LIST_PAGE_SIZE)}
+          onPress={() => setLeaderboardCount((prev) => prev + leaderboardPageSize)}
         />
       </View>
     )

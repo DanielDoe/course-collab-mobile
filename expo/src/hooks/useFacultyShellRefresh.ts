@@ -27,6 +27,7 @@ import {
 import { resolveFacultyStoredCourse } from "../lib/faculty-section-scope"
 import type { FacultySession } from "../lib/session"
 import { setAppBadgeCount } from "../lib/notifications/notification-service"
+import { getQueryClient } from "../lib/query/client"
 
 export function useFacultyShellRefresh(session: FacultySession) {
   const {
@@ -46,19 +47,34 @@ export function useFacultyShellRefresh(session: FacultySession) {
 
   const resolveCourse = useCallback(
     async (nextCourses: InstructorCourse[], courseOverride?: InstructorCourse | null) => {
-      let course = courseOverride ?? selectedCourse
-      if ((!course || course.id <= 0) && nextCourses.length > 0) {
+      let course = courseOverride ?? null
+
+      if (!course || course.id <= 0) {
         const storedId = await getStoredFacultyCourseId(session.id)
         const storedSessionCode =
           storedId != null ? await getStoredFacultySessionCode(session.id, storedId) : null
-        course =
-          storedId != null
-            ? resolveFacultyStoredCourse(nextCourses, storedId, storedSessionCode)
-            : null
-        if (!course && nextCourses.length === 1) course = nextCourses[0]!
-        if (course) setSelectedCourse(course)
+        if (storedId != null) {
+          course = resolveFacultyStoredCourse(nextCourses, storedId, storedSessionCode)
+        }
       }
-      return course
+
+      if (!course || course.id <= 0) {
+        if (selectedCourse && selectedCourse.id > 0) {
+          course =
+            nextCourses.find((item) => facultyPickerItemMatchesSelection(selectedCourse, item)) ??
+            null
+        }
+        if (!course && nextCourses.length === 1) course = nextCourses[0]!
+      }
+
+      if (!course || course.id <= 0) return course
+
+      const canonical =
+        nextCourses.find((item) => facultyPickerItemMatchesSelection(course, item)) ?? course
+      if (!facultyPickerItemMatchesSelection(selectedCourse, canonical)) {
+        setSelectedCourse(canonical)
+      }
+      return canonical
     },
     [selectedCourse, session.id, setSelectedCourse],
   )
@@ -75,8 +91,13 @@ export function useFacultyShellRefresh(session: FacultySession) {
       const force = options?.force === true || courseOverride != null
       const now = Date.now()
 
-      if (refreshingRef.current) return
-      if (!force && lastRefreshAtRef.current > 0 && now - lastRefreshAtRef.current < SHELL_REFRESH_TTL_MS) {
+      if (refreshingRef.current && courseOverride == null) return
+      if (
+        !force &&
+        courseOverride == null &&
+        lastRefreshAtRef.current > 0 &&
+        now - lastRefreshAtRef.current < SHELL_REFRESH_TTL_MS
+      ) {
         return
       }
 
@@ -85,6 +106,7 @@ export function useFacultyShellRefresh(session: FacultySession) {
         const nextCourses = await fetchFacultyCoursePickerItems(session)
         setCourses(nextCourses)
 
+        const previousCourse = selectedCourse
         const course = await resolveCourse(nextCourses, courseOverride)
         await refreshMembership()
 
@@ -102,6 +124,12 @@ export function useFacultyShellRefresh(session: FacultySession) {
           sessionId: course.session_id ?? null,
           sessionCode: course.session_code ?? null,
           academicTermId: course.academic_term_id ?? null,
+        }
+        const courseChanged =
+          courseOverride != null ||
+          !facultyPickerItemMatchesSelection(previousCourse, course)
+        if (courseChanged) {
+          void getQueryClient().invalidateQueries({ queryKey: ["faculty"] })
         }
         const [notifications, pendingPoints, issues, officeHours, exchangeSummary] = await Promise.all([
           instructorApi.getNotifications(session.id).catch(() => ({ unread_count: 0 })),
@@ -135,6 +163,7 @@ export function useFacultyShellRefresh(session: FacultySession) {
     [
       refreshMembership,
       resolveCourse,
+      selectedCourse,
       session.id,
       setBadges,
       setCourses,

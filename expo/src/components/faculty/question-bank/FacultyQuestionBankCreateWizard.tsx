@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from "react"
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native"
-import { Ionicons } from "@/components/icons/AppIcon"
+import { Modal, Pressable, StyleSheet, Text, View } from "react-native"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import type { CustomQuestionTypeDraft } from "../../../lib/custom-question-types"
 import { resolveQuestionBankTypeMeta } from "../../../lib/custom-question-types"
@@ -16,6 +15,7 @@ import { AppButton } from "../../theme/AppButton"
 import { FACULTY_QUESTION_BANK_COLOR } from "../../../lib/faculty-question-bank-theme"
 import { semanticSoft } from "../../../lib/themed-module-theme"
 import { useModuleTheme } from "../../../lib/themed-module-shell"
+import { KeyboardAwareForm } from "../../ui/KeyboardAwareForm"
 
 type EntryMode = "manual" | "ai" | "pdf"
 type WizardStep = 1 | 2
@@ -118,11 +118,7 @@ export function FacultyQuestionBankCreateWizard({ visible, onClose, onSaved }: P
             <View style={styles.headerSpacer} />
           </View>
 
-          <ScrollView
-            contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + 24 }]}
-            keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
-          >
+          <KeyboardAwareForm contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + 24 }]}>
             {wizardStep === 1 ? (
               typeStepMode === "create" ? (
                 <FacultyQuestionBankCreateTypePanel
@@ -191,7 +187,7 @@ export function FacultyQuestionBankCreateWizard({ visible, onClose, onSaved }: P
                 ) : null}
               </>
             ) : null}
-          </ScrollView>
+          </KeyboardAwareForm>
         </View>
       </Modal>
 

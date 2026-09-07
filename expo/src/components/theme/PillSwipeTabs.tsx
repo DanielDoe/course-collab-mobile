@@ -1,18 +1,19 @@
-import { useEffect, useState, type ReactNode } from "react"
+import { useEffect, useRef, useState, type ReactNode } from "react"
 import { LayoutChangeEvent, StyleSheet, View } from "react-native"
 import { Gesture, GestureDetector } from "react-native-gesture-handler"
 import Animated, {
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
-  withTiming,
+  withSpring,
 } from "react-native-reanimated"
 import {
   MobbinPillSegmentControl,
   type MobbinPillSegmentOption,
 } from "./MobbinPillSegmentControl"
+import { spring, useAppReducedMotion } from "../../lib/motion"
 
-const PAGE_TIMING = { duration: 240 }
+const PAGE_SPRING = spring.pill
 
 type Props<T extends string> = {
   options: MobbinPillSegmentOption<T>[]
@@ -43,6 +44,8 @@ export function PillSwipeTabs<T extends string>({
   const scrollX = useSharedValue(0)
   const dragStartX = useSharedValue(0)
   const translateX = useSharedValue(0)
+  const skipActiveSyncRef = useRef(false)
+  const reduceMotion = useAppReducedMotion()
 
   const activeIndex = Math.max(
     0,
@@ -60,12 +63,21 @@ export function PillSwipeTabs<T extends string>({
     if (pageWidth <= 0) return
     const clamped = Math.max(0, Math.min(pageCount - 1, index))
     const x = clamped * pageWidth
-    scrollX.value = withTiming(x, PAGE_TIMING)
-    translateX.value = withTiming(-x, PAGE_TIMING)
+    if (reduceMotion) {
+      scrollX.value = x
+      translateX.value = -x
+      return
+    }
+    scrollX.value = withSpring(x, PAGE_SPRING)
+    translateX.value = withSpring(-x, PAGE_SPRING)
   }
 
   useEffect(() => {
     if (pageWidth <= 0) return
+    if (skipActiveSyncRef.current) {
+      skipActiveSyncRef.current = false
+      return
+    }
     const x = activeIndex * pageWidth
     scrollX.value = x
     translateX.value = -x
@@ -74,6 +86,7 @@ export function PillSwipeTabs<T extends string>({
   function onSegmentChange(next: T) {
     const index = options.findIndex((option) => option.id === next)
     if (index < 0) return
+    skipActiveSyncRef.current = true
     onChange(next)
     animateToIndex(index)
   }
@@ -106,8 +119,13 @@ export function PillSwipeTabs<T extends string>({
       const index = Math.round(-translateX.value / pageWidth)
       const clamped = Math.max(0, Math.min(pageCount - 1, index))
       const x = clamped * pageWidth
-      scrollX.value = withTiming(x, PAGE_TIMING)
-      translateX.value = withTiming(-x, PAGE_TIMING)
+      if (reduceMotion) {
+        scrollX.value = x
+        translateX.value = -x
+      } else {
+        scrollX.value = withSpring(x, PAGE_SPRING)
+        translateX.value = withSpring(-x, PAGE_SPRING)
+      }
       runOnJS(commitIndex)(clamped)
     })
 

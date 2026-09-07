@@ -38,6 +38,7 @@ import {
   facultyFlashcardSwitchTrack,
 } from "../../lib/faculty-flashcard-theme"
 import { NativeSelect } from "../NativeSelect"
+import { KeyboardAwareForm } from "../ui/KeyboardAwareForm"
 import { BATCH_SIZE_OPTIONS } from "./FacultyNativePickers"
 import {
   FacultyAdminSection,
@@ -49,6 +50,8 @@ import {
   type ModuleConfiguration,
   type ModuleTopicRow,
 } from "../../lib/instructor-content-api"
+import { useFacultyListPager } from "../../hooks/useFacultyListPager"
+import { FacultyListPagerFooter } from "./FacultyListPagerFooter"
 
 type Tab = "all" | "topics" | "configuration" | "deleted"
 
@@ -227,6 +230,9 @@ export function FacultyFlashcardsScreen() {
       )
     })
   }, [decks, search])
+
+  const decksPager = useFacultyListPager(filteredDecks, `${search}:${deckSessionFilter}`, "decks")
+  const topicsPager = useFacultyListPager(topics, topicSession, "topics")
 
   async function openDeck(deck: FlashcardDeck) {
     if (!scope) return
@@ -677,7 +683,7 @@ export function FacultyFlashcardsScreen() {
                 />
               ) : (
                 <View style={localStyles.deckList}>
-                  {filteredDecks.map((deck) => (
+                  {decksPager.items.map((deck) => (
                     <FacultyFlashcardDeckListCard
                       key={deck.id}
                       deck={deck}
@@ -685,6 +691,7 @@ export function FacultyFlashcardsScreen() {
                       onDelete={() => deleteDeck(deck)}
                     />
                   ))}
+                  <FacultyListPagerFooter pager={decksPager} />
                 </View>
               )}
             </>
@@ -701,7 +708,7 @@ export function FacultyFlashcardsScreen() {
                   options={topicSessionOptions}
                   onChange={setTopicSession}
                 />
-                {topics.map((row) => {
+                {topicsPager.items.map((row) => {
                   const availability = row.availability?.[topicSession] ?? row.availability?.ALL
                   const enabled = availability?.is_available !== false
                   return (
@@ -729,6 +736,7 @@ export function FacultyFlashcardsScreen() {
                     </View>
                   )
                 })}
+                <FacultyListPagerFooter pager={topicsPager} />
               </>
             )
           ) : null}
@@ -830,7 +838,7 @@ export function FacultyFlashcardsScreen() {
               </Text>
             </Pressable>
           </View>
-          <ScrollView contentContainerStyle={localStyles.editorBody} keyboardShouldPersistTaps="handled">
+          <KeyboardAwareForm contentContainerStyle={localStyles.editorBody}>
             <TextInput
               value={title}
               onChangeText={setTitle}
@@ -1077,7 +1085,7 @@ export function FacultyFlashcardsScreen() {
                 </Pressable>
               </>
             ) : null}
-          </ScrollView>
+          </KeyboardAwareForm>
         </View>
       </Modal>
     </View>

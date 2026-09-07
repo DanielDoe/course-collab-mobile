@@ -206,7 +206,7 @@ export function AppearanceSetupScreen() {
   const router = useRouter()
   const systemScheme = useColorScheme()
   const { width: windowWidth } = useWindowDimensions()
-  const { session } = useSession()
+  const { session, isLoading: sessionLoading } = useSession()
   const { ready, prefs, tokens, setAppearanceMode, setThemeId } = useAppearance()
   const { LOGIN, loginType } = useLoginTheme()
   const contentStyle = useAuthFlowContentStyle(520)
@@ -229,6 +229,7 @@ export function AppearanceSetupScreen() {
   }, [session])
 
   useEffect(() => {
+    if (sessionLoading) return
     if (!session) {
       router.replace("/login")
       return
@@ -236,7 +237,7 @@ export function AppearanceSetupScreen() {
     if (session.portal !== "student") {
       router.replace("/dashboard")
     }
-  }, [router, session])
+  }, [router, session, sessionLoading])
 
   async function finish() {
     if (!session || session.portal !== "student") {
@@ -254,7 +255,7 @@ export function AppearanceSetupScreen() {
     }
   }
 
-  if (!session || session.portal !== "student") {
+  if (sessionLoading || !session || session.portal !== "student") {
     return null
   }
 
@@ -278,7 +279,7 @@ export function AppearanceSetupScreen() {
         <Text style={[styles.progressLabel, { color: LOGIN.secondaryLabel }]}>
           Step {progressMeta.stepIndex + 1} of {progressMeta.totalSteps}
         </Text>
-        {router.canGoBack() ? (
+        {progressMeta.stepIndex > 0 ? (
           <LoginBackLink label="Back" onPress={() => router.back()} style={styles.appearanceBack} />
         ) : null}
       </View>

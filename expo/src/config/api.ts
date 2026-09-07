@@ -40,6 +40,15 @@ export function resolveApiBaseUrl(): string {
   return PRODUCTION_API_BASE_URL
 }
 
+/** Public web origin for membership/credit checkout links opened in Safari. */
+export function resolvePurchaseBaseUrl(): string {
+  const configured = resolveApiBaseUrl()
+  if (isLocalOrLanHost(configured)) {
+    return configured
+  }
+  return PRODUCTION_API_BASE_URL
+}
+
 export function validateProductionApiConfig(): string[] {
   const errors: string[] = []
   const env = getAppEnvironment()

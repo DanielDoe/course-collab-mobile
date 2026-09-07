@@ -40,6 +40,7 @@ import {
   useCollabSheetStyles,
 } from "./faculty-collab-sheet-ui"
 import { SHEET_PROJECT, SHEET_SECTION } from "./faculty-sheet-semantics"
+import { FacultySummerCampDatePicker } from "./FacultySummerCampDatePicker"
 import { useModuleTheme } from "../../lib/themed-module-shell"
 
 type Scope = NonNullable<ReturnType<typeof useFacultyScope>["scope"]>
@@ -454,18 +455,20 @@ export function FacultyProjectPresentationConfigPanel({
               <Text style={[type.bodyEmphasis, { color: native.label }]}>{draft.session}</Text>
             </FacultySheetSection>
             <FacultySheetField label="Start date">
-              <FacultySheetTextInput
+              <FacultySummerCampDatePicker
                 value={draft.presentationStartDate}
-                onChangeText={(v) => setDraft((d) => ({ ...d, presentationStartDate: v }))}
-                placeholder="YYYY-MM-DD"
+                onChange={(presentationStartDate) =>
+                  setDraft((d) => ({ ...d, presentationStartDate }))
+                }
                 accessibilityLabel="Start date"
               />
             </FacultySheetField>
             <FacultySheetField label="End date">
-              <FacultySheetTextInput
+              <FacultySummerCampDatePicker
                 value={draft.presentationEndDate}
-                onChangeText={(v) => setDraft((d) => ({ ...d, presentationEndDate: v }))}
-                placeholder="YYYY-MM-DD"
+                onChange={(presentationEndDate) =>
+                  setDraft((d) => ({ ...d, presentationEndDate }))
+                }
                 accessibilityLabel="End date"
               />
             </FacultySheetField>

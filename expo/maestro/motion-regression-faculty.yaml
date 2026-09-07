@@ -1,0 +1,58 @@
+appId: com.coursecollab.app
+---
+# Faculty motion regression — glass filter sheet, drawer, keyboard form sheet.
+- runFlow: faculty-login-real.yaml
+- tapOn:
+    text: "Open"
+    optional: true
+
+# Drawer
+- tapOn: "Open navigation menu"
+- extendedWaitUntil:
+    visible: "Close menu"
+    timeout: 10000
+- waitForAnimationToEnd
+- tapOn: "Close menu"
+- waitForAnimationToEnd
+
+# Filter sheet on Academic Terms
+- openLink: coursecollab:///module/academic-terms
+- extendedWaitUntil:
+    visible: "Academic Terms"
+    timeout: 25000
+- tapOn: "Open filters"
+- extendedWaitUntil:
+    visible: "Filter|All sections|Done"
+    timeout: 10000
+- waitForAnimationToEnd
+- takeScreenshot: motion-faculty-filter-sheet
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn:
+    point: "50%,10%"
+    optional: true
+- waitForAnimationToEnd
+
+# Glass-bottom faculty action sheet (My Courses)
+- openLink: coursecollab:///module/my-courses
+- extendedWaitUntil:
+    visible: "My Courses"
+    timeout: 25000
+- tapOn:
+    text: ".*"
+    index: 0
+    optional: true
+- extendedWaitUntil:
+    visible: "Course|Done"
+    timeout: 10000
+    optional: true
+- waitForAnimationToEnd
+- takeScreenshot: motion-faculty-glass-sheet
+- tapOn:
+    text: "Done"
+    optional: true
+- waitForAnimationToEnd
+
+# Keyboard form sheet (nested header probe)
+- runFlow: faculty-keyboard-form-verify.yaml

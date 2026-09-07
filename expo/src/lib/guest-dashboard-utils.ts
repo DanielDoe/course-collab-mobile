@@ -1,6 +1,7 @@
 import type { RecommendationRequest } from "./course-info-api"
 import type { GuestEntitlements } from "./guest-types"
 import { guestCoraCommerceEnabled } from "../constants/guest-nav"
+import { isIosPurchaseUiHidden } from "./purchase-navigation"
 import {
   GUEST_CORA_CAREER_LIFETIME_CREDITS,
   GUEST_FREE_STARTER_CORA_CREDITS,
@@ -140,7 +141,7 @@ export function buildGuestDashboardInsights(
     }
   }
 
-  if (entitlements.coraCredits.isLow && entitlements.plan === "cora_career") {
+  if (!isIosPurchaseUiHidden() && entitlements.coraCredits.isLow && entitlements.plan === "cora_career") {
     insights.push({
       id: "credits-low",
       type: "warning",
@@ -150,7 +151,7 @@ export function buildGuestDashboardInsights(
     })
   }
 
-  if (entitlements.plan === "guest_free" && guestCoraCommerceEnabled(entitlements)) {
+  if (!isIosPurchaseUiHidden() && entitlements.plan === "guest_free" && guestCoraCommerceEnabled(entitlements)) {
     insights.push({
       id: "upgrade-career",
       type: "tip",

@@ -7,6 +7,8 @@ import type { CourseDigitalNote } from "../../lib/digital-notes-api"
 import { instructorCourseNotesApi, type InstructorScope } from "../../lib/instructor-content-api"
 import { useModuleTheme } from "../../lib/themed-module-shell"
 import { FacultyEmptyState } from "./faculty-shared"
+import { useFacultyListPager } from "../../hooks/useFacultyListPager"
+import { FacultyListPagerFooter } from "./FacultyListPagerFooter"
 import { FacultySearchToolbar } from "./faculty-module-shell"
 import { noteContentPreviewText } from "../../lib/digital-note-content"
 import { parseCircuitWorkspace, workspaceHasContent } from "../../lib/circuit-workspace"
@@ -37,6 +39,7 @@ export function FacultyCourseNotesDeletedPanel({ scope, notes, onChanged, onPrev
     )
   }, [notes, search])
 
+  const pager = useFacultyListPager(filteredNotes, search, "deleted notes")
   const visibleIds = useMemo(() => filteredNotes.map((note) => note.id), [filteredNotes])
   const allVisibleSelected =
     visibleIds.length > 0 && visibleIds.every((id) => selectedIds.includes(id))
@@ -170,7 +173,7 @@ export function FacultyCourseNotesDeletedPanel({ scope, notes, onChanged, onPrev
         <FacultyEmptyState icon="search-outline" title="No matches" body="Try a different search." />
       ) : (
         <View style={localStyles.list}>
-          {filteredNotes.map((note) => {
+          {pager.items.map((note) => {
             const selected = selectedIds.includes(note.id)
             return (
               <View
@@ -241,6 +244,7 @@ export function FacultyCourseNotesDeletedPanel({ scope, notes, onChanged, onPrev
               </View>
             )
           })}
+          <FacultyListPagerFooter pager={pager} />
         </View>
       )}
     </>

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   ActivityIndicator,
   RefreshControl,
@@ -26,6 +26,8 @@ import { PlaygroundLeaderboardPodium } from "./PlaygroundLeaderboardPodium"
 import { PlaygroundLeaderboardListCard } from "./PlaygroundLeaderboardListCard"
 import { signatureListStyles } from "../theme/TabbedModuleLayout"
 import { AppButton } from "../theme/AppButton"
+import { useFacultyListPager } from "../../hooks/useFacultyListPager"
+import { FacultyListPagerFooter } from "../faculty/FacultyListPagerFooter"
 
 function useStudentSession(): StudentSession | null {
   const { session } = useSession()
@@ -142,6 +144,11 @@ export function PlaygroundLeaderboardScreen() {
     }
   }, [load])
 
+  const leaderboardTail = useMemo(() => entries.slice(3), [entries])
+  const leaderboardTailPager = useFacultyListPager(leaderboardTail, String(resolvedSessionId ?? ""), "players", {
+    preset: "compact",
+  })
+
   const podiumSubtitle = leaderboardFinalized ? "Final rankings" : "Live classroom rankings"
 
   return (
@@ -189,20 +196,21 @@ export function PlaygroundLeaderboardScreen() {
               subtitle={podiumSubtitle}
             />
 
-            {entries.length > 0 ? (
+            {entries.length > 3 ? (
               <View style={styles.listSection}>
                 <Text style={[type.caption, styles.listHeading, { color: SN.secondaryLabel }]}>
                   All players
                 </Text>
                 <View style={signatureListStyles.list}>
-                  {entries.map((entry, index) => (
+                  {leaderboardTailPager.items.map((entry, index) => (
                     <PlaygroundLeaderboardListCard
                       key={`${entry.rank}-${entry.resultId ?? entry.displayName}`}
                       entry={entry}
-                      index={index}
+                      index={leaderboardTailPager.page * leaderboardTailPager.pageSize + index + 3}
                     />
                   ))}
                 </View>
+                <FacultyListPagerFooter pager={leaderboardTailPager} />
               </View>
             ) : null}
 

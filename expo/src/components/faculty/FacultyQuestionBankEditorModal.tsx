@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
-import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { AppAlert } from '../../lib/app-alert'
 import { Ionicons } from "@/components/icons/AppIcon"
 import * as ImagePicker from "expo-image-picker"
@@ -40,6 +40,7 @@ import {
 import { SHEET_SECTION } from "./faculty-sheet-semantics"
 import { FACULTY_QUESTION_BANK_COLOR } from "../../lib/faculty-question-bank-theme"
 import { useModuleTheme } from "../../lib/themed-module-shell"
+import { KeyboardAwareForm } from "../ui/KeyboardAwareForm"
 
 type Props = {
   visible: boolean
@@ -343,12 +344,7 @@ export function FacultyQuestionBankEditorModal({
             <ActivityIndicator size="large" color={FACULTY_QUESTION_BANK_COLOR.link} />
           </View>
         ) : (
-          <ScrollView
-            contentContainerStyle={[collabSheetStyles.scroll, { paddingBottom: insets.bottom + 24 }]}
-            keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
-            showsVerticalScrollIndicator={false}
-          >
+          <KeyboardAwareForm contentContainerStyle={collabSheetStyles.scroll}>
             {error ? <FacultySheetErrorBanner message={error} /> : null}
 
             <FacultySheetSection label="Question setup" tone={SHEET_SECTION.edit}>
@@ -558,7 +554,7 @@ export function FacultyQuestionBankEditorModal({
                 </View>
               </FacultySheetField>
             </FacultySheetSection>
-          </ScrollView>
+          </KeyboardAwareForm>
         )}
 
         <FacultyGroupedFilterSheet

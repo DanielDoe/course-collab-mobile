@@ -89,10 +89,8 @@ export function CoraActionCard({
       style={[
         styles.card,
         {
-          backgroundColor: native.secondaryGrouped,
-          borderColor: native.separator,
-          shadowColor: tokens.isDark ? "#000000" : "#101828",
-          shadowOpacity: tokens.isDark ? 0.45 : 0.12,
+          backgroundColor: tokens.elevatedSurface || native.secondaryGrouped,
+          borderColor: native.separatorOpaque || tokens.border,
         },
       ]}
       accessibilityRole="summary"
@@ -213,12 +211,9 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     marginHorizontal: 4,
     borderRadius: 14,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     padding: 14,
     gap: 12,
-    // Avoid scroll-slice artifacts from shadowed cells under clipping parents.
-    shadowOpacity: 0,
-    elevation: 0,
   },
   header: {
     flexDirection: "row",

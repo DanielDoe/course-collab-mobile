@@ -134,6 +134,11 @@ export const queryKeys = {
       root: (scope: QueryScope) => ["faculty", "syllabus", ...scopeParts(scope)] as const,
       list: (scope: QueryScope) => ["faculty", "syllabus", ...scopeParts(scope), "list"] as const,
     },
+    calendar: {
+      root: (scope: QueryScope) => ["faculty", "calendar", ...scopeParts(scope)] as const,
+      range: (scope: QueryScope, start: string, end: string, view: "all" | "selected" = "all") =>
+        ["faculty", "calendar", ...scopeParts(scope), "range", start, end, view] as const,
+    },
   },
   admin: {
     faculty: (scope: QueryScope) => ["admin", "faculty", ...scopeParts(scope)] as const,

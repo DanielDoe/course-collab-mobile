@@ -11,6 +11,11 @@ export function playgroundSessionPhase(session: Pick<PlaygroundSession, "is_acti
   return "ended"
 }
 
+/** Lobby and ended sessions can edit snapshots; live games cannot. */
+export function playgroundSessionQuestionsEditable(phase: PlaygroundSessionPhase): boolean {
+  return phase !== "live"
+}
+
 export function playgroundSessionLabel(session: Pick<PlaygroundSession, "selected_topics" | "session_code">): string {
   const topics = session.selected_topics ?? []
   const lecture = topics.find((t) => t.includes("—") || t.toLowerCase().includes("lecture"))
@@ -66,6 +71,50 @@ export function filterPlaygroundSessions(
       .toLowerCase()
     return hay.includes(q)
   })
+}
+
+/** Matches the web playground session grid. */
+export const PLAYGROUND_SESSIONS_PAGE_SIZE = 6
+export const PLAYGROUND_SESSIONS_FETCH_PAGE_SIZE = 200
+
+export function playgroundSessionPageCount(
+  total: number,
+  pageSize = PLAYGROUND_SESSIONS_PAGE_SIZE,
+): number {
+  return Math.max(1, Math.ceil(Math.max(0, total) / pageSize))
+}
+
+export function slicePlaygroundSessionPage<T>(
+  items: T[],
+  page: number,
+  pageSize = PLAYGROUND_SESSIONS_PAGE_SIZE,
+): T[] {
+  const pageCount = playgroundSessionPageCount(items.length, pageSize)
+  const safe = Math.min(Math.max(0, page), pageCount - 1)
+  return items.slice(safe * pageSize, safe * pageSize + pageSize)
+}
+
+export function playgroundSessionPageLabel(
+  total: number,
+  page: number,
+  pageSize = PLAYGROUND_SESSIONS_PAGE_SIZE,
+): string {
+  if (total <= 0) return "0 sessions"
+  const pageCount = playgroundSessionPageCount(total, pageSize)
+  const safe = Math.min(Math.max(0, page), pageCount - 1)
+  const start = safe * pageSize + 1
+  const end = Math.min(total, (safe + 1) * pageSize)
+  return `Showing ${start}–${end} of ${total}`
+}
+
+export function nextPlaygroundSessionsFetchPage(args: {
+  collected: number
+  total: number
+  currentPage: number
+}): number | null {
+  if (args.collected >= args.total) return null
+  if (args.currentPage >= 20) return null
+  return args.currentPage + 1
 }
 
 export function countPlaygroundSessionsByFilter(

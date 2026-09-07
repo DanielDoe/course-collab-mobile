@@ -14,6 +14,7 @@ import {
 import { studentAuthenticatedHeaders, studentAuthenticatedRequest } from "./student-api"
 import { mergeCookieHeaders, persistHttpCookiesFromResponse, studentHttpCookieHeader } from "./student-http-cookies"
 import { headersHaveStudentSessionProof, STUDENT_REFRESH_HEADER } from "./student-session-proof"
+import { getStoredRefreshToken } from "./refresh-token-store"
 
 export type ParticipantKind = "student" | "instructor"
 
@@ -111,12 +112,20 @@ export type MessageParticipantProfile = {
 }
 
 export type MessagesAuth =
-  | { kind: "student"; databaseId: string }
+  | { kind: "student"; databaseId: string; courseId?: number | null; section?: string | null }
   | { kind: "instructor"; instructorId: number }
 
 export function messagesAuthFromSession(session: AppSession | null): MessagesAuth | null {
   if (!session) return null
-  if (session.portal === "student" || session.portal === "guest" || session.portal === "summer") {
+  if (session.portal === "student") {
+    return {
+      kind: "student",
+      databaseId: session.databaseId,
+      courseId: session.courseId,
+      section: session.section,
+    }
+  }
+  if (session.portal === "guest" || session.portal === "summer") {
     return { kind: "student", databaseId: session.databaseId }
   }
   if (session.portal === "faculty") {
@@ -164,7 +173,10 @@ async function instructorAuthenticatedHeaders(
   const trust = await mfaTrustRequestHeadersForInstructor(faculty)
   Object.assign(headers, mergeCookieHeaders(trust.Cookie, jarCookie))
   const refresh =
-    refreshTokenFromCookieHeader(jarCookie) ?? refreshTokenFromCookieHeader(trust.Cookie)
+    refreshTokenFromCookieHeader(jarCookie) ??
+    refreshTokenFromCookieHeader(trust.Cookie) ??
+    (await getStoredRefreshToken()) ??
+    undefined
   if (refresh) headers[STUDENT_REFRESH_HEADER] = refresh
   if (!headersHaveStudentSessionProof(headers)) {
     throw new ApiError("Instructor authentication required", 401)

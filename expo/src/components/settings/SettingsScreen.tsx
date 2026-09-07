@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { AppAlert } from '../../lib/app-alert'
 import Constants from "expo-constants"
@@ -22,6 +22,11 @@ import {
   saveClassReminderPrefs,
 } from "../../lib/calendar/reminder-preferences"
 import { ensureNotificationPermission } from "../../lib/calendar/class-reminders"
+import {
+  applyMobilePushPrefsToServer,
+  mergeNotificationPrefs,
+  type ServerNotificationPreferences,
+} from "../../lib/notification-preferences-sync"
 import {
   getNotificationPrefs,
   saveNotificationPrefs,
@@ -184,6 +189,7 @@ export function SettingsScreen() {
   const [savingPassword, setSavingPassword] = useState(false)
   const [message, setMessage] = useState("")
   const [error, setError] = useState("")
+  const serverNotifPrefsRef = useRef<ServerNotificationPreferences | null>(null)
 
   const membershipTier = studentShell?.membershipTier ?? localMembershipTier
   const membershipTierLoaded = studentShell?.membershipTierLoaded ?? localMembershipTierLoaded
@@ -226,14 +232,28 @@ export function SettingsScreen() {
     if (!settingsSession) return
     setError("")
     try {
-      const [localNotifs, classReminders] = await Promise.all([
+      const [localNotifs, classReminders, serverPrefs] = await Promise.all([
         getNotificationPrefs(),
         getClassReminderPrefs(),
+        studentSession
+          ? studentApi.getNotificationPreferences(studentSession).catch(() => null)
+          : Promise.resolve(null),
       ])
-      setNotifPrefs({
-        ...localNotifs,
-        classReminders: classReminders.enabled,
-        classReminderMinutes: classReminders.minutesBefore,
+      const merged = mergeNotificationPrefs(
+        {
+          ...localNotifs,
+          classReminders: classReminders.enabled,
+          classReminderMinutes: classReminders.minutesBefore,
+        },
+        serverPrefs,
+      )
+      serverNotifPrefsRef.current = serverPrefs
+      setNotifPrefs(merged)
+      await saveNotificationPrefs({
+        quizReminders: merged.quizReminders,
+        announcementAlerts: merged.announcementAlerts,
+        classReminders: merged.classReminders,
+        classReminderMinutes: merged.classReminderMinutes,
       })
 
       if (settingsSession.portal === "student") {
@@ -249,7 +269,7 @@ export function SettingsScreen() {
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Failed to load settings.")
     }
-  }, [settingsSession, loadMembership])
+  }, [settingsSession, loadMembership, studentSession])
 
   useEffect(() => {
     setLoading(true)
@@ -321,6 +341,22 @@ export function SettingsScreen() {
       enabled: next.classReminders,
       minutesBefore: next.classReminderMinutes,
     })
+
+    if (!studentSession) return
+
+    try {
+      const base =
+        serverNotifPrefsRef.current ??
+        (await studentApi.getNotificationPreferences(studentSession).catch(() => ({})))
+      const payload = applyMobilePushPrefsToServer(
+        (base ?? {}) as ServerNotificationPreferences,
+        next,
+      )
+      const saved = await studentApi.updateNotificationPreferences(studentSession, payload)
+      serverNotifPrefsRef.current = saved
+    } catch {
+      /* Local prefs saved; server sync retries on next settings load or toggle. */
+    }
   }
 
   async function toggleNotification(
@@ -376,7 +412,12 @@ export function SettingsScreen() {
     return (
       <View style={[styles.screenRoot, { backgroundColor: native.groupedBackground }]}>
         <NotetakerScreenHeader title="Settings" fallbackHref="/dashboard" />
-        <ModuleScreen loading={false} error="Settings are not available for this account type." disableTopInsetAdjustment>
+        <ModuleScreen
+          loading={false}
+          error="Settings are not available for this account type."
+          disableTopInsetAdjustment
+          stackedHeader
+        >
           <View />
         </ModuleScreen>
       </View>
@@ -391,6 +432,7 @@ export function SettingsScreen() {
         error={error}
         refreshing={refreshing}
         disableTopInsetAdjustment
+        stackedHeader
         onRefresh={() => {
           setRefreshing(true)
           load().finally(() => setRefreshing(false))

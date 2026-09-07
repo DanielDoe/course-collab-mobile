@@ -1,6 +1,5 @@
 import { useCallback, useMemo } from "react"
 import {
-  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -25,9 +24,12 @@ import {
   resolveSubmissionsChartSeries} from "./faculty-chart-html"
 import { FacultyChartCard, ChartLegendItem } from "./FacultyChartCard"
 import { FacultyKpiGrid } from "./FacultyKpiGrid"
+import { FacultyQuickActions } from "./FacultyQuickActions"
+import { facultyDashboardSnapshotHref } from "../../lib/faculty-dashboard-kpi-nav"
 import { activityBelongsToCourse } from "../../lib/faculty-assessment-utils"
-import { FacultyEmptyState, FacultyListRow, FacultySectionCard, NativeCountBadge } from "./faculty-shared"
+import { FacultyEmptyState, FacultyListRow, FacultySectionCard } from "./faculty-shared"
 import { DashboardWelcomeCard } from "../dashboard/DashboardWelcomeCard"
+import { facultyScopeKey, facultyScopeLabel } from "../../lib/faculty-scope-label"
 import { useFacultyDashboard } from "../../hooks/query/useFacultyDashboard"
 import { QueryRefreshBanner } from "../query/QueryRefreshBanner"
 import { QuerySkeleton } from "../query/QuerySkeleton"
@@ -48,7 +50,7 @@ export function FacultyDashboardScreen() {
   const chartWidth = useChartContentWidth()
   const router = useRouter()
   const { session, course, scope, ready } = useFacultyScope()
-  const { badges, openCoursePicker, refreshFacultyData } = useFacultyShell()
+  const { openCoursePicker, refreshFacultyData } = useFacultyShell()
 
   const dash = useFacultyDashboard(ready ? scope : null)
   const stats = dash.stats
@@ -118,11 +120,12 @@ export function FacultyDashboardScreen() {
       showsVerticalScrollIndicator={false}
     >
       <DashboardWelcomeCard
+        key={facultyScopeKey(course)}
         portal="faculty"
         name={session.name}
         roleLabel="Instructor"
         roleIcon="school-outline"
-        badge={course?.course_code ?? undefined}
+        badge={facultyScopeLabel(course)}
       />
 
       <QueryRefreshBanner visible={dash.refreshFailed} onRetry={() => void handleRefresh()} />
@@ -205,28 +208,7 @@ export function FacultyDashboardScreen() {
           </FacultySectionCard>
 
           <FacultySectionCard title="Quick Actions" icon="flash-outline">
-            <View style={styles.actions}>
-              <ActionChip
-                label="Approve Points"
-                count={badges.pendingPoints}
-                onPress={() => router.push("/module/classroom-points" as never)}
-              />
-              <ActionChip
-                label="Assessment Issues"
-                count={badges.pendingIssues}
-                onPress={() => router.push("/module/quizzes?segment=issues" as never)}
-              />
-              <ActionChip
-                label="Office Hours"
-                count={badges.officeHours}
-                onPress={() => router.push("/module/office-hours" as never)}
-              />
-              <ActionChip label="Playground" onPress={() => router.push("/module/playground" as never)} />
-              <ActionChip
-                label="Announcements"
-                onPress={() => router.push("/module/announcements" as never)}
-              />
-            </View>
+            <FacultyQuickActions />
           </FacultySectionCard>
 
           <FacultySectionCard
@@ -271,35 +253,27 @@ export function FacultyDashboardScreen() {
 
 function SnapshotItem({ label, value }: { label: string; value: string }) {
   const { native, type } = useModuleTheme()
+  const router = useRouter()
   const cardLayout = useKpiGridCardStyle("47%")
-  return (
-    <View style={[styles.snapshotItem, cardLayout, { backgroundColor: native.fill }]}>
+  const href = facultyDashboardSnapshotHref(label)
+  const body = (
+    <>
       <Text style={[type.bodyEmphasis, styles.snapshotValue, { color: native.label }]}>{value}</Text>
       <Text style={[type.caption, styles.snapshotLabel, { color: native.secondaryLabel }]}>{label}</Text>
-    </View>
+    </>
   )
-}
-
-function ActionChip({
-  label,
-  count,
-  onPress}: {
-  label: string
-  count?: number
-  onPress: () => void
-}) {
-  const { native, type } = useModuleTheme()
+  const surface = [styles.snapshotItem, cardLayout, { backgroundColor: native.fill }]
+  if (!href) {
+    return <View style={surface}>{body}</View>
+  }
   return (
     <Pressable
-      style={({ pressed }) => [styles.chip, { backgroundColor: native.secondaryGrouped }, pressed && { opacity: NATIVE.pressedOpacity }]}
-      onPress={onPress}
-      accessible
+      onPress={() => router.push(href as never)}
       accessibilityRole="button"
-      accessibilityLabel={count && count > 0 ? `${label}, ${count}` : label}
-      android_ripple={Platform.OS === "android" ? { color: "rgba(0,0,0,0.08)" } : undefined}
+      accessibilityLabel={`${label}, ${value}. Open ${label}`}
+      style={({ pressed }) => [surface, { opacity: pressed ? 0.86 : 1 }]}
     >
-      <Text style={[type.body, styles.chipText, { color: native.label }]}>{label}</Text>
-      {count && count > 0 ? <NativeCountBadge count={count} variant="compact" /> : null}
+      {body}
     </Pressable>
   )
 }
@@ -332,16 +306,6 @@ const styles = StyleSheet.create({
     fontWeight: NATIVE.titleWeight,
     color: NATIVE.label},
   snapshotLabel: { fontSize: 12, fontWeight: "500", color: NATIVE.secondaryLabel },
-  actions: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  chip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    minHeight: 44},
-  chipText: { fontSize: 14, fontWeight: "500", color: NATIVE.label },
   viewAll: { fontSize: 15, fontWeight: "400", color: NATIVE.tint },
   primaryBtn: {
     alignSelf: "center",

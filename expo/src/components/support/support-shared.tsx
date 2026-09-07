@@ -192,6 +192,7 @@ const styles = StyleSheet.create({
     gap: 8,
     padding: 12,
     borderRadius: NATIVE.sectionRadius,
+    marginTop: 20,
   },
   tipText: { flex: 1, lineHeight: 19 },
 })

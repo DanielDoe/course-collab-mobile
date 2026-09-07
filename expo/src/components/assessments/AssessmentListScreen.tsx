@@ -25,8 +25,11 @@ import {
   quizItemListStatus,
 } from "./assessment-list-logic"
 import { FacultyEmptyState } from "../faculty/faculty-shared"
+import { FacultyListPagerFooter } from "../faculty/FacultyListPagerFooter"
+import { ModuleListItemMotion } from "../ModuleFlashList"
 import { useAppThemeTokens } from "../../context/AppearanceProvider"
 import { useNotificationModuleRefresh } from "../../lib/notifications/notification-events"
+import { useFacultyListPager } from "../../hooks/useFacultyListPager"
 
 function useStudentSession(): StudentSession | null {
   const { session } = useSession()
@@ -111,6 +114,10 @@ export function AssessmentListScreen({ type, title }: Props) {
   const openSection = filtered.filter((i) => !quizItemIsDone(i))
   const doneSection = filtered.filter((i) => quizItemIsDone(i))
 
+  const openPager = useFacultyListPager(openSection, `${filter}|${search}|open|${type}`, "assessments")
+  const donePager = useFacultyListPager(doneSection, `${filter}|${search}|done|${type}`, "assessments")
+  const filteredPager = useFacultyListPager(filtered, `${filter}|${search}|${type}`, "assessments")
+
   const displayTitle = title ?? config.title
   const emptyCopy = useMemo(
     () => assessmentListEmptyCopy(type, rolloverPolicy, displayTitle),
@@ -118,6 +125,32 @@ export function AssessmentListScreen({ type, title }: Props) {
   )
 
   const isRefreshing = loading || refreshing
+
+  function renderAssessmentCard(item: QuizItem, index: number) {
+    const listStatus = quizItemListStatus(item)
+    return (
+      <ModuleListItemMotion key={item.id} index={index}>
+        <AssessmentItemCard
+          index={index}
+          title={item.title}
+          dueUntil={item.available_until}
+          bestScore={quizItemCardScore(item)}
+          statusLabel={listStatus.label}
+          statusTone={listStatus.pillTone}
+          attemptsUsed={item.attempts_used}
+          retakeLimit={item.retake_limit}
+          icon={config.icon}
+          onPress={() => {
+            if (listStatus.label === "Continue") {
+              openAssessmentTake(router, type, item.id, "continue")
+              return
+            }
+            openAssessmentDetail(router, type, item.id, item.assessment_type)
+          }}
+        />
+      </ModuleListItemMotion>
+    )
+  }
 
   return (
     <ModuleScreen
@@ -174,62 +207,22 @@ export function AssessmentListScreen({ type, title }: Props) {
               <>
                 <ModuleSectionHeader title="Open Now" />
                 <View style={styles.list}>
-                  {openSection.map((item, index) => {
-                    const listStatus = quizItemListStatus(item)
-                    return (
-                      <AssessmentItemCard
-                        key={item.id}
-                        index={index}
-                        title={item.title}
-                        dueUntil={item.available_until}
-                        bestScore={quizItemCardScore(item)}
-                        statusLabel={listStatus.label}
-                        statusTone={listStatus.pillTone}
-                        attemptsUsed={item.attempts_used}
-                        retakeLimit={item.retake_limit}
-                        icon={config.icon}
-                        onPress={() => {
-                          if (listStatus.label === "Continue") {
-                            openAssessmentTake(router, type, item.id, "continue")
-                            return
-                          }
-                          openAssessmentDetail(router, type, item.id, item.assessment_type)
-                        }}
-                      />
-                    )
-                  })}
+                  {openPager.items.map((item, index) =>
+                    renderAssessmentCard(item, openPager.page * openPager.pageSize + index),
+                  )}
                 </View>
+                <FacultyListPagerFooter pager={openPager} />
               </>
             ) : null}
             {doneSection.length > 0 ? (
               <>
                 <ModuleSectionHeader title="Completed & Closed" />
                 <View style={styles.list}>
-                  {doneSection.map((item, index) => {
-                    const listStatus = quizItemListStatus(item)
-                    return (
-                      <AssessmentItemCard
-                        key={item.id}
-                        index={index}
-                        title={item.title}
-                        dueUntil={item.available_until}
-                        bestScore={quizItemCardScore(item)}
-                        statusLabel={listStatus.label}
-                        statusTone={listStatus.pillTone}
-                        attemptsUsed={item.attempts_used}
-                        retakeLimit={item.retake_limit}
-                        icon={config.icon}
-                        onPress={() => {
-                          if (listStatus.label === "Continue") {
-                            openAssessmentTake(router, type, item.id, "continue")
-                            return
-                          }
-                          openAssessmentDetail(router, type, item.id, item.assessment_type)
-                        }}
-                      />
-                    )
-                  })}
+                  {donePager.items.map((item, index) =>
+                    renderAssessmentCard(item, donePager.page * donePager.pageSize + index),
+                  )}
                 </View>
+                <FacultyListPagerFooter pager={donePager} />
               </>
             ) : null}
           </>
@@ -237,31 +230,11 @@ export function AssessmentListScreen({ type, title }: Props) {
           <>
             <ModuleSectionHeader title={filter === "open" ? "Open Now" : "Completed & Closed"} />
             <View style={styles.list}>
-              {filtered.map((item, index) => {
-                const listStatus = quizItemListStatus(item)
-                return (
-                  <AssessmentItemCard
-                    key={item.id}
-                    index={index}
-                    title={item.title}
-                    dueUntil={item.available_until}
-                    bestScore={quizItemCardScore(item)}
-                    statusLabel={listStatus.label}
-                    statusTone={listStatus.pillTone}
-                    attemptsUsed={item.attempts_used}
-                    retakeLimit={item.retake_limit}
-                    icon={config.icon}
-                    onPress={() => {
-                      if (listStatus.label === "Continue") {
-                        openAssessmentTake(router, type, item.id, "continue")
-                        return
-                      }
-                      openAssessmentDetail(router, type, item.id, item.assessment_type)
-                    }}
-                  />
-                )
-              })}
+              {filteredPager.items.map((item, index) =>
+                renderAssessmentCard(item, filteredPager.page * filteredPager.pageSize + index),
+              )}
             </View>
+            <FacultyListPagerFooter pager={filteredPager} />
           </>
         )
       ) : null}

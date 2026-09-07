@@ -10,6 +10,7 @@ import {
   buildFacultyCoraCreateOfflineChatReply,
   generateFacultyCoraQuestionDrafts,
   isCoraGenerateQuestionsOfflineError,
+  supplementFacultyCoraLiveResponse,
 } from "./faculty-cora-create-offline"
 import { buildFacultyCoraImproveOfflineChatReply } from "./faculty-cora-improve-offline"
 import { buildFacultyCoraAnalyzeOfflineChatReply } from "./faculty-cora-analyze-offline"
@@ -248,7 +249,7 @@ export const facultyCoraApi = {
         rbac,
       )
       const meta = parseCoraChatMeta(raw as unknown as Record<string, unknown>)
-      return {
+      const gated: FacultyCoraChatResponse = {
         ...raw,
         reply: applyCoraOutputGate(raw.reply ?? "", "faculty", rbac?.prepared?.identity),
         profile: meta.profile,
@@ -256,6 +257,7 @@ export const facultyCoraApi = {
         routing: meta.routing,
         ...(meta.ui ? { ui: meta.ui } : {}),
       }
+      return supplementFacultyCoraLiveResponse(scope, payload.message, gated, payload.capabilityId)
     } catch (err) {
       if (err instanceof ApiError && isApiRouteMissingError(err.status, err.message)) {
         if (payload.capabilityId === "insights") {

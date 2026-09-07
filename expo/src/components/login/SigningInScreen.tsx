@@ -79,9 +79,21 @@ export function SigningInScreen() {
 
     void (async () => {
       try {
-        await bootstrapAfterLogin(session)
+        const bootstrap = bootstrapAfterLogin(session)
+        await Promise.race([
+          bootstrap,
+          new Promise<void>((resolve) => setTimeout(resolve, 8_000)),
+        ])
         if (cancelled) return
-        const next = await resolvePostLoginRoute(session)
+        const next = await Promise.race([
+          resolvePostLoginRoute(session),
+          new Promise<Awaited<ReturnType<typeof resolvePostLoginRoute>>>((resolve) =>
+            setTimeout(
+              () => resolve(session.portal === "faculty" ? "/faculty-select-course" : "/dashboard"),
+              4_000,
+            ),
+          ),
+        ])
         navigatePostSignIn(router, next)
       } catch (err) {
         if (!cancelled) {

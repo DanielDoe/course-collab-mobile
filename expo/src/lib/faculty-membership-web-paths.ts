@@ -1,6 +1,12 @@
 import { appendNativeQuery } from "../constants/module-web-paths"
 import type { FacultyMembershipTier } from "../types/dashboard"
 import type { FacultyBillingCadence } from "./faculty-membership-plans"
+import {
+  openMembershipPurchase,
+  openPurchaseWebPath,
+  isIosPurchaseUiHidden,
+  requiresExternalWebPurchase,
+} from "./purchase-navigation"
 
 export function buildFacultyMembershipCheckoutWebPath(
   plan: FacultyMembershipTier,
@@ -41,12 +47,22 @@ export function openFacultyMembershipCheckout(
   plan: FacultyMembershipTier,
   cadence: FacultyBillingCadence = "semester",
 ) {
+  if (isIosPurchaseUiHidden()) return
+  if (requiresExternalWebPurchase()) {
+    void openMembershipPurchase({ tier: plan, cadence, portal: "faculty" })
+    return
+  }
   router.push({
     pathname: "/membership/checkout",
     params: { plan, cadence },
   } as never)
 }
 
-export function openFacultyMembershipManage(router: { push: (href: never) => void }) {
+export async function openFacultyMembershipManage(router: { push: (href: never) => void }) {
+  if (isIosPurchaseUiHidden()) return
+  if (requiresExternalWebPurchase()) {
+    await openPurchaseWebPath(buildFacultyMembershipManageWebPath())
+    return
+  }
   router.push("/membership/manage" as never)
 }

@@ -30,6 +30,8 @@ import { AttendanceOverviewHero } from "./AttendanceOverviewHero"
 import { AttendanceSessionActionSheet } from "./AttendanceSessionActionSheet"
 import { StructuredSessionCheckIn } from "./StructuredSessionCheckIn"
 import { StudentAttendanceSessionList } from "./StudentAttendanceSessionList"
+import { useFacultyListPager } from "../../hooks/useFacultyListPager"
+import { FacultyListPagerFooter } from "../faculty/FacultyListPagerFooter"
 
 function useStudentSession(): StudentSession | null {
   const { session } = useSession()
@@ -60,6 +62,16 @@ function AttendanceSearchDock({
           ? "Search rankings…"
           : "Search attendance…"
 
+  const trailingAction = useMemo(
+    () =>
+      ({
+        onPress: onOpenCheckIn,
+        accessibilityLabel: "Check in",
+        icon: "add",
+      }) as const,
+    [onOpenCheckIn],
+  )
+
   const dockEntry = useMemo<ModuleSearchDockEntry | null>(() => {
     if (tab === "overview") return null
     return {
@@ -70,14 +82,10 @@ function AttendanceSearchDock({
         placeholder,
         showFilter: false,
         placement: "dock",
-        trailingAction: {
-          onPress: onOpenCheckIn,
-          accessibilityLabel: "Check in",
-          icon: "add",
-        },
+        trailingAction,
       },
     }
-  }, [tab, search, onChangeSearch, placeholder, onOpenCheckIn])
+  }, [tab, search, onChangeSearch, placeholder, trailingAction])
 
   useModuleSearchDockRegistration(dockId, dockEntry)
   return null
@@ -211,6 +219,12 @@ export function AttendanceScreen() {
     return scoped.filter((entry) => (entry.full_name ?? "Student").toLowerCase().includes(q))
   }, [leaderboard, search, session])
 
+  const recordsPager = useFacultyListPager(sortedRecords, `${search}|records`, "records")
+  const leaderboardTail = useMemo(() => filteredLeaderboard.slice(3), [filteredLeaderboard])
+  const leaderboardTailPager = useFacultyListPager(leaderboardTail, `${search}|leaderboard`, "students", {
+    preset: "compact",
+  })
+
   const selfCheckInFromList = useCallback(
     async (row: StudentAttendanceSessionItem) => {
       if (!session || !row.canCheckIn) return
@@ -301,6 +315,10 @@ export function AttendanceScreen() {
     }
   }
 
+  const openCheckInMenu = useCallback(() => setCheckInMenuOpen(true), [])
+  const closeCheckInMenu = useCallback(() => setCheckInMenuOpen(false), [])
+  const browseSessionsTab = useCallback(() => setTab("sessions"), [])
+
   const tabs = useMemo(
     () => [
       { id: "overview" as const, label: "Overview", icon: "stats-chart-outline" as const },
@@ -345,11 +363,14 @@ export function AttendanceScreen() {
       )
     }
     return (
-      <View style={signatureListStyles.list}>
-        {sortedRecords.map((record, index) => (
-          <RecordListCard key={record.id} record={record} index={index} />
-        ))}
-      </View>
+      <>
+        <View style={signatureListStyles.list}>
+          {recordsPager.items.map((record, index) => (
+            <RecordListCard key={record.id} record={record} index={recordsPager.page * recordsPager.pageSize + index} />
+          ))}
+        </View>
+        <FacultyListPagerFooter pager={recordsPager} />
+      </>
     )
   }
 
@@ -364,14 +385,19 @@ export function AttendanceScreen() {
       )
     }
     return (
-      <View style={signatureListStyles.list}>
-        <AttendanceLeaderboardPodium entries={filteredLeaderboard} />
-        {filteredLeaderboard.length > 3
-          ? filteredLeaderboard.slice(3).map((entry, index) => (
-              <LeaderboardListCard key={entry.rank ?? index + 4} entry={entry} index={index + 3} />
-            ))
-          : null}
-      </View>
+      <>
+        <View style={signatureListStyles.list}>
+          <AttendanceLeaderboardPodium entries={filteredLeaderboard} />
+          {leaderboardTailPager.items.map((entry, index) => (
+            <LeaderboardListCard
+              key={entry.rank ?? index + 4}
+              entry={entry}
+              index={leaderboardTailPager.page * leaderboardTailPager.pageSize + index + 3}
+            />
+          ))}
+        </View>
+        <FacultyListPagerFooter pager={leaderboardTailPager} />
+      </>
     )
   }
 
@@ -381,7 +407,7 @@ export function AttendanceScreen() {
         tab={tab}
         search={search}
         onChangeSearch={setSearch}
-        onOpenCheckIn={() => setCheckInMenuOpen(true)}
+        onOpenCheckIn={openCheckInMenu}
       />
       <TabbedModuleLayout
         tabs={tabs}
@@ -397,12 +423,12 @@ export function AttendanceScreen() {
 
       <AttendanceCheckInActionSheet
         visible={checkInMenuOpen}
-        onClose={() => setCheckInMenuOpen(false)}
+        onClose={closeCheckInMenu}
         openSession={openSession}
         onSelfCheckIn={(row) => void selfCheckInFromList(row)}
         onEnterCode={openCodeCheckIn}
         onManualCode={openManualCheckIn}
-        onBrowseSessions={() => setTab("sessions")}
+        onBrowseSessions={browseSessionsTab}
       />
 
       <AttendanceSessionActionSheet

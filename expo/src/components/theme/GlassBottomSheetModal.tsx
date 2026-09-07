@@ -1,5 +1,6 @@
-import { useEffect, type ReactElement, type ReactNode } from "react"
+import { useEffect, useState, type ReactElement, type ReactNode } from "react"
 import {
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -12,7 +13,6 @@ import {
 import type { RefreshControlProps } from "react-native"
 import { Gesture, GestureDetector } from "react-native-gesture-handler"
 import Animated, {
-  Easing,
   runOnJS,
   useAnimatedRef,
   useAnimatedScrollHandler,
@@ -24,6 +24,13 @@ import Animated, {
 import { GLASS_SHEET_BACKDROP } from "./GlassActionSheetMenu"
 import { DismissKeyboardView } from "../ui/DismissKeyboardView"
 import { keyboardDismissScrollProps } from "../../lib/keyboard-dismiss-scroll-props"
+import {
+  durationOrInstant,
+  spring,
+  timing,
+  triggerMotionHaptic,
+  useAppReducedMotion,
+} from "../../lib/motion"
 
 const HIDDEN_OFFSET = 480
 const DISMISS_DRAG = 96
@@ -55,6 +62,8 @@ export function GlassBottomSheetModal({
   accessibilityLabel = "Close sheet",
   keyboardAvoiding = false,
 }: Props) {
+  const reduceMotion = useAppReducedMotion()
+  const [presented, setPresented] = useState(visible)
   const backdropOpacity = useSharedValue(0)
   const sheetTranslateY = useSharedValue(HIDDEN_OFFSET)
   const dragY = useSharedValue(0)
@@ -63,17 +72,32 @@ export function GlassBottomSheetModal({
 
   useEffect(() => {
     if (visible) {
+      Keyboard.dismiss()
+      setPresented(true)
       dragY.value = 0
       scrollOffsetY.value = 0
-      backdropOpacity.value = withTiming(1, { duration: 220, easing: Easing.out(Easing.quad) })
-      sheetTranslateY.value = withSpring(0, { damping: 24, stiffness: 280, mass: 0.9 })
+      const fadeMs = durationOrInstant(timing.backdropIn.duration, reduceMotion)
+      backdropOpacity.value = withTiming(1, { duration: fadeMs, easing: timing.backdropIn.easing })
+      if (reduceMotion) {
+        sheetTranslateY.value = withTiming(0, { duration: 0 })
+      } else {
+        sheetTranslateY.value = withSpring(0, spring.standard)
+        triggerMotionHaptic("selection")
+      }
       return
     }
 
-    backdropOpacity.value = withTiming(0, { duration: 180 })
-    sheetTranslateY.value = withTiming(HIDDEN_OFFSET, { duration: 220, easing: Easing.in(Easing.quad) })
+    const fadeMs = durationOrInstant(timing.backdropOut.duration, reduceMotion)
+    const outMs = durationOrInstant(timing.sheetOut.duration, reduceMotion)
+    backdropOpacity.value = withTiming(0, { duration: fadeMs }, (finished) => {
+      if (finished) runOnJS(setPresented)(false)
+    })
+    sheetTranslateY.value = withTiming(HIDDEN_OFFSET, {
+      duration: outMs,
+      easing: timing.sheetOut.easing,
+    })
     dragY.value = 0
-  }, [visible, backdropOpacity, sheetTranslateY, dragY, scrollOffsetY])
+  }, [visible, backdropOpacity, sheetTranslateY, dragY, scrollOffsetY, reduceMotion])
 
   const nativeScrollGesture = Gesture.Native()
 
@@ -87,19 +111,19 @@ export function GlassBottomSheetModal({
     })
     .onEnd((event) => {
       if (scrollOffsetY.value > 0) {
-        dragY.value = withSpring(0, { damping: 22, stiffness: 280 })
+        dragY.value = withSpring(0, spring.standard)
         return
       }
 
       const shouldDismiss = dragY.value > DISMISS_DRAG || event.velocityY > DISMISS_VELOCITY
       if (shouldDismiss) {
-        dragY.value = withTiming(HIDDEN_OFFSET, { duration: 220, easing: Easing.in(Easing.quad) })
-        backdropOpacity.value = withTiming(0, { duration: 180 })
+        dragY.value = withTiming(HIDDEN_OFFSET, timing.sheetOut)
+        backdropOpacity.value = withTiming(0, timing.backdropOut)
         runOnJS(onClose)()
         return
       }
 
-      dragY.value = withSpring(0, { damping: 22, stiffness: 280 })
+      dragY.value = withSpring(0, spring.standard)
     })
 
   const handlePanGesture = Gesture.Pan()
@@ -111,13 +135,13 @@ export function GlassBottomSheetModal({
     .onEnd((event) => {
       const shouldDismiss = dragY.value > DISMISS_DRAG || event.velocityY > DISMISS_VELOCITY
       if (shouldDismiss) {
-        dragY.value = withTiming(HIDDEN_OFFSET, { duration: 220, easing: Easing.in(Easing.quad) })
-        backdropOpacity.value = withTiming(0, { duration: 180 })
+        dragY.value = withTiming(HIDDEN_OFFSET, timing.sheetOut)
+        backdropOpacity.value = withTiming(0, timing.backdropOut)
         runOnJS(onClose)()
         return
       }
 
-      dragY.value = withSpring(0, { damping: 22, stiffness: 280 })
+      dragY.value = withSpring(0, spring.standard)
     })
 
   const scrollHandler = useAnimatedScrollHandler({
@@ -186,7 +210,7 @@ export function GlassBottomSheetModal({
 
   return (
     <Modal
-      visible={visible}
+      visible={presented}
       transparent
       animationType="none"
       onRequestClose={onClose}

@@ -1,3 +1,5 @@
+import { formatElegLectureDisplayTitle } from "./lecture-index-label"
+
 export type LectureTitleFields = {
   title?: string | null
   week?: number | null
@@ -26,31 +28,58 @@ export function stripSharedLectureSeriesPrefix(title: string): string {
   return stripped || title
 }
 
-function storedLectureTopic(title: string): string {
-  const stripped = stripSharedLectureSeriesPrefix(title)
-  const parts = stripped.split(/\s+[—–]\s+/)
-  return parts.length > 1 ? parts.slice(1).join(" — ").trim() : stripped
+/** Match web student lectures list — scoped catalog title with lecture prefix stripped. */
+export function displayLectureTitle(
+  title: string | null | undefined,
+  courseCode?: string | null,
+): string {
+  const formatted = formatElegLectureDisplayTitle(String(title ?? ""), courseCode)
+  const stripped = formatted
+    .replace(/^ECE\s*2202:\s*Circuit Analysis II\s*[—–-]\s*/i, "")
+    .replace(/^ELEG\s*130[14]:\s*Lecture\s+\d+\s*[—–-]\s*/i, "")
+    .replace(/^ELEG\s*130X:\s*Lecture\s+\d+\s*[—–-]\s*/i, "")
+    .replace(/^Lecture\s+(\d+):\s*/i, "Lecture $1 · ")
+    .trim()
+  if (stripped) return stripped
+  return stripSharedLectureSeriesPrefix(formatted).trim() || formatted.trim()
 }
 
-/** Title shown in lists and the slide viewer — prefers the term syllabus name from production. */
-export function lectureDisplayTitle(lecture: LectureTitleFields): string {
-  const stored = lecture.title?.trim() || (lecture.week != null ? `Week ${lecture.week}` : "Lecture")
-  const syllabus = parseLectureSyllabusReference(lecture.description)
-  if (syllabus?.label) return syllabus.label
-  return stripSharedLectureSeriesPrefix(stored)
+function storedLectureTopic(title: string, courseCode?: string | null): string {
+  const display = displayLectureTitle(title, courseCode)
+  const formatted = formatElegLectureDisplayTitle(title, courseCode)
+  const parts = stripSharedLectureSeriesPrefix(formatted).split(/\s+[—–]\s+/)
+  const tail = parts.length > 1 ? parts.slice(1).join(" — ").trim() : parts[0]?.trim() ?? ""
+  if (tail && !display.toLowerCase().includes(tail.toLowerCase())) return tail
+  return ""
 }
 
-/** Same syllabus week can cover two decks — keep list rows distinguishable. */
+/** Title shown in lists and the slide viewer — matches web student lectures. */
+export function lectureDisplayTitle(
+  lecture: LectureTitleFields,
+  courseCode?: string | null,
+): string {
+  const stored = lecture.title?.trim()
+  if (stored) return displayLectureTitle(stored, courseCode)
+  if (lecture.week != null) return `Week ${lecture.week}`
+  return "Lecture"
+}
+
+/** Same catalog topic can appear twice — keep list rows distinguishable. */
 export function lectureListDisplayTitle(
   lecture: LectureTitleFields,
   siblings: readonly LectureTitleFields[] = [],
+  courseCode?: string | null,
 ): string {
-  const display = lectureDisplayTitle(lecture)
+  const display = lectureDisplayTitle(lecture, courseCode)
   const stored = lecture.title?.trim()
   if (!stored) return display
-  const collisions = siblings.filter((item) => lectureDisplayTitle(item) === display)
+
+  const collisions = siblings.filter(
+    (item) => lectureDisplayTitle(item, courseCode) === display,
+  )
   if (collisions.length < 2) return display
-  const topic = storedLectureTopic(stored)
-  if (!topic || display.toLowerCase().includes(topic.toLowerCase())) return display
+
+  const topic = storedLectureTopic(stored, courseCode)
+  if (!topic) return display
   return `${display} · ${topic}`
 }
