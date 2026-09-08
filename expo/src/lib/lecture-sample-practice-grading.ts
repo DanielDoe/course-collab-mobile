@@ -1,4 +1,5 @@
 import type { LectureSamplePracticeEvaluateResult, PracticeAnswerReview } from "./lecture-types"
+import { scoreSelectAllQuestion } from "./select-all-scoring"
 
 const LETTERS = ["A", "B", "C", "D", "E", "F"] as const
 
@@ -187,17 +188,9 @@ export function gradeSelectAllAnswer(
     ...new Set(selectedLetters.map((letter) => letter.trim().toUpperCase()).filter(Boolean)),
   ]
   const selectedSet = new Set(selected)
-  const n = correctSet.size
-
-  let score = 0
-  if (n > 0) {
-    for (const letter of selected) {
-      score += correctSet.has(letter) ? 1 / n : -1 / n
-    }
-  }
-
-  const mcq_earned_fraction = n === 0 ? 0 : Math.max(0, Math.min(1, score))
-  const is_mcq_correct = mcq_earned_fraction === 1
+  const scored = scoreSelectAllQuestion(selected, correctLetters, 1)
+  const mcq_earned_fraction = scored.fraction
+  const is_mcq_correct = scored.isFullyCorrect
 
   const options = labels.map(({ letter, text }) => {
     const upper = letter.toUpperCase()
@@ -312,7 +305,7 @@ export function resolveMcqEarnedFractionForSubmission(input: {
   const selected = input.selectedLetters.map((letter) => letter.trim().toUpperCase()).filter(Boolean)
   if (selected.length === 0) return undefined
 
-  if (type === "select_all") {
+  if (type === "select_all" || type === "multi_output") {
     const correctAnswers =
       input.correctAnswers ??
       (input.correctAnswer ? parseStoredSelectAllCorrectAnswers(input.correctAnswer) : undefined)
@@ -887,6 +880,38 @@ export function resolveObjectiveAnswerReview(input: {
     maxPoints?: number
   }
 }): PracticeAnswerReview | null {
+  const qType = input.question.question_type.toLowerCase().replace(/-/g, "_")
+  const preferLocalSelectAll =
+    (qType === "select_all" || qType === "multi_output") &&
+    Boolean(input.question.correct_answer?.trim()) &&
+    input.selectedLetters.length > 0
+
+  if (preferLocalSelectAll) {
+    const local = buildLocalObjectiveAnswerReview({
+      question: input.question,
+      selectedLetters: input.selectedLetters,
+      selectedLetter: input.selectedLetter,
+      isCorrect: Boolean(input.evalResult.isCorrect),
+      score: input.evalResult.score,
+      pointsEarned: input.evalResult.pointsEarned,
+      maxPoints: input.evalResult.maxPoints,
+    })
+    if (local) {
+      const partial = isEvalPartialCredit(input.evalResult, local)
+      return {
+        ...local,
+        isCorrect: input.evalResult.isCorrect ?? local.isCorrect,
+        isPartialCredit: local.isPartialCredit || partial,
+        score:
+          typeof input.evalResult.score === "number"
+            ? input.evalResult.score
+            : local.score,
+        pointsEarned: input.evalResult.pointsEarned ?? local.pointsEarned,
+        maxPoints: input.evalResult.maxPoints ?? local.maxPoints,
+      }
+    }
+  }
+
   if (input.serverReview) {
     return normalizePracticeHubAnswerReview(input.serverReview, input.evalResult)
   }

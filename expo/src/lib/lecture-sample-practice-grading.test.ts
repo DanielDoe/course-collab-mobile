@@ -174,6 +174,18 @@ describe("lecture sample practice schema normalization", () => {
     assert.equal(wrongSelection.is_mcq_correct, false)
     assert.equal(wrongSelection.mcq_earned_fraction, 0.25)
 
+    const allOptions = gradeSelectAllAnswer(declarationsQuestion, ["A", "B", "C", "D", "E"])
+    assert.equal(allOptions.is_mcq_correct, false)
+    assert.equal(allOptions.mcq_earned_fraction, 0.75)
+
+    const noneSelected = gradeSelectAllAnswer(declarationsQuestion, [])
+    assert.equal(noneSelected.is_mcq_correct, false)
+    assert.equal(noneSelected.mcq_earned_fraction, 0)
+
+    const allIncorrect = gradeSelectAllAnswer(declarationsQuestion, ["D"])
+    assert.equal(allIncorrect.is_mcq_correct, false)
+    assert.equal(allIncorrect.mcq_earned_fraction, 0)
+
     const normalized = normalizeSamplePracticeSelectAllResult(
       {
         question_id: "q9",
