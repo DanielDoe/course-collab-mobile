@@ -45,9 +45,15 @@ function normalizeQuizHistoryList(raw: unknown): QuizHistoryItemRaw[] {
   return []
 }
 
+function attemptIdFromRaw(raw: QuizHistoryAttemptRaw | Record<string, unknown>): number | null {
+  const record = raw as Record<string, unknown>
+  const id = Number(record.attempt_id ?? record.attemptId ?? record.id)
+  return Number.isFinite(id) && id > 0 ? id : null
+}
+
 function mapAttempt(raw: QuizHistoryAttemptRaw): AssessmentHistoryAttempt | null {
-  const id = Number(raw.attempt_id)
-  if (!Number.isFinite(id)) return null
+  const id = attemptIdFromRaw(raw)
+  if (id == null) return null
   const completedAt =
     typeof raw.completed_at === "string" && raw.completed_at.trim() ? raw.completed_at : null
   return {
@@ -95,6 +101,34 @@ function mapQuizHistoryItem(raw: QuizHistoryItemRaw): AssessmentHistoryItem | nu
     completed_at: latestCompletedAt(attempts),
     status: historyStatus(attempts),
   }
+}
+
+/** Latest completed attempt id on a History row (handles attempt_id / id). */
+export function resolveCompletedHistoryAttemptId(item: {
+  attempts?: Array<{
+    id?: number
+    attempt_id?: number
+    attemptId?: number
+    completed_at?: string | null
+    is_completed?: boolean
+  }>
+}): number | null {
+  const attempts = item.attempts ?? []
+  const completed = attempts
+    .map((attempt) => ({
+      id: attemptIdFromRaw(attempt),
+      completedAt: attempt.completed_at,
+      isCompleted: attempt.is_completed === true || Boolean(attempt.completed_at),
+    }))
+    .filter((attempt): attempt is { id: number; completedAt?: string | null; isCompleted: boolean } => {
+      return attempt.id != null && attempt.isCompleted
+    })
+    .sort((a, b) => {
+      const ta = a.completedAt ? new Date(a.completedAt).getTime() : 0
+      const tb = b.completedAt ? new Date(b.completedAt).getTime() : 0
+      return tb - ta
+    })
+  return completed[0]?.id ?? null
 }
 
 /** Map GET /api/student/quiz-history rows onto AssessmentHistoryItem. */

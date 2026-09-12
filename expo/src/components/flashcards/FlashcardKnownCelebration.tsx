@@ -18,10 +18,18 @@ import { useNativeType } from "../../lib/themed-module-theme"
 
 export type FlashcardCelebrationPayload = {
   pointsEarned: number
-  streakBonus: number
-  streak: number
+  streakBonus?: number
+  streak?: number
   bonusType?: "timed" | "boss"
   firstKnownThisWeek?: boolean
+  /** Defaults to "XP" (flashcards). Assessments use "pts". */
+  pointsLabel?: string
+  /** Shown when pointsEarned is 0. Defaults to "Mastered!" */
+  zeroPointsTitle?: string
+  /** Optional subtitle chips — replaces streak/bonus lines when set. */
+  messageLines?: string[]
+  /** Visual tone — assessments set success/warning/danger; flashcards use default accent. */
+  tone?: "success" | "warning" | "danger" | "default"
 }
 
 type Props = {
@@ -32,8 +40,17 @@ type Props = {
 const PARTICLE_COUNT = 16
 const DURATION_MS = 1300
 
-function triggerSuccessHaptic() {
+function triggerCelebrationHaptic(tone?: FlashcardCelebrationPayload["tone"]) {
   if (Platform.OS !== "ios") return
+  if (tone === "danger") {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy)
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
+    return
+  }
+  if (tone === "warning") {
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning)
+    return
+  }
   void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
 }
 
@@ -64,6 +81,57 @@ function Particle({
   return <Animated.View style={[styles.particle, { backgroundColor: color }, style]} />
 }
 
+function resolveCelebrationTheme(
+  tokens: ReturnType<typeof useAppThemeTokens>,
+  tone: FlashcardCelebrationPayload["tone"],
+) {
+  if (tone === "success") {
+    return {
+      glow: tokens.success,
+      ring: tokens.success,
+      badge: tokens.success,
+      chipBg: tokens.success,
+      chipText: tokens.success,
+      particles: [tokens.success, tokens.accent, tokens.secondaryAccent, tokens.success],
+    }
+  }
+  if (tone === "warning") {
+    return {
+      glow: tokens.warning,
+      ring: tokens.warning,
+      badge: tokens.warning,
+      chipBg: tokens.warning,
+      chipText: tokens.warning,
+      particles: [tokens.warning, tokens.accent, tokens.success, tokens.warning],
+    }
+  }
+  if (tone === "danger") {
+    return {
+      glow: tokens.danger,
+      ring: tokens.danger,
+      badge: tokens.danger,
+      chipBg: tokens.danger,
+      chipText: tokens.danger,
+      particles: [tokens.danger, tokens.warning, tokens.accent, tokens.danger],
+    }
+  }
+  return {
+    glow: tokens.warning,
+    ring: tokens.accent,
+    badge: tokens.accent,
+    chipBg: tokens.warning,
+    chipText: tokens.accentDark,
+    particles: [
+      tokens.accent,
+      tokens.warning,
+      tokens.success,
+      tokens.secondaryAccent,
+      tokens.accentHover,
+      ...tokens.chartPalette.slice(0, 4),
+    ],
+  }
+}
+
 export function FlashcardKnownCelebration({ payload, onComplete }: Props) {
   const tokens = useAppThemeTokens()
   const type = useNativeType()
@@ -78,30 +146,46 @@ export function FlashcardKnownCelebration({ payload, onComplete }: Props) {
   const glowOpacity = useSharedValue(0)
   const bonusOpacity = useSharedValue(0)
 
+  const theme = useMemo(
+    () => resolveCelebrationTheme(tokens, payload.tone),
+    [payload.tone, tokens],
+  )
+
   const particleColors = useMemo(
-    () => [
-      tokens.accent,
-      tokens.warning,
-      tokens.success,
-      tokens.secondaryAccent,
-      tokens.accentHover,
-      ...tokens.chartPalette.slice(0, 4),
-    ],
-    [tokens],
+    () => theme.particles,
+    [theme.particles],
   )
 
   const bonusLines = useMemo(() => {
+    if (payload.messageLines?.length) return payload.messageLines.slice(0, 2)
     const lines: string[] = []
     if (payload.bonusType === "timed") lines.push("Speed bonus")
     if (payload.bonusType === "boss") lines.push("Boss card mastered")
-    if (payload.streakBonus > 0) lines.push(`+${payload.streakBonus} streak bonus`)
+    if ((payload.streakBonus ?? 0) > 0) lines.push(`+${payload.streakBonus} streak bonus`)
     if (payload.firstKnownThisWeek) lines.push("First mastered this week")
-    if (payload.streak >= 3) lines.push(`${payload.streak} card streak`)
+    if ((payload.streak ?? 0) >= 3) lines.push(`${payload.streak} card streak`)
     return lines.slice(0, 2)
   }, [payload])
 
+  const pointsLabel = payload.pointsLabel ?? "XP"
+  const zeroPointsTitle = payload.zeroPointsTitle ?? "Mastered!"
+  const displayPoints =
+    payload.pointsEarned % 1 === 0
+      ? String(payload.pointsEarned)
+      : payload.pointsEarned.toFixed(1)
+  const badgeIcon =
+    payload.tone === "success"
+      ? "checkmark-circle"
+      : payload.tone === "warning"
+        ? "alert-circle"
+        : payload.tone === "danger"
+          ? "close-circle"
+          : payload.pointsEarned > 0
+            ? "sparkles"
+            : "checkmark-circle"
+
   useEffect(() => {
-    triggerSuccessHaptic()
+    triggerCelebrationHaptic(payload.tone)
 
     burst.value = withTiming(1, { duration: 680, easing: Easing.out(Easing.cubic) })
     ringScale.value = withSequence(
@@ -131,7 +215,7 @@ export function FlashcardKnownCelebration({ payload, onComplete }: Props) {
 
     const timer = setTimeout(() => onCompleteRef.current(), DURATION_MS)
     return () => clearTimeout(timer)
-  }, [bonusOpacity, burst, glowOpacity, payload.pointsEarned, ringOpacity, ringScale, xpScale, xpY])
+  }, [bonusOpacity, burst, glowOpacity, payload.pointsEarned, payload.tone, ringOpacity, ringScale, xpScale, xpY])
 
   const ringStyle = useAnimatedStyle(() => ({
     opacity: ringOpacity.value,
@@ -155,10 +239,10 @@ export function FlashcardKnownCelebration({ payload, onComplete }: Props) {
   return (
     <View style={styles.overlay} pointerEvents="none">
       <Animated.View
-        style={[styles.glow, glowStyle, { backgroundColor: hexToRgba(tokens.warning, 0.35) }]}
+        style={[styles.glow, glowStyle, { backgroundColor: hexToRgba(theme.glow, 0.35) }]}
       />
       <Animated.View
-        style={[styles.ring, ringStyle, { borderColor: hexToRgba(tokens.accent, 0.55) }]}
+        style={[styles.ring, ringStyle, { borderColor: hexToRgba(theme.ring, 0.55) }]}
       />
 
       {Array.from({ length: PARTICLE_COUNT }, (_, index) => (
@@ -171,19 +255,15 @@ export function FlashcardKnownCelebration({ payload, onComplete }: Props) {
       ))}
 
       <Animated.View style={[styles.xpBadge, xpStyle, tokens.cardShadow]}>
-        <View style={[styles.xpInner, { backgroundColor: tokens.accent }]}>
-          <Ionicons
-            name={payload.pointsEarned > 0 ? "sparkles" : "checkmark-circle"}
-            size={22}
-            color="#fff"
-          />
+        <View style={[styles.xpInner, { backgroundColor: theme.badge }]}>
+          <Ionicons name={badgeIcon} size={22} color="#fff" />
           {payload.pointsEarned > 0 ? (
             <>
-              <Text style={styles.xpAmount}>+{payload.pointsEarned}</Text>
-              <Text style={styles.xpLabel}>XP</Text>
+              <Text style={styles.xpAmount}>+{displayPoints}</Text>
+              <Text style={styles.xpLabel}>{pointsLabel}</Text>
             </>
           ) : (
-            <Text style={styles.masteredText}>Mastered!</Text>
+            <Text style={styles.masteredText}>{zeroPointsTitle}</Text>
           )}
         </View>
       </Animated.View>
@@ -196,12 +276,12 @@ export function FlashcardKnownCelebration({ payload, onComplete }: Props) {
               style={[
                 styles.bonusChip,
                 {
-                  backgroundColor: hexToRgba(tokens.warning, tokens.isDark ? 0.22 : 0.14),
-                  borderColor: hexToRgba(tokens.warning, 0.35),
+                  backgroundColor: hexToRgba(theme.chipBg, tokens.isDark ? 0.22 : 0.14),
+                  borderColor: hexToRgba(theme.chipBg, 0.35),
                 },
               ]}
             >
-              <Text style={[type.caption, styles.bonusText, { color: tokens.accentDark }]}>
+              <Text style={[type.caption, styles.bonusText, { color: theme.chipText }]}>
                 {line}
               </Text>
             </View>

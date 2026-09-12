@@ -1,5 +1,6 @@
 import { messageCourseImportPreview } from "./message-course-import"
 import { unsentAuditLabel } from "./message-lifecycle"
+import { parseTargetedPracticeMessage, targetedPracticePreviewText } from "./targeted-practice-message"
 
 /** Strip HTML tags for mobile message previews and plain-text display. */
 export function stripMessageHtml(html: string): string {
@@ -19,6 +20,9 @@ export function messagePreviewText(body: string | null | undefined, max = 120): 
   const raw = body == null ? "" : String(body)
   const importPreview = messageCourseImportPreview(raw, max)
   if (importPreview) return importPreview
+
+  const practice = parseTargetedPracticeMessage(raw)
+  if (practice) return targetedPracticePreviewText(practice, max)
 
   const text = stripMessageHtml(raw) || raw.trim()
   if (text.length <= max) return text

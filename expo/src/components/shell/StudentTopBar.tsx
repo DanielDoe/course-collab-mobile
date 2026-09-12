@@ -10,6 +10,7 @@ import { safeRouterBack } from "../../lib/safe-router-back"
 import { useAppThemeTokens, useShellChrome } from "../../context/AppearanceProvider"
 import type { StudentSession } from "../../lib/session"
 import { getNavLabel, getWebNavLabel } from "../../constants/student-nav"
+import { normalizeRoutePathname } from "../../lib/navigation-reset"
 import { CoraBrand } from "../cora/CoraBrand"
 import { CoraHeaderBreadcrumb } from "../cora/CoraHeaderBreadcrumb"
 import { useCora } from "../cora/CoraProvider"
@@ -30,18 +31,19 @@ type Props = {
 export function StudentTopBar({ session }: Props) {
   const topSafeInset = useStableTopSafeInset()
   const pathname = usePathname()
+  const routePath = normalizeRoutePathname(pathname)
   const { path: webPathParam } = useLocalSearchParams<{ path?: string }>()
   const webPath = typeof webPathParam === "string" ? decodeURIComponent(webPathParam) : ""
   const screenTitle =
-    pathname === "/web" && webPath ? getWebNavLabel(webPath) : getNavLabel(pathname)
-  const isCoraModule = pathname === "/module/ai-tutor"
+    routePath === "/web" && webPath ? getWebNavLabel(webPath) : getNavLabel(routePath)
+  const isCoraModule = routePath === "/module/ai-tutor"
   const chrome = useShellChrome()
   const tokens = useAppThemeTokens()
   const router = useRouter()
   const { openDrawer, toggleProfile, profileOpen, notificationCount, openCoursePicker } = useStudentShell()
   const courseCtx = useOptionalStudentActiveCourse()
   const stackHasHistory = useStackHasHistory()
-  const showBack = studentShellShowsBack(pathname, stackHasHistory)
+  const showBack = studentShellShowsBack(routePath, stackHasHistory)
   const {
     overlaySection,
     setOverlaySection,

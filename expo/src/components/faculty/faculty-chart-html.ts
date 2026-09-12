@@ -404,3 +404,71 @@ export function buildFacultyPracticeScoreDistributionChartHtml(
 
   return chartShell(script, chartHeight)
 }
+
+export function hasAttendanceTrendChartData(
+  data: Array<{ attendance_rate: number; check_ins?: number }>,
+): boolean {
+  return data.some((d) => d.attendance_rate > 0 || (d.check_ins ?? 0) > 0)
+}
+
+/** Weekly attendance rate trend for Class Analytics overview. */
+export function buildFacultyAttendanceTrendChartHtml(
+  data: Array<{ week: string; attendance_rate: number }>,
+  width: number,
+): string {
+  const payload = escapeJson(data)
+  const chartHeight = FACULTY_CHART_HEIGHT
+  const script = `
+<script>
+(function () {
+  const data = ${payload};
+  const width = ${Math.max(280, Math.floor(width))};
+  const height = ${chartHeight};
+  const plotLeft = 42;
+  const plotRight = width - 12;
+  const plotTop = 16;
+  const plotBottom = height - 32;
+  const innerW = plotRight - plotLeft;
+  const innerH = plotBottom - plotTop;
+  const yMin = 0;
+  const yMax = 100;
+  const yTicks = [0, 25, 50, 75, 100];
+
+  function xAt(i) {
+    if (data.length <= 1) return plotLeft + innerW / 2;
+    return plotLeft + (innerW * i) / (data.length - 1);
+  }
+  function yAt(v) {
+    return plotBottom - ((v - yMin) / (yMax - yMin)) * innerH;
+  }
+
+  let svg = '<svg viewBox="0 0 ' + width + ' ' + height + '" xmlns="http://www.w3.org/2000/svg">';
+  yTicks.forEach(function (tick) {
+    const y = yAt(tick);
+    svg += '<line x1="' + plotLeft + '" y1="' + y + '" x2="' + plotRight + '" y2="' + y + '" stroke="${grid}" stroke-dasharray="3 3"/>';
+    svg += '<text x="' + (plotLeft - 6) + '" y="' + (y + 4) + '" fill="${tick}" font-size="11" font-weight="500" text-anchor="end">' + tick + '%</text>';
+  });
+
+  data.forEach(function (d, i) {
+    svg += '<text x="' + xAt(i) + '" y="' + (height - 8) + '" fill="${tick}" font-size="10" font-weight="500" text-anchor="middle">' + d.week + '</text>';
+  });
+
+  if (data.length > 0) {
+    let line = '';
+    data.forEach(function (d, i) {
+      const cmd = i === 0 ? 'M' : 'L';
+      line += cmd + ' ' + xAt(i) + ' ' + yAt(d.attendance_rate) + ' ';
+    });
+    svg += '<path d="' + line + '" fill="none" stroke="${primary}" stroke-width="2.5"/>';
+    data.forEach(function (d, i) {
+      svg += '<circle cx="' + xAt(i) + '" cy="' + yAt(d.attendance_rate) + '" r="4" fill="${primary}" stroke="#fff" stroke-width="2"/>';
+    });
+  }
+
+  svg += '</svg>';
+  document.querySelector(".wrap").innerHTML = svg;
+})();
+</script>`
+
+  return chartShell(script, chartHeight)
+}

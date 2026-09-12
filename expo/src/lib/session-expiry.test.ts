@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
-import { shouldInvalidateSessionForStatus } from "./session-expiry"
+import { isInstructorAuthLeakMessage, shouldInvalidateSessionForStatus } from "./session-expiry"
 
 describe("session expiry", () => {
   it("invalidates authenticated API 401s", () => {
@@ -56,5 +56,10 @@ describe("session expiry", () => {
       shouldInvalidateSessionForStatus("/api/classroom-points?studentId=958&session=ELEG1301P01", 401),
       false,
     )
+  })
+
+  it("recognizes instructor-auth leaks on dual-role student routes", () => {
+    assert.equal(isInstructorAuthLeakMessage("Instructor authentication required"), true)
+    assert.equal(isInstructorAuthLeakMessage("Student session expired"), false)
   })
 })

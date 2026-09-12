@@ -1,0 +1,186 @@
+appId: com.coursecollab.app
+---
+# Demo 1 — Homework 1 (ELEG 1301 / dmdoep01). Exercises native code_write + code_write_plot.
+- stopApp
+- openLink: coursecollab://dev-eleg-student-login
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 120000
+- openLink: "coursecollab:///take/531?type=homework&action=continue"
+- extendedWaitUntil:
+    visible: "Submit answer"
+    timeout: 120000
+- takeScreenshot: demo-hw-q1
+
+# Q1 select_all — same sequence as for(i=0;i<3;i++)
+- tapOn: "Option A"
+- tapOn: "Option D"
+- tapOn: "Submit answer"
+- extendedWaitUntil:
+    visible: "Submit answer"
+    timeout: 45000
+
+# Q2 true — \n is a newline
+- tapOn: "Option A"
+- tapOn: "Submit answer"
+- extendedWaitUntil:
+    visible: "Submit answer"
+    timeout: 45000
+
+# Q3 mcq — missing semicolon after return
+- tapOn: "Option A"
+- tapOn: "Submit answer"
+- extendedWaitUntil:
+    visible: "Submit answer"
+    timeout: 45000
+
+# Q4 select_all — same squares 0 1 4 9
+- tapOn: "Option A"
+- tapOn: "Option C"
+- tapOn: "Submit answer"
+- extendedWaitUntil:
+    visible: "Submit answer"
+    timeout: 45000
+
+# Q5 mcq — single quotes hold one char
+- tapOn: "Option A"
+- tapOn: "Submit answer"
+- extendedWaitUntil:
+    visible: "Submit answer"
+    timeout: 45000
+
+# Q6 mcq — extra semicolon after while
+- tapOn: "Option A"
+- tapOn: "Submit answer"
+- extendedWaitUntil:
+    visible: "Submit answer"
+    timeout: 45000
+
+# Q7 false — cannot have multiple main functions
+- tapOn: "Option B"
+- tapOn: "Submit answer"
+- extendedWaitUntil:
+    visible: "Submit answer"
+    timeout: 45000
+
+# Q8 select_all — valid return types
+- tapOn: "Option A"
+- tapOn: "Option B"
+- tapOn: "Option C"
+- tapOn: "Option D"
+- tapOn: "Submit answer"
+- extendedWaitUntil:
+    visible: "Submit answer"
+    timeout: 45000
+
+# Q9 mcq — missing semicolon is a syntax error
+- tapOn: "Option B"
+- tapOn: "Submit answer"
+- extendedWaitUntil:
+    visible: "Submit answer"
+    timeout: 45000
+
+# Q10 true — overload print(5.0)
+- tapOn: "Option A"
+- tapOn: "Submit answer"
+- extendedWaitUntil:
+    visible: "Code write"
+    timeout: 60000
+- takeScreenshot: demo-hw-section2
+
+# Q11 code_write — largest of 5 ints
+- tapOn: "Code editor"
+- inputText: "#include <iostream>\nusing namespace std;\nint main(){\n  int a[5];\n  cout<<\"Enter 5 integers: \";\n  for(int i=0;i<5;i++) cin>>a[i];\n  int m=a[0];\n  for(int i=1;i<5;i++) if(a[i]>m) m=a[i];\n  cout<<\"Largest: \"<<m<<endl;\n  return 0;\n}\n"
+- tapOn: "Submit answer"
+- extendedWaitUntil:
+    visible: "Code write"
+    timeout: 180000
+- takeScreenshot: demo-hw-q11-ai
+
+# Q12 code_write — triangle type
+- tapOn: "Code editor"
+- inputText: "#include <iostream>\nusing namespace std;\nint main(){\n  double a,b,c;\n  cout<<\"Enter three sides: \";\n  cin>>a>>b>>c;\n  if(a<=0||b<=0||c<=0||a+b<=c||a+c<=b||b+c<=a){ cout<<\"Invalid triangle\\n\"; return 0; }\n  if(a==b&&b==c) cout<<\"Equilateral\\n\";\n  else if(a==b||b==c||a==c) cout<<\"Isosceles\\n\";\n  else cout<<\"Scalene\\n\";\n  return 0;\n}\n"
+- tapOn: "Submit answer"
+- extendedWaitUntil:
+    visible: "Code + plot"
+    timeout: 180000
+- takeScreenshot: demo-hw-q12-ai
+
+# Q13 code_write_plot — sin(x) zero crossings
+- tapOn: "Code editor"
+- inputText: "x = linspace(-2*pi, 2*pi, 1000);\ny = sin(x);\nplot(x, y, 'b-', 'LineWidth', 1.5);\nhold on;\ncross = y(1:end-1).*y(2:end) <= 0;\nplot(x(cross), zeros(sum(cross),1), 'ro', 'MarkerFaceColor', 'r');\nxlabel('x'); ylabel('y');\ntitle('y = sin(x) with zero crossings');\ngrid on;\n"
+- tapOn: "Upload image"
+- tapOn:
+    text: "Photo Library"
+    optional: true
+- tapOn:
+    text: "Recents"
+    optional: true
+- tapOn:
+    text: "All Photos"
+    optional: true
+- tapOn:
+    point: "18%,28%"
+    optional: true
+- tapOn:
+    text: "Choose"
+    optional: true
+- tapOn:
+    text: "Add"
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn: "Submit answer"
+- extendedWaitUntil:
+    visible: "Code + plot"
+    timeout: 180000
+- takeScreenshot: demo-hw-q13-ai
+
+# Q14 code_write_plot — 3D surface
+- tapOn: "Code editor"
+- inputText: "[X,Y] = meshgrid(linspace(-pi, pi, 80));\nZ = sin(X).*cos(Y);\nsurf(X, Y, Z);\nxlabel('x'); ylabel('y'); zlabel('z');\ntitle('z = sin(x).*cos(y)');\ncolorbar; shading interp;\n"
+- tapOn: "Upload image"
+- tapOn:
+    text: "Photo Library"
+    optional: true
+- tapOn:
+    point: "50%,28%"
+    optional: true
+- tapOn:
+    text: "Choose"
+    optional: true
+- tapOn:
+    text: "Add"
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn: "Submit answer"
+- extendedWaitUntil:
+    visible: "Code write"
+    timeout: 180000
+- takeScreenshot: demo-hw-q14-ai
+
+# Q15 code_write — primes without isprime
+- tapOn: "Code editor"
+- inputText: "n = input('Enter n: ');\nprimes = [];\nfor k = 2:n\n  isP = true;\n  for d = 2:floor(sqrt(k))\n    if mod(k,d)==0\n      isP = false; break;\n    end\n  end\n  if isP, primes(end+1)=k; end\nend\ndisp(primes);\n"
+- tapOn: "Submit answer"
+- extendedWaitUntil:
+    visible: "Code write"
+    timeout: 180000
+- takeScreenshot: demo-hw-q15-ai
+
+# Q16 code_write — factorial with while
+- tapOn: "Code editor"
+- inputText: "#include <iostream>\nusing namespace std;\nint main(){\n  int n; cout<<\"Enter N: \"; cin>>n;\n  long long f=1; int i=1;\n  while(i<=n){ f*=i; i++; }\n  cout<<n<<\"! = \"<<f<<endl;\n  return 0;\n}\n"
+- tapOn: "Submit answer"
+- extendedWaitUntil:
+    visible: "Submit assessment"
+    timeout: 180000
+- takeScreenshot: demo-hw-ready-final
+- tapOn: "Submit assessment"
+- extendedWaitUntil:
+    visible: "Homework Performance Summary|AI Feedback|Provisional|Points"
+    timeout: 120000
+- takeScreenshot: demo-hw-results

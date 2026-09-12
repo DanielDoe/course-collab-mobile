@@ -185,16 +185,15 @@ export function useNotetakerLiveCaptions(active: boolean): NotetakerLiveCaptionS
       return
     }
 
-    reset()
     const startDelay = setTimeout(() => {
       void startListening()
-    }, 900)
+    }, 400)
 
     return () => {
       clearTimeout(startDelay)
       stopListening()
     }
-  }, [active, reset, startListening, stopListening])
+  }, [active, startListening, stopListening])
 
   useEffect(() => {
     return () => {

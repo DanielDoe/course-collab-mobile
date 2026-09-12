@@ -1,5 +1,17 @@
 import { API_BASE_URL } from "../constants"
 import { buildMarkdownHtml } from "./markdown-html"
+import {
+  formatEngineeringQuestionText,
+  formatLetteredSubparts,
+} from "./engineering-question-text"
+import {
+  normalizeLatexMultiCharSubscripts,
+  repairLatexDamagedByJsonEscapes,
+} from "./question-latex-repair"
+import { expandEncodedNewlines } from "./programming-escape-display"
+import { formatDenseCodeFencesForDisplay } from "./code-fence-display"
+
+export { repairLatexDamagedByJsonEscapes }
 
 export type QuestionMedia = {
   media_enabled?: boolean
@@ -326,21 +338,6 @@ export function escapeHtml(text: string): string {
 }
 
 /** Repair LaTeX corrupted by JSON/API escaping (e.g. `\t` eating `\text`). */
-export function repairLatexDamagedByJsonEscapes(input: string): string {
-  if (!input) return input
-  return input
-    .replace(/\text\{/g, "\\text{")
-    .replace(/\text(?=[A-Za-z])/g, "\\text")
-    .replace(/\frac\{/g, "\\frac{")
-    .replace(/\boxed\{/g, "\\boxed{")
-    .replace(/\right\b/g, "\\right")
-    .replace(/\times\b/g, "\\times")
-    .replace(/\tau\b/g, "\\tau")
-    .replace(/\u0003/g, "")
-    .replace(/\\text\{\s*k\}A/g, "\\text{k}\\Omega")
-    .replace(/\\text\{\s*m\}A/g, "\\text{mA}")
-}
-
 function decodeHtmlEntities(text: string): string {
   return text
     .replace(/&nbsp;/g, " ")
@@ -366,6 +363,26 @@ function extractKatexAnnotation(html: string): string {
   return match?.[1]?.trim() ?? ""
 }
 
+/** Convert inline HTML sub/sup inside code blocks to LaTeX (mirrors web html-question-text). */
+function htmlInlineToLatex(fragment: string): string {
+  return decodeHtmlEntities(fragment)
+    .replace(/<sub>([\s\S]*?)<\/sub>/gi, "_{$1}")
+    .replace(/<sup>([\s\S]*?)<\/sup>/gi, "^{$1}")
+    .replace(/<[^>]+>/g, "")
+    .trim()
+}
+
+/** Preserve math inside `<code>$S$</code>` as inline LaTeX; plain code stays markdown backticks. */
+function formatStrippedCodeTag(inner: string): string {
+  const latex = htmlInlineToLatex(inner)
+  if (!latex) return "``"
+  if (/\$/.test(latex) || /\\[a-zA-Z]|[_^{}]/.test(latex)) {
+    const stripped = latex.replace(/^\$+|\$+$/g, "").trim()
+    return stripped ? `$${stripped}$` : "``"
+  }
+  return `\`${latex}\``
+}
+
 /** Strip HTML wrappers from quiz/bank copy while preserving LaTeX delimiters. */
 export function stripQuestionHtml(input: string): string {
   if (!input || !/<[a-z][\s\S]*>/i.test(input)) return input
@@ -384,9 +401,13 @@ export function stripQuestionHtml(input: string): string {
     return latex ? `$${latex}$` : " "
   })
 
+  t = t.replace(/<sub>([\s\S]*?)<\/sub>/gi, "_{$1}")
+  t = t.replace(/<sup>([\s\S]*?)<\/sup>/gi, "^{$1}")
   t = t.replace(/<(strong|b)(?:\s[^>]*)?>([\s\S]*?)<\/\1>/gi, "**$2**")
   t = t.replace(/<(em|i)(?:\s[^>]*)?>([\s\S]*?)<\/\1>/gi, "*$2*")
-  t = t.replace(/<code(?:\s[^>]*)?>([\s\S]*?)<\/code>/gi, "`$2`")
+  t = t.replace(/<code(?:\s[^>]*)?>([\s\S]*?)<\/code>/gi, (_, inner: string) =>
+    formatStrippedCodeTag(inner),
+  )
   t = t.replace(/<h([1-6])(?:\s[^>]*)?>([\s\S]*?)<\/h\1>/gi, (_, level: string, body: string) => {
     return `\n${"#".repeat(Number(level))} ${String(body).trim()}\n`
   })
@@ -405,19 +426,25 @@ export function stripQuestionHtml(input: string): string {
   return t.replace(/\n{3}/g, "\n\n").trim()
 }
 
+
 /** Normalize question copy for KaTeX WebView rendering (quiz, classroom, preview). */
 export function normalizeQuestionContentForRender(text: string): string {
   const trimmed = text.trim()
   const withBreaks = normalizeHtmlLineBreaks(trimmed)
-  const normalized = wrapBareMathSymbols(
-    normalizeMathDelimiters(repairLatexDamagedByJsonEscapes(stripQuestionHtml(withBreaks))),
+  const stripped = stripQuestionHtml(withBreaks)
+  const normalized = normalizeLatexMultiCharSubscripts(
+    wrapBareMathSymbols(
+      normalizeMathDelimiters(repairLatexDamagedByJsonEscapes(stripped)),
+    ),
   )
-  return normalized.replace(/^(\d+)\)\s+/gm, "$1. ")
+  return formatDenseCodeFencesForDisplay(
+    formatLetteredSubparts(formatEngineeringQuestionText(normalized)).replace(/^(\d+)\)\s+/gm, "$1. "),
+  )
 }
 
 /** Normalize \\[ \\] and \\( \\) delimiters to $$ and $ for parsing. */
 export function normalizeMathDelimiters(input: string): string {
-  let t = input.replace(/\\n/g, "\n")
+  let t = expandEncodedNewlines(input)
   // Display math — tolerate a missing backslash on the closing bracket (\[ ... ])
   t = t.replace(/\\\[([\s\S]*?)(?:\\\]|\](?!\\))/g, (_, expr: string) => {
     const cleaned = expr.trim().replace(/,\s*$/, "")
@@ -441,6 +468,23 @@ function protectMathSegments(text: string): { text: string; segments: string[] }
   return { text: protectedText, segments }
 }
 
+function protectCodeSegments(text: string): { text: string; segments: string[] } {
+  const segments: string[] = []
+  let protectedText = text.replace(/```[\s\S]*?```/g, (m) => {
+    segments.push(m)
+    return `\x01CODE${segments.length - 1}\x01`
+  })
+  protectedText = protectedText.replace(/`[^`\n]+`/g, (m) => {
+    segments.push(m)
+    return `\x01CODE${segments.length - 1}\x01`
+  })
+  return { text: protectedText, segments }
+}
+
+function restoreCodeSegments(text: string, segments: string[]): string {
+  return text.replace(/\x01CODE(\d+)\x01/g, (_, i) => segments[Number(i)] ?? "")
+}
+
 function restoreMathSegments(text: string, segments: string[]): string {
   return text.replace(/\x00MATH(\d+)\x00/g, (_, i) => segments[Number(i)] ?? "")
 }
@@ -450,7 +494,8 @@ function restoreMathSegments(text: string, segments: string[]): string {
  * Instructions often omit LaTeX delimiters unlike question stems.
  */
 export function wrapBareMathSymbols(input: string): string {
-  const { text: protectedText, segments } = protectMathSegments(input)
+  const code = protectCodeSegments(input)
+  const { text: protectedText, segments } = protectMathSegments(code.text)
   let t = protectedText
 
   // Function-of-time: i_s(t)
@@ -458,7 +503,10 @@ export function wrapBareMathSymbols(input: string): string {
     return `$${base}_{${sub}}(${args})$`
   })
 
-  // Subscripts: Z_C, V_out, I_s
+  // Braced subscripts outside math: V_{rms}, I_{rms}
+  t = t.replace(/\b([A-Za-z])_\{([A-Za-z0-9]+)\}/g, (_, base, sub) => `$${base}_{${sub}}$`)
+
+  // Subscripts: Z_C, V_out, I_s, V_rms
   t = t.replace(/\b([A-Za-z])_([A-Za-z0-9]+)\b/g, (_, base, sub) => `$${base}_{${sub}}$`)
 
   // Bare LaTeX commands outside delimiters: \omega, \Omega, \text{V}, \mu
@@ -475,7 +523,7 @@ export function wrapBareMathSymbols(input: string): string {
   t = t.replace(/[∑Σ]/g, "$\\sum$")
   t = t.replace(/[−–]/g, "-")
 
-  return restoreMathSegments(t, segments)
+  return restoreCodeSegments(restoreMathSegments(t, segments), code.segments)
 }
 
 function prepareQuestionText(text: string): string {
@@ -489,6 +537,9 @@ export function needsQuestionRichRender(text: string): boolean {
   if (/<span[^>]*class=["'][^"']*katex/i.test(t)) return true
   if (/<(?:pre|code|img|table|ul|ol|li|h[1-6]|br|strong|b|em|p)\b/i.test(t)) return true
   if (/```/.test(t)) return true
+  if (/#include\s*[<"]/.test(t) || /\b(?:std::|cout\s*<<|cin\s*>>|nullptr)\b/.test(t)) return true
+  if (/\b(?:int|void|double|float|char|bool)\s+\w+\s*\(/.test(t)) return true
+  if (/(?:^|\n)\s*(?:function\s+\w+\s*=|disp\s*\(|fprintf\s*\(|linspace\s*\()/.test(t)) return true
   if (/^[-*+]\s/m.test(t) || /^\d+[.)]\s/m.test(t)) return true
   if (/\*\*|__|`/.test(t)) return true
   if (/^#{1,6}\s/m.test(t)) return true
@@ -499,6 +550,7 @@ export function needsQuestionRichRender(text: string): boolean {
   if (/\$[^$\n]+\$/.test(t)) return true
   if (/\\(?:frac|omega|Omega|text|cdot|times|sqrt|sum|int|alpha|beta|theta|mu|pi)\b/.test(t)) return true
   if (/\b[A-Za-z]_[A-Za-z0-9]+\b/.test(t)) return true
+  if (/\b[A-Za-z]_\{[A-Za-z0-9]+\}/.test(t)) return true
   if (/ω/.test(t)) return true
   if (/[∑Σ]/.test(t)) return true
   if (/<[a-z][\s\S]*>/i.test(t)) {
@@ -825,6 +877,24 @@ export function buildQuestionHtml(
   }, { disableSelection: options?.disableSelection })
 }
 
+/** KaTeX/markdown HTML tuned for flashcard faces (centered, study-sized type). */
+export function buildFlashcardHtml(
+  text: string,
+  options?: { theme?: QuestionHtmlTheme },
+): string {
+  const colors = resolveQuestionHtmlTheme(options?.theme)
+  const prepared = normalizeQuestionContentForRender(text)
+  return buildMarkdownHtml(prepared, "flashcard", {
+    accent: colors.heading,
+    accentSoft: colors.codeBg,
+    text: colors.text,
+    textSecondary: colors.textSecondary,
+    heading: colors.heading,
+    border: options?.theme?.isDark ? "rgba(255,255,255,0.12)" : "rgba(226, 232, 240, 0.95)",
+    isDark: options?.theme?.isDark,
+  })
+}
+
 export type McqReportOptionHtmlItem = {
   letter: string
   text: string
@@ -925,6 +995,11 @@ export function buildMcqReportOptionsHtml(
       var id = mathStore.length;
       mathStore.push(renderMath(expr.trim(), true));
       return "\\n\\nMATHBLOCK_" + id + "_\\n\\n";
+    });
+    out = out.replace(/(?<!\\\\)\\$([^$\\n]+?)\\$(?!\\$)/g, function(_, expr) {
+      var id = mathStore.length;
+      mathStore.push(renderMath(expr.trim(), false));
+      return "MATHINLINE_" + id + "_";
     });
     var html = (typeof marked !== "undefined" && marked.parse)
       ? (marked.setOptions({ gfm: true, breaks: true }), marked.parse(out))

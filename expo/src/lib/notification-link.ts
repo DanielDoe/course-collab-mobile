@@ -60,7 +60,7 @@ export function resolveNotificationLink(link: string | null | undefined): string
       return tail.length ? `/announcements/${tail[0]}` : "/announcements"
     }
     if (segment === "results" && tail[0]) {
-      return `/assessment/report/${tail[0]}`
+      return `/results/${tail[0]}`
     }
     if ((segment === "quiz" || segment === "homework" || segment === "mid-semester" || segment === "final") && tail[0]) {
       return `/assessment/${tail[0]}`
@@ -202,7 +202,7 @@ function mapStudentDashboardSegment(segment: string, tail: string[], search: str
     return id ? `/assessment/${id}` : null
   }
   if (segment === "results" && tail[0]) {
-    return `/assessment/report/${tail[0]}`
+    return `/results/${tail[0]}`
   }
   if (segment === "grades") {
     return "/module/grades"
@@ -297,6 +297,10 @@ function mapFacultyPath(path: string, search: string): string | null {
   if (lower.includes("recommendations")) return "/module/recommendations"
   if (lower.includes("progress-review")) return "/module/progress-reviews"
   if (lower.includes("office-hours")) return "/module/office-hours"
+  if (lower.includes("cora-insights") || lower.includes("ai-monitoring") || lower.includes("ai-insights")) {
+    return "/module/cora-insights"
+  }
+  if (lower.includes("student-progress") || lower.includes("analytics/advanced")) return "/module/student-progress"
   if (lower.includes("schedule-adjustment")) return "/module/schedule-adjustment"
   if (lower.includes("results/")) {
     const attemptId = path.split("/").pop()

@@ -52,7 +52,7 @@ export default function WebScreen() {
       return (
         <Redirect
           href={{
-            pathname: "/assessment/report/[attemptId]",
+            pathname: "/results/[attemptId]",
             params: {
               attemptId: String(results.attemptId),
               ...(results.assessmentType ? { type: results.assessmentType } : {}),

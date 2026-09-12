@@ -59,6 +59,8 @@ export function asCoursePickerItem(
 
   return {
     ...course,
+    // Prefer the selected section's term so APIs can distinguish reused codes (e.g. ELEG1301P01 Fall vs Spring).
+    academic_term_id: session?.academic_term_id ?? course.academic_term_id ?? null,
     picker_key: coursePickerKey(course.id, session?.id),
     picker_display_title: isSectionRow ? (sectionLabel ?? session!.code) : course.course_title,
     picker_display_subtitle: course.course_code,

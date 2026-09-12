@@ -211,12 +211,16 @@ export const rewardsApi = {
     }>(session, "/api/classroom-points"),
 
   getClassroomLeaderboard: async (session: StudentSession) => {
-    const res = await requestContent<{ leaderboard?: ClassroomLeaderboardEntry[] }>(
-      session,
-      "/api/classroom-points/leaderboard",
-    )
+    const res = await requestContent<{
+      leaderboard?: ClassroomLeaderboardEntry[]
+      privacyMode?: boolean
+      leaderboardPrivacy?: { blurPeerNames?: boolean }
+    }>(session, "/api/classroom-points/leaderboard")
+    const blurPeerNames =
+      res.leaderboardPrivacy?.blurPeerNames === true || res.privacyMode === true
     return {
       ...res,
+      leaderboardPrivacy: { blurPeerNames },
       leaderboard: classroomPointsLeaderboardForCurrentOffering(res.leaderboard ?? [], session),
     }
   },

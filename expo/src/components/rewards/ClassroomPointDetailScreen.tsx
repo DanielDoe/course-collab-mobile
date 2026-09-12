@@ -9,6 +9,7 @@ import { semanticSoft } from "../../lib/themed-module-theme"
 import { useSession } from "../../context/SessionProvider"
 import { ApiError } from "../../lib/student-api"
 import type { StudentSession } from "../../lib/session"
+import { resolveClassroomDisplayPoints } from "../../lib/classroom-point-booster"
 import { shortenTaskTitle } from "../../lib/classroom-submission"
 import type { ClassroomPointRow } from "../../lib/instructor-api"
 import { FacultySubmissionReviewPanel } from "../faculty/FacultySubmissionReviewPanel"
@@ -101,7 +102,7 @@ export function ClassroomPointDetailScreen() {
     [point],
   )
 
-  const pts = Number(point?.points ?? 0)
+  const pts = resolveClassroomDisplayPoints(Number(point?.points ?? 0), point?.point_booster)
   const feedbackText =
     typeof point?.ai_feedback === "string"
       ? point.ai_feedback

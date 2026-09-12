@@ -3,6 +3,11 @@ import type { PreviewQuestion } from "./faculty-assessment-preview"
 import { parseSectionConfig, type SectionConfig } from "./faculty-assessment-sections"
 import type { InstructorQuizDetail, InstructorQuizQuestion } from "./instructor-api"
 import { defaultTimeLimit } from "./faculty-quiz-editor-config"
+import {
+  DEFAULT_ASSESSMENT_PLATFORM_FLAGS,
+  parseAssessmentPlatformOverride,
+  type AssessmentPlatformFlags,
+} from "./assessment-platform-access"
 
 export type QuizQuestionDraft = {
   id?: number
@@ -69,6 +74,8 @@ export type QuizEditorDraft = {
   restrict_access_to_students: boolean
   allowed_student_ids: number[]
   access_restriction_session_id: number | null
+  inherit_platform_access: boolean
+  platform_access: AssessmentPlatformFlags
   max_concurrent_students: number | null
   section_config: SectionConfig[] | null
   counts_toward_course_grade: boolean
@@ -222,6 +229,9 @@ export function quizDetailToEditorDraft(quiz: InstructorQuizDetail): QuizEditorD
     restrict_access_to_students: parseBool(quiz.restrict_access_to_students),
     allowed_student_ids: parseAllowedStudentIds(quiz.allowed_student_ids),
     access_restriction_session_id: quiz.access_restriction_session_id ?? null,
+    inherit_platform_access: parseAssessmentPlatformOverride(quiz.platform_access) == null,
+    platform_access:
+      parseAssessmentPlatformOverride(quiz.platform_access) ?? { ...DEFAULT_ASSESSMENT_PLATFORM_FLAGS },
     max_concurrent_students:
       quiz.max_concurrent_students != null ? Number(quiz.max_concurrent_students) : null,
     section_config: parseSectionConfig(quiz.section_config),
@@ -345,6 +355,7 @@ export function editorDraftToUpdatePayload(
     access_restriction_session_id: draft.restrict_access_to_students
       ? draft.access_restriction_session_id
       : null,
+    platform_access: draft.inherit_platform_access ? null : draft.platform_access,
     counts_toward_course_grade: draft.counts_toward_course_grade}
 }
 

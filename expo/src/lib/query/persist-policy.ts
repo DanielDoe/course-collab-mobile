@@ -22,6 +22,7 @@ const NEVER_PERSIST_SEGMENTS = new Set([
   "quizzes",
   "homework",
   "grades",
+  "analytics",
   "exam",
   "exams",
   "finals",

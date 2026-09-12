@@ -1,0 +1,27 @@
+appId: com.coursecollab.app
+---
+- tapOn:
+    id: "practice-nav-12"
+- extendedWaitUntil:
+    visible: "12/12"
+    timeout: 10000
+- takeScreenshot: ac-q12-now
+- tapOn:
+    id: "practice-option-A"
+- tapOn:
+    id: "practice-option-C"
+- tapOn: "Submit answer"
+- extendedWaitUntil:
+    visible: "Finish practice"
+    timeout: 15000
+- takeScreenshot: ac-q12-graded
+- tapOn:
+    id: "practice-nav-1"
+- extendedWaitUntil:
+    visible: "1/12"
+    timeout: 8000
+- takeScreenshot: ac-nav-1-again
+- tapOn: "Finish practice"
+- waitForAnimationToEnd:
+    timeout: 8000
+- takeScreenshot: ac-results

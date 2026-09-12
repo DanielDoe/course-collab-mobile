@@ -30,6 +30,7 @@ import { ModuleListItemMotion } from "../ModuleFlashList"
 import { useAppThemeTokens } from "../../context/AppearanceProvider"
 import { useNotificationModuleRefresh } from "../../lib/notifications/notification-events"
 import { useFacultyListPager } from "../../hooks/useFacultyListPager"
+import { useAssessmentPlatformAccess } from "../../hooks/useAssessmentPlatformAccess"
 
 function useStudentSession(): StudentSession | null {
   const { session } = useSession()
@@ -45,6 +46,7 @@ type Props = {
 
 export function AssessmentListScreen({ type, title }: Props) {
   const session = useStudentSession()
+  const { confirmMobileAccess } = useAssessmentPlatformAccess(session)
   const router = useRouter()
   const tokens = useAppThemeTokens()
   const configs = getAssessmentConfigs(tokens)
@@ -142,6 +144,7 @@ export function AssessmentListScreen({ type, title }: Props) {
           icon={config.icon}
           onPress={() => {
             if (listStatus.label === "Continue") {
+              if (!confirmMobileAccess(type, item.platform_access)) return
               openAssessmentTake(router, type, item.id, "continue")
               return
             }

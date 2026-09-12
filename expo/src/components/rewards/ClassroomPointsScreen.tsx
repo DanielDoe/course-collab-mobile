@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { View } from "react-native"
+import { Text, View } from "react-native"
 import { useRouter } from "expo-router"
 import { useSession } from "../../context/SessionProvider"
 import { ApiError } from "../../lib/student-api"
 import type { StudentSession } from "../../lib/session"
+import { resolveClassroomDisplayPoints } from "../../lib/classroom-point-booster"
 import { assignmentKindLabel, isSolutionAssignment, shortenTaskTitle } from "../../lib/classroom-submission"
 import { StudentSearchToolbar } from "../student/student-search-toolbar"
 import {
@@ -19,9 +20,15 @@ import { useNotificationModuleRefresh } from "../../lib/notifications/notificati
 import { SignatureListCard } from "../theme/SignatureListCard"
 import { TabbedModuleLayout, signatureListStyles } from "../theme/TabbedModuleLayout"
 import { ClassroomPointsLeaderboardPodium } from "./ClassroomPointsLeaderboardPodium"
+import {
+  classroomLeaderboardDisplayName,
+  classroomLeaderboardPointsLabel,
+} from "./classroom-leaderboard-privacy"
 import { classroomPointsLeaderboardForCurrentOffering } from "../../lib/classroom-points-leaderboard-scope"
 import { useFacultyListPager } from "../../hooks/useFacultyListPager"
 import { FacultyListPagerFooter } from "../faculty/FacultyListPagerFooter"
+import { useThemedNative } from "../../context/AppearanceProvider"
+import { useNativeType } from "../../lib/themed-module-theme"
 
 function useStudentSession(): StudentSession | null {
   const { session } = useSession()
@@ -47,7 +54,7 @@ function PointListCard({
   onPress: () => void
 }) {
   const theme = useRewardsTheme()
-  const pts = Number(item.points ?? 0)
+  const pts = resolveClassroomDisplayPoints(Number(item.points ?? 0), item.point_booster)
   return (
     <SignatureListCard
       index={index}
@@ -65,16 +72,23 @@ function PointListCard({
   )
 }
 
-function LeaderboardListCard({ entry, index }: { entry: ClassroomLeaderboardEntry; index: number }) {
+function LeaderboardListCard({
+  entry,
+  index,
+  blurPeerNames,
+}: {
+  entry: ClassroomLeaderboardEntry
+  index: number
+  blurPeerNames: boolean
+}) {
   const theme = useRewardsTheme()
-  const isMe = entry.is_current_user
   return (
     <SignatureListCard
       index={index}
-      title={`${entry.full_name ?? "Student"}${isMe ? " (you)" : ""}`}
+      title={classroomLeaderboardDisplayName(entry, blurPeerNames, { listIndex: index })}
       meta={`Rank #${entry.rank}`}
       metaIcon="podium-outline"
-      trailingValue={String(Number(entry.total_points ?? 0))}
+      trailingValue={classroomLeaderboardPointsLabel(entry).replace(/ pts$/, "")}
       trailingValueColor={theme.primary}
       icon="trophy-outline"
       accent={theme.primary}
@@ -115,7 +129,10 @@ export function ClassroomPointsScreen() {
   const [submissions, setSubmissions] = useState<ClassroomSubmission[]>([])
   const [pendingSubmissions, setPendingSubmissions] = useState<ClassroomSubmission[]>([])
   const [leaderboard, setLeaderboard] = useState<ClassroomLeaderboardEntry[]>([])
+  const [blurPeerNames, setBlurPeerNames] = useState(false)
   const [search, setSearch] = useState("")
+  const native = useThemedNative()
+  const type = useNativeType()
 
   const load = useCallback(async () => {
     if (!session) return
@@ -130,6 +147,7 @@ export function ClassroomPointsScreen() {
       setSubmissions(subsData.submissions ?? [])
       setPendingSubmissions(subsData.pendingSubmissions ?? [])
       setLeaderboard(lbData.leaderboard ?? [])
+      setBlurPeerNames(lbData.leaderboardPrivacy?.blurPeerNames === true)
       setError("")
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Failed to load classroom points.")
@@ -190,8 +208,15 @@ export function ClassroomPointsScreen() {
       : classroomPointsLeaderboardForCurrentOffering(leaderboard)
     const q = search.trim().toLowerCase()
     if (!q) return awarded
-    return awarded.filter((entry) => (entry.full_name ?? "Student").toLowerCase().includes(q))
-  }, [leaderboard, search, session])
+    return awarded.filter((entry) =>
+      classroomLeaderboardDisplayName(entry, blurPeerNames).toLowerCase().includes(q),
+    )
+  }, [blurPeerNames, leaderboard, search, session])
+
+  const selfRank = useMemo(
+    () => filteredLeaderboard.find((entry) => entry.is_current_user)?.rank ?? null,
+    [filteredLeaderboard],
+  )
 
   const historyPager = useFacultyListPager(sortedHistory, `${search}|history`, "awards")
   const tasksPager = useFacultyListPager(taskItems, `${search}|tasks`, "tasks")
@@ -284,12 +309,23 @@ export function ClassroomPointsScreen() {
     return (
       <>
         <View style={signatureListStyles.list}>
-          <ClassroomPointsLeaderboardPodium entries={filteredLeaderboard} />
+          <ClassroomPointsLeaderboardPodium
+            entries={filteredLeaderboard}
+            blurPeerNames={blurPeerNames}
+          />
+          {blurPeerNames ? (
+            <Text style={[type.caption, { color: native.secondaryLabel, marginBottom: 4 }]}>
+              {selfRank != null
+                ? `Your rank: #${selfRank} — classmate names are hidden for privacy.`
+                : "Classmate names are hidden for privacy."}
+            </Text>
+          ) : null}
           {leaderboardTailPager.items.map((entry, index) => (
             <LeaderboardListCard
-              key={entry.rank}
+              key={`${entry.rank}-${entry.student_id ?? index}`}
               entry={entry}
               index={leaderboardTailPager.page * leaderboardTailPager.pageSize + index + 3}
+              blurPeerNames={blurPeerNames}
             />
           ))}
         </View>

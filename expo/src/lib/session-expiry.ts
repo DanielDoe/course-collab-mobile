@@ -47,6 +47,11 @@ export function isNonSessionExpiryUnauthorized(path: string): boolean {
   return false
 }
 
+/** Dual-role groups/projects routes 401 as instructor when student cookies are the caller. */
+export function isInstructorAuthLeakMessage(message: string | undefined): boolean {
+  return /instructor authentication required/i.test(String(message ?? ""))
+}
+
 export function shouldInvalidateSessionForStatus(
   path: string,
   status: number,

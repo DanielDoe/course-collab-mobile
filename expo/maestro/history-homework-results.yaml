@@ -1,0 +1,16 @@
+appId: com.coursecollab.app
+---
+- launchApp
+- openLink: coursecollab://dev-eleg-student-login
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 120000
+- openLink: coursecollab:///module/quiz-history
+- extendedWaitUntil:
+    visible: ".*Homework 1.*"
+    timeout: 60000
+- tapOn: ".*Homework 1.*"
+- extendedWaitUntil:
+    visible: "Results|Question Review|Homework Performance|84"
+    timeout: 60000
+- takeScreenshot: history-homework-results

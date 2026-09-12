@@ -1,32 +1,25 @@
-import { useLocalSearchParams } from "expo-router"
-import { AssessmentQuizScreen } from "../../../../src/components/assessments/AssessmentQuizScreen"
-import type { AssessmentTakeAction } from "../../../../src/constants/module-web-paths"
+import { Redirect, useLocalSearchParams, usePathname } from "expo-router"
+import { assessmentModuleRoute } from "../../../../src/components/assessments/assessment-navigation"
+import {
+  assessmentTakeHref,
+  firstRouteParam,
+  parseAssessmentTakeAction,
+  resolveAssessmentTakeQuizId,
+} from "../../../../src/lib/route-params"
 
-function parseTakeAction(value: string | undefined): AssessmentTakeAction {
-  if (value === "continue" || value === "retake" || value === "start") return value
-  return "start"
-}
-
-export default function AssessmentTakeRoute() {
-  const { id, type, action } = useLocalSearchParams<{
-    id: string
-    type?: string
-    action?: string
+/** Legacy `/assessment/take/:id` — Expo [id] collision. Bounce to `/take/:id`. */
+export default function LegacyAssessmentTakeRedirect() {
+  const pathname = usePathname()
+  const { id, type, action, quizId: quizIdParam } = useLocalSearchParams<{
+    id?: string | string[]
+    type?: string | string[]
+    action?: string | string[]
+    quizId?: string | string[]
   }>()
-
-  const quizId = Number(id)
-  const assessmentType = typeof type === "string" ? type : "quiz"
-  const takeAction = parseTakeAction(typeof action === "string" ? action : undefined)
-
-  if (!Number.isFinite(quizId)) {
-    return null
+  const assessmentType = firstRouteParam(type) ?? "quiz"
+  const quizId = resolveAssessmentTakeQuizId({ id, quizId: quizIdParam, pathname })
+  if (quizId == null) {
+    return <Redirect href={assessmentModuleRoute(assessmentType)} />
   }
-
-  return (
-    <AssessmentQuizScreen
-      quizId={quizId}
-      assessmentType={assessmentType}
-      takeAction={takeAction}
-    />
-  )
+  return <Redirect href={assessmentTakeHref(quizId, assessmentType, parseAssessmentTakeAction(action))} />
 }

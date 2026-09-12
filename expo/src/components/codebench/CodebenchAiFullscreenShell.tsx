@@ -73,7 +73,7 @@ export function CodebenchAiFullscreenShell({
 
           {loading ? (
             <View style={styles.loading}>
-              <CoraThinkingIndicator context="codebench" hideBrand />
+              <CoraThinkingIndicator context="codebench" hideBrand centered />
             </View>
           ) : (
             <>
@@ -143,9 +143,9 @@ const styles = StyleSheet.create({
   },
   loading: {
     flex: 1,
-    alignItems: "stretch",
-    justifyContent: "flex-start",
+    alignItems: "center",
+    justifyContent: "center",
     paddingHorizontal: 14,
-    paddingTop: 8,
+    paddingBottom: 24,
   },
 })

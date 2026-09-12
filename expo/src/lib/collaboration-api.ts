@@ -1,8 +1,9 @@
 import type { StudentSession } from "./session"
 import { normalizePlaygroundQuestions } from "./playground-question-utils"
-import { studentAuthenticatedRequest } from "./student-api"
+import { ApiError, studentAuthenticatedRequest } from "./student-api"
 import { studentProjectsListPath } from "./student-content-context"
 import { enrichStudentContentSession, studentEnrichedContentPath } from "./student-content-session"
+import { isInstructorAuthLeakMessage } from "./session-expiry"
 
 function request<T>(session: StudentSession, path: string, init?: RequestInit): Promise<T> {
   return studentAuthenticatedRequest<T>(session, path, init)
@@ -344,12 +345,20 @@ export const collaborationApi = {
         contactMethod: payload.contactMethod})}),
 
   // ── Groups ──
-  getGroups: (session: StudentSession, status?: string) =>
-    requestContent<{ groups?: GroupRecord[] }>(
-      session,
-      "/api/groups",
-      status ? { status } : undefined,
-    ),
+  getGroups: async (session: StudentSession, status?: string) => {
+    try {
+      return await requestContent<{ groups?: GroupRecord[] }>(
+        session,
+        "/api/groups",
+        status ? { status } : undefined,
+      )
+    } catch (err) {
+      if (err instanceof ApiError && isInstructorAuthLeakMessage(err.message)) {
+        return { groups: [] }
+      }
+      throw err
+    }
+  },
 
   getGroup: (session: StudentSession, groupId: number) =>
     request<{ group?: GroupRecord }>(session, `/api/groups/${groupId}`),

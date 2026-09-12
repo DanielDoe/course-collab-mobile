@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from "react-native";
+import * as DocumentPicker from "expo-document-picker"
 import { AppAlert } from '../../lib/app-alert'
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useLocalSearchParams, useRouter } from "expo-router"
@@ -19,6 +20,10 @@ import { FacultySummerCampDatePicker } from "../faculty/FacultySummerCampDatePic
 import { NotetakerScreenHeader } from "./NotetakerScreenHeader"
 import { NotetakerSaveFlash } from "./NotetakerSaveFlash"
 import { NotetakerChatPanel } from "./NotetakerChatPanel"
+import {
+  NotetakerProcessingOverlay,
+  type NotetakerProcessingStep,
+} from "./NotetakerProcessingOverlay"
 import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
 import { useNativeType } from "../../lib/themed-module-theme"
 import { useSession } from "../../context/SessionProvider"
@@ -30,6 +35,7 @@ import {
   isNotetakerProcessing,
   notetakerApi,
   notetakerNoteSegment,
+  resolveLocalAudioDurationSeconds,
   type NotetakerKeyPoints,
   type NotetakerLimits,
   type NotetakerNoteDetail,
@@ -42,7 +48,7 @@ type DetailTab = "summary" | "transcript" | "chat"
 const DETAIL_TABS: Array<{ id: DetailTab; label: string }> = [
   { id: "summary", label: "Summary" },
   { id: "transcript", label: "Transcript" },
-  { id: "chat", label: "AI Chat" },
+  { id: "chat", label: "Cora AI Assistant" },
 ]
 
 function useStudentSession(): StudentSession | null {
@@ -117,6 +123,9 @@ export function NotetakerNoteDetailScreen() {
   const [roster, setRoster] = useState<RosterStudent[]>([])
   const [selectedShareIds, setSelectedShareIds] = useState<number[]>([])
   const [saveFlashVisible, setSaveFlashVisible] = useState(false)
+  const [retrying, setRetrying] = useState(false)
+  const [processingLabel, setProcessingLabel] = useState("")
+  const [processingStep, setProcessingStep] = useState<NotetakerProcessingStep>("upload")
   const [audioSource, setAudioSource] = useState<{ uri: string; headers?: Record<string, string> } | null>(
     null,
   )
@@ -336,6 +345,55 @@ export function NotetakerNoteDetailScreen() {
     }
   }, [session, movedDigitalNoteId, selectedShareIds])
 
+  const retryAudio = useCallback(async () => {
+    if (!session || !note) return
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        copyToCacheDirectory: true,
+        type: ["audio/*", "public.audio", "public.mpeg-4-audio"],
+        multiple: false,
+      })
+      if (result.canceled || !result.assets?.[0]) return
+      const asset = result.assets[0]
+      setRetrying(true)
+      setProcessingStep("upload")
+      setProcessingLabel("Uploading audio…")
+      const durationSeconds = await resolveLocalAudioDurationSeconds(asset.uri)
+      setProcessingStep("transcribe")
+      setProcessingLabel("Transcribing with AI…")
+      const summarizeTimer = setTimeout(() => {
+        setProcessingStep("summarize")
+        setProcessingLabel("Writing your AI summary…")
+      }, 12_000)
+      try {
+        const updated = await notetakerApi.uploadAudio(
+          session,
+          notetakerNoteSegment(note),
+          {
+            uri: asset.uri,
+            name: asset.name || `retry-${Date.now()}.m4a`,
+            type: asset.mimeType || "audio/m4a",
+          },
+          { durationSeconds, displayTitle: title.trim() || note.title },
+        )
+        setNote(updated)
+        setTitle(updated.title || "")
+        setCourse(updated.course_name || "")
+        setLectureDate(updated.lecture_date ? String(updated.lecture_date).slice(0, 10) : "")
+      } finally {
+        clearTimeout(summarizeTimer)
+      }
+    } catch (err) {
+      AppAlert.alert(
+        "Retry failed",
+        err instanceof ApiError ? err.message : "Could not process this audio file.",
+      )
+    } finally {
+      setRetrying(false)
+      setProcessingLabel("")
+    }
+  }, [session, note, title])
+
   const confirmDelete = useCallback(() => {
     if (!session || !note) return
     AppAlert.alert("Delete note?", `"${note.title}" will be removed from AI Notetaker.`, [
@@ -449,6 +507,7 @@ export function NotetakerNoteDetailScreen() {
               styles.segmentLabel,
               { color: tab === id ? native.label : native.secondaryLabel },
             ]}
+            numberOfLines={2}
           >
             {label}
           </Text>
@@ -552,11 +611,24 @@ export function NotetakerNoteDetailScreen() {
           ) : null}
 
           {failed ? (
-            <CommEmptyState
-              icon="alert-circle-outline"
-              title="Processing failed"
-              body={note.failure_reason || "Something went wrong while processing this recording."}
-            />
+            <>
+              <CommEmptyState
+                icon="alert-circle-outline"
+                title="Processing failed"
+                body={note.failure_reason || "Something went wrong while processing this recording."}
+              />
+              <ModuleSection>
+                <ModuleListRow
+                  title="Retry with a new audio file"
+                  subtitle="Upload MP3, M4A, or WAV to transcribe and summarize again"
+                  icon="cloud-upload-outline"
+                  iconBg={tokens.accentSoft}
+                  iconColor={tokens.accent}
+                  onPress={() => void retryAudio()}
+                  last
+                />
+              </ModuleSection>
+            </>
           ) : null}
 
           {!processing && !failed ? (
@@ -633,6 +705,16 @@ export function NotetakerNoteDetailScreen() {
 
           <ModuleSectionHeader title="Actions" />
           <ModuleSection>
+            {failed || note.processing_status === "draft" ? (
+              <ModuleListRow
+                title="Upload audio"
+                subtitle="Replace this note's recording and run transcription again"
+                icon="cloud-upload-outline"
+                iconBg={tokens.accentSoft}
+                iconColor={tokens.accent}
+                onPress={() => void retryAudio()}
+              />
+            ) : null}
             <ModuleListRow
               title="Move to My Notes"
               subtitle="Save a copy you can edit and organize"
@@ -731,6 +813,7 @@ export function NotetakerNoteDetailScreen() {
       </Modal>
 
       <NotetakerSaveFlash visible={saveFlashVisible} />
+      <NotetakerProcessingOverlay visible={retrying} label={processingLabel} step={processingStep} />
     </>
   )
 }
@@ -767,7 +850,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     elevation: 1,
   },
-  segmentLabel: { fontWeight: "600" },
+  segmentLabel: { fontWeight: "600", textAlign: "center" },
   transcriptBox: {
     borderRadius: 12,
     padding: 14,

@@ -1,9 +1,11 @@
 import type { QueryScope } from "./scope"
 
-type ScopeParts = readonly [userId: string, courseId: string, section: string]
+type ScopeParts = readonly [userId: string, courseId: string, section: string, sessionId: string]
 
 function scopeParts(scope: QueryScope): ScopeParts {
-  return [scope.userId, String(scope.courseId ?? "none"), scope.section ?? "none"]
+  const sessionId =
+    scope.sessionId != null && Number.isFinite(scope.sessionId) ? String(scope.sessionId) : "none"
+  return [scope.userId, String(scope.courseId ?? "none"), scope.section ?? "none", sessionId]
 }
 
 /**
@@ -78,6 +80,10 @@ export const queryKeys = {
     grades: {
       root: (scope: QueryScope) => ["student", "grades", ...scopeParts(scope)] as const,
       bundle: (scope: QueryScope) => ["student", "grades", ...scopeParts(scope), "bundle"] as const,
+    },
+    analytics: {
+      root: (scope: QueryScope) => ["student", "analytics", ...scopeParts(scope)] as const,
+      bundle: (scope: QueryScope) => ["student", "analytics", ...scopeParts(scope), "bundle"] as const,
     },
     syllabus: {
       root: (scope: QueryScope) => ["student", "syllabus", ...scopeParts(scope)] as const,

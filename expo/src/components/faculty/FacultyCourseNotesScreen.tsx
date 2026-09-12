@@ -16,6 +16,8 @@ import { QueryRefreshBanner } from "../query/QueryRefreshBanner"
 import { QuerySkeleton } from "../query/QuerySkeleton"
 import { useSuppressModuleSearchDock } from "../../context/ModuleSearchDockContext"
 import { useModuleTheme } from "../../lib/themed-module-shell"
+import { semanticSoft } from "../../lib/themed-module-theme"
+import { NATIVE } from "../../constants/faculty-native-theme"
 import { FacultyEmptyState } from "./faculty-shared"
 import { FacultyCourseNoteListCard } from "./FacultyCourseNoteListCard"
 import { FacultyCourseNotesDeletedPanel } from "./FacultyCourseNotesDeletedPanel"
@@ -731,9 +733,17 @@ export function FacultyCourseNotesScreen() {
                 onPress={deleteNoteFromEditor}
                 accessibilityRole="button"
                 accessibilityLabel="Delete note"
-                style={localStyles.deleteLink}
+                style={({ pressed }) => [
+                  localStyles.deleteBtn,
+                  {
+                    borderColor: `${tokens.danger}55`,
+                    backgroundColor: semanticSoft(tokens.danger, tokens.isDark),
+                    opacity: pressed ? NATIVE.pressedOpacity : 1,
+                  },
+                ]}
               >
-                <Text style={[type.bodyEmphasis, { color: tokens.danger }]}>Delete note</Text>
+                <Ionicons name="trash-outline" size={18} color={tokens.danger} />
+                <Text style={[type.bodyEmphasis, { color: tokens.danger, fontSize: 15 }]}>Delete note</Text>
               </Pressable>
             ) : null}
           </ScrollView>
@@ -812,7 +822,17 @@ const localStyles = StyleSheet.create({
   },
   publishRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   previewToggle: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  deleteLink: { marginTop: 8, alignSelf: "flex-start", minHeight: 44, justifyContent: "center" },
+  deleteBtn: {
+    marginTop: 16,
+    minHeight: 48,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingVertical: 12,
+  },
   segmentTrack: {
     flexDirection: "row",
     borderRadius: 10,

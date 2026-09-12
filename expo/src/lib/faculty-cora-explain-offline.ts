@@ -208,7 +208,7 @@ function conceptQuestionsReply(scope: InstructorScope, ctx: FacultyCoraExplainCo
     actions: [
       moduleAction("results", "Manage Results"),
       moduleAction("question-bank", "Question Bank"),
-      moduleAction("student-progress", "Student Progress"),
+      moduleAction("student-progress", "Class Analytics"),
     ],
   }
 }
@@ -351,7 +351,7 @@ function gradingTrendReply(ctx: FacultyCoraExplainContext): FacultyCoraChatRespo
     actions: [
       moduleAction("results", "Manage Results"),
       moduleAction("reports", "Manage Reports"),
-      moduleAction("student-progress", "Student Progress"),
+      moduleAction("student-progress", "Class Analytics"),
     ],
   }
 }
@@ -447,7 +447,7 @@ function genericExplainReply(): FacultyCoraChatResponse {
     offline: true,
     actions: [
       moduleAction("results", "Manage Results"),
-      moduleAction("student-progress", "Student Progress"),
+      moduleAction("student-progress", "Class Analytics"),
       moduleAction("office-hours", "Office Hours"),
       moduleAction("messages", "Messages"),
     ],
@@ -471,11 +471,11 @@ export async function buildFacultyCoraExplainOfflineChatReply(
   } catch {
     return {
       reply:
-        "I couldn't load course context right now. Open **Manage Results** or **Student Progress** for the latest performance data.",
+        "I couldn't load course context right now. Open **Manage Results** or **Class Analytics** for the latest performance data.",
       offline: true,
       actions: [
         moduleAction("results", "Manage Results"),
-        moduleAction("student-progress", "Student Progress"),
+        moduleAction("student-progress", "Class Analytics"),
       ],
     }
   }

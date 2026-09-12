@@ -13,6 +13,7 @@ import type {
   StudentIndividualReportPayload,
   StudentReportSearchHit} from "./instructor-reports-utils"
 import { normalizeSavedReport } from "./instructor-reports-utils"
+import type { InstructorCalendarPayload, InstructorCalendarView } from "./instructor-calendar"
 import { assertProductionHttpsUrl, createApiAbortSignal, noteApiFailure } from "./http"
 import { mfaTrustRequestHeadersForInstructor } from "./mfa-device-trust"
 import { getStoredSession } from "./session"
@@ -20,6 +21,14 @@ import { mergeCookieHeaders, persistHttpCookiesFromResponse, studentHttpCookieHe
 import { assessmentResultSectionHints, evaluationRowBelongsToCourse } from "./course-sections"
 import { headersHaveStudentSessionProof, STUDENT_REFRESH_HEADER } from "./student-session-proof"
 import { buildFacultyApiHeaders, type FacultyApiScope } from "./faculty-api-headers"
+import {
+  buildCoraInsightsQuery,
+  unwrapCoraInsights,
+  type CoraInsightsEnvelope,
+  type CoraInsightsFilterOption,
+  type CoraInsightsQueryExtra,
+  type CoraInsightsStudentProfile,
+} from "./cora-insights-faculty"
 
 export type InstructorCourse = {
   id: number
@@ -84,6 +93,103 @@ export type InstructorRecentActivity = {
   assessment_type?: string
   created_at?: string
   timestamp?: string
+}
+
+export type FacultyAiStruggleAlert = {
+  student_id?: number
+  student_name?: string
+  student_number?: string
+  section?: string
+  topic?: string
+  question_count?: number
+  severity?: string
+  messages?: string[]
+  time_span_minutes?: number
+  questionsPerHour?: number
+  last_asked?: string
+}
+
+export type FacultyAiHotTopic = {
+  topic?: string
+  question_count?: number
+  student_count?: number
+  trend?: string
+  trendPercentage?: number
+  students?: string[]
+  last_asked?: string
+}
+
+export type FacultyAiActivityRow = {
+  id?: number
+  student_name?: string
+  student_number?: string
+  section?: string
+  topic?: string
+  message?: string
+  response?: string
+  module?: string
+  created_at?: string
+}
+
+export type FacultyAiEngagement = {
+  activeUsers?: number
+  totalStudents?: number
+  inactiveUsers?: number
+  totalQuestions?: number
+  engagementRate?: number
+  engagementLevels?: { high?: number; medium?: number; low?: number; none?: number }
+  activeUsersList?: Array<{
+    id?: number
+    full_name?: string
+    student_id?: string
+    question_count?: number
+    active_days?: number
+    last_active?: string
+  }>
+  inactiveUsersList?: Array<{
+    id?: number
+    full_name?: string
+    student_id?: string
+    last_active?: string | null
+  }>
+}
+
+export type FacultyAiPeakUsage = {
+  hourlyUsage?: Array<{ hour: number; question_count: number; student_count: number }>
+  dailyUsage?: Array<{ day_name: string; question_count: number; student_count: number }>
+  peakHour?: { hourFormatted?: string; questionCount?: number; studentCount?: number } | null
+  peakDay?: { day?: string; questionCount?: number; studentCount?: number } | null
+}
+
+export type FacultyAiDifficultyTopic = {
+  topic?: string
+  difficulty_score?: number | string
+  category?: string
+  unique_students?: number
+}
+
+export type FacultyAiConsentedStruggle = {
+  id?: number
+  student_name?: string
+  student_id?: string
+  topic?: string
+  question_count?: number
+  last_seen?: string
+}
+
+export type FacultyAiInsightsSummary = {
+  tutor: {
+    conversations14d: number
+    uniqueStudents14d: number
+    uniqueTopics14d: number
+  }
+  mastery: {
+    avgMastery: number
+    studentsTracked: number
+    topicsTracked: number
+  }
+  earlyWarningCount: number
+  recentInsights: Array<{ type?: string; createdAt?: string; preview?: string }>
 }
 
 export type InstructorReportMeta = {
@@ -435,6 +541,7 @@ export type InstructorQuizDetail = InstructorQuiz & {
   restrict_access_to_students?: boolean
   allowed_student_ids?: number[] | string | null
   access_restriction_session_id?: number | null
+  platform_access?: import("./assessment-platform-access").AssessmentPlatformFlags | null
   max_concurrent_students?: number | null
   section_config?: SectionConfig[] | unknown
   counts_toward_course_grade?: boolean
@@ -1046,6 +1153,32 @@ export type PlaygroundLeaderboardStats = {
   avgScore: number
   maxScore: number
   avgAccuracy: number
+}
+
+export type ModuleStudentActivityRow = {
+  studentDbId: number
+  studentId: string
+  fullName: string
+  email: string | null
+  section: string | null
+  sessionCode: string | null
+  engaged: boolean
+  lastActivityAt: string | null
+  pointsAwarded: number
+  activityCount: number
+  activityLabel: string
+  detail: string | null
+}
+
+export type ModuleStudentActivityPayload = {
+  module: "syllabus" | "flashcards" | "notes" | "lectures"
+  summary: {
+    totalStudents: number
+    engagedStudents: number
+    notStartedStudents: number
+    totalPointsAwarded: number
+  }
+  students: ModuleStudentActivityRow[]
 }
 
 export type PlaygroundSessionQuestion = {
@@ -1742,14 +1875,20 @@ async function fetchAssessmentResultsForCourse(
   return recovered
 }
 
+function normalizeInstructorIdScope(
+  scope: Pick<FacultyApiScope, "instructorId" | "universityId"> | number,
+): Pick<FacultyApiScope, "instructorId" | "universityId"> {
+  return typeof scope === "number" ? { instructorId: scope } : scope
+}
+
 export const instructorApi = {
-  getCourses: (scope: Pick<FacultyApiScope, "instructorId" | "universityId">) =>
+  getCourses: (scope: Pick<FacultyApiScope, "instructorId" | "universityId"> | number) =>
     instructorRequest<{
       courses: Array<InstructorCourse & { course_id?: number }>
       offerings?: Array<InstructorCourse & { course_id?: number; academic_term_id?: number | null }>
       activeTerm?: { id: number; label: string } | null
       actorRole?: string
-    }>("/api/instructor/courses", scope, { omitCourseId: true }).then((r) => ({
+    }>("/api/instructor/courses", normalizeInstructorIdScope(scope), { omitCourseId: true }).then((r) => ({
       ...r,
       courses: (r.courses ?? [])
         .map((c) => ({
@@ -1801,6 +1940,228 @@ export const instructorApi = {
       "/api/instructor/recent-activity",
       scope,
     ).then((r) => r.recentActivity ?? []),
+
+  getAiMonitoringStruggles: async (scope: Scope, hours = 168) => {
+    try {
+      return await instructorRequest<{
+        struggles?: FacultyAiStruggleAlert[]
+        criticalCount?: number
+        highCount?: number
+      }>(`/api/instructor/ai-monitoring/struggle-alerts?hours=${hours}&threshold=2`, scope)
+    } catch {
+      const fallback = await instructorRequest<{ struggles?: FacultyAiConsentedStruggle[] }>(
+        "/api/instructor/ai-tutor/struggles",
+        scope,
+      )
+      const struggles: FacultyAiStruggleAlert[] = (fallback.struggles ?? []).map((row) => ({
+        student_id: typeof row.id === "number" ? row.id : undefined,
+        student_name: row.student_name,
+        student_number: row.student_id,
+        topic: row.topic,
+        question_count: row.question_count,
+        severity:
+          (row.question_count ?? 0) >= 5 ? "high" : (row.question_count ?? 0) >= 3 ? "medium" : "low",
+      }))
+      return {
+        struggles,
+        criticalCount: struggles.filter((row) => row.severity === "high").length,
+        highCount: struggles.filter((row) => row.severity === "medium").length,
+      }
+    }
+  },
+
+  getAiMonitoringHotTopics: async (scope: Scope, hours = 168) => {
+    try {
+      const r = await instructorRequest<{ hotTopics?: FacultyAiHotTopic[] }>(
+        `/api/instructor/ai-monitoring/hot-topics?hours=${hours}`,
+        scope,
+      )
+      return r.hotTopics ?? []
+    } catch {
+      const fallback = await instructorRequest<{
+        topics?: Array<{ topic?: string; questions?: number; students?: number }>
+      }>("/api/instructor/ai-tutor/hot-topics", scope)
+      return (fallback.topics ?? []).map((row) => ({
+        topic: row.topic,
+        question_count: row.questions,
+        student_count: row.students,
+      }))
+    }
+  },
+
+  getAiMonitoringActivity: async (scope: Scope, minutes = 10080) => {
+    try {
+      const r = await instructorRequest<{
+        success?: boolean
+        activity?: FacultyAiActivityRow[]
+        stats?: { active_students?: number; total_questions?: number; topics_discussed?: number }
+      }>(`/api/instructor/ai-monitoring/activity?limit=50&minutes=${minutes}`, scope)
+      if ((r.activity ?? []).length > 0) return r
+    } catch {
+      /* production still 500s this route — use conversations */
+    }
+    const conv = await instructorRequest<{
+      conversations?: Array<{
+        id?: string | number
+        source?: string
+        student_name?: string
+        student_id?: string
+        topic?: string
+        module_source?: string
+        turn_count?: number
+        created_at?: string
+        summary?: string
+        message?: string
+        response?: string
+      }>
+    }>("/api/instructor/ai-tutor/conversations?limit=25&page=1", scope)
+    const rows = (conv.conversations ?? []).filter((row) => row.source !== "faculty-copilot")
+    const students = new Set(rows.map((row) => row.student_name ?? row.student_id).filter(Boolean))
+    const topics = new Set(rows.map((row) => row.topic).filter(Boolean))
+    return {
+      activity: rows.map((row, index) => ({
+        id: typeof row.id === "number" ? row.id : index + 1,
+        student_name: row.student_name,
+        student_number: row.student_id,
+        topic: row.topic,
+        message: row.message || row.summary || `Asked about ${row.topic ?? "Cora"}`,
+        response: row.response,
+        module: row.module_source,
+        created_at: row.created_at,
+      })),
+      stats: {
+        active_students: students.size,
+        total_questions: rows.reduce((sum, row) => sum + (row.turn_count ?? 1), 0),
+        topics_discussed: topics.size,
+      },
+    }
+  },
+
+  getAiMonitoringEngagement: async (scope: Scope, days = 7) => {
+    try {
+      const r = await instructorRequest<FacultyAiEngagement>(
+        `/api/instructor/ai-monitoring/engagement?days=${days}`,
+        scope,
+      )
+      if ((r.activeUsers ?? 0) > 0 || (r.totalQuestions ?? 0) > 0 || (r.activeUsersList ?? []).length > 0) {
+        return r
+      }
+    } catch {
+      /* derive from conversations + roster */
+    }
+    const [conv, roster] = await Promise.all([
+      instructorRequest<{
+        conversations?: Array<{
+          student_name?: string
+          student_id?: string
+          turn_count?: number
+          created_at?: string
+          source?: string
+        }>
+      }>("/api/instructor/ai-tutor/conversations?limit=25&page=1", scope),
+      instructorRequest<{ students?: InstructorStudent[] }>(
+        `/api/instructor/students${scope.sessionCode ? `?sessionCode=${encodeURIComponent(scope.sessionCode)}` : ""}`,
+        scope,
+      )
+        .then((r) => r.students ?? [])
+        .catch(() => []),
+    ])
+    const rows = (conv.conversations ?? []).filter((row) => row.source !== "faculty-copilot")
+    const byName = new Map<
+      string,
+      { full_name: string; student_id?: string; question_count: number; last_active?: string }
+    >()
+    for (const row of rows) {
+      const key = row.student_name || row.student_id || "Student"
+      const existing = byName.get(key)
+      if (existing) {
+        existing.question_count += row.turn_count ?? 1
+        if (row.created_at && (!existing.last_active || row.created_at > existing.last_active)) {
+          existing.last_active = row.created_at
+        }
+      } else {
+        byName.set(key, {
+          full_name: row.student_name ?? "Student",
+          student_id: row.student_id,
+          question_count: row.turn_count ?? 1,
+          last_active: row.created_at,
+        })
+      }
+    }
+    const activeUsersList = [...byName.values()]
+      .sort((a, b) => b.question_count - a.question_count)
+      .map((row, index) => ({ id: index + 1, ...row, active_days: 1 }))
+    const activeNames = new Set(activeUsersList.map((row) => row.full_name.toLowerCase()))
+    const inactiveUsersList = roster
+      .filter((student) => !activeNames.has(student.full_name.toLowerCase()))
+      .map((student) => ({
+        id: student.id,
+        full_name: student.full_name,
+        student_id: student.student_id,
+        last_active: null,
+      }))
+    const totalStudents = roster.length || activeUsersList.length
+    const high = activeUsersList.filter((row) => row.question_count >= 10).length
+    const medium = activeUsersList.filter((row) => row.question_count >= 5 && row.question_count < 10).length
+    const low = activeUsersList.filter((row) => row.question_count > 0 && row.question_count < 5).length
+    return {
+      activeUsers: activeUsersList.length,
+      totalStudents,
+      inactiveUsers: Math.max(0, totalStudents - activeUsersList.length),
+      totalQuestions: activeUsersList.reduce((sum, row) => sum + row.question_count, 0),
+      engagementRate: totalStudents > 0 ? Math.round((activeUsersList.length / totalStudents) * 1000) / 10 : 0,
+      engagementLevels: {
+        high,
+        medium,
+        low,
+        none: Math.max(0, totalStudents - activeUsersList.length),
+      },
+      activeUsersList,
+      inactiveUsersList: inactiveUsersList.slice(0, 20),
+    }
+  },
+
+  getAiMonitoringPeakUsage: (scope: Scope, days = 7) =>
+    instructorRequest<FacultyAiPeakUsage>(`/api/instructor/ai-monitoring/peak-usage?days=${days}`, scope),
+
+  getAiMonitoringDifficulty: (scope: Scope, days = 14) =>
+    instructorRequest<{
+      topicDifficulty?: FacultyAiDifficultyTopic[]
+      summary?: { avgScore?: number }
+    }>(`/api/instructor/ai-monitoring/difficulty-score?days=${days}`, scope),
+
+  getAiTutorConsentedStruggles: (scope: Scope) =>
+    instructorRequest<{ struggles?: FacultyAiConsentedStruggle[] }>(
+      "/api/instructor/ai-tutor/struggles",
+      scope,
+    ).then((r) => r.struggles ?? []),
+
+  getAiInsightsSummary: (scope: Scope) =>
+    instructorRequest<FacultyAiInsightsSummary>("/api/instructor/ai-insights/summary", scope),
+
+  getCoraInsights: <T = unknown>(scope: Scope, tab: string, extra?: CoraInsightsQueryExtra) =>
+    instructorRequest<CoraInsightsEnvelope<T>>(buildCoraInsightsQuery(tab, extra), scope).then(
+      unwrapCoraInsights,
+    ),
+
+  getCoraInsightsFilters: (scope: Scope, extra?: CoraInsightsQueryExtra) =>
+    instructorRequest<CoraInsightsEnvelope<CoraInsightsFilterOption>>(
+      buildCoraInsightsQuery("filters", extra),
+      scope,
+    ).then(unwrapCoraInsights),
+
+  getCoraInsightsStudent: (scope: Scope, studentId: number, range = "7d") =>
+    instructorRequest<CoraInsightsEnvelope<CoraInsightsStudentProfile>>(
+      `/api/instructor/cora-insights/student/${studentId}?range=${encodeURIComponent(range)}`,
+      scope,
+    ).then(unwrapCoraInsights),
+
+  assignCoraInsightsPractice: (scope: Scope, studentId: number, range = "7d") =>
+    instructorRequest<CoraInsightsEnvelope<unknown>>(
+      `/api/instructor/cora-insights/student/${studentId}?action=assign-practice&range=${encodeURIComponent(range)}`,
+      scope,
+      { method: "POST" },
+    ).then(unwrapCoraInsights),
 
   getInstructorReports: (scope: Scope, params?: { type?: string; startDate?: string; endDate?: string }) => {
     const q = new URLSearchParams()
@@ -2659,6 +3020,58 @@ export const instructorApi = {
       { method: "DELETE", requireAuthHeader: true },
     ),
 
+  getCalendar: (
+    scope: Scope,
+    range: { startDate: Date; endDate: Date },
+    view: InstructorCalendarView = "all",
+  ) => {
+    const params = new URLSearchParams({
+      startDate: range.startDate.toISOString(),
+      endDate: range.endDate.toISOString(),
+      scope: view === "selected" ? "selected" : "all",
+    })
+    return instructorRequest<InstructorCalendarPayload & { success?: boolean }>(
+      `/api/instructor/calendar?${params.toString()}`,
+      scope,
+    ).then((payload) => ({
+      events: Array.isArray(payload.events) ? payload.events : [],
+      scheduleText: typeof payload.scheduleText === "string" ? payload.scheduleText : null,
+      location: typeof payload.location === "string" ? payload.location : null,
+      openAdjustments: Array.isArray(payload.openAdjustments) ? payload.openAdjustments : [],
+      calendarScope: payload.calendarScope === "selected" ? ("selected" as const) : ("all" as const),
+      scheduleSummaries: Array.isArray(payload.scheduleSummaries) ? payload.scheduleSummaries : [],
+    }))
+  },
+
+  getCalendarFeed: (scope: Scope) =>
+    instructorRequest<{
+      success?: boolean
+      token: string
+      httpsUrl: string
+      webcalUrl: string
+      beforeMinutes: number
+      atStart: boolean
+    }>("/api/instructor/calendar/feed", scope).then((payload) => ({
+      token: payload.token,
+      httpsUrl: payload.httpsUrl,
+      webcalUrl: payload.webcalUrl,
+      beforeMinutes: payload.beforeMinutes === 0 ? 0 : 15,
+      atStart: payload.atStart !== false,
+    })),
+
+  updateCalendarFeed: (scope: Scope, prefs: { beforeMinutes?: number; atStart?: boolean }) =>
+    instructorRequest<{
+      success?: boolean
+      token: string
+      httpsUrl: string
+      webcalUrl: string
+      beforeMinutes: number
+      atStart: boolean
+    }>("/api/instructor/calendar/feed", scope, {
+      method: "PATCH",
+      body: JSON.stringify(prefs),
+    }),
+
   getOfficeHours: (scope: Scope) =>
     instructorRequest<{ requests: OfficeHourRequest[] }>(
       "/api/instructor/office-hours",
@@ -2815,12 +3228,23 @@ export const instructorApi = {
     payload: { durationSec?: number; topics?: string[] },
   ) => playgroundSessionAction(scope, "update", { sessionId, ...payload }),
 
-  getPlaygroundLeaderboard: (scope: Scope, sessionId: number) =>
+  getPlaygroundLeaderboard: (scope: Scope, sessionId?: number) =>
     instructorRequest<{
       session: Record<string, unknown> | null
       leaderboard: PlaygroundLeaderboardEntry[]
       stats: PlaygroundLeaderboardStats
-    }>(`/api/instructor/playground/leaderboard?sessionId=${sessionId}`, scope),
+    }>(
+      sessionId != null
+        ? `/api/instructor/playground/leaderboard?sessionId=${sessionId}`
+        : "/api/instructor/playground/leaderboard",
+      scope,
+    ),
+
+  getModuleStudentActivity: (scope: Scope, module: ModuleStudentActivityPayload["module"]) =>
+    instructorRequest<ModuleStudentActivityPayload>(
+      `/api/instructor/module-student-activity?module=${encodeURIComponent(module)}`,
+      scope,
+    ),
 
   getPlaygroundSessionQuestions: (scope: Scope, sessionId: number) =>
     instructorRequest<{

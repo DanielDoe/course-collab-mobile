@@ -1,0 +1,26 @@
+appId: com.coursecollab.app
+---
+- tapOn:
+    text: "Close walkthrough"
+    optional: true
+- tapOn:
+    text: "Close AI assistant"
+    optional: true
+- tapOn:
+    text: "Cancel"
+    optional: true
+- openLink: coursecollab:///codebench/ide
+- extendedWaitUntil:
+    visible: "All Cora tools"
+    timeout: 20000
+- tapOn: "Walk through with Cora"
+- assertVisible: "Building walkthrough|Execution walkthrough"
+- takeScreenshot: walkthrough-fullscreen
+- tapOn:
+    text: "Close walkthrough"
+    optional: true
+- tapOn:
+    text: "Close AI assistant"
+    optional: true
+- assertVisible: "All Cora tools"
+- takeScreenshot: walkthrough-dismissed

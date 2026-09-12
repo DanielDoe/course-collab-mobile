@@ -39,6 +39,7 @@ export const STALE_BY_RESOURCE = {
   facultyFlashcards: STALE_MS.normal,
   facultyStudents: STALE_MS.dynamic,
   studentGrades: STALE_MS.dynamic,
+  studentAnalytics: STALE_MS.dynamic,
   syllabus: STALE_MS.slow,
   coursePolicies: STALE_MS.slow,
   liveAssessment: STALE_MS.veryDynamic,

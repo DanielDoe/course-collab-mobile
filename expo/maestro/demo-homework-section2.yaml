@@ -1,0 +1,135 @@
+appId: com.coursecollab.app
+---
+# Resume Demo 1 — Homework 1 at Section II (code write / code+plot + AI autograde).
+- launchApp
+- openLink: coursecollab://dev-eleg-student-login
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 120000
+- openLink: "coursecollab:///take/531?type=homework&action=continue"
+- extendedWaitUntil:
+    visible: "Submit answer|Answer submitted|Code write|Code + plot"
+    timeout: 120000
+
+# Skip already-graded Section I
+- repeat:
+    times: 12
+    commands:
+      - runFlow:
+          when:
+            visible: "Answer submitted"
+          commands:
+            - tapOn: "Next"
+
+- extendedWaitUntil:
+    visible: "Code write"
+    timeout: 30000
+- takeScreenshot: demo-hw-q11
+
+# Q11 — largest of 5 integers
+- tapOn:
+    text: ".*Code editor.*|Your code|.*Write or paste.*"
+- inputText: "#include <iostream>\nusing namespace std;\nint main(){\n  int a[5];\n  cout<<\"Enter 5 integers: \";\n  for(int i=0;i<5;i++) cin>>a[i];\n  int m=a[0];\n  for(int i=1;i<5;i++) if(a[i]>m) m=a[i];\n  cout<<\"Largest: \"<<m<<endl;\n  return 0;\n}\n"
+- hideKeyboard
+- tapOn: "Submit answer"
+- extendedWaitUntil:
+    visible: "Answer submitted|Code write|Provisional"
+    timeout: 180000
+- takeScreenshot: demo-hw-q11-done
+- tapOn:
+    text: "Next"
+    optional: true
+
+- extendedWaitUntil:
+    visible: "Code write"
+    timeout: 60000
+
+# Q12 — triangle type
+- tapOn:
+    text: ".*Code editor.*|Your code|.*Write or paste.*"
+- inputText: "#include <iostream>\nusing namespace std;\nint main(){\n  double a,b,c;\n  cout<<\"Enter three sides: \";\n  cin>>a>>b>>c;\n  if(a<=0||b<=0||c<=0||a+b<=c||a+c<=b||b+c<=a){ cout<<\"Invalid triangle\\n\"; return 0; }\n  if(a==b&&b==c) cout<<\"Equilateral\\n\";\n  else if(a==b||b==c||a==c) cout<<\"Isosceles\\n\";\n  else cout<<\"Scalene\\n\";\n  return 0;\n}\n"
+- hideKeyboard
+- tapOn: "Submit answer"
+- extendedWaitUntil:
+    visible: "Answer submitted|Code + plot|Provisional"
+    timeout: 180000
+- takeScreenshot: demo-hw-q12-done
+- tapOn:
+    text: "Next"
+    optional: true
+
+- extendedWaitUntil:
+    visible: "Code + plot"
+    timeout: 60000
+- takeScreenshot: demo-hw-q13
+
+# Q13 — sin plot (draft + plot restored)
+- runFlow:
+    when:
+      visible: ".*Code editor.*|Your code|Code write|Code + plot"
+    commands:
+      - tapOn:
+          text: ".*Code editor.*|Your code|.*Write or paste.*"
+- hideKeyboard
+- tapOn: "Submit answer"
+- extendedWaitUntil:
+    visible: "Answer submitted|Code + plot|Provisional"
+    timeout: 180000
+- takeScreenshot: demo-hw-q13-done
+- tapOn:
+    text: "Next"
+    optional: true
+
+- extendedWaitUntil:
+    visible: "Code + plot"
+    timeout: 60000
+- takeScreenshot: demo-hw-q14
+
+# Q14 — 3D surface (draft + plot restored)
+- hideKeyboard
+- tapOn: "Submit answer"
+- extendedWaitUntil:
+    visible: "Answer submitted|Code write|Provisional"
+    timeout: 180000
+- takeScreenshot: demo-hw-q14-done
+- tapOn:
+    text: "Next"
+    optional: true
+
+- extendedWaitUntil:
+    visible: "Code write"
+    timeout: 60000
+
+# Q15 — primes without isprime
+- tapOn:
+    text: ".*Code editor.*|Your code|.*Write or paste.*"
+- inputText: "n = input('Enter n: ');\nprimes = [];\nfor k = 2:n\n  isP = true;\n  for d = 2:floor(sqrt(k))\n    if mod(k,d)==0\n      isP = false; break;\n    end\n  end\n  if isP, primes(end+1)=k; end\nend\ndisp(primes);\n"
+- hideKeyboard
+- tapOn: "Submit answer"
+- extendedWaitUntil:
+    visible: "Answer submitted|Code write|Provisional"
+    timeout: 180000
+- takeScreenshot: demo-hw-q15-done
+- tapOn:
+    text: "Next"
+    optional: true
+
+- extendedWaitUntil:
+    visible: "Code write"
+    timeout: 60000
+
+# Q16 — factorial while loop
+- tapOn:
+    text: ".*Code editor.*|Your code|.*Write or paste.*"
+- inputText: "#include <iostream>\nusing namespace std;\nint main(){\n  int n; cout<<\"Enter N: \"; cin>>n;\n  long long f=1; int i=1;\n  while(i<=n){ f*=i; i++; }\n  cout<<n<<\"! = \"<<f<<endl;\n  return 0;\n}\n"
+- hideKeyboard
+- tapOn: "Submit answer"
+- extendedWaitUntil:
+    visible: "Submit assessment"
+    timeout: 180000
+- takeScreenshot: demo-hw-ready-final
+- tapOn: "Submit assessment"
+- extendedWaitUntil:
+    visible: "Homework Performance Summary|AI Feedback|Provisional|Points:|Overall"
+    timeout: 120000
+- takeScreenshot: demo-hw-results

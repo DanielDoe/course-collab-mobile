@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react"
 import { StyleSheet, View } from "react-native"
 import { usePathname } from "expo-router"
+import { normalizeRoutePathname } from "../lib/navigation-reset"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import {
   GlassBottomSearchDock,
@@ -42,7 +43,8 @@ function shouldHideSearchDock(pathname: string): boolean {
   if (pathname === "/dashboard") return true
   if (pathname === "/membership") return true
   if (pathname.startsWith("/settings")) return true
-  if (pathname.startsWith("/assessment/")) return true
+  if (pathname === "/assessment" || pathname.startsWith("/assessment/")) return true
+  if (pathname === "/results" || pathname.startsWith("/results/")) return true
   if (pathname.startsWith("/(auth)/") || pathname.startsWith("/auth/")) return true
   if (
     pathname === "/login" ||
@@ -92,9 +94,10 @@ export function ModuleSearchDockProvider({
 }) {
   const insets = useSafeAreaInsets()
   const pathname = usePathname()
-  const dockScope = moduleDockScope(pathname)
+  const routePath = normalizeRoutePathname(pathname)
+  const dockScope = moduleDockScope(routePath)
   const [sheetSuppressIds, setSheetSuppressIds] = useState<Set<string>>(new Set())
-  const hideDock = suppressDock || shouldHideSearchDock(pathname) || sheetSuppressIds.size > 0
+  const hideDock = suppressDock || shouldHideSearchDock(routePath) || sheetSuppressIds.size > 0
   const [entries, setEntries] = useState<Map<string, ScopedDockRegistration<ModuleSearchDockEntry>>>(
     new Map(),
   )

@@ -12,6 +12,7 @@ import Animated, {
   withSpring,
 } from "react-native-reanimated"
 import { useSession } from "../../context/SessionProvider"
+import { getQueryClient, invalidateByAction, studentQueryScope } from "../../lib/query"
 import { useStudentShell } from "../../context/StudentShellContext"
 import { ApiError } from "../../lib/student-api"
 import type { StudentSession } from "../../lib/session"
@@ -160,6 +161,12 @@ export function FlashcardStudyScreen() {
     cardPositionTotal > 0
       ? `${Math.min(cardPositionIndex + 1, cardPositionTotal)} / ${cardPositionTotal}`
       : "0 / 0"
+  const quizProgressPct =
+    cardPositionTotal <= 0
+      ? 0
+      : finished
+        ? 100
+        : Math.min(100, Math.round(((cardPositionIndex + 1) / cardPositionTotal) * 100))
 
   const isTimed = studyMode === "timed"
   const isBossCard = !batchMode && !finished && queue.length === 1 && current != null
@@ -280,6 +287,9 @@ export function FlashcardStudyScreen() {
           ...payload,
           sessionId: sessionIdRef.current,
         })
+        if (res.recorded !== false) {
+          invalidateByAction(getQueryClient(), studentQueryScope(session), "student.flashcards.study")
+        }
         if (res.pointsEarned > 0) {
           setSessionXp((x) => x + res.pointsEarned)
         }
@@ -723,11 +733,7 @@ export function FlashcardStudyScreen() {
                 styles.quizFill,
                 {
                   backgroundColor: tokens.accent,
-                  width: `${
-                    cardPositionTotal > 0
-                      ? Math.min(100, Math.round((cardPositionIndex / cardPositionTotal) * 100))
-                      : 0
-                  }%`,
+                  width: `${quizProgressPct}%`,
                 },
               ]}
             />

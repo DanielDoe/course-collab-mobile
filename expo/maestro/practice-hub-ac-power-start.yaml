@@ -1,0 +1,15 @@
+appId: com.coursecollab.app
+---
+- openLink: coursecollab://dev-student-login
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 30000
+- openLink: "coursecollab:///practice/topic?topic=AC%20Power"
+- extendedWaitUntil:
+    visible: "Start Practice"
+    timeout: 20000
+- tapOn: "Start Practice"
+- extendedWaitUntil:
+    visible: "Submit answer"
+    timeout: 25000
+- takeScreenshot: ac-power-q1

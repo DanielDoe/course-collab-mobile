@@ -8,6 +8,8 @@ export type QueryScope = {
   userId: string
   courseId: number | null
   section: string | null
+  /** Faculty offering session pk — distinguishes reused section codes across terms. */
+  sessionId?: number | null
 }
 
 export function queryScopeFromSession(
@@ -31,6 +33,7 @@ export function queryScopeFromSession(
       userId: String(session.id),
       courseId: null,
       section: null,
+      sessionId: null,
     }
   }
   return {
@@ -38,6 +41,7 @@ export function queryScopeFromSession(
     userId: session.databaseId,
     courseId: null,
     section: null,
+    sessionId: null,
   }
 }
 
@@ -49,6 +53,7 @@ export function studentQueryScope(session: StudentSession): QueryScope {
     userId,
     courseId: session.courseId ?? null,
     section: session.section?.trim() || null,
+    sessionId: null,
   }
 }
 
@@ -62,6 +67,7 @@ export function studentInboxScope(session: {
     userId: session.databaseId,
     courseId: session.courseId ?? null,
     section: session.section?.trim() || null,
+    sessionId: null,
   }
 }
 
@@ -69,25 +75,39 @@ export function facultyQueryScopeFromInstructor(scope: {
   instructorId: number
   courseId?: number | null
   sessionCode?: string | null
+  sessionId?: number | null
 }): QueryScope {
-  return facultyQueryScope({ id: scope.instructorId }, scope.courseId ?? null, scope.sessionCode ?? null)
+  return facultyQueryScope(
+    { id: scope.instructorId },
+    scope.courseId ?? null,
+    scope.sessionCode ?? null,
+    scope.sessionId ?? null,
+  )
 }
 
 export function facultyQueryScope(
   session: Pick<FacultySession, "id">,
   courseId: number | null,
   section: string | null = null,
+  sessionId: number | null = null,
 ): QueryScope {
+  const sid =
+    sessionId != null && Number.isFinite(sessionId) && sessionId > 0 ? Math.trunc(sessionId) : null
   return {
     portal: "faculty",
     userId: String(session.id),
     courseId,
     section: section?.trim() || null,
+    sessionId: sid,
   }
 }
 
 export function serializeQueryScope(scope: QueryScope): string {
-  return [scope.portal, scope.userId, scope.courseId ?? "none", scope.section ?? "none"].join(":")
+  const sessionKey =
+    scope.sessionId != null && Number.isFinite(scope.sessionId) ? String(scope.sessionId) : "none"
+  return [scope.portal, scope.userId, scope.courseId ?? "none", scope.section ?? "none", sessionKey].join(
+    ":",
+  )
 }
 
 export function scopesEqual(a: QueryScope | null, b: QueryScope | null): boolean {

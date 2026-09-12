@@ -1,4 +1,5 @@
 import type { FlashcardDifficulty } from "./flashcard-difficulty"
+import { normalizeFlashcardCards } from "./flashcard-display"
 import type { StudentSession } from "./session"
 import { studentAuthenticatedRequest } from "./student-api"
 import { studentContentPath } from "./student-content-context"
@@ -137,12 +138,13 @@ export const flashcardsApi = {
     )
   },
 
-  getDeck(session: StudentSession, deckId: number) {
-    return studentAuthenticatedRequest<{
+  async getDeck(session: StudentSession, deckId: number) {
+    const res = await studentAuthenticatedRequest<{
       deck: FlashcardDeck
       cards: FlashcardCard[]
       studySettings?: FlashcardStudySettings
     }>(session, flashcardPath(session, `/api/student/flashcards/decks/${deckId}`))
+    return { ...res, cards: normalizeFlashcardCards(res.cards) }
   },
 
   updateDeck(

@@ -108,8 +108,14 @@ export function GradeSummaryCard({
         </Text>
       ) : null}
 
-      <View style={styles.gaugeWrap}>
-        <Svg width={DONUT_SIZE} height={DONUT_SIZE} viewBox="0 0 200 200">
+      <View style={styles.gaugeWrap} collapsable={false}>
+        <Svg
+          width={DONUT_SIZE}
+          height={DONUT_SIZE}
+          viewBox="0 0 200 200"
+          style={StyleSheet.absoluteFill}
+          pointerEvents="none"
+        >
           <Circle
             cx="100"
             cy="100"
@@ -346,13 +352,18 @@ const styles = StyleSheet.create({
   gaugeWrap: {
     width: DONUT_SIZE,
     height: DONUT_SIZE,
+    position: "relative",
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 4},
+    marginTop: 4,
+  },
   gaugeCenter: {
-    ...StyleSheet.absoluteFillObject,
+    width: DONUT_SIZE,
+    height: DONUT_SIZE,
     alignItems: "center",
-    justifyContent: "center"},
+    justifyContent: "center",
+    zIndex: 1,
+  },
   pctRow: {
     flexDirection: "row",
     alignItems: "baseline"},

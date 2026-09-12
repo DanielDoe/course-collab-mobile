@@ -187,7 +187,7 @@ function missedTopicsReply(ctx: FacultyCoraAnalyzeContext): FacultyCoraChatRespo
     }
   }
 
-  lines.push("", "Drill into **Student Progress** and **Manage Results** for item-level detail.")
+  lines.push("", "Drill into **Class Analytics** and **Manage Results** for item-level detail.")
 
   return {
     reply: lines.join("\n"),
@@ -195,7 +195,7 @@ function missedTopicsReply(ctx: FacultyCoraAnalyzeContext): FacultyCoraChatRespo
     contextSyncedAt: ctx.syncedAt,
     suggestedModuleId: "student-progress",
     actions: [
-      moduleAction("student-progress", "Student Progress"),
+      moduleAction("student-progress", "Class Analytics"),
       moduleAction("results", "Manage Results"),
       moduleAction("practice", "Manage Practice"),
     ],
@@ -370,7 +370,7 @@ function genericAnalyzeReply(): FacultyCoraChatResponse {
     offline: true,
     actions: [
       moduleAction("results", "Manage Results"),
-      moduleAction("student-progress", "Student Progress"),
+      moduleAction("student-progress", "Class Analytics"),
       moduleAction("question-bank", "Question Bank"),
       moduleAction("reports", "Manage Reports"),
     ],
@@ -394,11 +394,11 @@ export async function buildFacultyCoraAnalyzeOfflineChatReply(
   } catch {
     return {
       reply:
-        "I couldn't load course analytics right now. Open **Manage Results** or **Student Progress** for the latest data.",
+        "I couldn't load course analytics right now. Open **Manage Results** or **Class Analytics** for the latest data.",
       offline: true,
       actions: [
         moduleAction("results", "Manage Results"),
-        moduleAction("student-progress", "Student Progress"),
+        moduleAction("student-progress", "Class Analytics"),
       ],
     }
   }

@@ -1,6 +1,9 @@
 import type { ComponentType } from "react"
+import { Redirect } from "expo-router"
 import { WEB_ONLY_MODULE_IDS, getModuleWebPath } from "../constants/module-web-paths"
 import { WebModuleScreen } from "../components/modules/WebModuleScreen"
+import { ModulePlaceholderScreen } from "../components/shell/ModulePlaceholderScreen"
+import { studentModuleRedirect } from "../lib/student-module-fallback"
 import { AiTutorScreen } from "../components/ai-tutor/AiTutorScreen"
 import { AnalyticsMoreScreen } from "../components/analytics-more/AnalyticsMoreScreen"
 import { CodebenchScreen } from "../components/codebench/CodebenchScreen"
@@ -43,6 +46,24 @@ function webModule(id: string): ModuleRenderer {
   const title = NAV_LABEL_BY_ROUTE[`/module/${id}`] ?? id
   return function WebModuleWrapper() {
     return <WebModuleScreen webPath={path} title={title} />
+  }
+}
+
+function redirectModule(href: string): ModuleRenderer {
+  return function StudentModuleRedirect() {
+    return <Redirect href={href as never} />
+  }
+}
+
+function unknownStudentModule(id: string): ModuleRenderer {
+  const title = id.replace(/-/g, " ")
+  return function UnknownStudentModule() {
+    return (
+      <ModulePlaceholderScreen
+        title={title}
+        description="This screen is not part of the student app. Open the menu and pick a student module."
+      />
+    )
   }
 }
 
@@ -92,5 +113,7 @@ for (const id of WEB_ONLY_MODULE_IDS) {
 }
 
 export function getModuleRenderer(id: string): ModuleRenderer {
-  return MODULE_RENDERERS[id] ?? webModule(id)
+  const redirect = studentModuleRedirect(id)
+  if (redirect) return redirectModule(redirect)
+  return MODULE_RENDERERS[id] ?? unknownStudentModule(id)
 }

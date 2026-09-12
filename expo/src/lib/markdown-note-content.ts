@@ -7,7 +7,7 @@ const CORA_EXPORT_MARKERS = [
 ]
 
 const MARKDOWN_HINT =
-  /(^|\n)\s{0,3}(#{1,6}\s|[-*+]\s|\d+\.\s|>\s)|\*\*[^*]+\*\*|\\[\[(]|\\[\(\[]|\$\$|_[^_]+_/
+  /(^|\n)\s{0,3}(#{1,6}\s|[-*+]\s|\d+\.\s|>\s)|\*\*[^*]+\*\*|\\[\[(]|\\[\(\[]|\$\$|_[^_]+_|(^|\n)\s*\|[^\n]+\|/
 
 /** True when note body is markdown/KaTeX (e.g. Cora export), not rich HTML. */
 export function isMarkdownNoteContent(content: string): boolean {

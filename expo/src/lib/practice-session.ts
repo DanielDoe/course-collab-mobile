@@ -74,10 +74,9 @@ export async function clearActivePracticeSession(): Promise<void> {
   }
 }
 
-export function isMultiSelectType(type: string): boolean {
-  const t = type.toLowerCase()
-  return t === "select_all" || t === "multi_output"
-}
+import { isMultiSelectType } from "./question-type-utils"
+
+export { isMultiSelectType } from "./question-type-utils"
 
 export function stripHtml(text: string): string {
   return text.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim()

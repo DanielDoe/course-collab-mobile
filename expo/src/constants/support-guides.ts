@@ -151,7 +151,7 @@ export const STUDENT_SUPPORT_GUIDES: SupportGuideEntry[] = [
     id: "mobile-web",
     category: "App & technical",
     q: "Should I use the mobile app or web?",
-    a: "Both use the same account. Native screens cover grades, lectures, forum, calendar, and most assessments. AI Notetaker, Playground live games, and some editors open the web view inside the app for full functionality. If a feature looks limited on mobile, try the web dashboard from a browser.",
+    a: "Both use the same account. Native screens cover grades, lectures, forum, calendar, assessments, and AI Notetaker (record or upload audio, then get a transcript and AI summary). Playground live games and some faculty editors are smoother on the web dashboard.",
   },
   {
     id: "submit-ticket",
@@ -271,15 +271,22 @@ export const INSTRUCTOR_SUPPORT_GUIDES: SupportGuideEntry[] = [
     id: "reports",
     category: "Analytics & feedback",
     q: "Where are exportable reports?",
-    a: "Analytics → Manage Reports lists generated report runs (results summaries, activity exports). Filter by date and type. Student Progress shows engagement charts. For a single attempt deep-dive, use Manage Results instead of reports.",
+    a: "Analytics → Manage Reports lists generated report runs (results summaries, activity exports). Filter by date and type. Class Analytics shows engagement charts. For a single attempt deep-dive, use Manage Results instead of reports.",
     route: "/module/reports",
   },
   {
     id: "student-progress",
     category: "Analytics & feedback",
     q: "How do I check if a student is falling behind?",
-    a: "Open Analytics → Student Progress for activity and grade trends. Cross-check Practice Hub usage, missing homework, and attendance. Schedule office hours or send a Progress Review for structured feedback.",
+    a: "Open Analytics → Class Analytics for activity and grade trends. Cross-check Practice Hub usage, missing homework, and attendance. Schedule office hours or send a Progress Review for structured feedback.",
     route: "/module/student-progress",
+  },
+  {
+    id: "cora-insights",
+    category: "Analytics & feedback",
+    q: "Where do I see Cora struggles and early warnings?",
+    a: "Analytics → Cora Insights combines usage, predictions, repeated topics, and struggle alerts. The Shared Cora tab only includes students who turned on Share with instructor. Class Analytics remains the place for grades, practice, attendance, and at-risk lists.",
+    route: "/module/cora-insights",
   },
   {
     id: "lectures",
@@ -361,7 +368,7 @@ export const INSTRUCTOR_SUPPORT_GUIDES: SupportGuideEntry[] = [
     id: "mobile-web",
     category: "App & technical",
     q: "Mobile app vs web dashboard",
-    a: "The faculty mobile app covers queues, results, discussions, announcements, and most analytics. Heavy editing (question bank bulk import, lecture workspace, assessment builder) is smoother on the web instructor dashboard. Tell students native mobile works for grades and quizzes; AI Notetaker and Playground may open embedded web views.",
+    a: "The faculty mobile app covers queues, results, discussions, announcements, and most analytics. Heavy editing (question bank bulk import, lecture workspace, assessment builder) is smoother on the web instructor dashboard. Tell students native mobile works for grades, quizzes, and AI Notetaker (record, transcribe, and summarize lectures).",
   },
   {
     id: "student-help",

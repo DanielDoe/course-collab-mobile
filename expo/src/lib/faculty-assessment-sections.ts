@@ -16,6 +16,8 @@ export type SectionConfig = {
   question_order_end?: number
   timer_mode?: SectionTimerMode
   total_time_seconds?: number
+  /** When set on the first section, one pooled countdown spans all section_timer sections. */
+  exam_shared_timer_seconds?: number
   timers?: SectionQuestionTimers
   allow_backtracking?: boolean
   auto_submit_on_expire?: boolean

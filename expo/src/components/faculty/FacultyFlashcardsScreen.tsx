@@ -1111,7 +1111,7 @@ const localStyles = StyleSheet.create({
   cardHead: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
   cardCopy: { flex: 1, gap: 4 },
   cardTitleRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  deleteLink: { marginTop: 8, alignSelf: "flex-start", minHeight: 44, justifyContent: "center" },
+  deleteLink: { marginTop: 8, alignSelf: "center", minHeight: 44, justifyContent: "center" },
   topicRow: { flexDirection: "row", alignItems: "center", gap: 12 },
   configSettingRow: { marginTop: 12, gap: 8 },
   batchInput: { maxWidth: 96, alignSelf: "flex-start" },

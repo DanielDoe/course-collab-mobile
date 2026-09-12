@@ -349,6 +349,7 @@ export type QuizItem = {
   expired_retake_slots?: number | null
   attempts_remaining?: number | null
   quiz_type?: string
+  platform_access?: import("./assessment-platform-access").AssessmentPlatformFlags | null
 }
 
 /** Observed on GET /api/student/quizzes (production 2026-08-18). */

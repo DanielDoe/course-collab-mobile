@@ -22,6 +22,7 @@ export const assessmentQuizApi = {
       body: JSON.stringify({
         studentId: Number(session.databaseId),
         quizId: payload.quizId,
+        clientPlatform: "mobile",
         ...(payload.forceRestart ? { forceRestart: true } : {}),
         ...(payload.superpowers?.length ? { superpowers: payload.superpowers } : {}),
       }),
@@ -33,7 +34,7 @@ export const assessmentQuizApi = {
     quizId: number,
     options?: { attemptId?: number; lat?: number; lng?: number },
   ) => {
-    let path = `/api/${apiType}/take/${quizId}?studentId=${encodeURIComponent(session.databaseId)}`
+    let path = `/api/${apiType}/take/${quizId}?studentId=${encodeURIComponent(session.databaseId)}&clientPlatform=mobile`
     if (options?.attemptId != null) path += `&attemptId=${options.attemptId}`
     if (options?.lat != null && options?.lng != null) {
       path += `&lat=${options.lat}&lng=${options.lng}`
@@ -63,6 +64,7 @@ export const assessmentQuizApi = {
       questionType: string
       autoSave?: boolean
       timeSpentSeconds?: number
+      keystrokeLog?: unknown
     },
   ) =>
     studentAuthenticatedRequest<{ success: boolean }>(session, "/api/student/save-answer", {
@@ -92,12 +94,22 @@ export const assessmentQuizApi = {
       answer: string | string[]
       questionType: string
       timeSpentSeconds?: number
+      mcqEarnedFraction?: number
+      keystrokeLog?: unknown
     },
-  ) =>
-    studentAuthenticatedRequest<EvaluateAnswerResult>(session, `/api/${apiType}/submit`, {
+  ) => {
+    const body: Record<string, unknown> = { ...payload }
+    if (
+      payload.mcqEarnedFraction != null &&
+      Number.isFinite(payload.mcqEarnedFraction)
+    ) {
+      body.mcqEarnedFraction = Math.max(0, Math.min(1, payload.mcqEarnedFraction))
+    }
+    return studentAuthenticatedRequest<EvaluateAnswerResult>(session, `/api/${apiType}/submit`, {
       method: "POST",
-      body: JSON.stringify(payload),
-    }),
+      body: JSON.stringify(body),
+    })
+  },
 
   /** Anti-cheat telemetry (tab_switch / copy_paste / app_backgrounded). Best-effort. */
   logViolation: (

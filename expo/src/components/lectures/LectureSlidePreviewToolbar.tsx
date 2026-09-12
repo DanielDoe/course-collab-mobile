@@ -15,9 +15,9 @@ type Props = {
   trailing?: ReactNode
 }
 
-/** Side slot width — keeps the title truly centered like iOS navigation bars. */
-const SIDE_SLOT_WIDTH = 100
-const TRAILING_SLOT_WIDTH = 88
+/** Reserve space on each side so the title stays visually centered. */
+const BACK_SLOT_MAX_WIDTH = 112
+const TRAILING_SLOT_MIN_WIDTH = 88
 
 /** Native toolbar for immersive lecture slide preview — respects appearance theme + dark mode. */
 export function LectureSlidePreviewToolbar({
@@ -89,19 +89,18 @@ const styles = StyleSheet.create({
     }),
   },
   bar: {
-    position: "relative",
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 4,
   },
   sideSlot: {
-    width: SIDE_SLOT_WIDTH,
     flexShrink: 0,
     zIndex: 2,
   },
   backSlot: {
     flexDirection: "row",
     alignItems: "center",
+    maxWidth: BACK_SLOT_MAX_WIDTH,
     paddingLeft: 2,
     paddingVertical: 6,
     borderRadius: 8,
@@ -113,10 +112,11 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   titleWrap: {
-    ...StyleSheet.absoluteFillObject,
+    flex: 1,
+    minWidth: 0,
     alignItems: "center",
     justifyContent: "center",
-            paddingHorizontal: Math.max(SIDE_SLOT_WIDTH, TRAILING_SLOT_WIDTH) + 8,
+    paddingHorizontal: 6,
   },
   title: {
     width: "100%",
@@ -125,8 +125,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   trailingSlot: {
-    width: TRAILING_SLOT_WIDTH,
-    marginLeft: "auto",
+    minWidth: TRAILING_SLOT_MIN_WIDTH,
     alignItems: "flex-end",
     justifyContent: "center",
     paddingRight: 4,

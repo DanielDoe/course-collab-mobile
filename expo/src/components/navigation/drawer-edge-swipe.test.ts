@@ -72,6 +72,19 @@ describe("shouldEnableDrawerEdgeSwipe", () => {
     )
   })
 
+  it("stays off on practice quiz so question 1 is tappable", () => {
+    assert.equal(
+      shouldEnableDrawerEdgeSwipe({
+        immersive: true,
+        drawerOpen: false,
+        stackShowsBack: false,
+        pathname: "/practice/quiz",
+        portal: "student",
+      }),
+      false,
+    )
+  })
+
   it("stays off on immersive routes with horizontal pan UI", () => {
     assert.equal(
       shouldEnableDrawerEdgeSwipe({
@@ -119,5 +132,6 @@ describe("immersiveRouteAllowsDrawerEdgeOpen", () => {
     assert.equal(immersiveRouteAllowsDrawerEdgeOpen("/lecture/3", "student"), false)
     assert.equal(immersiveRouteBlocksDrawerEdgeOpen("/flashcards/deck/1"), true)
     assert.equal(immersiveRouteBlocksDrawerEdgeOpen("/messages/thread/1"), true)
+    assert.equal(immersiveRouteBlocksDrawerEdgeOpen("/practice/quiz"), true)
   })
 })

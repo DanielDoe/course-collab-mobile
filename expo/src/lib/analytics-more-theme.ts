@@ -3,6 +3,11 @@ import { COLOR_HUNT_COOL } from "./codebench-badge-theme"
 import { solidListThumbFixed } from "./solid-list-thumb"
 
 export const ANALYTICS_SUMMARY_KPI = {
+  grade: { accent: COLOR_HUNT_COOL.indigo, icon: "school-outline" as const },
+  quiz: { accent: COLOR_HUNT.orange, icon: "help-circle-outline" as const },
+  homework: { accent: COLOR_HUNT_COOL.cyan, icon: "document-text-outline" as const },
+  attendance: { accent: COLOR_HUNT.pink, icon: "checkmark-done-outline" as const },
+  practice: { accent: COLOR_HUNT_COOL.gold, icon: "fitness-outline" as const },
   streak: { accent: COLOR_HUNT.orange, icon: "flame-outline" as const },
   badges: { accent: COLOR_HUNT_COOL.indigo, icon: "ribbon-outline" as const },
   subs: { accent: COLOR_HUNT_COOL.cyan, icon: "code-slash-outline" as const },
@@ -23,6 +28,10 @@ export const ANALYTICS_LIST_THUMBS = {
   practice: solidListThumbFixed(COLOR_HUNT.pink),
   recommendation: solidListThumbFixed(COLOR_HUNT_COOL.indigo),
   task: solidListThumbFixed(COLOR_HUNT.yellow, COLOR_HUNT.ink),
+  quiz: solidListThumbFixed(COLOR_HUNT.orange),
+  homework: solidListThumbFixed(COLOR_HUNT_COOL.cyan),
+  exam: solidListThumbFixed(COLOR_HUNT_COOL.indigo),
+  grades: solidListThumbFixed(COLOR_HUNT_COOL.gold, COLOR_HUNT.ink),
   streakSubmissions: solidListThumbFixed(COLOR_HUNT.orange),
   streakActiveDays: solidListThumbFixed(COLOR_HUNT_COOL.indigo),
   badgeSummary: solidListThumbFixed(COLOR_HUNT_COOL.indigo),

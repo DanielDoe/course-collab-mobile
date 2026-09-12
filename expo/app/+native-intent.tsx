@@ -49,8 +49,24 @@ export function redirectSystemPath({
   return "/"
 }
 
+function aliasAssessmentReportPath(path: string): string {
+  const [bare, qs] = path.split("?")
+  const match = (bare ?? "").match(/^\/assessment\/report\/(\d+)\/?$/)
+  if (!match) return path
+  return `/results/${match[1]}${qs ? `?${qs}` : ""}`
+}
+
+function aliasAssessmentTakePath(path: string): string {
+  const [bare, qs] = path.split("?")
+  const match = (bare ?? "").match(/^\/assessment\/take\/(\d+)\/?$/)
+  if (!match) return path
+  return `/take/${match[1]}${qs ? `?${qs}` : ""}`
+}
+
 function hardenInboundPath(path: string): string {
-  return downgradeExternalAssessmentRetake(aliasFacultyCoraPath(path))
+  return downgradeExternalAssessmentRetake(
+    aliasFacultyCoraPath(aliasAssessmentReportPath(aliasAssessmentTakePath(path))),
+  )
 }
 
 /**
@@ -63,7 +79,7 @@ function hardenInboundPath(path: string): string {
 function downgradeExternalAssessmentRetake(path: string): string {
   if (!path || !path.includes("action=retake")) return path
   const bare = path.split("?")[0] ?? ""
-  if (!/^\/assessment\/take\/[^/]+$/.test(bare)) return path
+  if (!/^\/(?:assessment\/)?take\/[^/]+$/.test(bare)) return path
   return path.replace(/([?&]action=)retake\b/g, "$1continue")
 }
 

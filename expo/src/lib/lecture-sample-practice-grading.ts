@@ -779,6 +779,8 @@ export function buildLocalObjectiveAnswerReview(input: {
   if (!correctLetter) return null
   const labels = subquestionOptionLabels(gradable)
   const selectedSet = new Set(letters.map((l) => l.toUpperCase()))
+  const selected = letters[0]?.toUpperCase() ?? ""
+  const localCorrect = Boolean(selected && selected === correctLetter.toUpperCase())
   const options = labels.map(({ letter, text }) => ({
     letter: letter.toUpperCase(),
     text,
@@ -787,15 +789,15 @@ export function buildLocalObjectiveAnswerReview(input: {
   }))
 
   return {
-    isCorrect: input.isCorrect,
+    isCorrect: localCorrect,
     isPartialCredit: false,
-    score: input.isCorrect ? 100 : 0,
+    score: localCorrect ? 100 : 0,
     pointsEarned: input.pointsEarned,
     maxPoints: input.maxPoints,
     correctLetters: [correctLetter.toUpperCase()],
     correctTexts: options.filter((row) => row.isCorrect).map((row) => row.text),
     options,
-    summary: input.isCorrect ? "Correct!" : `Correct: ${correctLetter.toUpperCase()}`,
+    summary: localCorrect ? "Correct!" : `Correct: ${correctLetter.toUpperCase()}`,
   }
 }
 
@@ -881,14 +883,33 @@ export function resolveObjectiveAnswerReview(input: {
   }
 }): PracticeAnswerReview | null {
   const qType = input.question.question_type.toLowerCase().replace(/-/g, "_")
-  const preferLocalSelectAll =
-    (qType === "select_all" || qType === "multi_output") &&
-    Boolean(input.question.correct_answer?.trim()) &&
-    input.selectedLetters.length > 0
+  const isSingleChoice =
+    qType === "mcq" || qType === "true_false" || qType === "multiple_choice"
+  const markedCorrect = input.serverReview?.options?.filter((row) => row.isCorrect) ?? []
+  const uniqueReviewLetters = (input.serverReview?.correctLetters ?? []).filter(Boolean)
+  const inferredKey =
+    !input.question.correct_answer?.trim() && isSingleChoice
+      ? markedCorrect.length === 1
+        ? markedCorrect[0]?.letter
+        : uniqueReviewLetters.length === 1
+          ? uniqueReviewLetters[0]
+          : undefined
+      : undefined
+  const questionWithKey = inferredKey
+    ? { ...input.question, correct_answer: inferredKey }
+    : input.question
+  const hasAnswerKey = Boolean(questionWithKey.correct_answer?.trim())
+  const canGradeLocally =
+    hasAnswerKey &&
+    (qType === "select_all" ||
+      qType === "multi_output" ||
+      qType === "mcq" ||
+      qType === "true_false" ||
+      qType === "multiple_choice")
 
-  if (preferLocalSelectAll) {
+  if (canGradeLocally) {
     const local = buildLocalObjectiveAnswerReview({
-      question: input.question,
+      question: questionWithKey,
       selectedLetters: input.selectedLetters,
       selectedLetter: input.selectedLetter,
       isCorrect: Boolean(input.evalResult.isCorrect),
@@ -897,15 +918,8 @@ export function resolveObjectiveAnswerReview(input: {
       maxPoints: input.evalResult.maxPoints,
     })
     if (local) {
-      const partial = isEvalPartialCredit(input.evalResult, local)
       return {
         ...local,
-        isCorrect: input.evalResult.isCorrect ?? local.isCorrect,
-        isPartialCredit: local.isPartialCredit || partial,
-        score:
-          typeof input.evalResult.score === "number"
-            ? input.evalResult.score
-            : local.score,
         pointsEarned: input.evalResult.pointsEarned ?? local.pointsEarned,
         maxPoints: input.evalResult.maxPoints ?? local.maxPoints,
       }
@@ -965,4 +979,38 @@ export function practiceHubFeedbackSummary(
       : "Partial credit — some selections were correct."
   }
   return fallback
+}
+
+/** Read a programmed key from generate/evaluate payloads (camelCase or snake_case). */
+export function programmedAnswerKeyFromRecord(raw: Record<string, unknown> | null | undefined): string | undefined {
+  if (!raw) return undefined
+  const scalars = [raw.correct_answer, raw.correctAnswer, raw.answer_key, raw.answerKey]
+  for (const value of scalars) {
+    if (typeof value === "string" && value.trim()) return value.trim()
+  }
+  if (Array.isArray(raw.correct_answers) && raw.correct_answers.length > 0) {
+    return JSON.stringify(raw.correct_answers.map((entry) => String(entry)))
+  }
+  if (typeof raw.correct_answers === "string" && raw.correct_answers.trim()) {
+    return raw.correct_answers.trim()
+  }
+  return undefined
+}
+
+export function programmedAnswerKeyFromReview(
+  review: PracticeAnswerReview | null | undefined,
+  questionType: string,
+): string | undefined {
+  if (!review) return undefined
+  const qType = questionType.toLowerCase().replace(/-/g, "_")
+  if (qType === "select_all" || qType === "multi_output") {
+    if (review.correctTexts?.length) return JSON.stringify(review.correctTexts)
+    if (review.correctLetters?.length) return JSON.stringify(review.correctLetters)
+    return undefined
+  }
+  if (review.correctLetters?.filter(Boolean).length === 1) {
+    return review.correctLetters.find((letter) => Boolean(letter))
+  }
+  const marked = review.options?.filter((row) => row.isCorrect) ?? []
+  return marked.length === 1 ? marked[0]?.letter : undefined
 }

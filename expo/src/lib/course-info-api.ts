@@ -72,6 +72,8 @@ export type CoursePolicies = {
   source_label?: string
   assessment_privilege_source?: string
   show_course_policy_notice?: boolean
+  platform_access?: import("./assessment-platform-access").AssessmentPlatformAccess
+  assessment_policy?: unknown
 }
 
 export type RecommendationRequest = {

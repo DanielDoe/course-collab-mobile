@@ -385,7 +385,6 @@ export const DigitalNoteRichEditor = forwardRef<DigitalNoteRichEditorHandle, Pro
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.primaryRow}>
               <PreviewToggleButton
                 active={showPreview}
-                disabled={disabled}
                 accent={tokens.accent}
                 native={native}
                 onPress={() => setShowPreview((current) => !current)}
@@ -396,7 +395,7 @@ export const DigitalNoteRichEditor = forwardRef<DigitalNoteRichEditorHandle, Pro
                   key={group.id}
                   group={group}
                   expanded={expandedGroup === group.id}
-                  disabled={disabled || showPreview}
+                  disabled={showPreview}
                   accent={tokens.accent}
                   native={native}
                   type={type}
@@ -411,7 +410,6 @@ export const DigitalNoteRichEditor = forwardRef<DigitalNoteRichEditorHandle, Pro
                   <FormatActionChip
                     key={tool.kind === "photo" ? "photo" : tool.action}
                     label={tool.label}
-                    disabled={disabled}
                     loading={tool.kind === "photo" && insertingPhoto}
                     accent={tokens.accent}
                     native={native}
@@ -440,15 +438,11 @@ export const DigitalNoteRichEditor = forwardRef<DigitalNoteRichEditorHandle, Pro
           <CommGroupedList>
             {disabled ? (
               <View style={styles.insetField}>
-                {isMarkdownNoteContent(plain) || isMarkdownNoteContent(value) ? (
-                  <MarkdownNotePreview markdown={noteBodyForEditor(plain || value)} paddingHorizontal={14} />
-                ) : (
-                  <DigitalNoteBodyView
-                    content={editablePlainToNoteHtml(plain) || value}
-                    accentColor={tokens.accent}
-                    paddingHorizontal={14}
-                  />
-                )}
+                <DigitalNoteBodyView
+                  content={plain || value}
+                  accentColor={tokens.accent}
+                  paddingHorizontal={14}
+                />
               </View>
             ) : (
               <TextInput

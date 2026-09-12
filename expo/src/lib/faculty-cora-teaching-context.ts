@@ -85,7 +85,7 @@ function focusThisWeekReply(ctx: FacultyCoraTeachingContext): FacultyCoraChatRes
     actions: [
       moduleAction("dashboard", "Open Dashboard"),
       moduleAction("recent-activity", "Recent Activity"),
-      moduleAction("student-progress", "Student Progress"),
+      moduleAction("student-progress", "Class Analytics"),
     ],
   }
 }
@@ -152,7 +152,7 @@ function coraUsageTrendsReply(ctx: FacultyCoraTeachingContext): FacultyCoraChatR
     lines.push(
       "Detailed per-student Cora session analytics aren't available in this build yet.",
       "",
-      `You can still monitor engagement through **${stats?.recentSubmissions24h ?? 0}** recent submissions and practice progress in **Student Progress**.`,
+      `You can still monitor engagement through **${stats?.recentSubmissions24h ?? 0}** recent submissions and practice progress in **Class Analytics**.`,
       "",
       "Once the Cora analytics route is live, this answer will include session counts, top tools, and struggling topics.",
     )
@@ -164,7 +164,7 @@ function coraUsageTrendsReply(ctx: FacultyCoraTeachingContext): FacultyCoraChatR
     contextSyncedAt: ctx.syncedAt,
     suggestedModuleId: "student-progress",
     actions: [
-      moduleAction("student-progress", "Student Progress"),
+      moduleAction("student-progress", "Class Analytics"),
       moduleAction("reports", "Manage Reports"),
       moduleAction("course-evaluations", "Course Evaluations"),
     ],
@@ -250,11 +250,11 @@ function genericOfflineReply(capabilityId?: FacultyCoraCapabilityId): FacultyCor
   if (capabilityId === "insights") {
     return {
       reply:
-        "I couldn't load course analytics right now. Try again shortly, or open Dashboard and Student Progress for the latest numbers.",
+        "I couldn't load course analytics right now. Try again shortly, or open Dashboard and Class Analytics for the latest numbers.",
       offline: true,
       actions: [
         moduleAction("dashboard", "Open Dashboard"),
-        moduleAction("student-progress", "Student Progress"),
+        moduleAction("student-progress", "Class Analytics"),
       ],
     }
   }

@@ -34,6 +34,7 @@ import {
 import { validateQuizEditorDraft } from "../../lib/faculty-quiz-editor-validation"
 import { instructorApi, type InstructorQuiz, type InstructorSession } from "../../lib/instructor-api"
 import { FacultyAssessmentAccessPanel } from "./FacultyAssessmentAccessPanel"
+import { FacultyAssessmentPlatformAccessSection } from "./FacultyAssessmentPlatformAccessSection"
 import { FacultyAssessmentQuestionPreview } from "./FacultyAssessmentQuestionPreview"
 import { FacultyAssessmentSectionsPanel } from "./FacultyAssessmentSectionsPanel"
 import { FacultyAssessmentStudentGrantsPanel } from "./FacultyAssessmentStudentGrantsPanel"
@@ -1265,6 +1266,15 @@ export function FacultyAssessmentEditorModal({quiz,
                   />
                 </EditorSectionCard>
 
+                {scope ? (
+                  <FacultyAssessmentPlatformAccessSection
+                    scope={scope}
+                    draft={draft}
+                    assessmentType={assessmentType}
+                    onChange={patchDraft}
+                  />
+                ) : null}
+
                 <EditorSectionCard
                   icon="school-outline"
                   title="Grading"
@@ -1316,6 +1326,7 @@ export function FacultyAssessmentEditorModal({quiz,
                   sessions={sessions}
                   draft={draft}
                   assessmentLabel={config.shortLabel}
+                  assessmentType={assessmentType}
                   onChange={patchDraft}
                 />
                 <FacultyAssessmentStudentGrantsPanel

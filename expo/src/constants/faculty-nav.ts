@@ -122,9 +122,10 @@ export const FACULTY_NAV_GROUPS: FacultyNavGroup[] = [
     icon: "bar-chart-outline",
     items: [
       { id: "results", label: "Manage Results", route: "/module/results", icon: "bar-chart-outline" },
-      { id: "student-progress", label: "Student Progress", route: "/module/student-progress", icon: "analytics-outline" },
+      { id: "student-progress", label: "Class Analytics", route: "/module/student-progress", icon: "analytics-outline" },
       { id: "reports", label: "Manage Reports", route: "/module/reports", icon: "document-attach-outline", locked: true, minTier: "Pro" },
       { id: "progress-reviews", label: "Progress Reviews", route: "/module/progress-reviews", icon: "trending-up-outline", locked: true, minTier: "Pro" },
+      { id: "cora-insights", label: "Cora Insights", route: "/module/cora-insights", icon: "sparkles-outline" },
       { id: "recent-activity", label: "Recent Activity", route: "/module/recent-activity", icon: "pulse-outline" },
     ],
   }),
@@ -329,6 +330,9 @@ export function facultyNativeRouteFromLink(link: string | undefined): string {
   if (path.includes("trade-center")) return "/module/trade-center"
 
   if (path.includes("/results")) return "/module/results"
+  if (path.includes("cora-insights") || path.includes("ai-monitoring") || path.includes("ai-insights")) {
+    return "/module/cora-insights"
+  }
   if (path.includes("analytics/advanced") || path.includes("student-progress")) return "/module/student-progress"
   if (path.includes("analytics/reports") || path.includes("/reports")) return "/module/reports"
   if (path.includes("progress-reviews")) return "/module/progress-reviews"

@@ -3,9 +3,11 @@ import type { CodebenchLearningMode } from "../constants/codebench-languages"
 import { assertProductionHttpsUrl, createApiAbortSignal } from "./http"
 import type { StudentSession } from "./session"
 import { persistHttpCookiesFromResponse } from "./student-http-cookies"
+import { iosInsufficientCoraCreditsNotice } from "./purchase-navigation"
 import { ApiError, studentAuthenticatedHeaders } from "./student-api"
 import type { PreparedCoraRequest } from "./cora-rbac/prepare-request"
 import { flattenRequestHeaders } from "./student-session-proof"
+import { filterOpenCodeClassroomAssignments } from "./codebench-classroom-assignments"
 
 async function request<T>(session: StudentSession, path: string, init?: RequestInit): Promise<T> {
   const url = `${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`
@@ -132,7 +134,24 @@ export type ClassroomAssignmentOption = {
   id: number
   title: string
   attempted?: boolean
+  pending?: boolean
   expires_at?: string
+  submission_kind?: string
+}
+
+function detailsFlag(details: unknown, key: string): boolean {
+  return Boolean(details && typeof details === "object" && (details as Record<string, unknown>)[key] === true)
+}
+
+/** Map 402 / creditsInsufficient from CodeBench Cora routes to the shared credit notice. */
+export function codebenchAiFailureMessage(err: unknown, fallback: string): string {
+  if (err instanceof ApiError) {
+    if (err.status === 402 || detailsFlag(err.details, "creditsInsufficient")) {
+      return iosInsufficientCoraCreditsNotice()
+    }
+    return err.message
+  }
+  return fallback
 }
 
 type AiBody = CodebenchToolPayload & { studentId: string }
@@ -387,12 +406,6 @@ export const codebenchApi = {
       session,
       `/api/classroom-points/submissions?session=${encodeURIComponent(session.section)}&studentId=${encodeURIComponent(session.databaseId)}`,
     )
-    const now = Date.now()
-    return (data.submissions ?? []).filter((s) => {
-      if (s.attempted) return false
-      if (!s.expires_at) return true
-      const exp = new Date(s.expires_at).getTime()
-      return !Number.isFinite(exp) || exp > now
-    })
+    return filterOpenCodeClassroomAssignments(data.submissions ?? [])
   },
 }

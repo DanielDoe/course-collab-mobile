@@ -1,0 +1,7 @@
+appId: com.coursecollab.app
+---
+- openLink: "coursecollab:///practice/topic?topic=AC%20Power"
+- extendedWaitUntil:
+    visible: "Practice Summary"
+    timeout: 20000
+- takeScreenshot: practice-summary-ring

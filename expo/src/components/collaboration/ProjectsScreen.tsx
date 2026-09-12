@@ -58,7 +58,10 @@ function isMyProject(project: ProjectRecord, student: StudentSession, myGroupIds
 
 function canLeadSubmit(groups: GroupRecord[], student: StudentSession): boolean {
   return groups.some(
-    (group) => Number(group.created_by) === Number(student.databaseId) && group.status === "approved",
+    (group) =>
+      group.status === "approved" &&
+      (Number(group.created_by) === Number(student.databaseId) ||
+        String(group.leader_student_id) === String(student.id)),
   )
 }
 

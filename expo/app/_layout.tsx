@@ -49,9 +49,9 @@ export default function RootLayout() {
   }, [])
 
   return (
-    <View style={styles.boot}>
-      <BootErrorBoundary>
-        <SessionProvider>
+    <SessionProvider>
+      <View style={styles.boot}>
+        <BootErrorBoundary>
           <FullRootProviders>
             <Stack
               screenOptions={{
@@ -60,9 +60,9 @@ export default function RootLayout() {
               }}
             />
           </FullRootProviders>
-        </SessionProvider>
-      </BootErrorBoundary>
-    </View>
+        </BootErrorBoundary>
+      </View>
+    </SessionProvider>
   )
 }
 

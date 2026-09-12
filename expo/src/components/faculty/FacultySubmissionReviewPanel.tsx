@@ -4,6 +4,7 @@ import {
   Image,
   Linking,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -234,11 +235,21 @@ export function FacultySubmissionReviewPanel({ point }: { point: ClassroomPointR
 
       {isCodeSubmission(point) && point.code ? (
         <FacultySectionCard title="Submitted code" icon="code-slash-outline" flush>
-          <ScrollView horizontal nestedScrollEnabled showsHorizontalScrollIndicator>
-            <Text style={styles.codeText} selectable>
-              {point.code}
-            </Text>
-          </ScrollView>
+          <View
+            style={[
+              styles.codePane,
+              {
+                backgroundColor: tokens.isDark ? tokens.background : "#f8fafc",
+                borderColor: native.separator,
+              },
+            ]}
+          >
+            <ScrollView horizontal nestedScrollEnabled showsHorizontalScrollIndicator>
+              <Text style={[styles.codeText, { color: native.label }]} selectable>
+                {point.code}
+              </Text>
+            </ScrollView>
+          </View>
         </FacultySectionCard>
       ) : null}
 
@@ -331,13 +342,18 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: StyleSheet.hairlineWidth},
   notesLabel: { fontSize: 12, fontWeight: "600" },
+  codePane: {
+    marginHorizontal: 14,
+    marginBottom: 14,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: "hidden"},
   codeText: {
-    fontFamily: "Menlo",
-    fontSize: 11,
-    lineHeight: 16,
-    color: "#1e293b",
-    paddingHorizontal: 14,
-    paddingBottom: 14},
+    fontFamily: Platform.select({ ios: "Menlo", android: "monospace", default: "monospace" }),
+    fontSize: 12,
+    lineHeight: 18,
+    paddingHorizontal: 12,
+    paddingVertical: 12},
   plotImage: {
     width: "100%",
     height: 220,

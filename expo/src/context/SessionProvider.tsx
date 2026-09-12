@@ -1,4 +1,5 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
+import { SessionContext } from "./session-context"
 import {
   clearStoredSession,
   getStoredSession,
@@ -77,17 +78,6 @@ async function hydrateSessionWithTimeout(stored: AppSession | null): Promise<App
     return stored
   }
 }
-
-type SessionContextValue = {
-  session: AppSession | null
-  isLoading: boolean
-  signIn: (data: SignInPayload) => Promise<void>
-  signOut: () => Promise<void>
-  refreshSession: () => Promise<void>
-  updateSession: (patch: import("../lib/session").SessionPatch) => Promise<void>
-}
-
-const SessionContext = createContext<SessionContextValue | null>(null)
 
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<AppSession | null>(null)
@@ -268,8 +258,4 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>
 }
 
-export function useSession() {
-  const ctx = useContext(SessionContext)
-  if (!ctx) throw new Error("useSession must be used within SessionProvider")
-  return ctx
-}
+export { useSession } from "./session-context"

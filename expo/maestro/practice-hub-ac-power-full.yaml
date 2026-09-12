@@ -1,0 +1,112 @@
+appId: com.coursecollab.app
+---
+# Q1 — forget pf (960 W). Should be marked incorrect; key is 1440 W.
+- tapOn: "Option A"
+- tapOn: "Submit answer"
+- extendedWaitUntil:
+    visible: "2/12"
+    timeout: 12000
+- takeScreenshot: ac-q1-after
+
+# Q2 — S = 230×12 = 2.76 kVA, pf = cos(36.9°) ≈ 0.80 lagging
+- tapOn: "Option A"
+- tapOn: "Submit answer"
+- waitForAnimationToEnd:
+    timeout: 800
+# Navigator: go back to 1 (must cancel auto-advance and actually land on Q1)
+- tapOn: "Question 1"
+- extendedWaitUntil:
+    visible: "1/12"
+    timeout: 8000
+- takeScreenshot: ac-nav-back-to-1
+- tapOn: "Question 3"
+- extendedWaitUntil:
+    visible: "3/12"
+    timeout: 8000
+
+# Q3 — S = P + jQ
+- tapOn: "Option A"
+- tapOn: "Submit answer"
+- extendedWaitUntil:
+    visible: "4/12"
+    timeout: 12000
+
+# Q4 — purely inductive: P_avg = 0, Q ≠ 0
+- tapOn: "Option A"
+- tapOn: "Submit answer"
+- extendedWaitUntil:
+    visible: "5/12"
+    timeout: 12000
+
+# Q5 — leading PF is capacitive. Pick the wrong “always inductive” option.
+- tapOn: "Option D"
+- tapOn: "Submit answer"
+- extendedWaitUntil:
+    visible: "6/12"
+    timeout: 12000
+- takeScreenshot: ac-q5-wrong
+
+# Q6 — S² = P² + Q²
+- tapOn: "Option A"
+- tapOn: "Submit answer"
+- extendedWaitUntil:
+    visible: "7/12"
+    timeout: 12000
+
+# Q7 — |I| = |V|/|Z| stays put if |V| and |Z| stay put
+- tapOn: "Option A"
+- tapOn: "Submit answer"
+- extendedWaitUntil:
+    visible: "8/12"
+    timeout: 12000
+
+# Q8 — S = VI* = P + jQ
+- tapOn: "Option A"
+- tapOn: "Submit answer"
+- extendedWaitUntil:
+    visible: "9/12"
+    timeout: 12000
+
+# Q9 — lagging = inductive, current lags voltage
+- tapOn: "Option A"
+- tapOn: "Submit answer"
+- extendedWaitUntil:
+    visible: "10/12"
+    timeout: 12000
+- takeScreenshot: ac-q10-select-all
+
+# Q10 — real power 960 W and the cos formula
+- tapOn: "A. 960 W"
+- tapOn:
+    text: ".*cos\\(36\\.87"
+    optional: true
+- tapOn: "B. P = V_rms I_rms cos(36.87°) = 120 × 10 × cos(36.87°)"
+- tapOn: "Submit answer"
+- extendedWaitUntil:
+    visible: "11/12"
+    timeout: 15000
+- takeScreenshot: ac-q11-select-all
+
+# Q11 — +1.44 kVAR, absorbs (inductive), 1440 VAR
+- tapOn: "A. The reactive power is approximately +1.44 kVAR."
+- tapOn: "C. The load absorbs reactive power, indicating an inductive load."
+- tapOn: "E. The reactive power is 1440 VAR."
+- tapOn: "Submit answer"
+- extendedWaitUntil:
+    visible: "12/12"
+    timeout: 15000
+- takeScreenshot: ac-q12-select-all
+
+# Q12 — S = 6 kVA, pf 0.80 lagging
+- tapOn: "A. The apparent power is 6.0 kVA."
+- tapOn: "C. The power factor is 0.80 lagging."
+- tapOn: "Submit answer"
+- extendedWaitUntil:
+    visible: "Finish practice"
+    timeout: 15000
+- takeScreenshot: ac-ready-finish
+- tapOn: "Finish practice"
+- extendedWaitUntil:
+    visible: ".*"
+    timeout: 20000
+- takeScreenshot: ac-results

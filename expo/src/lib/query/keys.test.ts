@@ -34,13 +34,27 @@ describe("query key isolation", () => {
     assert.equal(queryKeyPortal(projects), "student")
     assert.equal(queryKeyPortal(quizzes), "faculty")
     assert.notEqual(groups[1], projects[1])
-    assert.equal(quizzes[6], "quiz")
+    assert.equal(quizzes[7], "quiz")
   })
 
-  it("keeps admin keys on the admin portal", () => {
-    const adminScope: QueryScope = { portal: "admin", userId: "a1", courseId: null, section: null }
-    const key = queryKeys.admin.courses(adminScope)
-    assert.equal(key[0], "admin")
-    assert.equal(queryKeyUserId(key), "a1")
+  it("scopes faculty office hours by session id when section codes are reused", () => {
+    const fall: QueryScope = {
+      portal: "faculty",
+      userId: "u1",
+      courseId: 5,
+      section: "ELEG1301P01",
+      sessionId: 100,
+    }
+    const spring: QueryScope = {
+      portal: "faculty",
+      userId: "u1",
+      courseId: 5,
+      section: "ELEG1301P01",
+      sessionId: 200,
+    }
+    assert.notDeepEqual(
+      queryKeys.faculty.officeHours.bundle(fall),
+      queryKeys.faculty.officeHours.bundle(spring),
+    )
   })
 })

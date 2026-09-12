@@ -79,6 +79,9 @@ export const INVALIDATION_GRAPH: Record<string, InvalidationTarget[]> = {
   "cora.syllabus.publishSection": ["student.syllabus", "faculty.syllabus"],
   "cora.message.send": ["student.messages", "faculty.messages"],
   "student.membership.activate": ["student.flashcards", "student.practice", "student.dashboard"],
+  "student.practice.evaluate": ["student.practice"],
+  "student.practice.submit": ["student.practice"],
+  "student.flashcards.study": ["student.flashcards", "student.practice"],
 }
 
 export function invalidateTargets(

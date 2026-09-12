@@ -8,8 +8,16 @@ export function useStackHasHistory(): boolean {
 
   useEffect(() => {
     const sync = () => {
-      const state = navigation.getState()
-      setHasHistory((state?.index ?? 0) > 0)
+      let current: { getState?: () => { index?: number } | undefined; getParent?: () => unknown } | undefined =
+        navigation
+      while (current) {
+        if ((current.getState?.()?.index ?? 0) > 0) {
+          setHasHistory(true)
+          return
+        }
+        current = current.getParent?.() as typeof current
+      }
+      setHasHistory(false)
     }
 
     sync()

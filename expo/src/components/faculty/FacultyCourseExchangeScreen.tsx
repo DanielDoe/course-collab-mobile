@@ -159,7 +159,7 @@ export function FacultyCourseExchangeScreen() {
   const loadCoursesAndSessions = useCallback(async () => {
     if (!scope) return
     const [coursesRes, sessionsRes] = await Promise.all([
-      instructorApi.getCourses(scope.instructorId),
+      instructorApi.getCourses({ instructorId: scope.instructorId, universityId: scope.universityId }),
       instructorApi.getAllInstructorSessions(scope),
     ])
     const offerings = coursesRes.offerings ?? coursesRes.courses ?? []
@@ -250,7 +250,12 @@ export function FacultyCourseExchangeScreen() {
 
   const bootstrap = useCallback(async () => {
     if (!scope) return
-    await Promise.all([loadCoursesAndSessions(), loadNoticeCounts(), loadTabData()])
+    await Promise.all([
+      // Destination-course metadata supports import sheets; don't block the active tab when it fails.
+      loadCoursesAndSessions().catch(() => undefined),
+      loadNoticeCounts(),
+      loadTabData(),
+    ])
   }, [scope, loadCoursesAndSessions, loadNoticeCounts, loadTabData])
 
   useEffect(() => {

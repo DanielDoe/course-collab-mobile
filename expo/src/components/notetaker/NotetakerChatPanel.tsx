@@ -21,6 +21,7 @@ import {
 } from "../../lib/notetaker-api"
 import { CommEmptyState, CommTintButton } from "../faculty/faculty-communication-ui"
 import { CoraBrand } from "../cora/CoraBrand"
+import { AiTutorMessageMarkdown } from "../ai-tutor/AiTutorMessageMarkdown"
 import { ComposerSendButton } from "../theme/ComposerSendButton"
 import { ChatKeyboardShell } from "../motion/ChatKeyboardShell"
 
@@ -77,8 +78,8 @@ export function NotetakerChatPanel({ session, note, chatEnabled, onUpgrade }: Pr
       <View style={styles.upgradeWrap}>
         <CommEmptyState
           icon="sparkles-outline"
-          title="AI chat requires Trailblazer"
-          body="Upgrade to ask questions about this lecture transcript and get answers grounded in what was recorded."
+          title="Cora AI Assistant requires Trailblazer"
+          body="Upgrade to ask Cora questions about this lecture transcript and get answers grounded in what was recorded."
         />
         <CommTintButton label="View membership" onPress={onUpgrade} icon="arrow-forward-outline" />
       </View>
@@ -94,7 +95,7 @@ export function NotetakerChatPanel({ session, note, chatEnabled, onUpgrade }: Pr
           <TextInput
             value={input}
             onChangeText={setInput}
-            placeholder="Ask about this lecture…"
+            placeholder="Ask Cora about this lecture…"
             placeholderTextColor={native.tertiaryLabel}
             multiline
             maxLength={4000}
@@ -125,8 +126,8 @@ export function NotetakerChatPanel({ session, note, chatEnabled, onUpgrade }: Pr
           <View style={[styles.hintBox, { backgroundColor: native.secondaryGrouped }]}>
             <CoraBrand size="sm" />
             <Text style={[type.body, { color: native.secondaryLabel, flex: 1, lineHeight: 22 }]}>
-              Ask about definitions, examples, or what the instructor emphasized. Answers use only this lecture's
-              transcript.
+              Ask Cora about definitions, examples, or what the instructor emphasized. Answers use only this
+              lecture's transcript.
             </Text>
           </View>
         ) : null}
@@ -142,9 +143,12 @@ export function NotetakerChatPanel({ session, note, chatEnabled, onUpgrade }: Pr
                   : [styles.assistantBubble, { backgroundColor: native.secondaryGrouped }],
               ]}
             >
-              <Text style={[type.body, { color: isUser ? "#fff" : native.label, lineHeight: 22 }]}>
-                {message.text}
-              </Text>
+              <AiTutorMessageMarkdown
+                messageId={`notetaker-${index}`}
+                markdown={message.text}
+                onAccentSurface={isUser}
+                compact
+              />
             </View>
           )
         })}
@@ -178,7 +182,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   userBubble: { alignSelf: "flex-end", borderBottomRightRadius: 4 },
-  assistantBubble: { alignSelf: "flex-start", borderBottomLeftRadius: 4 },
+  assistantBubble: { alignSelf: "stretch", borderBottomLeftRadius: 4 },
   composer: {
     flexDirection: "row",
     alignItems: "flex-end",

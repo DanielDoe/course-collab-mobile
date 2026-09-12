@@ -57,6 +57,7 @@ export function shouldEnableDrawerEdgeSwipe(opts: {
 }): boolean {
   if (opts.drawerOpen) return false
   if (opts.stackShowsBack) return false
+  if (immersiveRouteBlocksDrawerEdgeOpen(opts.pathname)) return false
   if (!opts.immersive) return true
   return immersiveRouteAllowsDrawerEdgeOpen(opts.pathname, opts.portal)
 }
@@ -67,6 +68,8 @@ export function immersiveRouteBlocksDrawerEdgeOpen(pathname: string): boolean {
   if (/^\/flashcards\//.test(pathname)) return true
   if (/^\/messages\//.test(pathname)) return true
   if (/^\/assessment\//.test(pathname)) return true
+  if (/^\/take\//.test(pathname)) return true
+  if (/^\/practice\/quiz/.test(pathname)) return true
   if (/^\/collaboration\//.test(pathname)) return true
   if (pathname.includes("/codebench/ide")) return true
   return false

@@ -77,6 +77,7 @@ type Props = {
   onChange: (nextJson: string) => void
   disabled?: boolean
   textFieldHeight?: number
+  onReady?: (slot: string) => void
 }
 
 function isTextSubquestion(sq: MultiPartSubQuestion): boolean {
@@ -84,7 +85,14 @@ function isTextSubquestion(sq: MultiPartSubQuestion): boolean {
   return t === "fill_blank" || t === "fill_in_blank" || t === "short_answer" || t === "text"
 }
 
-export function MultiPartAnswerPanel({ subquestionsRaw, value, onChange, disabled, textFieldHeight: textFieldHeightProp }: Props) {
+export function MultiPartAnswerPanel({
+  subquestionsRaw,
+  value,
+  onChange,
+  disabled,
+  textFieldHeight: textFieldHeightProp,
+  onReady,
+}: Props) {
   const tokens = useAppThemeTokens()
   const SN = useThemedStudentNative()
   const { multipartTextHeight } = useStudentSubmissionLayout()
@@ -130,7 +138,12 @@ export function MultiPartAnswerPanel({ subquestionsRaw, value, onChange, disable
           >
             <Text style={[styles.partLabel, { color: tokens.text }]}>{partLabel}</Text>
             {sq.prompt.trim() ? (
-              <QuestionContentWebView text={sq.prompt} embedded compact />
+              <QuestionContentWebView
+                text={sq.prompt}
+                embedded
+                compact
+                onReady={() => onReady?.(`part-${sq.id}-prompt`)}
+              />
             ) : null}
 
             {isText ? (
@@ -154,6 +167,11 @@ export function MultiPartAnswerPanel({ subquestionsRaw, value, onChange, disable
               />
             ) : options.length > 0 ? (
               <View style={styles.optionsStack}>
+                {isMulti ? (
+                  <Text style={[styles.selectAllHint, { color: SN.secondaryLabel }]}>
+                    Select all that apply
+                  </Text>
+                ) : null}
                 {options.map(({ letter, text }) => {
                   const selected = isMulti
                     ? Array.isArray(partVal) && partVal.includes(letter)
@@ -161,6 +179,9 @@ export function MultiPartAnswerPanel({ subquestionsRaw, value, onChange, disable
                   return (
                     <Pressable
                       key={letter}
+                      testID={`practice-option-${letter}`}
+                      accessibilityRole={isMulti ? "checkbox" : "radio"}
+                      accessibilityState={{ selected, checked: isMulti ? selected : undefined }}
                       style={[
                         styles.option,
                         { borderColor: tokens.border, backgroundColor: tokens.surface },
@@ -185,34 +206,41 @@ export function MultiPartAnswerPanel({ subquestionsRaw, value, onChange, disable
                       }}
                       disabled={disabled}
                     >
-                      <View
-                        style={[
-                          styles.optionLetter,
-                          { backgroundColor: tokens.background, borderColor: tokens.border },
-                          selected && { backgroundColor: tokens.accent, borderColor: tokens.accent },
-                        ]}
-                      >
-                        <Text
+                      {isMulti ? (
+                        <Ionicons
+                          name={selected ? "checkbox" : "square-outline"}
+                          size={24}
+                          color={selected ? tokens.accent : SN.secondaryLabel}
+                        />
+                      ) : (
+                        <View
                           style={[
-                            styles.optionLetterText,
-                            { color: SN.secondaryLabel },
-                            selected && styles.optionLetterTextSelected,
+                            styles.optionLetter,
+                            { backgroundColor: tokens.background, borderColor: tokens.border },
+                            selected && { backgroundColor: tokens.accent, borderColor: tokens.accent },
                           ]}
                         >
-                          {letter}
-                        </Text>
-                      </View>
+                          <Text
+                            style={[
+                              styles.optionLetterText,
+                              { color: SN.secondaryLabel },
+                              selected && styles.optionLetterTextSelected,
+                            ]}
+                          >
+                            {letter}
+                          </Text>
+                        </View>
+                      )}
                       <View style={styles.optionTextWrap}>
-                        <QuestionContentWebView text={text} embedded compact />
-                      </View>
-                      {selected ? (
-                        <Ionicons
-                          name={isMulti ? "checkbox" : "checkmark-circle"}
-                          size={20}
-                          color={tokens.accent}
+                        <QuestionContentWebView
+                          text={text}
+                          embedded
+                          compact
+                          onReady={() => onReady?.(`part-${sq.id}-option-${letter}`)}
                         />
-                      ) : isMulti ? (
-                        <Ionicons name="square-outline" size={20} color={SN.secondaryLabel} />
+                      </View>
+                      {!isMulti && selected ? (
+                        <Ionicons name="checkmark-circle" size={20} color={tokens.accent} />
                       ) : null}
                     </Pressable>
                   )
@@ -255,6 +283,7 @@ const styles = StyleSheet.create({
   },
   partLabel: { fontSize: 13, fontWeight: "700" },
   optionsStack: { gap: 8 },
+  selectAllHint: { fontSize: 13, lineHeight: 18, marginBottom: 4 },
   option: {
     flexDirection: "row",
     alignItems: "center",

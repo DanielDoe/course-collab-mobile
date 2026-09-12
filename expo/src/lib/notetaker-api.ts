@@ -5,6 +5,9 @@ import { persistHttpCookiesFromResponse } from "./student-http-cookies"
 import type { StudentSession } from "./session"
 import { ApiError, studentAuthenticatedHeaders } from "./student-api"
 
+/** Matches the backend audio route `maxDuration` so lecture transcription is not aborted at 30s. */
+export const NOTETAKER_AUDIO_TIMEOUT_MS = 300_000
+
 export type NotetakerKeyPoints = {
   shortSummary: string
   keyConcepts: string[]
@@ -305,7 +308,7 @@ export const notetakerApi = {
     const response = await fetch(url, {
       method: "POST",
       credentials: "include",
-      signal: createApiAbortSignal(),
+      signal: createApiAbortSignal(NOTETAKER_AUDIO_TIMEOUT_MS),
       headers: { Accept: "application/json", ...authHeaders },
       body: form,
     })
@@ -318,6 +321,36 @@ export const notetakerApi = {
     }
 
     return (body as NotetakerNoteResponse).note
+  },
+
+  async sendLiveCaptionChat(
+    session: StudentSession,
+    message: string,
+    context: string,
+  ): Promise<NotetakerChatResponse> {
+    const { response, body } = await notetakerRequest(session, "/api/student/ai-notetaker/live-caption-chat", {
+      method: "POST",
+      json: true,
+      body: JSON.stringify({
+        studentDatabaseId: session.databaseId,
+        message,
+        context,
+      }),
+    })
+
+    if (!response.ok) {
+      const upgrade =
+        typeof body === "object" &&
+        body !== null &&
+        "upgrade" in body &&
+        Boolean((body as { upgrade?: boolean }).upgrade)
+      throw new ApiError(errorMessage(body, "Could not send message"), response.status, {
+        ...(body as object),
+        upgrade,
+      })
+    }
+
+    return body as NotetakerChatResponse
   },
 
   async deleteNote(session: StudentSession, note: Pick<NotetakerNote, "id" | "slug">): Promise<void> {
@@ -366,10 +399,22 @@ export async function processNotetakerAudio(
     lecture_date: params.lectureDate ?? null,
   })
   const noteRef = draft.slug ?? String(draft.id)
-  return notetakerApi.uploadAudio(
-    session,
-    noteRef,
-    { uri: params.uri, name: params.fileName, type: params.mimeType },
-    { durationSeconds: params.durationSeconds, displayTitle: params.title },
-  )
+  try {
+    return await notetakerApi.uploadAudio(
+      session,
+      noteRef,
+      { uri: params.uri, name: params.fileName, type: params.mimeType },
+      { durationSeconds: params.durationSeconds, displayTitle: params.title },
+    )
+  } catch (err) {
+    const status = err instanceof ApiError ? err.status : 0
+    if (status > 0 && status < 500 && status !== 408) {
+      try {
+        await notetakerApi.deleteNote(session, draft)
+      } catch {
+        // Keep the original upload/transcribe error if cleanup fails.
+      }
+    }
+    throw err
+  }
 }

@@ -16,6 +16,9 @@ import {
   resolveCorrectLetterFromEvaluateAnswer,
   resolveMcqCorrectLetter,
   resolveMcqEarnedFractionForSubmission,
+  programmedAnswerKeyFromRecord,
+  programmedAnswerKeyFromReview,
+  resolveObjectiveAnswerReview,
   resolveSelectAllCorrectLetters,
   samplePracticeEngagementPointsMessage,
   samplePracticeOptionReviewState,
@@ -359,5 +362,154 @@ describe("lecture sample practice schema normalization", () => {
     const normalized = normalizeGradableSubquestionAnswers(legacy)
     assert.equal(resolveMcqCorrectLetter(normalized), "B")
     assert.equal(normalized.correct_answer, "B")
+  })
+
+  it("does not mark a wrong MCQ selection correct when the server says true", () => {
+    const review = resolveObjectiveAnswerReview({
+      question: {
+        id: 9,
+        question_type: "mcq",
+        option_a: "3 mA",
+        option_b: "30 mA",
+        option_c: "300 mA",
+        option_d: "3 A",
+        correct_answer: "B",
+      },
+      selectedLetters: [],
+      selectedLetter: "A",
+      serverReview: {
+        isCorrect: true,
+        options: [
+          { letter: "A", text: "3 mA", isSelected: true, isCorrect: true },
+          { letter: "B", text: "30 mA", isSelected: false, isCorrect: true },
+        ],
+        summary: "Correct!",
+      },
+      evalResult: { isCorrect: true, score: 100 },
+    })
+    assert.equal(review?.isCorrect, false)
+    assert.equal(review?.options.find((row) => row.letter === "A")?.isCorrect, false)
+    assert.equal(review?.options.find((row) => row.letter === "B")?.isCorrect, true)
+  })
+
+  it("marks an MCQ correct only when the selected letter matches the key", () => {
+    const review = resolveObjectiveAnswerReview({
+      question: {
+        id: 9,
+        question_type: "mcq",
+        option_a: "3 mA",
+        option_b: "30 mA",
+        option_c: "300 mA",
+        option_d: "3 A",
+        correct_answer: "B",
+      },
+      selectedLetters: [],
+      selectedLetter: "B",
+      evalResult: { isCorrect: false, score: 0 },
+    })
+    assert.equal(review?.isCorrect, true)
+  })
+
+  it("infers a unique correct letter from answerReview.correctLetters when options are unmarked", () => {
+    const review = resolveObjectiveAnswerReview({
+      question: {
+        id: 12,
+        question_type: "mcq",
+        option_a: "3 mA",
+        option_b: "30 mA",
+        option_c: "300 mA",
+        option_d: "3 A",
+      },
+      selectedLetters: [],
+      selectedLetter: "A",
+      serverReview: {
+        isCorrect: true,
+        correctLetters: ["C"],
+        options: [
+          { letter: "A", text: "3 mA", isSelected: true, isCorrect: false },
+          { letter: "B", text: "30 mA", isSelected: false, isCorrect: false },
+          { letter: "C", text: "300 mA", isSelected: false, isCorrect: false },
+        ],
+      },
+      evalResult: { isCorrect: true, score: 100 },
+    })
+    assert.equal(review?.isCorrect, false)
+    assert.equal(review?.options.find((row) => row.letter === "C")?.isCorrect, true)
+  })
+
+  it("infers a unique correct letter from the server review when generate omitted the key", () => {
+    const review = resolveObjectiveAnswerReview({
+      question: {
+        id: 10,
+        question_type: "mcq",
+        option_a: "3 mA",
+        option_b: "30 mA",
+        option_c: "300 mA",
+        option_d: "3 A",
+      },
+      selectedLetters: [],
+      selectedLetter: "A",
+      serverReview: {
+        isCorrect: true,
+        options: [
+          { letter: "A", text: "3 mA", isSelected: true, isCorrect: false },
+          { letter: "B", text: "30 mA", isSelected: false, isCorrect: true },
+          { letter: "C", text: "300 mA", isSelected: false, isCorrect: false },
+        ],
+      },
+      evalResult: { isCorrect: true, score: 100 },
+    })
+    assert.equal(review?.isCorrect, false)
+    assert.equal(review?.options.find((row) => row.letter === "B")?.isCorrect, true)
+  })
+
+  it("reads programmed keys from generate camelCase and select_all arrays", () => {
+    assert.equal(programmedAnswerKeyFromRecord({ correctAnswer: "C" }), "C")
+    assert.equal(
+      programmedAnswerKeyFromRecord({ correct_answers: ["A", "C"] }),
+      JSON.stringify(["A", "C"]),
+    )
+  })
+
+  it("reads a programmed key from the evaluate review for later local grading", () => {
+    assert.equal(
+      programmedAnswerKeyFromReview(
+        {
+          isCorrect: false,
+          correctLetters: ["C"],
+          correctTexts: ["It requires an external power source for proper operation."],
+          options: [],
+          summary: "Correct: C",
+        },
+        "mcq",
+      ),
+      "C",
+    )
+  })
+
+  it("does not treat every option as the key when the server marks all correct", () => {
+    const review = resolveObjectiveAnswerReview({
+      question: {
+        id: 11,
+        question_type: "mcq",
+        option_a: "3 mA",
+        option_b: "30 mA",
+        option_c: "300 mA",
+        option_d: "3 A",
+      },
+      selectedLetters: [],
+      selectedLetter: "A",
+      serverReview: {
+        isCorrect: true,
+        options: [
+          { letter: "A", text: "3 mA", isSelected: true, isCorrect: true },
+          { letter: "B", text: "30 mA", isSelected: false, isCorrect: true },
+          { letter: "C", text: "300 mA", isSelected: false, isCorrect: true },
+        ],
+      },
+      evalResult: { isCorrect: true, score: 100 },
+    })
+    // No unique key to infer — keep the server review as-is rather than inventing one.
+    assert.equal(review?.isCorrect, true)
   })
 })

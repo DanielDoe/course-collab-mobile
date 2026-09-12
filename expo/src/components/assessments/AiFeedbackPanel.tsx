@@ -201,6 +201,15 @@ export function AiFeedbackPanel({ feedback, questionMaxPoints, pointsEarned }: P
               </View>
               <Text style={[styles.heroTitle, { color: tokens.text }]}>AI Feedback</Text>
             </View>
+            {feedback.aiGraded || feedback.requiresManualReview ? (
+              <StatusBadge
+                label={
+                  feedback.requiresManualReview
+                    ? "Provisional — instructor review"
+                    : "Provisional AI grade"
+                }
+              />
+            ) : null}
             {feedback.status ? <StatusBadge label={feedback.status} /> : null}
             {feedback.statusMessage ? (
               <Text style={[styles.heroMeta, { color: SN.secondaryLabel }]} numberOfLines={3}>

@@ -4,6 +4,7 @@ import {
   inferAssessmentTypeFromTitle,
   mergeAssessmentHistoryById,
   quizHistoryToAssessmentItems,
+  resolveCompletedHistoryAttemptId,
 } from "./assessment-history-map"
 
 describe("inferAssessmentTypeFromTitle", () => {
@@ -65,6 +66,28 @@ describe("quizHistoryToAssessmentItems", () => {
     assert.equal(items[0]?.assessment_type, "final")
     assert.equal(items[0]?.attempts?.[0]?.is_completed, false)
     assert.equal(items[0]?.status, "in_progress")
+  })
+})
+
+describe("resolveCompletedHistoryAttemptId", () => {
+  it("reads attempt_id from quiz-history rows", () => {
+    const items = quizHistoryToAssessmentItems([
+      {
+        quiz_id: 531,
+        quiz_title: "Demo 1 — Homework 1",
+        attempts: [{ attempt_id: 5458, percentage: 84.8, completed_at: "2026-09-09T18:53:35.000Z" }],
+      },
+    ])
+    assert.equal(resolveCompletedHistoryAttemptId(items[0]!), 5458)
+  })
+
+  it("reads raw attempt_id when id was not mapped", () => {
+    assert.equal(
+      resolveCompletedHistoryAttemptId({
+        attempts: [{ attempt_id: 5458, completed_at: "2026-09-09T18:53:35.000Z" }],
+      }),
+      5458,
+    )
   })
 })
 

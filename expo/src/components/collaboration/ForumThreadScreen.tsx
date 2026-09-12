@@ -31,7 +31,7 @@ import { ComposerSendButton } from "../theme/ComposerSendButton"
 import { CommGroupedList, CommSectionFooter } from "../faculty/faculty-communication-ui"
 import { FacultyStatusPill } from "../faculty/faculty-shared"
 import { ModuleSectionHeader } from "../modules/ModuleScreen"
-import { CollabScreenTitle } from "./collab-nav"
+import { CollabFlowHeader } from "./collab-nav"
 import { ChatKeyboardShell } from "../motion/ChatKeyboardShell"
 
 function useStudentSession(): StudentSession | null {
@@ -169,16 +169,22 @@ export function ForumThreadScreen() {
 
   if (loading) {
     return (
-      <View style={[styles.center, { backgroundColor: native.groupedBackground }]}>
-        <ActivityIndicator size="large" color={native.tint} />
+      <View style={[styles.root, { backgroundColor: native.groupedBackground }]}>
+        <CollabFlowHeader title="Thread" fallbackHref="/module/forum" />
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={native.tint} />
+        </View>
       </View>
     )
   }
 
   if (!thread) {
     return (
-      <View style={[styles.center, { backgroundColor: native.groupedBackground }]}>
-        <Text style={[type.destructive, styles.errorText]}>{error || "Thread not found."}</Text>
+      <View style={[styles.root, { backgroundColor: native.groupedBackground }]}>
+        <CollabFlowHeader title="Thread" fallbackHref="/module/forum" />
+        <View style={styles.center}>
+          <Text style={[type.destructive, styles.errorText]}>{error || "Thread not found."}</Text>
+        </View>
       </View>
     )
   }
@@ -188,6 +194,11 @@ export function ForumThreadScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: native.groupedBackground }]}>
+      <CollabFlowHeader
+        title="Thread"
+        subtitle={thread.title}
+        fallbackHref="/module/forum"
+      />
       <ChatKeyboardShell
         style={styles.flex}
         onKeyboardShow={scrollToEnd}
@@ -230,7 +241,6 @@ export function ForumThreadScreen() {
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="interactive"
         >
-        <CollabScreenTitle subtitle={thread.title} />
         {error ? <Text style={[type.destructive, styles.errorBanner]}>{error}</Text> : null}
 
         <CommGroupedList>

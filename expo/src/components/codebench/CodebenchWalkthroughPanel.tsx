@@ -57,6 +57,7 @@ type Props = {
   expanded?: boolean
   bottomInset?: number
   fullscreen?: boolean
+  visible?: boolean
   loading?: boolean
   index?: number
   onIndexChange?: (index: number) => void
@@ -452,6 +453,7 @@ export function CodebenchWalkthroughPanel({
   expanded = false,
   bottomInset = 0,
   fullscreen = false,
+  visible = true,
   loading = false,
   index: controlledIndex,
   onIndexChange,
@@ -584,7 +586,14 @@ export function CodebenchWalkthroughPanel({
 
   if (fullscreen) {
     return (
-      <Modal visible animationType="fade" statusBarTranslucent presentationStyle="fullScreen">
+      <Modal
+        visible={visible}
+        transparent
+        animationType="none"
+        presentationStyle="overFullScreen"
+        statusBarTranslucent
+        onRequestClose={onCollapse ?? onClose}
+      >
         <View style={[styles.fullscreenHost, { backgroundColor: native.secondaryGrouped }]}>
           <IosEdgeBackSwipe onBack={() => (onCollapse ?? onClose)?.()} topInset={insets.top} />
           <View
@@ -596,7 +605,7 @@ export function CodebenchWalkthroughPanel({
             {fullscreenHeader}
             {loading || !step || total === 0 ? (
               <View style={styles.fullscreenLoading}>
-                <CoraThinkingIndicator context="codebench" hideBrand />
+                <CoraThinkingIndicator context="codebench" hideBrand centered />
               </View>
             ) : (
               <ScrollView
@@ -607,7 +616,7 @@ export function CodebenchWalkthroughPanel({
                 ]}
                 showsVerticalScrollIndicator={false}
                 keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
+                keyboardDismissMode="on-drag"
               >
                 <View style={styles.chrome}>{chromeCard}</View>
                 <StepDetail key={`step-${index}`} step={step} sourceCode={sourceCode} phaseColor={phaseColor} />
@@ -954,9 +963,9 @@ const styles = StyleSheet.create({
   },
   fullscreenLoading: {
     flex: 1,
-    alignItems: "stretch",
-    justifyContent: "flex-start",
+    alignItems: "center",
+    justifyContent: "center",
     paddingHorizontal: H_PAD,
-    paddingTop: 8,
+    paddingBottom: 24,
   },
 })

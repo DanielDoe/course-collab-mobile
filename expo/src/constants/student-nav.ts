@@ -193,7 +193,22 @@ export function getNavLabel(pathname: string): string {
   if (/^\/notes\//.test(pathname)) return "Edit note"
   if (/^\/flashcards\/\d+\/edit$/.test(pathname)) return "Edit deck"
   if (/^\/flashcards\//.test(pathname)) return "Study deck"
+  if (pathname === "/results" || pathname.startsWith("/results/")) return "Results"
+  if (pathname === "/take" || pathname.startsWith("/take/")) return "Assessment"
+  if (pathname === "/assessment" || pathname.startsWith("/assessment/")) {
+    if (pathname.includes("/take")) return "Assessment"
+    if (pathname.includes("/report")) return "Results"
+    return "Results"
+  }
   if (/^\/schedule-adjustment\//.test(pathname)) return "Schedule Adjustment"
+  if (pathname === "/collaboration/projects/submit" || pathname.startsWith("/collaboration/projects/submit")) {
+    return "Submit project"
+  }
+  if (pathname === "/collaboration/forum/new") return "New thread"
+  if (pathname === "/collaboration/forum/tutoring" || pathname.startsWith("/collaboration/forum/tutoring/")) {
+    return "Tutoring"
+  }
+  if (/^\/collaboration\/forum\/thread\//.test(pathname)) return "Thread"
   const moduleMatch = pathname.match(/^\/module\/(.+)$/)
   if (moduleMatch) {
     const id = moduleMatch[1]
@@ -211,6 +226,7 @@ export function getNavGroupIdForPath(pathname: string): string | null {
   if (/^\/announcements(\/|$)/.test(pathname)) {
     return "course-info"
   }
+  if (pathname.startsWith("/collaboration/forum")) return "collaboration"
   for (const group of [...STUDENT_NAV_GROUPS, STUDENT_SUPPORT_GROUP]) {
     if (
       group.items.some(
@@ -231,6 +247,7 @@ export function getStudentActiveNavItemId(pathname: string): string | null {
   }
   if (pathname === "/codebench/ide" || pathname.startsWith("/codebench/ide/")) return "codebench"
   if (pathname.startsWith("/messages/")) return "messages"
+  if (pathname.startsWith("/collaboration/forum")) return "forum"
   if (pathname.startsWith("/schedule-adjustment/")) return "schedule-adjustment"
   for (const group of [...STUDENT_NAV_GROUPS, STUDENT_SUPPORT_GROUP]) {
     for (const item of group.items) {
@@ -240,6 +257,33 @@ export function getStudentActiveNavItemId(pathname: string): string | null {
     }
   }
   return null
+}
+
+/** Native student routes that hide the drawer chrome (take, report, notes, etc.). */
+export function isImmersiveStudentAppPath(pathname: string, webPath?: string): boolean {
+  const path = (pathname.split("?")[0] || "/").replace(/\/$/, "") || "/"
+  if (path === "/assessment" || path.startsWith("/assessment/")) return true
+  if (path === "/take" || path.startsWith("/take/")) return true
+  if (path === "/results" || path.startsWith("/results/")) return true
+  if (path.includes("/codebench/ide")) return true
+  if (/^\/lecture\//.test(path)) return true
+  if (/^\/messages\//.test(path)) return true
+  if (/^\/notes\//.test(path)) return true
+  if (/^\/notetaker\//.test(path)) return true
+  if (/^\/collaboration\/playground\//.test(path)) return true
+  if (/^\/collaboration\/groups\//.test(path)) return true
+  if (path.startsWith("/collaboration/forum/")) return true
+  if (path === "/collaboration/projects/submit" || path.startsWith("/collaboration/projects/submit")) return true
+  if (/^\/rewards\/classroom-point\//.test(path)) return true
+  if (/^\/rewards\/classroom-task\//.test(path)) return true
+  if (/^\/flashcards\//.test(path)) return true
+  if (/\/announcements\/[^/]+$/.test(path)) return true
+  if (/^\/practice\//.test(path)) return true
+  if (/^\/membership/.test(path)) return true
+  if (path === "/settings" || path.startsWith("/settings/")) return true
+  if (path === "/module/ai-tutor") return true
+  if (path.includes("/web") && webPath) return isImmersiveStudentWebPath(webPath)
+  return false
 }
 
 /** Web paths that must stay in the embedded WebView (quiz take, results, membership checkout, etc.). */

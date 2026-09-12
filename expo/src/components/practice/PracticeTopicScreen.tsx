@@ -27,6 +27,7 @@ import { shouldShowPurchaseCta, tierLockedAlertButtons } from "../../lib/purchas
 import { ModuleSection, ModuleSectionHeader } from "../modules/ModuleScreen"
 import { StudentThemedLocked } from "../student/student-themed-hero"
 import { canAccessPracticeHub, PRACTICE_HUB_MIN_TIER, resolvePracticeAccess } from "../../lib/practice-hub-access"
+import { QuestionPrepareGate } from "../questions/QuestionPrepareGate"
 
 type Difficulty = "easy" | "medium" | "hard" | "mixed"
 
@@ -111,7 +112,13 @@ function PracticeSummaryCard({
   return (
     <View style={[summaryStyles.card, tokens.cardShadow, { backgroundColor: native.secondaryGrouped }]}>
       <View style={summaryStyles.ringWrap}>
-        <Svg width={CARD_RING} height={CARD_RING} viewBox={`0 0 ${CARD_RING} ${CARD_RING}`}>
+        <Svg
+          width={CARD_RING}
+          height={CARD_RING}
+          viewBox={`0 0 ${CARD_RING} ${CARD_RING}`}
+          style={StyleSheet.absoluteFill}
+          pointerEvents="none"
+        >
           <Circle cx={CARD_RING / 2} cy={CARD_RING / 2} r={34} fill={hexToRgba(SN.accent, 0.06)} />
           <G transform={`rotate(-90 ${CARD_RING / 2} ${CARD_RING / 2})`}>
             <Circle
@@ -134,9 +141,11 @@ function PracticeSummaryCard({
             />
           </G>
         </Svg>
-        <View style={summaryStyles.ringCenter}>
+        <View style={summaryStyles.ringCenter} pointerEvents="none">
           <Text style={[summaryStyles.ringPct, { color: arcColor }]}>{pct}%</Text>
-          <Text style={[summaryStyles.ringComplete, { color: native.secondaryLabel }]}>Complete</Text>
+          {pct >= 100 ? (
+            <Text style={[summaryStyles.ringComplete, { color: native.secondaryLabel }]}>Complete</Text>
+          ) : null}
         </View>
       </View>
 
@@ -191,18 +200,20 @@ const summaryStyles = StyleSheet.create({
     alignSelf: "center",
     width: CARD_RING,
     height: CARD_RING,
+    position: "relative",
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 4,
   },
   ringCenter: {
-    ...StyleSheet.absoluteFillObject,
+    width: CARD_RING,
+    height: CARD_RING,
     alignItems: "center",
     justifyContent: "center",
-    gap: 4,
+    gap: 1,
   },
-  ringPct: { fontSize: 28, fontWeight: "700", letterSpacing: -0.5 },
-  ringComplete: { fontSize: 13, fontWeight: "500" },
+  ringPct: { fontSize: 26, fontWeight: "700", letterSpacing: -0.5, lineHeight: 30 },
+  ringComplete: { fontSize: 11, fontWeight: "600", lineHeight: 13 },
   statRows: { gap: 12 },
   statRow: {
     flexDirection: "row",
@@ -428,6 +439,14 @@ export function PracticeTopicScreen() {
   const lockedInTopic = topic ? Math.max(0, topic.questionCount - unlockedCount) : 0
 
   return (
+    <QuestionPrepareGate
+      fetching={generating}
+      texts={null}
+      title="Preparing practice"
+      subtitle="Loading questions, math, and answer choices"
+      enabled={generating}
+      hideUntilReady
+    >
     <View style={[styles.root, { backgroundColor: native.groupedBackground }]}>
       <NotetakerScreenHeader title="Practice Summary" fallbackHref="/module/practice" />
 
@@ -549,6 +568,7 @@ export function PracticeTopicScreen() {
         </ScrollView>
       )}
     </View>
+    </QuestionPrepareGate>
   )
 }
 

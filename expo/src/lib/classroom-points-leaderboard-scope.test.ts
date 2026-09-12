@@ -4,6 +4,7 @@ import { FALL_2026_ELEG_SESSION_CODES } from "./fall-2026-eleg-sessions"
 import {
   classroomPointsLeaderboardForCurrentOffering,
   classroomPointsLeaderboardHasAwards,
+  isClassroomLeaderboardPrivacyStub,
 } from "./classroom-points-leaderboard-scope"
 
 const offering = {
@@ -56,6 +57,40 @@ describe("classroom points leaderboard scope", () => {
         courseId: 6,
       }),
       [],
+    )
+  })
+
+  it("keeps FERPA privacy stubs so classmates are not dropped from ranks", () => {
+    const rows = [
+      row({
+        rank: 1,
+        full_name: "Daniel Doe",
+        total_points: 75,
+        is_current_user: true,
+        session: "ELEG1301P01",
+      }),
+      { rank: 2, is_current_user: false },
+      { rank: 3, is_current_user: false },
+      { rank: 4, is_current_user: false },
+    ]
+    assert.equal(isClassroomLeaderboardPrivacyStub(rows[1]!), true)
+    const filtered = classroomPointsLeaderboardForCurrentOffering(rows, offering)
+    assert.equal(filtered.length, 4)
+    assert.deepEqual(
+      filtered.map((entry) => entry.rank),
+      [1, 2, 3, 4],
+    )
+  })
+
+  it("preserves API ranks instead of reindexing after filtering", () => {
+    const rows = [
+      row({ rank: 5, full_name: "A", total_points: 10, session: "ELEG1301P01" }),
+      row({ rank: 8, full_name: "B", total_points: 4, session: "ELEG1301P01" }),
+    ]
+    const filtered = classroomPointsLeaderboardForCurrentOffering(rows, offering)
+    assert.deepEqual(
+      filtered.map((entry) => entry.rank),
+      [5, 8],
     )
   })
 })

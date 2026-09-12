@@ -8,6 +8,7 @@ import {
 import { persistHttpCookiesFromResponse } from "./student-http-cookies"
 import type { AssessmentPolicy } from "./assessment-policy-settings"
 import type { AssessmentPrivilegeSource } from "./assessment-governance"
+import type { AssessmentPlatformAccess } from "./assessment-platform-access"
 import type {
   AttendancePolicy,
   ProjectPolicy,
@@ -45,7 +46,9 @@ export type CoursePoliciesPatch = {
     retakes: Partial<AssessmentPolicy["retakes"]>
     anti_cheat: Partial<AssessmentPolicy["anti_cheat"]>
     ai: Partial<AssessmentPolicy["ai"]>
-    access: Partial<AssessmentPolicy["access"]>
+    access: Partial<AssessmentPolicy["access"]> & {
+      platform_access?: AssessmentPolicy["access"]["platform_access"]
+    }
     superpowers: Partial<AssessmentPolicy["superpowers"]>
   }>
 }
@@ -53,6 +56,7 @@ export type CoursePoliciesPatch = {
 export type AssessmentGovernanceResponse = {
   assessment_privilege_source: AssessmentPrivilegeSource
   show_course_policy_notice: boolean
+  platform_access?: AssessmentPlatformAccess
   course_label?: string
   students_impacted?: number
 }
@@ -60,6 +64,7 @@ export type AssessmentGovernanceResponse = {
 export type AssessmentGovernancePatch = {
   assessment_privilege_source?: AssessmentPrivilegeSource
   show_course_policy_notice?: boolean
+  platform_access?: AssessmentPlatformAccess
 }
 
 export type GradingPolicyResponse = {

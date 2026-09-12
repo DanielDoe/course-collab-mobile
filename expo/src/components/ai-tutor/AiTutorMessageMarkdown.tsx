@@ -3,7 +3,7 @@ import { Platform, StyleSheet, Text, View } from "react-native"
 import { WebView } from "react-native-webview"
 import { useAppThemeTokens } from "../../context/AppearanceProvider"
 import { useNativeType } from "../../lib/themed-module-theme"
-import { needsMarkdownRichRender } from "../../lib/assessment-report-markdown"
+import { needsMarkdownRichRender, prepareMessageRichContent } from "../../lib/assessment-report-markdown"
 import { buildMarkdownHtml } from "../../lib/markdown-html"
 
 const MARKDOWN_HEIGHT_CACHE = new Map<string, number>()
@@ -43,6 +43,8 @@ type Props = {
   messageId?: string
   /** Light text + borders for markdown on solid accent chat bubbles. */
   onAccentSurface?: boolean
+  /** Drop the chat WebView's extra body padding when the bubble already insets. */
+  compact?: boolean
 }
 
 const WEBVIEW_PROPS = {
@@ -65,26 +67,33 @@ export function AiTutorMessageMarkdown({
   streaming = false,
   messageId,
   onAccentSurface = false,
+  compact = false,
 }: Props) {
   const tokens = useAppThemeTokens()
   const type = useNativeType()
-  const rendered = useDebouncedValue(markdown, streaming ? 160 : 0)
+  const prepared = useMemo(() => prepareMessageRichContent(markdown), [markdown])
+  const rendered = useDebouncedValue(prepared, streaming ? 160 : 0)
   const cachedHeight = readCachedMarkdownHeight(messageId)
   const [height, setHeight] = useState(cachedHeight ?? 96)
   const [paintReady, setPaintReady] = useState(Boolean(streaming || cachedHeight))
-  const rich = useMemo(() => needsMarkdownRichRender(markdown), [markdown])
+  const rich = useMemo(() => needsMarkdownRichRender(prepared || markdown), [markdown, prepared])
 
   const html = useMemo(
     () =>
-      buildMarkdownHtml(rendered, "chat", {
-        accent: onAccentSurface ? "#FFFFFF" : tokens.accent,
-        accentSoft: onAccentSurface ? "rgba(255,255,255,0.16)" : tokens.accentSoft,
-        text: onAccentSurface ? "#FFFFFF" : tokens.text,
-        textSecondary: onAccentSurface ? "rgba(255,255,255,0.82)" : tokens.textSecondary,
-        heading: onAccentSurface ? "#FFFFFF" : tokens.text,
-        border: onAccentSurface ? "rgba(255,255,255,0.28)" : tokens.border,
-        isDark: onAccentSurface ? true : tokens.isDark,
-      }),
+      buildMarkdownHtml(
+        rendered,
+        "chat",
+        {
+          accent: onAccentSurface ? "#FFFFFF" : tokens.accent,
+          accentSoft: onAccentSurface ? "rgba(255,255,255,0.16)" : tokens.accentSoft,
+          text: onAccentSurface ? "#FFFFFF" : tokens.text,
+          textSecondary: onAccentSurface ? "rgba(255,255,255,0.82)" : tokens.textSecondary,
+          heading: onAccentSurface ? "#FFFFFF" : tokens.text,
+          border: onAccentSurface ? "rgba(255,255,255,0.28)" : tokens.border,
+          isDark: onAccentSurface ? true : tokens.isDark,
+        },
+        { compact },
+      ),
     [
       rendered,
       onAccentSurface,
@@ -94,6 +103,7 @@ export function AiTutorMessageMarkdown({
       tokens.textSecondary,
       tokens.border,
       tokens.isDark,
+      compact,
     ],
   )
 

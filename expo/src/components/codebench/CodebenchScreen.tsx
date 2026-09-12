@@ -583,7 +583,7 @@ export function CodebenchScreen() {
     return (
       <StudentThemedLocked
         icon="code-slash"
-        subtitle="Write, run, and improve code in many languages with AI — available on Trailblazer."
+        subtitle="Write C++, C, or Python and review it with Cora — available on Trailblazer."
         paddingTop={lockedTopPad}
         onUpgrade={() => router.push("/membership" as never)}
       />

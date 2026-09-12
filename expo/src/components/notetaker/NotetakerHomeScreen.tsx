@@ -97,7 +97,7 @@ function PlanPanel({
       <Text style={[type.caption, styles.planBody]}>
         Up to {limits.maxNoteDurationMinutes} min per recording · ~{limits.transcriptionMinutes} transcription min /
         month · {usage.notesThisMonth} / {limits.maxNotesPerMonth} notes this month
-        {!limits.chatEnabled ? " · AI chat requires Trailblazer" : ""}
+        {!limits.chatEnabled ? " · Cora AI Assistant requires Trailblazer" : ""}
       </Text>
       <View style={styles.progressBlock}>
         <View style={styles.progressMeta}>
@@ -124,9 +124,9 @@ function PlanPanel({
             pressed && { opacity: NATIVE.pressedOpacity },
           ]}
           accessibilityRole="button"
-          accessibilityLabel="Upgrade for AI chat with notes"
+          accessibilityLabel="Upgrade for Cora AI Assistant"
         >
-          <Text style={[styles.planLinkText, { color: tokens.accent }]}>Upgrade for AI chat with notes</Text>
+          <Text style={[styles.planLinkText, { color: tokens.accent }]}>Upgrade for Cora AI Assistant</Text>
           <Ionicons name="chevron-forward" size={16} color={SN.tertiaryLabel} />
         </Pressable>
       ) : null}

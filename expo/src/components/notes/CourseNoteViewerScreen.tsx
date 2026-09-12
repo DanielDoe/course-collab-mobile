@@ -23,11 +23,8 @@ import {
 import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
 import { useNativeType } from "../../lib/themed-module-theme"
 import { NATIVE } from "../../constants/faculty-native-theme"
-import {
-  CommGroupedList,
-  CommStatusChip,
-} from "../faculty/faculty-communication-ui"
-import { DigitalNoteRichEditor } from "./DigitalNoteRichEditor"
+import { CommGroupedList, CommStatusChip } from "../faculty/faculty-communication-ui"
+import { DigitalNoteBodyView } from "./DigitalNoteBodyView"
 import { FlashInfoHintQueue, type FlashInfoHint } from "./FlashInfoHint"
 import { CircuitWorkspaceViewer } from "../ink/CircuitWorkspaceViewer"
 
@@ -174,7 +171,21 @@ export function CourseNoteViewerScreen() {
         </View>
 
         {contentTab === "typed" ? (
-          <DigitalNoteRichEditor key={note.id} value={note.bodyText} onChange={() => undefined} disabled />
+          note.bodyText.trim() ? (
+            <CommGroupedList>
+              <View style={styles.bodyPreview}>
+                <DigitalNoteBodyView
+                  content={note.bodyText}
+                  accentColor={tokens.accent}
+                  paddingHorizontal={14}
+                />
+              </View>
+            </CommGroupedList>
+          ) : (
+            <Text style={[type.caption, { color: native.tertiaryLabel, textAlign: "center", paddingVertical: 24 }]}>
+              No typed content for this note.
+            </Text>
+          )
         ) : hasInk ? (
           <CircuitWorkspaceViewer workspace={inkWorkspace} />
         ) : (
@@ -245,5 +256,6 @@ const styles = StyleSheet.create({
   },
   metaCopy: { flex: 1, gap: 2 },
   insetField: { paddingHorizontal: 14, paddingVertical: 14 },
+  bodyPreview: { paddingVertical: 6 },
   titleText: { fontSize: 20, letterSpacing: -0.3, lineHeight: 26 },
 })

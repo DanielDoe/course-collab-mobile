@@ -1,4 +1,6 @@
-import { needsQuestionRichRender, repairLatexDamagedByJsonEscapes } from "./classroom-submission"
+import { htmlToChatMarkdown } from "./html-to-chat-markdown"
+import { expandEncodedNewlines } from "./programming-escape-display"
+import { repairLatexDamagedByJsonEscapes } from "./question-latex-repair"
 
 const LATEX_COMMAND_RE =
   /\\(?:frac|tfrac|cdot|cdotp|times|mathrm|text|mathbf|mathit|Omega|mu|alpha|beta|sqrt|left|right|boxed|Rightarrow|pm|mp|leq|geq|neq|approx|sum|int|infty|partial|nabla|vec|hat|bar|dot)\b/
@@ -8,7 +10,7 @@ const MATHY_SUBSCRIPT_RE = /[A-Za-z]_[A-Za-z0-9]+/
 
 /** Normalize LaTeX delimiters into remark-math / marked-friendly $ / $$ form. */
 export function normalizeReportMathDelimiters(input: string): string {
-  let t = input.replace(/\\n/g, "\n")
+  let t = expandEncodedNewlines(input)
   t = t.replace(/\\\[([\s\S]*?)\\\]/g, (_, expr: string) => `\n$$\n${expr.trim()}\n$$\n`)
   t = t.replace(/\\\(([\s\S]*?)\\\)/g, (_, expr: string) => `$${expr.trim()}$`)
   t = t.replace(/\$\$([\s\S]*?)\$\$/g, (_, expr: string) => `\n$$\n${String(expr).trim()}\n$$\n`)
@@ -77,7 +79,7 @@ function wrapBareLatexInPlainText(text: string): string {
 export function normalizeAiFeedbackMath(input: string): string {
   if (!input?.trim()) return input
 
-  let t = normalizeReportMathDelimiters(input.replace(/\\n/g, "\n"))
+  let t = normalizeReportMathDelimiters(expandEncodedNewlines(input))
 
   // "1) item" → markdown ordered list
   t = t.replace(/^(\d+)\)\s+/gm, "$1. ")
@@ -103,12 +105,23 @@ export function hasReportMathContent(input: string): boolean {
   )
 }
 
+/** Inbox / Cora bodies: turn composer HTML into markdown, normalize KaTeX otherwise. */
+export function prepareMessageRichContent(input: string): string {
+  const t = input.trim()
+  if (!t) return ""
+  if (/<[a-z][\s\S]*>/i.test(t) && !hasReportMathContent(t)) {
+    if (/class=["'][^"']*katex/i.test(t)) return t
+    return htmlToChatMarkdown(t)
+  }
+  return prepareAssessmentReportMarkdown(t)
+}
+
 /** True when markdown needs WebView rendering (math, lists, HTML, formatting). */
 export function needsMarkdownRichRender(input: string): boolean {
   const t = input.trim()
   if (!t) return false
-  if (needsQuestionRichRender(t)) return true
   if (hasReportMathContent(t)) return true
+  if (/```/.test(t)) return true
   if (/^[-*+]\s/m.test(t) || /^\d+[.)]\s/m.test(t)) return true
   if (/\*\*|__|`/.test(t)) return true
   if (/^#{1,6}\s/m.test(t)) return true

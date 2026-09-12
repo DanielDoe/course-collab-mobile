@@ -1,5 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native"
 import { AppAlert } from '../../lib/app-alert'
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useRouter } from "expo-router"
@@ -31,6 +41,7 @@ import {
   getActivePracticeSession,
   hydrateActivePracticeSession,
   isMultiSelectType,
+  setActivePracticeSession,
   type PracticeQuestion,
   type PracticeSessionData,
 } from "../../lib/practice-session"
@@ -46,16 +57,22 @@ import { ApiError } from "../../lib/student-api"
 import { QuestionContentWebView, QuestionMediaView } from "../rewards/QuestionContent"
 import { parseQuestionMedia } from "../../lib/classroom-submission"
 import { QuestionPrepareGate } from "../questions/QuestionPrepareGate"
+import { useQuestionPaintReady } from "../../hooks/useQuestionPaintReady"
+import { useKeyboardHeight } from "../ui/KeyboardAwareForm"
+import { countQuestionPaintTargets } from "../../lib/question-paint-ready"
 import { resolvePracticeQuestionMcqEarnedFraction } from "../../lib/practice-mcq-earned-fraction"
 import {
   buildPartialCreditFallbackReview,
   isEvalPartialCredit,
   practiceAnswerReviewOptionState,
   practiceHubFeedbackSummary,
+  programmedAnswerKeyFromReview,
   resolveObjectiveAnswerReview,
 } from "../../lib/lecture-sample-practice-grading"
 import type { PracticeAnswerReview } from "../../lib/lecture-types"
 import { extractPracticeQuestionTexts } from "../../lib/question-prepare"
+import { getQueryClient, invalidateByAction, studentQueryScope } from "../../lib/query"
+import { getGradableSubquestions, subquestionOptionLabels } from "../../lib/lecture-sample-practice-utils"
 import type { StudentSession } from "../../lib/session"
 import {
   emptyMultiPartAnswer,
@@ -108,10 +125,63 @@ export function PracticeQuizScreen() {
   const [attemptCounts, setAttemptCounts] = useState<Record<number, number>>({})
   const [results, setResults] = useState<SubmitPracticeResult | null>(null)
   const questionStartRef = useRef<Record<number, number>>({})
+  const advanceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (advanceTimeoutRef.current != null) clearTimeout(advanceTimeoutRef.current)
+    }
+  }, [])
 
   const questions = practiceSession?.questions ?? []
   const attemptId = practiceSession?.attemptId ?? 0
   const currentQuestion = questions[currentIndex]
+  const [answerFieldFocused, setAnswerFieldFocused] = useState(false)
+  const scrollRef = useRef<ScrollView>(null)
+  const keyboardHeight = useKeyboardHeight()
+  const keyboardOpen = keyboardHeight > 0
+
+  const paintOptionTexts = useMemo(() => {
+    if (!currentQuestion || currentQuestion.locked) return []
+    if (
+      isCircuitQuestion(currentQuestion) ||
+      isCodeQuestion(currentQuestion) ||
+      isTextInputQuestion(currentQuestion)
+    ) {
+      return []
+    }
+    if (isMultiPartQuestion(currentQuestion)) {
+      return getGradableSubquestions(currentQuestion.subquestions).flatMap((sq) => [
+        sq.prompt,
+        ...subquestionOptionLabels(sq).map((option) => option.text),
+      ])
+    }
+    return getQuestionOptions(asAssessmentQuestion(currentQuestion)).map((option) => option.text)
+  }, [currentQuestion])
+
+  const { ready: questionPaintReady, markReady: markQuestionPaintReady } = useQuestionPaintReady(
+    currentQuestion?.id,
+    countQuestionPaintTargets({
+      promptText: currentQuestion?.question_text,
+      optionTexts: paintOptionTexts,
+    }),
+  )
+  const [initialPaintDone, setInitialPaintDone] = useState(false)
+
+  useEffect(() => {
+    if (!currentQuestion || !questionPaintReady) return
+    setInitialPaintDone(true)
+  }, [currentQuestion, questionPaintReady])
+
+  const sessionPaintReady = initialPaintDone
+
+  useEffect(() => {
+    if (!keyboardOpen || !answerFieldFocused) return
+    const timer = setTimeout(() => {
+      scrollRef.current?.scrollToEnd({ animated: true })
+    }, 80)
+    return () => clearTimeout(timer)
+  }, [keyboardOpen, answerFieldFocused])
 
   const unlockedQuestions = useMemo(
     () => questions.filter((q) => !q.locked),
@@ -197,9 +267,10 @@ export function PracticeQuizScreen() {
           setSelectedLetter("")
           setSelectedLetters([])
         } else {
-          setSelectedLetter(saved)
+          const sel = restoreSelectionFromSavedAnswer(asAssessmentQuestion(question), saved)
+          setSelectedLetter(sel.letter)
           setSelectedLetters([])
-          setTextAnswer("")
+          setTextAnswer(sel.text)
         }
       } else {
         setSelectedLetter("")
@@ -293,6 +364,11 @@ export function PracticeQuizScreen() {
   }, [session, attemptId, questions, hydrating, router])
 
   const goToIndex = (index: number) => {
+    if (advanceTimeoutRef.current != null) {
+      clearTimeout(advanceTimeoutRef.current)
+      advanceTimeoutRef.current = null
+      setSubmittingAnswer(false)
+    }
     const target = questions[index]
     if (target?.locked) {
       AppAlert.alert(
@@ -402,6 +478,7 @@ export function PracticeQuizScreen() {
         difficulty: currentQuestion.difficulty,
         ...(mcqEarnedFraction != null ? { mcqEarnedFraction } : {}),
       })
+      invalidateByAction(getQueryClient(), studentQueryScope(session), "student.practice.evaluate")
 
       setAttemptCounts((prev) => ({ ...prev, [currentQuestion.id]: attemptNum }))
       setAnsweredIds((prev) => new Set(prev).add(currentQuestion.id))
@@ -429,6 +506,22 @@ export function PracticeQuizScreen() {
       }
       if (review) {
         setAnswerReviews((prev) => ({ ...prev, [currentQuestion.id]: review }))
+        const programmedKey = programmedAnswerKeyFromReview(review, currentQuestion.question_type)
+        if (programmedKey && !currentQuestion.correct_answer?.trim()) {
+          setPracticeSession((prev) => {
+            if (!prev) return prev
+            const next: PracticeSessionData = {
+              ...prev,
+              questions: prev.questions.map((question) =>
+                question.id === currentQuestion.id
+                  ? { ...question, correct_answer: programmedKey }
+                  : question,
+              ),
+            }
+            void setActivePracticeSession(next)
+            return next
+          })
+        }
       }
 
       setAnswersByQuestion((prev) => ({
@@ -443,8 +536,12 @@ export function PracticeQuizScreen() {
               : selectedLetter || textAnswer || String(answerToSubmit),
       }))
 
-      const partial = isEvalPartialCredit(evalMeta, review)
-      setIsCorrect(evalResult.isCorrect)
+      const verdictCorrect = review?.isCorrect ?? evalResult.isCorrect
+      const partial = isEvalPartialCredit(
+        { ...evalMeta, isCorrect: verdictCorrect },
+        review,
+      )
+      setIsCorrect(verdictCorrect)
       setFeedbackText(
         evalResult.feedback ??
           (evalResult.requiresManualReview
@@ -453,16 +550,18 @@ export function PracticeQuizScreen() {
                 review,
                 partial
                   ? "Partial credit — some selections were correct."
-                  : evalResult.isCorrect
+                  : verdictCorrect
                     ? "Correct!"
                     : "Not quite — keep learning!",
-                evalMeta,
+                { ...evalMeta, isCorrect: verdictCorrect },
               )),
       )
       setShowFeedback(true)
 
       const delay = evalResult.aiGraded || evalResult.requiresManualReview ? 4000 : 2000
-      setTimeout(() => {
+      if (advanceTimeoutRef.current != null) clearTimeout(advanceTimeoutRef.current)
+      advanceTimeoutRef.current = setTimeout(() => {
+        advanceTimeoutRef.current = null
         setShowFeedback(false)
         setSubmittingAnswer(false)
         const nextIndex = nextUnlockedIndex(currentIndex)
@@ -495,6 +594,7 @@ export function PracticeQuizScreen() {
     setSubmittingFinal(true)
     try {
       const result = await practiceApi.submit(session, attemptId)
+      invalidateByAction(getQueryClient(), studentQueryScope(session), "student.practice.submit")
       await clearActivePracticeSession()
       setResults(result)
     } catch (err) {
@@ -533,7 +633,7 @@ export function PracticeQuizScreen() {
             {results.correctCount} of {results.totalQuestions} correct
           </Text>
           <Pressable
-            style={[styles.primaryBtn, { backgroundColor: tokens.accent }]}
+            style={[styles.primaryBtn, styles.resultsBtn, { backgroundColor: tokens.accent }]}
             onPress={() => router.replace("/module/practice" as never)}
           >
             <Text style={styles.primaryBtnText}>Back to Practice Hub</Text>
@@ -551,6 +651,8 @@ export function PracticeQuizScreen() {
         title="Preparing practice"
         subtitle="Loading questions, math, and answer choices"
         enabled={hydrating || Boolean(practiceSession?.questions.length)}
+        hideUntilReady
+        paintReady={sessionPaintReady}
       >
         <View style={[styles.center, { paddingTop: insets.top, backgroundColor: tokens.background }]}>
           <ActivityIndicator size="large" color={tokens.accent} />
@@ -597,8 +699,11 @@ export function PracticeQuizScreen() {
       title="Preparing practice"
       subtitle="Loading questions, math, and answer choices"
       enabled={Boolean(practiceSession.questions.length)}
+      hideUntilReady
+      paintReady={sessionPaintReady}
     >
     <View style={[styles.root, { paddingTop: insets.top, backgroundColor: tokens.background }]}>
+      <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <View style={styles.topBar}>
         <Pressable onPress={() => router.back()} hitSlop={12}>
           <Ionicons name="chevron-back" size={24} color={tokens.accent} />
@@ -618,7 +723,18 @@ export function PracticeQuizScreen() {
         <View style={[styles.progressFill, { width: `${progressPct}%`, backgroundColor: tokens.accent }]} />
       </View>
 
-      <ScrollView contentContainerStyle={[styles.content, moduleContent]} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        ref={scrollRef}
+        style={styles.root}
+        contentContainerStyle={[
+          styles.content,
+          moduleContent,
+          keyboardOpen && Platform.OS === "android" && { paddingBottom: keyboardHeight + 16 },
+        ]}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        {keyboardOpen || !questionPaintReady ? null : (
         <View style={styles.questionNav}>
           {questions.map((q, i) => {
             const answered = answeredIds.has(q.id)
@@ -627,16 +743,20 @@ export function PracticeQuizScreen() {
             return (
               <Pressable
                 key={q.id}
+                testID={`practice-nav-${i + 1}`}
+                accessibilityRole="button"
+                accessibilityLabel={`Go to question ${i + 1}`}
+                hitSlop={6}
                 style={[
                   styles.navDot,
                   { backgroundColor: tokens.surface, borderColor: tokens.border },
+                  answered && !current && {
+                    backgroundColor: hexToRgba(tokens.success, 0.12),
+                    borderColor: tokens.success,
+                  },
                   current && {
                     borderColor: tokens.accent,
                     backgroundColor: hexToRgba(tokens.accent, 0.1),
-                  },
-                  answered && {
-                    backgroundColor: hexToRgba(tokens.success, 0.12),
-                    borderColor: tokens.success,
                   },
                   tierLocked && {
                     backgroundColor: hexToRgba(tokens.warning, 0.08),
@@ -662,8 +782,17 @@ export function PracticeQuizScreen() {
             )
           })}
         </View>
+        )}
 
-        <View style={[styles.card, { backgroundColor: tokens.surface, borderColor: tokens.border }]}>
+        <View style={[styles.cardHost, !questionPaintReady && styles.cardHostPending]}>
+        <View
+          style={[
+            styles.card,
+            { backgroundColor: tokens.surface, borderColor: tokens.border },
+            { opacity: questionPaintReady ? 1 : 0 },
+          ]}
+          pointerEvents={questionPaintReady ? "auto" : "none"}
+        >
           <View style={styles.cardHeader}>
             <View style={styles.badges}>
               <View style={[styles.badge, { backgroundColor: tokens.accent }]}>
@@ -688,7 +817,11 @@ export function PracticeQuizScreen() {
 
           <QuestionMediaView media={parseQuestionMedia(currentQuestion.question_media)} embedded />
 
-          <QuestionContentWebView text={currentQuestion.question_text} embedded />
+          <QuestionContentWebView
+            text={currentQuestion.question_text}
+            embedded
+            onReady={() => markQuestionPaintReady("prompt")}
+          />
 
           {showHint && currentQuestion.hint ? (
             <View
@@ -736,6 +869,7 @@ export function PracticeQuizScreen() {
               onChange={setMultiPartAnswerJson}
               disabled={submitted || submittingAnswer}
               textFieldHeight={submissionLayout.multipartTextHeight}
+              onReady={markQuestionPaintReady}
             />
           ) : isCode ? (
             <View style={styles.codeWrap}>
@@ -756,6 +890,8 @@ export function PracticeQuizScreen() {
                 ]}
                 value={textAnswer}
                 onChangeText={setTextAnswer}
+                onFocus={() => setAnswerFieldFocused(true)}
+                onBlur={() => setAnswerFieldFocused(false)}
                 placeholder="// Write your complete solution here…"
                 placeholderTextColor={SN.secondaryLabel}
                 editable={!submitted && !submittingAnswer}
@@ -791,6 +927,8 @@ export function PracticeQuizScreen() {
               ]}
               value={textAnswer}
               onChangeText={setTextAnswer}
+              onFocus={() => setAnswerFieldFocused(true)}
+              onBlur={() => setAnswerFieldFocused(false)}
               placeholder={
                 qType === "fill_code"
                   ? "// Fill in the missing code…"
@@ -806,115 +944,134 @@ export function PracticeQuizScreen() {
               spellCheck={qType !== "fill_code"}
             />
           ) : (
-            options.map(({ letter, text }) => {
-              const selected = isMulti ? selectedLetters.includes(letter) : selectedLetter === letter
-              const reviewState =
-                submitted && currentReview
-                  ? practiceAnswerReviewOptionState(currentReview, letter)
-                  : null
-              const showReview = reviewState != null
+            <>
+              {isMulti && !submitted ? (
+                <Text style={[styles.selectAllHint, { color: SN.secondaryLabel }]}>
+                  Select all that apply, then submit.
+                </Text>
+              ) : null}
+              {options.map(({ letter, text }) => {
+                const selected = isMulti ? selectedLetters.includes(letter) : selectedLetter === letter
+                const reviewState =
+                  submitted && currentReview
+                    ? practiceAnswerReviewOptionState(currentReview, letter)
+                    : null
+                const showReview = reviewState != null
+                const markColor = reviewState?.showWrongSelection
+                  ? SYSTEM.red.color
+                  : reviewState?.showPartialCreditSelection
+                    ? SYSTEM.orange.color
+                    : reviewState?.isCorrect
+                      ? SYSTEM.green.color
+                      : selected
+                        ? tokens.accent
+                        : SN.secondaryLabel
 
-              return (
-                <Pressable
-                  key={letter}
-                  style={[
-                    styles.option,
-                    { borderColor: tokens.border, backgroundColor: tokens.background },
-                    selected && !showReview && {
-                      borderColor: tokens.accent,
-                      backgroundColor: hexToRgba(tokens.accent, 0.06),
-                    },
-                    reviewState?.showPartialCreditSelection && {
-                      borderColor: SYSTEM.orange.color,
-                      backgroundColor: hexToRgba(SYSTEM.orange.color, 0.08),
-                    },
-                    reviewState?.isCorrect && {
-                      borderColor: SYSTEM.green.color,
-                      backgroundColor: hexToRgba(SYSTEM.green.color, 0.08),
-                    },
-                    reviewState?.showWrongSelection && {
-                      borderColor: SYSTEM.red.color,
-                      backgroundColor: hexToRgba(SYSTEM.red.color, 0.06),
-                    },
-                    submitted && styles.optionLocked,
-                  ]}
-                  onPress={() => {
-                    if (submitted || submittingAnswer) return
-                    if (isMulti) {
-                      setSelectedLetters((prev) =>
-                        prev.includes(letter) ? prev.filter((l) => l !== letter) : [...prev, letter],
-                      )
-                    } else {
-                      setSelectedLetter(letter)
-                    }
-                  }}
-                  disabled={submitted || submittingAnswer}
-                >
-                  <View
+                return (
+                  <Pressable
+                    key={letter}
+                    testID={`practice-option-${letter}`}
+                    accessibilityRole={isMulti ? "checkbox" : "radio"}
+                    accessibilityState={{
+                      selected,
+                      checked: isMulti ? selected : undefined,
+                      disabled: submitted || submittingAnswer,
+                    }}
+                    accessibilityLabel={isMulti ? `Option ${letter}. ${text}` : `Option ${letter}`}
                     style={[
-                      styles.optionLetter,
-                      { backgroundColor: tokens.surface, borderColor: tokens.border },
-                      selected && !showReview && { backgroundColor: tokens.accent, borderColor: tokens.accent },
+                      styles.option,
+                      { borderColor: tokens.border, backgroundColor: tokens.background },
+                      selected && !showReview && {
+                        borderColor: tokens.accent,
+                        backgroundColor: hexToRgba(tokens.accent, 0.06),
+                      },
                       reviewState?.showPartialCreditSelection && {
-                        backgroundColor: SYSTEM.orange.color,
                         borderColor: SYSTEM.orange.color,
+                        backgroundColor: hexToRgba(SYSTEM.orange.color, 0.08),
                       },
                       reviewState?.isCorrect && {
-                        backgroundColor: SYSTEM.green.color,
                         borderColor: SYSTEM.green.color,
+                        backgroundColor: hexToRgba(SYSTEM.green.color, 0.08),
                       },
                       reviewState?.showWrongSelection && {
-                        backgroundColor: SYSTEM.red.color,
                         borderColor: SYSTEM.red.color,
+                        backgroundColor: hexToRgba(SYSTEM.red.color, 0.06),
                       },
+                      submitted && styles.optionLocked,
                     ]}
+                    onPress={() => {
+                      if (submitted || submittingAnswer) return
+                      if (isMulti) {
+                        setSelectedLetters((prev) =>
+                          prev.includes(letter) ? prev.filter((l) => l !== letter) : [...prev, letter],
+                        )
+                      } else {
+                        setSelectedLetter(letter)
+                      }
+                    }}
+                    disabled={submitted || submittingAnswer}
                   >
-                    <Text
-                      style={[
-                        styles.optionLetterText,
-                        { color: SN.secondaryLabel },
-                        (selected && !showReview) ||
-                        reviewState?.isCorrect ||
-                        reviewState?.showPartialCreditSelection ||
-                        reviewState?.showWrongSelection
-                          ? styles.optionLetterTextSelected
-                          : null,
-                      ]}
-                    >
-                      {letter}
-                    </Text>
-                  </View>
-                  <View style={styles.optionTextWrap}>
-                    <QuestionContentWebView text={text} embedded compact />
-                  </View>
-                  {selected ? (
-                    <Ionicons
-                      name={isMulti ? "checkbox" : "checkmark-circle"}
-                      size={20}
-                      color={
-                        reviewState?.showWrongSelection
-                          ? SYSTEM.red.color
-                          : reviewState?.showPartialCreditSelection
-                            ? SYSTEM.orange.color
-                            : reviewState?.isCorrect
-                              ? SYSTEM.green.color
-                              : tokens.accent
-                      }
-                    />
-                  ) : isMulti ? (
-                    <Ionicons
-                      name="square-outline"
-                      size={20}
-                      color={
-                        reviewState?.isCorrect
-                          ? SYSTEM.green.color
-                          : SN.secondaryLabel
-                      }
-                    />
-                  ) : null}
-                </Pressable>
-              )
-            })
+                    {isMulti ? (
+                      <Ionicons
+                        name={selected ? "checkbox" : "square-outline"}
+                        size={24}
+                        color={markColor}
+                      />
+                    ) : (
+                      <View
+                        style={[
+                          styles.optionLetter,
+                          { backgroundColor: tokens.surface, borderColor: tokens.border },
+                          selected && !showReview && { backgroundColor: tokens.accent, borderColor: tokens.accent },
+                          reviewState?.showPartialCreditSelection && {
+                            backgroundColor: SYSTEM.orange.color,
+                            borderColor: SYSTEM.orange.color,
+                          },
+                          reviewState?.isCorrect && {
+                            backgroundColor: SYSTEM.green.color,
+                            borderColor: SYSTEM.green.color,
+                          },
+                          reviewState?.showWrongSelection && {
+                            backgroundColor: SYSTEM.red.color,
+                            borderColor: SYSTEM.red.color,
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.optionLetterText,
+                            { color: SN.secondaryLabel },
+                            (selected && !showReview) ||
+                            reviewState?.isCorrect ||
+                            reviewState?.showPartialCreditSelection ||
+                            reviewState?.showWrongSelection
+                              ? styles.optionLetterTextSelected
+                              : null,
+                          ]}
+                        >
+                          {letter}
+                        </Text>
+                      </View>
+                    )}
+                    <View style={styles.optionTextWrap}>
+                      <QuestionContentWebView
+                        text={text}
+                        embedded
+                        compact
+                        onReady={() => markQuestionPaintReady(`option-${letter}`)}
+                      />
+                    </View>
+                    {!isMulti && selected && !showReview ? (
+                      <Ionicons name="checkmark-circle" size={20} color={markColor} />
+                    ) : reviewState?.showWrongSelection ? (
+                      <Ionicons name="close-circle" size={20} color={markColor} />
+                    ) : reviewState?.isCorrect ? (
+                      <Ionicons name="checkmark-circle" size={20} color={markColor} />
+                    ) : null}
+                  </Pressable>
+                )
+              })}
+            </>
           )}
 
           {showFeedback ? (
@@ -940,8 +1097,23 @@ export function PracticeQuizScreen() {
             </View>
           ) : null}
         </View>
+        {!questionPaintReady ? (
+          <View
+            style={[
+              styles.cardPaintOverlay,
+              { backgroundColor: tokens.surface, borderColor: tokens.border },
+            ]}
+          >
+            <ActivityIndicator size="large" color={tokens.accent} />
+            <Text style={[styles.cardPaintText, { color: SN.secondaryLabel }]}>
+              Loading question…
+            </Text>
+          </View>
+        ) : null}
+        </View>
       </ScrollView>
 
+      {keyboardOpen || !questionPaintReady ? null : (
       <View style={[styles.footer, { paddingBottom: insets.bottom + 12, backgroundColor: tokens.background }]}>
         {allAnswered ? (
           <Pressable
@@ -969,6 +1141,8 @@ export function PracticeQuizScreen() {
           </Pressable>
         )}
       </View>
+      )}
+      </KeyboardAvoidingView>
     </View>
     </QuestionPrepareGate>
   )
@@ -989,6 +1163,17 @@ const styles = StyleSheet.create({
   progressTrack: { height: 4, marginHorizontal: 16 },
   progressFill: { height: "100%" },
   content: { padding: 16, gap: 12, paddingBottom: 24 },
+  cardHost: { position: "relative" },
+  cardHostPending: { minHeight: 280 },
+  cardPaintOverlay: {
+    ...StyleSheet.absoluteFill,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    borderRadius: 18,
+    borderWidth: 1,
+  },
+  cardPaintText: { fontSize: 14, fontWeight: "600" },
   questionNav: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   navDot: {
     width: 36,
@@ -1058,6 +1243,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1.5,
   },
+  selectAllHint: { fontSize: 13, lineHeight: 18, marginBottom: 2 },
   optionLocked: { opacity: 0.7 },
   optionLetter: {
     width: 28,
@@ -1082,11 +1268,20 @@ const styles = StyleSheet.create({
   footer: { paddingHorizontal: 16, paddingTop: 8 },
   primaryBtn: {
     borderRadius: 999,
-    paddingVertical: 16,
+    minHeight: 52,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
     alignItems: "center",
+    justifyContent: "center",
   },
   btnDisabled: { opacity: 0.6 },
-  primaryBtnText: { color: "#ffffff", fontSize: 16, fontWeight: "600" },
+  primaryBtnText: {
+    color: "#ffffff",
+    fontSize: 16,
+    fontWeight: "600",
+    lineHeight: 22,
+    textAlign: "center",
+  },
   resultsRoot: { flex: 1, paddingHorizontal: 20, justifyContent: "center" },
   resultsCard: {
     borderRadius: 20,
@@ -1094,6 +1289,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 10,
     borderWidth: 1,
+  },
+  resultsBtn: {
+    alignSelf: "stretch",
+    marginTop: 8,
   },
   resultsTitle: { fontSize: 22, fontWeight: "600" },
   resultsScore: { fontSize: 48, fontWeight: "600" },

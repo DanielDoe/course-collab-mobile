@@ -13,6 +13,7 @@ import type { StudentSession } from "./session"
 import { studentAuthenticatedRequest } from "./student-api"
 import { studentContentFields, studentContentPath } from "./student-content-context"
 import type { PracticeQuestion } from "./practice-session"
+import { programmedAnswerKeyFromRecord } from "./lecture-sample-practice-grading"
 
 const PRACTICE_LEADERBOARD_LIMIT = 100
 
@@ -117,6 +118,37 @@ export type PracticeGenerateResponse = {
   totalCount?: number
 }
 
+/** Accept camelCase or snake_case evaluate payloads. Never treat a missing flag as correct. */
+export function normalizePracticeEvaluateResult(raw: EvaluateResult | Record<string, unknown>): EvaluateResult {
+  const rec = (raw ?? {}) as Record<string, unknown>
+  const nested =
+    rec.data && typeof rec.data === "object" && !Array.isArray(rec.data)
+      ? (rec.data as Record<string, unknown>)
+      : rec
+  const review = (nested.answerReview ?? nested.answer_review ?? rec.answerReview) as
+    | EvaluateResult["answerReview"]
+    | undefined
+  return {
+    ...(rec as EvaluateResult),
+    isCorrect: nested.isCorrect === true || nested.is_correct === true,
+    score: typeof nested.score === "number" ? nested.score : rec.score,
+    pointsEarned:
+      typeof nested.pointsEarned === "number"
+        ? nested.pointsEarned
+        : typeof nested.points_earned === "number"
+          ? nested.points_earned
+          : rec.pointsEarned,
+    maxPoints:
+      typeof nested.maxPoints === "number"
+        ? nested.maxPoints
+        : typeof nested.max_points === "number"
+          ? nested.max_points
+          : rec.maxPoints,
+    answerReview: review ?? rec.answerReview ?? null,
+    feedback: typeof nested.feedback === "string" ? nested.feedback : rec.feedback,
+  }
+}
+
 export const practiceApi = {
   getTopicsProgress: (session: StudentSession) =>
     studentAuthenticatedRequest<{
@@ -192,7 +224,13 @@ export const practiceApi = {
           fullTopic: payload.fullTopic === true,
         }),
       },
-    ),
+    ).then((data) => ({
+      ...data,
+      questions: (data.questions ?? []).map((question) => {
+        const key = programmedAnswerKeyFromRecord(question as unknown as Record<string, unknown>)
+        return key ? { ...question, correct_answer: key } : question
+      }),
+    })),
 
   evaluate: (
     session: StudentSession,
@@ -224,7 +262,7 @@ export const practiceApi = {
         method: "POST",
         body: JSON.stringify(body),
       },
-    )
+    ).then(normalizePracticeEvaluateResult)
   },
 
   getAttemptState: (session: StudentSession, attemptId: number) =>

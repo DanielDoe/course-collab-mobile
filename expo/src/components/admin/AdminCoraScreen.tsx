@@ -36,6 +36,7 @@ import {
 } from "../../lib/cora"
 import type { AdminSession } from "../../lib/session"
 import { CoraBrand } from "../cora/CoraBrand"
+import { AiTutorMessageMarkdown } from "../ai-tutor/AiTutorMessageMarkdown"
 import { CoraActionCard } from "../cora/CoraActionCard"
 import { openCoraNativeRoute } from "../../lib/cora/resolve-open-route"
 import { CoraScopeFeedbackBar } from "../cora/CoraScopeFeedbackBar"
@@ -234,9 +235,12 @@ export function AdminCoraScreen() {
                       ],
                 ]}
               >
-                <Text style={[type.body, { color: isUser ? "#fff" : native.label, lineHeight: 22 }]}>
-                  {message.content}
-                </Text>
+                <AiTutorMessageMarkdown
+                  messageId={`admin-cora-${message.id}`}
+                  markdown={message.content}
+                  onAccentSurface={isUser}
+                  compact
+                />
               </View>
               {!isUser && message.scopeFeedback ? (
                 <CoraScopeFeedbackBar
@@ -391,7 +395,7 @@ const styles = StyleSheet.create({
   bubble: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 16, maxWidth: "92%" },
   userBubble: { alignSelf: "flex-end", borderBottomRightRadius: 4 },
   assistantBubble: {
-    alignSelf: "flex-start",
+    alignSelf: "stretch",
     borderBottomLeftRadius: 4,
     borderWidth: StyleSheet.hairlineWidth,
   },

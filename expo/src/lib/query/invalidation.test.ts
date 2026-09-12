@@ -44,6 +44,12 @@ describe("invalidation graph", () => {
     ])
   })
 
+  it("refreshes practice hub after an answer or flashcard study event", () => {
+    assert.deepEqual(INVALIDATION_GRAPH["student.practice.evaluate"], ["student.practice"])
+    assert.deepEqual(INVALIDATION_GRAPH["student.practice.submit"], ["student.practice"])
+    assert.deepEqual(INVALIDATION_GRAPH["student.flashcards.study"], ["student.flashcards", "student.practice"])
+  })
+
   it("refreshes gated student modules after Stripe membership activation", () => {
     assert.deepEqual(INVALIDATION_GRAPH["student.membership.activate"], [
       "student.flashcards",

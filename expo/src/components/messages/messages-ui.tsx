@@ -13,12 +13,14 @@ import {
   deliveryStatusLabel,
   formatMessageMetaLine,
   formatMessageWhen,
-  looksLikeHtml,
   messageInitials,
   messagePreviewText,
   resolveMessageDeliveryStatus,
-  stripMessageHtml,
 } from "../../lib/messages-html"
+import { needsMarkdownRichRender } from "../../lib/assessment-report-markdown"
+import { parseTargetedPracticeMessage } from "../../lib/targeted-practice-message"
+import { AiTutorMessageMarkdown } from "../ai-tutor/AiTutorMessageMarkdown"
+import { TargetedPracticeMessageCard } from "./TargetedPracticeMessageCard"
 import {
   incompleteCourseImportLabel,
   parseCourseImportFromMessage,
@@ -192,11 +194,19 @@ export const MessageBubble = memo(function MessageBubble({
     () => (message.unsent || courseImport ? null : incompleteCourseImportLabel(message.body)),
     [courseImport, message.body, message.unsent],
   )
-  const plainBody = useMemo(() => {
+  const displayBody = useMemo(() => {
     if (courseImport) return courseImport.userNote
     if (incompleteImportLabel) return stripCourseImportMarkup(message.body)
-    return looksLikeHtml(message.body) ? stripMessageHtml(message.body) : message.body.trim()
+    return message.body.trim()
   }, [courseImport, incompleteImportLabel, message.body])
+  const practicePlan = useMemo(
+    () => (courseImport || incompleteImportLabel ? null : parseTargetedPracticeMessage(displayBody)),
+    [courseImport, displayBody, incompleteImportLabel],
+  )
+  const bodyIsRich = useMemo(
+    () => Boolean(practicePlan) || needsMarkdownRichRender(displayBody),
+    [displayBody, practicePlan],
+  )
   const editVersions = message.editHistory ?? []
   const hasEditHistory = editVersions.length > 0
 
@@ -246,7 +256,17 @@ export const MessageBubble = memo(function MessageBubble({
         style={[
           styles.bubbleCol,
           courseImport && styles.bubbleColCourseImport,
-          { maxWidth: courseImport ? layout.courseImportBubbleMaxWidth : layout.bubbleMaxWidth },
+          practicePlan && styles.bubbleColCourseImport,
+          {
+            maxWidth:
+              courseImport || practicePlan ? layout.courseImportBubbleMaxWidth : layout.bubbleMaxWidth,
+            width:
+              bodyIsRich || practicePlan
+                ? courseImport || practicePlan
+                  ? layout.courseImportBubbleMaxWidth
+                  : layout.bubbleMaxWidth
+                : undefined,
+          },
         ]}
       >
         {!message.isMine ? (
@@ -277,23 +297,19 @@ export const MessageBubble = memo(function MessageBubble({
                   },
                 ]}
               >
-                <Text
-                  style={[
-                    type.body,
-                    styles.bubbleText,
-                    { color: message.isMine ? tokens.accent : native.secondaryLabel },
-                  ]}
-                >
-                  {looksLikeHtml(version.body) ? stripMessageHtml(version.body) : version.body.trim()}
-                </Text>
+                <AiTutorMessageMarkdown
+                  messageId={`${message.id}-edit-${index}`}
+                  markdown={version.body}
+                  compact
+                />
               </View>
             ))
           : null}
         <View
           style={[
             styles.bubble,
-            courseImport ? styles.bubbleCourseImport : null,
-            courseImport
+            courseImport ? styles.bubbleCourseImport : practicePlan ? styles.bubbleCourseImport : null,
+            courseImport || practicePlan
               ? {
                   backgroundColor: native.secondaryGrouped,
                   borderColor: message.isMine ? tokens.accentBorder : native.separator,
@@ -324,23 +340,23 @@ export const MessageBubble = memo(function MessageBubble({
                 : `Course question: ${incompleteImportLabel}`}
             </Text>
           ) : null}
-          {plainBody ? (
-            <Text
-              style={[
-                type.body,
-                styles.bubbleText,
-                courseImport && styles.bubbleTextAfterImport,
-                { color: courseImport || !message.isMine ? native.label : "#ffffff" },
-              ]}
-            >
-              {plainBody}
-            </Text>
+          {practicePlan ? (
+            <TargetedPracticeMessageCard plan={practicePlan} />
+          ) : displayBody ? (
+            <View style={courseImport ? styles.bubbleTextAfterImport : undefined}>
+              <AiTutorMessageMarkdown
+                messageId={`inbox-${message.id}`}
+                markdown={displayBody}
+                onAccentSurface={message.isMine && !courseImport}
+                compact
+              />
+            </View>
           ) : null}
           {message.attachments.map((attachment) => (
             <AttachmentChip
               key={attachment.id}
               attachment={attachment}
-              mine={message.isMine && !courseImport}
+              mine={message.isMine && !courseImport && !practicePlan}
             />
           ))}
         </View>

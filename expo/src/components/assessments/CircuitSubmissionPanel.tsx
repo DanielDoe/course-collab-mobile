@@ -56,6 +56,8 @@ type Props = {
   notesHeight?: number
   /** @deprecated Prefer notesHeight */
   expandNotes?: boolean
+  onNotesFocus?: () => void
+  onNotesBlur?: () => void
   uploadFile?: (input: {
     partId: string
     uri: string
@@ -79,6 +81,8 @@ export function CircuitSubmissionPanel({
   disabled,
   notesHeight: notesHeightProp,
   expandNotes = false,
+  onNotesFocus,
+  onNotesBlur,
   uploadFile,
 }: Props) {
   const tokens = useAppThemeTokens()
@@ -403,6 +407,8 @@ export function CircuitSubmissionPanel({
           ]}
           value={answer.written_notes ?? ""}
           onChangeText={(written_notes) => updateAnswer({ ...answer, written_notes })}
+          onFocus={onNotesFocus}
+          onBlur={onNotesBlur}
           placeholder="Type steps, calculations, or notes here…"
           placeholderTextColor={SN.secondaryLabel}
           multiline
