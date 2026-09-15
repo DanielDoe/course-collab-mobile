@@ -191,6 +191,8 @@ async function studentRequest<T>(
     const message = extractApiErrorMessage(body, response.status, path)
     // Known soft misses — don't dump LogBox overlays in __DEV__.
     const isExpectedClientMiss =
+      ((response.status === 404 || response.status === 500) &&
+        path.includes("/api/student/membership/refresh")) ||
       ((response.status === 404 || response.status === 503) && path.includes("mobile-payment")) ||
       (response.status === 404 &&
         (/^\/api\/announcements\/\d+/.test(path) || path.includes("/api/announcements/"))) ||

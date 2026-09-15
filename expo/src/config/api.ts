@@ -20,12 +20,25 @@ export function normalizeApiBaseUrl(url: string): string {
   return url.replace(/\/$/, "")
 }
 
-function readConfiguredAppUrl(): string | undefined {
-  const fromEnv = process.env.EXPO_PUBLIC_APP_URL
-  if (typeof fromEnv === "string" && fromEnv.trim()) return fromEnv.trim()
+function readExtraAppUrl(): string | undefined {
   const fromExtra = Constants.expoConfig?.extra?.appUrl
   if (typeof fromExtra === "string" && fromExtra.trim()) return fromExtra.trim()
   return undefined
+}
+
+function readConfiguredAppUrl(): string | undefined {
+  const fromEnv = process.env.EXPO_PUBLIC_APP_URL
+  if (typeof fromEnv === "string" && fromEnv.trim()) return fromEnv.trim()
+  return readExtraAppUrl()
+}
+
+function productionSafeApiBase(fallbackConfigured?: string): string {
+  const extra = readExtraAppUrl()
+  if (extra && !isLocalOrLanHost(extra)) return normalizeApiBaseUrl(extra)
+  if (fallbackConfigured && !isLocalOrLanHost(fallbackConfigured)) {
+    return normalizeApiBaseUrl(fallbackConfigured)
+  }
+  return PRODUCTION_API_BASE_URL
 }
 
 /** Resolve API base URL from Expo config with production-safe fallbacks. */
@@ -33,9 +46,14 @@ export function resolveApiBaseUrl(): string {
   const configured = readConfiguredAppUrl()
   if (configured) {
     const normalized = normalizeApiBaseUrl(configured)
-    // Never ship a local/LAN API URL in production builds.
-    if (isProductionEnvironment() && isLocalOrLanHost(normalized)) {
-      return PRODUCTION_API_BASE_URL
+    const blockLocalInDev =
+      typeof __DEV__ !== "undefined" &&
+      __DEV__ &&
+      process.env.EXPO_PUBLIC_USE_LOCAL_API !== "true"
+    // Never ship a local/LAN API URL in production builds; dev simulators default to hosted API
+    // unless EXPO_PUBLIC_USE_LOCAL_API=true (see EXPO_PUBLIC_APP_URL=http://localhost:3000).
+    if (isLocalOrLanHost(normalized) && (isProductionEnvironment() || blockLocalInDev)) {
+      return productionSafeApiBase()
     }
     return normalized
   }
