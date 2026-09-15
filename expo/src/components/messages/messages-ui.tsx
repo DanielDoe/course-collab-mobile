@@ -1,6 +1,8 @@
 import { memo, useEffect, useMemo, useState } from "react"
-import { Linking, Pressable, StyleSheet, Text, View } from "react-native"
+import { Linking, Modal, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native"
+import { useSafeAreaInsets } from "react-native-safe-area-context"
 import Animated, { useAnimatedStyle, useSharedValue, withSequence, withSpring } from "react-native-reanimated"
+import { Image } from "expo-image"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
 import { useNativeType } from "../../lib/themed-module-theme"
@@ -11,13 +13,15 @@ import { PresenceAvatarBadge } from "../presence/PresenceAvatarBadge"
 import { resolveAttachmentUrl } from "../../lib/messages-api"
 import {
   deliveryStatusLabel,
+  extractMessageImageUrls,
   formatMessageMetaLine,
   formatMessageWhen,
+  isImageMimeType,
   messageInitials,
   messagePreviewText,
   resolveMessageDeliveryStatus,
 } from "../../lib/messages-html"
-import { needsMarkdownRichRender } from "../../lib/assessment-report-markdown"
+import { needsMarkdownRichRender, prepareMessageRichContent } from "../../lib/assessment-report-markdown"
 import { parseTargetedPracticeMessage } from "../../lib/targeted-practice-message"
 import { AiTutorMessageMarkdown } from "../ai-tutor/AiTutorMessageMarkdown"
 import { TargetedPracticeMessageCard } from "./TargetedPracticeMessageCard"
@@ -197,8 +201,12 @@ export const MessageBubble = memo(function MessageBubble({
   const displayBody = useMemo(() => {
     if (courseImport) return courseImport.userNote
     if (incompleteImportLabel) return stripCourseImportMarkup(message.body)
-    return message.body.trim()
+    return prepareMessageRichContent(message.body)
   }, [courseImport, incompleteImportLabel, message.body])
+  const inlineImageUrls = useMemo(
+    () => (courseImport || incompleteImportLabel ? [] : extractMessageImageUrls(message.body)),
+    [courseImport, incompleteImportLabel, message.body],
+  )
   const practicePlan = useMemo(
     () => (courseImport || incompleteImportLabel ? null : parseTargetedPracticeMessage(displayBody)),
     [courseImport, displayBody, incompleteImportLabel],
@@ -207,6 +215,7 @@ export const MessageBubble = memo(function MessageBubble({
     () => Boolean(practicePlan) || needsMarkdownRichRender(displayBody),
     [displayBody, practicePlan],
   )
+  const hasAttachments = message.attachments.length > 0 || inlineImageUrls.length > 0
   const editVersions = message.editHistory ?? []
   const hasEditHistory = editVersions.length > 0
 
@@ -240,6 +249,15 @@ export const MessageBubble = memo(function MessageBubble({
       : message.edited
         ? "Edited"
         : null
+
+  const showBubbleContent =
+    Boolean(courseImport) ||
+    Boolean(incompleteImportLabel) ||
+    Boolean(practicePlan) ||
+    Boolean(displayBody.trim()) ||
+    hasAttachments
+
+  const emptyAttachmentShell = !showBubbleContent
 
   return (
     <View
@@ -299,7 +317,7 @@ export const MessageBubble = memo(function MessageBubble({
               >
                 <AiTutorMessageMarkdown
                   messageId={`${message.id}-edit-${index}`}
-                  markdown={version.body}
+                  markdown={prepareMessageRichContent(version.body)}
                   compact
                 />
               </View>
@@ -320,6 +338,21 @@ export const MessageBubble = memo(function MessageBubble({
                 : { backgroundColor: native.secondaryGrouped, borderColor: native.separator, borderWidth: StyleSheet.hairlineWidth },
           ]}
         >
+          {emptyAttachmentShell ? (
+            <Text
+              style={[
+                type.caption,
+                styles.bubbleText,
+                {
+                  color: message.isMine ? "rgba(255,255,255,0.85)" : native.secondaryLabel,
+                  fontStyle: "italic",
+                },
+              ]}
+            >
+              Attachment missing — the photo or file may not have finished uploading. Ask the student to
+              resend using the + button → Photo.
+            </Text>
+          ) : null}
           {courseImport ? (
             <CoraImportedQuestionPreview
               label={courseImport.label}
@@ -342,7 +375,7 @@ export const MessageBubble = memo(function MessageBubble({
           ) : null}
           {practicePlan ? (
             <TargetedPracticeMessageCard plan={practicePlan} />
-          ) : displayBody ? (
+          ) : displayBody.trim() ? (
             <View style={courseImport ? styles.bubbleTextAfterImport : undefined}>
               <AiTutorMessageMarkdown
                 messageId={`inbox-${message.id}`}
@@ -352,6 +385,13 @@ export const MessageBubble = memo(function MessageBubble({
               />
             </View>
           ) : null}
+          {inlineImageUrls.map((src) => (
+            <MessageImagePreview
+              key={src}
+              url={resolveAttachmentUrl(src)}
+              mine={message.isMine && !courseImport && !practicePlan}
+            />
+          ))}
           {message.attachments.map((attachment) => (
             <AttachmentChip
               key={attachment.id}
@@ -445,21 +485,123 @@ function ReactionChip({
   )
 }
 
+function MessageImageLightbox({
+  visible,
+  url,
+  onClose,
+}: {
+  visible: boolean
+  url: string
+  onClose: () => void
+}) {
+  const insets = useSafeAreaInsets()
+  const { width, height } = useWindowDimensions()
+
+  return (
+    <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose} statusBarTranslucent>
+      <View style={styles.imageLightboxBackdrop}>
+        <Pressable
+          style={StyleSheet.absoluteFill}
+          onPress={onClose}
+          accessibilityRole="button"
+          accessibilityLabel="Close image preview"
+        />
+        <Pressable
+          style={[styles.imageLightboxClose, { top: insets.top + 8 }]}
+          onPress={onClose}
+          hitSlop={12}
+          accessibilityRole="button"
+          accessibilityLabel="Close"
+        >
+          <Ionicons name="close" size={28} color="#ffffff" />
+        </Pressable>
+        {url ? (
+          <Image
+            source={{ uri: url }}
+            style={{ width: width - 32, height: height - insets.top - insets.bottom - 48 }}
+            contentFit="contain"
+            accessibilityLabel="Message attachment image"
+          />
+        ) : null}
+      </View>
+    </Modal>
+  )
+}
+
+function MessageImagePreview({ url, mine }: { url: string; mine: boolean }) {
+  const native = useThemedNative()
+  const [failed, setFailed] = useState(false)
+  const [lightboxOpen, setLightboxOpen] = useState(false)
+
+  const openPreview = () => {
+    if (!url) return
+    setLightboxOpen(true)
+  }
+
+  if (failed || !url) {
+    return (
+      <>
+        <Pressable
+          style={[styles.attachmentChip, mine && styles.attachmentChipMine]}
+          onPress={openPreview}
+          accessibilityRole="button"
+          accessibilityLabel="View image"
+        >
+          <Ionicons name="image-outline" size={14} color={mine ? "#ffffff" : native.secondaryLabel} />
+          <Text style={[styles.attachmentName, { color: mine ? "#ffffff" : native.label }]} numberOfLines={1}>
+            View image
+          </Text>
+        </Pressable>
+        <MessageImageLightbox visible={lightboxOpen} url={url} onClose={() => setLightboxOpen(false)} />
+      </>
+    )
+  }
+
+  return (
+    <>
+      <Pressable
+        onPress={openPreview}
+        accessibilityRole="imagebutton"
+        accessibilityLabel="View image full screen"
+      >
+        <Image
+          source={{ uri: url }}
+          style={styles.attachmentImage}
+          contentFit="cover"
+          onError={() => setFailed(true)}
+        />
+      </Pressable>
+      <MessageImageLightbox visible={lightboxOpen} url={url} onClose={() => setLightboxOpen(false)} />
+    </>
+  )
+}
+
 function AttachmentChip({ attachment, mine }: { attachment: MessageAttachment; mine: boolean }) {
   const type = useNativeType()
-  const url = resolveAttachmentUrl(attachment.fileUrl)
+  const native = useThemedNative()
+  const url = resolveAttachmentUrl(attachment.fileUrl || "")
+  const label = String(attachment.fileName || "").trim() || "Attachment"
+  const isImage = isImageMimeType(attachment.mimeType, attachment.fileName)
+
+  if (isImage && url) {
+    return <MessageImagePreview url={url} mine={mine} />
+  }
 
   return (
     <Pressable
-      style={[styles.attachmentChip, mine && styles.attachmentChipMine]}
-      onPress={() => void Linking.openURL(url)}
+      style={[styles.attachmentChip, mine && styles.attachmentChipMine, { backgroundColor: mine ? "rgba(255,255,255,0.18)" : native.fill }]}
+      onPress={() => {
+        if (!url) return
+        void Linking.openURL(url)
+      }}
+      disabled={!url}
     >
-      <Ionicons name="document-outline" size={14} color={mine ? "#ffffff" : undefined} />
+      <Ionicons name="document-outline" size={14} color={mine ? "#ffffff" : native.secondaryLabel} />
       <Text
-        style={[type.caption, styles.attachmentName, mine && { color: "#ffffff" }]}
+        style={[type.caption, styles.attachmentName, { color: mine ? "#ffffff" : native.label }]}
         numberOfLines={1}
       >
-        {attachment.fileName}
+        {label}
       </Text>
     </Pressable>
   )
@@ -543,6 +685,26 @@ const styles = StyleSheet.create({
   },
   attachmentChipMine: { backgroundColor: "rgba(255,255,255,0.18)" },
   attachmentName: { flexShrink: 1 },
+  attachmentImage: {
+    width: "100%",
+    minWidth: 180,
+    maxWidth: 280,
+    height: 180,
+    borderRadius: 12,
+    backgroundColor: "rgba(127,127,127,0.2)",
+  },
+  imageLightboxBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.92)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  imageLightboxClose: {
+    position: "absolute",
+    right: 16,
+    zIndex: 2,
+    padding: 4,
+  },
   reactionRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 4, marginHorizontal: 4 },
   reactionChip: {
     flexDirection: "row",

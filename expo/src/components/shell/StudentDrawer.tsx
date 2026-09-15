@@ -23,10 +23,15 @@ import {
   type StudentNavItem,
 } from "../../constants/student-nav"
 import { useStudentShell } from "../../context/StudentShellContext"
+import {
+  resolveStudentNavBadgeCount,
+  studentNavBadgeTotal,
+} from "../../lib/module-nav-badges"
 import { getNavUpgradePrompt } from "../../lib/membership-tier"
 import type { StudentSession } from "../../lib/session"
 import type { MembershipTier } from "../../types/dashboard"
 import { NATIVE } from "../../constants/faculty-native-theme"
+import { NativeCountBadge } from "../faculty/faculty-shared"
 import { useAppThemeTokens } from "../../context/AppearanceProvider"
 import { getMembershipPlan, nextUpgradeTier } from "../../lib/membership-plans"
 import { membershipTierSolidBadge } from "../../lib/membership-plan-theme"
@@ -68,7 +73,15 @@ export function StudentDrawer({ session }: Props) {
   const panelWidth = useDrawerPanelWidth()
   const router = useRouter()
   const pathname = usePathname()
-  const { drawerOpen, closeDrawer, membershipTier, membershipTierLoaded } = useStudentShell()
+  const {
+    drawerOpen,
+    closeDrawer,
+    membershipTier,
+    membershipTierLoaded,
+    unreadMessagesCount,
+    notificationCount,
+    badges,
+  } = useStudentShell()
   const { modalVisible } = useShellDrawerMotion()
   const drawerOverlayVisible = drawerOpen || modalVisible
   const drawerTheme = useDrawerNavTheme()
@@ -78,6 +91,14 @@ export function StudentDrawer({ session }: Props) {
   const normalizedPathname = useMemo(() => normalizeRoutePathname(pathname), [pathname])
   const { scrollRef, contentRef, registerRow, unregisterRow, onRowLayout, onScroll } =
     useDrawerScrollToActive(activeItemId, drawerOpen)
+
+  function badgeFor(item: StudentNavItem): number | null {
+    if (item.id === STUDENT_DASHBOARD_LINK.id) {
+      const total = studentNavBadgeTotal(badges, notificationCount)
+      return total > 0 ? total : null
+    }
+    return resolveStudentNavBadgeCount(badges, notificationCount, unreadMessagesCount, item.badgeKey)
+  }
 
   useEffect(() => {
     closeDrawer()
@@ -192,6 +213,7 @@ export function StudentDrawer({ session }: Props) {
                   <NavRow
                     item={STUDENT_DASHBOARD_LINK}
                     active={isDrawerShellRouteActive(normalizedPathname, STUDENT_DASHBOARD_LINK.route)}
+                    badge={badgeFor(STUDENT_DASHBOARD_LINK)}
                     tier={membershipTier}
                     tierLoaded={membershipTierLoaded}
                     onPress={() => handleNavPress(STUDENT_DASHBOARD_LINK)}
@@ -203,6 +225,7 @@ export function StudentDrawer({ session }: Props) {
                     key={group.id}
                     group={group}
                     pathname={normalizedPathname}
+                    badgeFor={badgeFor}
                     tier={membershipTier}
                     tierLoaded={membershipTierLoaded}
                     onPress={handleNavPress}
@@ -223,6 +246,7 @@ export function StudentDrawer({ session }: Props) {
                   <NavRow
                     item={STUDENT_SETTINGS_LINK}
                     active={isDrawerShellRouteActive(normalizedPathname, STUDENT_SETTINGS_LINK.route)}
+                    badge={badgeFor(STUDENT_SETTINGS_LINK)}
                     tier={membershipTier}
                     tierLoaded={membershipTierLoaded}
                     onPress={() => handleNavPress(STUDENT_SETTINGS_LINK)}
@@ -232,6 +256,7 @@ export function StudentDrawer({ session }: Props) {
                 <FlatNavSection
                   group={STUDENT_SUPPORT_GROUP}
                   pathname={normalizedPathname}
+                  badgeFor={badgeFor}
                   tier={membershipTier}
                   tierLoaded={membershipTierLoaded}
                   onPress={handleNavPress}
@@ -339,6 +364,7 @@ function DrawerUpgradeCard({
 function FlatNavSection({
   group,
   pathname,
+  badgeFor,
   tier,
   tierLoaded,
   onPress,
@@ -348,6 +374,7 @@ function FlatNavSection({
 }: {
   group: StudentNavGroup
   pathname: string
+  badgeFor: (item: StudentNavItem) => number | null
   tier: MembershipTier
   tierLoaded: boolean
   onPress: (item: StudentNavItem) => void
@@ -372,6 +399,7 @@ function FlatNavSection({
           <NavRow
             item={item}
             active={isDrawerShellRouteActive(pathname, item.route)}
+            badge={badgeFor(item)}
             tier={tier}
             tierLoaded={tierLoaded}
             onPress={() => onPress(item)}
@@ -387,12 +415,14 @@ const AnimatedPressable = Animated.createAnimatedComponent(Pressable)
 function NavRowComponent({
   item,
   active,
+  badge,
   tier,
   tierLoaded,
   onPress,
 }: {
   item: StudentNavItem
   active: boolean
+  badge: number | null
   tier: MembershipTier
   tierLoaded: boolean
   onPress: () => void
@@ -438,6 +468,7 @@ function NavRowComponent({
         {item.label}
       </Text>
 
+      {badge ? <NativeCountBadge count={badge} variant="compact" /> : null}
       {locked ? (
         <View style={[styles.lockChip, { backgroundColor: theme.iconWellBg }]}>
           <DrawerNavIcon name="lock-closed" size={11} color={theme.inactiveIcon} strokeWidth={2.25} />

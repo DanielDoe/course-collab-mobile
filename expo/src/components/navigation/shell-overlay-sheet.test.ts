@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
-import { shellOverlaySheetCanPresent } from "./shell-overlay-sheet"
+import { shellOverlaySheetCanPresent, shellSheetModalDismissDelayMs } from "./shell-overlay-sheet"
 
 describe("shellOverlaySheetCanPresent", () => {
   it("presents from the header when no other shell modal is up", () => {
@@ -46,6 +46,11 @@ describe("shellOverlaySheetCanPresent", () => {
       }),
       false,
     )
+  })
+
+  it("uses a non-zero dismiss delay while modals animate out", () => {
+    assert.equal(shellSheetModalDismissDelayMs(true), 16)
+    assert.ok(shellSheetModalDismissDelayMs(false) >= 200)
   })
 
   it("stays closed when the picker was not requested", () => {

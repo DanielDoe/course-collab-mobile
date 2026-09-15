@@ -22,7 +22,7 @@ export type RewardsPolicy = {
   auto_approve_practice_submissions: boolean
   max_daily_submission_points: number
   duplicate_detection_enabled: boolean
-  /** When true (default), student leaderboard hides peer names/points for FERPA. */
+  /** When true, student leaderboard hides peer names for FERPA. Default: visible. */
   blur_leaderboard_peer_names: boolean
   /** Show the Code Assignments block on the student classroom points page. */
   show_code_assignments: boolean
@@ -66,7 +66,7 @@ export const DEFAULT_REWARDS_POLICY: RewardsPolicy = {
   auto_approve_practice_submissions: true,
   max_daily_submission_points: 50,
   duplicate_detection_enabled: true,
-  blur_leaderboard_peer_names: true,
+  blur_leaderboard_peer_names: false,
   show_code_assignments: true,
   show_solution_assignments: true,
 }

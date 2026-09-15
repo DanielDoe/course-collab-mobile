@@ -76,7 +76,8 @@ export function AiTutorMessageMarkdown({
   const cachedHeight = readCachedMarkdownHeight(messageId)
   const [height, setHeight] = useState(cachedHeight ?? 96)
   const [paintReady, setPaintReady] = useState(Boolean(streaming || cachedHeight))
-  const rich = useMemo(() => needsMarkdownRichRender(prepared || markdown), [markdown, prepared])
+  // Decide richness from prepared text only — raw HTML like `<p></p>` must not force an empty WebView.
+  const rich = useMemo(() => Boolean(prepared) && needsMarkdownRichRender(prepared), [prepared])
 
   const html = useMemo(
     () =>
@@ -119,6 +120,7 @@ export function AiTutorMessageMarkdown({
   }, [messageId, markdown, streaming])
 
   if (!markdown.trim()) return null
+  if (!prepared.trim()) return null
 
   if (!rich) {
     return (
@@ -129,7 +131,7 @@ export function AiTutorMessageMarkdown({
           { color: onAccentSurface ? "#FFFFFF" : tokens.text },
         ]}
       >
-        {markdown.trim()}
+        {prepared.trim()}
       </Text>
     )
   }

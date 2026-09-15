@@ -1,4 +1,8 @@
-export type FacultyQuickActionBadgeKey = "pendingPoints" | "pendingIssues" | "officeHours"
+export type FacultyQuickActionBadgeKey =
+  | "pendingPoints"
+  | "pendingIssues"
+  | "officeHours"
+  | "unreadMessages"
 
 export type FacultyQuickActionId =
   | "points"
@@ -24,7 +28,7 @@ export const FACULTY_DASHBOARD_QUICK_ACTIONS: FacultyQuickAction[] = [
   { id: "points", label: "Approve Points", href: "/module/classroom-points", badgeKey: "pendingPoints" },
   { id: "issues", label: "Issues", href: "/module/quizzes?segment=issues", badgeKey: "pendingIssues" },
   { id: "office-hours", label: "Office Hours", href: "/module/office-hours", badgeKey: "officeHours" },
-  { id: "messages", label: "Messages", href: "/module/messages" },
+  { id: "messages", label: "Messages", href: "/module/messages", badgeKey: "unreadMessages" },
   { id: "lectures", label: "Lectures", href: "/module/lectures" },
   { id: "quizzes", label: "Quizzes", href: "/module/quizzes" },
   { id: "attendance", label: "Attendance", href: "/module/attendance" },

@@ -44,6 +44,7 @@ import { useGlassChromeActive } from "../theme/GlassSurface"
 import { NativeCountBadge } from "../faculty/faculty-shared"
 import { BrandLogoMark } from "../brand/BrandLogoMark"
 import { useFacultyShell } from "../../context/FacultyShellContext"
+import { resolveFacultyNavBadgeCount } from "../../lib/module-nav-badges"
 import type { FacultySession } from "../../lib/session"
 import type { InstructorCourse } from "../../lib/instructor-api"
 import type { FacultyMembershipTier } from "../../types/dashboard"
@@ -86,12 +87,7 @@ export function FacultyDrawer({ session }: Props) {
   }, [pathname, closeDrawer])
 
   function badgeFor(item: FacultyNavItem): number | null {
-    if (item.badgeKey === "pendingPoints") return badges.pendingPoints || null
-    if (item.badgeKey === "pendingIssues") return badges.pendingIssues || null
-    if (item.badgeKey === "officeHours") return badges.officeHours || null
-    if (item.badgeKey === "courseExchange") return badges.courseExchange || null
-    if (item.badgeKey === "notifications") return notificationCount || null
-    return null
+    return resolveFacultyNavBadgeCount(badges, notificationCount, item.badgeKey)
   }
 
   function navigate(item: FacultyNavItem) {

@@ -5,6 +5,7 @@ import { FullRootProviders } from "../src/components/root/FullRootProviders"
 import { SessionProvider } from "../src/context/SessionProvider"
 import { bootLog } from "../src/lib/boot-diagnostics"
 import { hideAppSplashFireAndForget, initAppSplash, scheduleSplashHideFallback } from "../src/lib/app-splash"
+import { startEasUpdateListener } from "../src/lib/eas-update"
 
 bootLog("Root layout module evaluated")
 void initAppSplash()
@@ -45,7 +46,11 @@ export default function RootLayout() {
     globalThis.__CC_ROOT_LAYOUT_MOUNTED__ = true
     hideAppSplashFireAndForget()
     const cancelFallback = scheduleSplashHideFallback(600)
-    return cancelFallback
+    const stopUpdates = startEasUpdateListener()
+    return () => {
+      cancelFallback()
+      stopUpdates()
+    }
   }, [])
 
   return (

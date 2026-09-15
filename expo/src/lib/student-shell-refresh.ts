@@ -1,6 +1,7 @@
 import {
   fetchClassroomPoints,
   fetchNotificationCount} from "./student-dashboard-stats"
+import { fetchStudentModuleBadges, type StudentBadges } from "./module-nav-badges"
 import { setCachedMembershipTier } from "./membership-tier-cache"
 import { higherMembershipTier, parseMembershipTier } from "./membership-tier"
 import { studentApi, studentAuthenticatedRequest } from "./student-api"
@@ -93,13 +94,16 @@ export async function refreshStudentShellData(
     setMembershipTierLoaded: (loaded: boolean) => void
     setClassroomPoints: (points: number) => void
     setNotificationCount: (count: number) => void
+    setBadges: (partial: Partial<StudentBadges>) => void
+    setUnreadMessagesCount: (count: number) => void
   },
   options?: { syncStripe?: boolean },
 ): Promise<void> {
-  const [tier, points, notifications] = await Promise.all([
+  const [tier, points, notifications, moduleBadges] = await Promise.all([
     fetchEffectiveMembershipTier(session, options),
     fetchClassroomPoints(session).catch(() => null),
     fetchNotificationCount(session).catch(() => null),
+    fetchStudentModuleBadges(session).catch(() => null),
   ])
 
   if (tier) {
@@ -112,5 +116,12 @@ export async function refreshStudentShellData(
   if (notifications != null) {
     setters.setNotificationCount(notifications)
     void setAppBadgeCount(notifications)
+  }
+  if (moduleBadges) {
+    setters.setBadges({
+      ...moduleBadges,
+      notifications: moduleBadges.notifications || notifications || 0,
+    })
+    setters.setUnreadMessagesCount(moduleBadges.unreadMessages)
   }
 }

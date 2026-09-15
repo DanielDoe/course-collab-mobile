@@ -5,8 +5,15 @@ export type ModuleListPagePreset = "compact" | "lecture" | "standard" | "tall"
 export const MODULE_LIST_ROW_GAP = 10
 export const MODULE_LIST_PAGER_HEIGHT = 48
 export const MODULE_LIST_DUAL_PAGER_HEIGHT = 88
+/** Fixed footer when only the range label is shown (no Previous / Next). */
+export const MODULE_LIST_PAGER_LABEL_HEIGHT = 40
 /** Extra scroll breathing room so the pager row stays above the search dock. */
 export const MODULE_LIST_VIEWPORT_BUFFER = 16
+
+export function moduleListPagerChromeHeight(total: number, pageCount: number): number {
+  if (total <= 0) return 0
+  return pageCount > 1 ? MODULE_LIST_DUAL_PAGER_HEIGHT : MODULE_LIST_PAGER_LABEL_HEIGHT
+}
 
 export const MODULE_LIST_PAGE_PRESETS = {
   /** Leaderboard / dense rows (~PracticeLeaderboardListCard). */

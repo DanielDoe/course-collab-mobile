@@ -20,21 +20,24 @@ export function normalizeApiBaseUrl(url: string): string {
   return url.replace(/\/$/, "")
 }
 
+function readConfiguredAppUrl(): string | undefined {
+  const fromEnv = process.env.EXPO_PUBLIC_APP_URL
+  if (typeof fromEnv === "string" && fromEnv.trim()) return fromEnv.trim()
+  const fromExtra = Constants.expoConfig?.extra?.appUrl
+  if (typeof fromExtra === "string" && fromExtra.trim()) return fromExtra.trim()
+  return undefined
+}
+
 /** Resolve API base URL from Expo config with production-safe fallbacks. */
 export function resolveApiBaseUrl(): string {
-  const configured = Constants.expoConfig?.extra?.appUrl
-  if (typeof configured === "string" && configured.trim()) {
-    const normalized = normalizeApiBaseUrl(configured.trim())
+  const configured = readConfiguredAppUrl()
+  if (configured) {
+    const normalized = normalizeApiBaseUrl(configured)
+    // Never ship a local/LAN API URL in production builds.
     if (isProductionEnvironment() && isLocalOrLanHost(normalized)) {
       return PRODUCTION_API_BASE_URL
     }
-    if (!isLocalOrLanHost(normalized)) {
-      return normalized
-    }
-  }
-
-  if (isProductionEnvironment()) {
-    return PRODUCTION_API_BASE_URL
+    return normalized
   }
 
   return PRODUCTION_API_BASE_URL

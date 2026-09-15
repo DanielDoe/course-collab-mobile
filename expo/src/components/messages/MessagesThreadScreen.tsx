@@ -5,6 +5,7 @@ import {
   Keyboard,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -12,6 +13,7 @@ import {
 import { AppAlert } from "../../lib/app-alert"
 import * as DocumentPicker from "expo-document-picker"
 import * as ImagePicker from "expo-image-picker"
+import { Image } from "expo-image"
 import { useLocalSearchParams, useRouter } from "expo-router"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { useStableTopSafeInset } from "../shell/shell-shared"
@@ -37,6 +39,11 @@ import {
   onMessagesRefresh,
   shouldReloadThreadOnMessageRefresh,
 } from "../../lib/notifications/notification-events"
+import {
+  inferMessageAttachmentMime,
+  isImageMimeType,
+  isPersistedMessageAttachmentUrl,
+} from "../../lib/messages-media"
 import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
 import { useNativeType } from "../../lib/themed-module-theme"
 import { useChatListScrollToEnd } from "../../hooks/useChatListScrollToEnd"
@@ -66,6 +73,23 @@ import type { FacultySession, StudentSession } from "../../lib/session"
 import { useMessagesLayout } from "../../hooks/useMessagesLayout"
 
 const EMPTY_THREAD_MESSAGES: ThreadMessage[] = []
+
+function composerAttachmentLabel(fileName: string, isImage: boolean): string {
+  const name = fileName.trim()
+  if (!name || /^messages-upload-/i.test(name) || /^photo-\d+/i.test(name) || /^IMG_/i.test(name)) {
+    return isImage ? "Photo" : "Attachment"
+  }
+  return name
+}
+
+function attachmentPayload(draft: MessageAttachmentDraft): MessageAttachmentDraft {
+  return {
+    fileName: draft.fileName,
+    fileUrl: draft.fileUrl,
+    mimeType: draft.mimeType ?? null,
+    fileSize: draft.fileSize ?? null,
+  }
+}
 
 function applyOptimisticReaction(
   reactions: MessageReactionGroup[],
@@ -238,10 +262,10 @@ export function MessagesThreadScreen() {
   const [thread, setThread] = useState<ThreadDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
-  const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<ApiErrorPresentation | null>(null)
   const [draft, setDraft] = useState("")
   const [attachments, setAttachments] = useState<MessageAttachmentDraft[]>([])
+  const composerUploading = attachments.some((item) => item.uploadState === "uploading")
   const [attachMenuOpen, setAttachMenuOpen] = useState(false)
   const [importCourseOpen, setImportCourseOpen] = useState(false)
   const [importedQuestion, setImportedQuestion] = useState<CoraImportedProblem | null>(null)
@@ -335,12 +359,29 @@ export function MessagesThreadScreen() {
     const body = importedQuestion
       ? buildMessageBodyWithCourseImport(importedQuestion, importedQuestionLabel ?? "", note)
       : note
-    if (!body && attachments.length === 0) return
+    if (attachments.some((item) => item.uploadState === "uploading")) {
+      AppAlert.alert("Still uploading", "Wait for the photo to finish uploading, then send.")
+      return
+    }
+    const readyAttachments = attachments
+      .filter((item) => isPersistedMessageAttachmentUrl(item.fileUrl))
+      .map(attachmentPayload)
+    if (attachments.length > 0 && readyAttachments.length === 0) {
+      AppAlert.alert(
+        "Attachment not ready",
+        "The photo or file did not finish uploading. Remove it and attach again with + → Photo.",
+      )
+      return
+    }
+    if (!body && readyAttachments.length === 0) return
 
     setSending(true)
     setError(null)
     try {
-      const result = await messagesApi.replyToThread(auth, thread.id, { body, attachments })
+      const result = await messagesApi.replyToThread(auth, thread.id, {
+        body,
+        attachments: readyAttachments,
+      })
       setDraft("")
       setAttachments([])
       setImportedQuestion(null)
@@ -536,14 +577,53 @@ export function MessagesThreadScreen() {
 
   async function uploadFile(uri: string, name: string, mimeType: string) {
     if (!auth) return
-    setUploading(true)
+    const resolvedMime = inferMessageAttachmentMime(name, mimeType, uri)
+    if (resolvedMime === "application/octet-stream") {
+      AppAlert.alert(
+        "Unsupported file",
+        "That file type is not allowed. Try a photo (JPEG/PNG/HEIC) or PDF.",
+      )
+      return
+    }
+
+    const localKey = `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    const pending: MessageAttachmentDraft = {
+      localKey,
+      fileName: name,
+      fileUrl: "",
+      mimeType: resolvedMime,
+      localPreviewUri: uri,
+      uploadState: "uploading",
+    }
+    setAttachments((prev) => [...prev, pending])
     try {
-      const uploaded = await messagesApi.uploadAttachment(auth, { uri, name, mimeType })
-      setAttachments((prev) => [...prev, uploaded])
+      const uploaded = await messagesApi.uploadAttachment(auth, {
+        uri,
+        name,
+        mimeType: resolvedMime,
+      })
+      setAttachments((prev) =>
+        prev.map((item) =>
+          item.localKey === localKey
+            ? {
+                ...uploaded,
+                localKey,
+                localPreviewUri: uri,
+                uploadState: "ready",
+                fileName: uploaded.fileName || name,
+              }
+            : item,
+        ),
+      )
     } catch (err) {
-      AppAlert.alert("Upload failed", err instanceof ApiError ? err.message : "Could not upload file.")
-    } finally {
-      setUploading(false)
+      setAttachments((prev) => prev.filter((item) => item.localKey !== localKey))
+      const message =
+        err instanceof ApiError
+          ? err.message
+          : err instanceof Error && err.message.trim()
+            ? err.message
+            : "Could not upload file."
+      AppAlert.alert("Upload failed", message)
     }
   }
 
@@ -563,7 +643,8 @@ export function MessagesThreadScreen() {
     })
     if (result.canceled || !result.assets?.[0]) return
     const asset = result.assets[0]
-    await uploadFile(asset.uri, asset.name ?? "attachment", asset.mimeType ?? "application/octet-stream")
+    const name = asset.name ?? "attachment"
+    await uploadFile(asset.uri, name, asset.mimeType ?? "application/octet-stream")
   }
 
   async function pickPhoto(fromCamera: boolean) {
@@ -581,21 +662,30 @@ export function MessagesThreadScreen() {
       }
     }
 
+    const libraryOptions: ImagePicker.ImagePickerOptions = {
+      quality: 0.85,
+      allowsEditing: false,
+      mediaTypes: ["images"],
+    }
+    const compatible = ImagePicker.UIImagePickerPreferredAssetRepresentationMode?.Compatible
+    if (compatible != null) {
+      libraryOptions.preferredAssetRepresentationMode = compatible
+    }
+
     const result = fromCamera
       ? await ImagePicker.launchCameraAsync({ quality: 0.85, allowsEditing: false })
-      : await ImagePicker.launchImageLibraryAsync({
-          quality: 0.85,
-          allowsEditing: false,
-          mediaTypes: ["images"],
-        })
+      : await ImagePicker.launchImageLibraryAsync(libraryOptions)
 
     if (result.canceled || !result.assets?.[0]) return
     const asset = result.assets[0]
-    await uploadFile(
-      asset.uri,
-      asset.fileName ?? `photo-${Date.now()}.jpg`,
-      asset.mimeType ?? "image/jpeg",
-    )
+    let name = asset.fileName?.trim() || `photo-${Date.now()}.jpg`
+    let mimeType = inferMessageAttachmentMime(name, asset.mimeType, asset.uri)
+    if (/\.heic$|\.heif$/i.test(name) || /heic|heif/i.test(mimeType)) {
+      name = name.replace(/\.(heic|heif)$/i, ".jpg")
+      if (!/\.(jpe?g|png|gif|webp)$/i.test(name)) name = `${name}.jpg`
+      mimeType = "image/jpeg"
+    }
+    await uploadFile(asset.uri, name, mimeType)
   }
 
   const openProfile = useCallback(() => setProfileOpen(true), [])
@@ -669,19 +759,73 @@ export function MessagesThreadScreen() {
                   },
                 ]}
               >
-                {attachments.map((attachment, index) => (
-                  <View key={`${attachment.fileUrl}-${index}`} style={[styles.attachChip, { backgroundColor: native.fill }]}>
-                    <Text style={[type.caption, { flex: 1 }]} numberOfLines={1}>
-                      {attachment.fileName}
-                    </Text>
-                    <Pressable
-                      onPress={() => setAttachments((prev) => prev.filter((_, i) => i !== index))}
-                      hitSlop={6}
-                    >
-                      <Ionicons name="close-circle" size={18} color={native.secondaryLabel} />
-                    </Pressable>
-                  </View>
-                ))}
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.attachScrollContent}
+                  keyboardShouldPersistTaps="handled"
+                >
+                  {attachments.map((attachment, index) => {
+                    const isImage = isImageMimeType(attachment.mimeType, attachment.fileName)
+                    const previewUri = attachment.localPreviewUri || attachment.fileUrl
+                    const isUploading = attachment.uploadState === "uploading"
+                    const label = composerAttachmentLabel(attachment.fileName, isImage)
+                    return (
+                      <View
+                        key={attachment.localKey ?? `${attachment.fileUrl}-${index}`}
+                        style={[
+                          styles.attachPreviewCard,
+                          {
+                            backgroundColor: native.fill,
+                            borderColor: native.separator,
+                          },
+                        ]}
+                      >
+                        {isImage && previewUri ? (
+                          <Image
+                            source={{ uri: previewUri }}
+                            style={styles.attachPreviewImage}
+                            contentFit="cover"
+                            transition={120}
+                          />
+                        ) : (
+                          <View style={[styles.attachPreviewFallback, { backgroundColor: native.secondaryGrouped }]}>
+                            <Ionicons
+                              name="document-outline"
+                              size={28}
+                              color={native.secondaryLabel}
+                            />
+                          </View>
+                        )}
+                        {isUploading ? (
+                          <View style={styles.attachPreviewBusy}>
+                            <ActivityIndicator size="small" color="#ffffff" />
+                            <Text style={styles.attachPreviewBusyText}>Uploading…</Text>
+                          </View>
+                        ) : null}
+                        <Text
+                          style={[type.caption, styles.attachPreviewLabel, { color: native.secondaryLabel }]}
+                          numberOfLines={1}
+                        >
+                          {isUploading ? "Uploading…" : label}
+                        </Text>
+                        <Pressable
+                          style={styles.attachPreviewRemove}
+                          onPress={() =>
+                            setAttachments((prev) =>
+                              prev.filter((_, i) => i !== index),
+                            )
+                          }
+                          hitSlop={8}
+                          accessibilityRole="button"
+                          accessibilityLabel="Remove attachment"
+                        >
+                          <Ionicons name="close-circle" size={22} color={native.secondaryLabel} />
+                        </Pressable>
+                      </View>
+                    )
+                  })}
+                </ScrollView>
               </View>
             ) : null}
 
@@ -692,7 +836,7 @@ export function MessagesThreadScreen() {
               onAttach={() => setAttachMenuOpen(true)}
               placeholder="Message…"
               sending={sending}
-              uploading={uploading}
+              uploading={composerUploading}
               hasAttachments={attachments.length > 0}
               hasCourseImport={importedQuestion != null && !editingMessage}
               editing={editingMessage != null}
@@ -837,8 +981,11 @@ const styles = StyleSheet.create({
   inlineErrorNotice: { marginHorizontal: 0, marginBottom: 6 },
   attachRow: {
     borderTopWidth: StyleSheet.hairlineWidth,
-    paddingVertical: 8,
-    gap: 6,
+    paddingVertical: 10,
+  },
+  attachScrollContent: {
+    gap: 10,
+    paddingRight: 4,
   },
   importPreviewDock: {
     borderRadius: 16,
@@ -848,12 +995,46 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     marginBottom: 6,
   },
-  attachChip: {
-    flexDirection: "row",
+  attachPreviewCard: {
+    width: 96,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: "hidden",
+    paddingBottom: 6,
+  },
+  attachPreviewImage: {
+    width: "100%",
+    height: 72,
+    backgroundColor: "rgba(120,120,128,0.18)",
+  },
+  attachPreviewFallback: {
+    width: "100%",
+    height: 72,
     alignItems: "center",
-    gap: 8,
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+    justifyContent: "center",
+  },
+  attachPreviewBusy: {
+    ...StyleSheet.absoluteFill,
+    top: 0,
+    height: 72,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+  },
+  attachPreviewBusyText: {
+    color: "#ffffff",
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  attachPreviewLabel: {
+    marginTop: 4,
+    paddingHorizontal: 8,
+    fontSize: 11,
+  },
+  attachPreviewRemove: {
+    position: "absolute",
+    top: 4,
+    right: 4,
   },
 })

@@ -9,6 +9,7 @@ import { APP_BUTTON_RADIUS } from "../../constants/app-button"
 import { semanticSoft } from "../../lib/themed-module-theme"
 import { useReliableTextInputFocus } from "../../hooks/useReliableTextInputFocus"
 import { motion, timing, triggerMotionHaptic } from "../../lib/motion"
+import { useAuthScrollIntoView } from "./AuthFlowScroll"
 import { useLoginTheme } from "./login-theme"
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable)
@@ -216,6 +217,7 @@ export function LoginField({
   const inputRef = useRef<TextInput>(null)
   const [focused, setFocused] = useState(false)
   const { focusReliably, onFocus, onBlur } = useReliableTextInputFocus(inputRef, editable)
+  const requestScrollIntoView = useAuthScrollIntoView()
   const keyboardAppearance = LOGIN.isDark ? "dark" : "light"
   const iconName = leadingIcon === undefined ? resolveLeadingIcon(label, secureTextEntry) : leadingIcon
   const isEmailField = label.trim().toLowerCase().includes("email")
@@ -280,6 +282,8 @@ export function LoginField({
           onFocus={() => {
             onFocus()
             setFocused(true)
+            // Keyboard often stays up between fields — scroll so the last field isn't covered.
+            requestScrollIntoView()
           }}
           onBlur={() => {
             onBlur()

@@ -33,7 +33,9 @@ export function ModuleFilterBottomSheet({
     <GlassBottomSheetModal
       visible={visible}
       onClose={onClose}
-      scrollable={scrollable}
+      // Keep scrolling inside this sheet so the modal host stays content-sized
+      // (an outer ScrollView was eating backdrop taps above short filter menus).
+      scrollable={false}
       accessibilityLabel={`Close ${title}`}
       sheetHostStyle={styles.sheetHost}
     >
@@ -45,6 +47,7 @@ export function ModuleFilterBottomSheet({
         ) : null}
         {scrollable ? (
           <ScrollView
+            style={styles.optionsScroll}
             contentContainerStyle={styles.scrollContent}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="on-drag"
@@ -65,6 +68,7 @@ const styles = StyleSheet.create({
   sheet: { paddingHorizontal: 16, paddingTop: 4 },
   title: { marginTop: 4, marginBottom: 4 },
   subtitle: { marginBottom: 8, lineHeight: 18 },
+  optionsScroll: { maxHeight: 420 },
   scrollContent: { gap: 8, paddingBottom: 8 },
   body: { gap: 8 },
 })

@@ -9,6 +9,8 @@ export type FacultyBadges = {
   pendingIssues: number
   officeHours: number
   courseExchange: number
+  unreadMessages: number
+  pendingAccessRequests: number
 }
 
 type FacultyShellContextValue = {
@@ -64,6 +66,8 @@ export function FacultyShellProvider({ children }: { children: ReactNode }) {
     pendingIssues: 0,
     officeHours: 0,
     courseExchange: 0,
+    unreadMessages: 0,
+    pendingAccessRequests: 0,
   })
   const [membershipTier, setMembershipTier] = useState<FacultyMembershipTier>("Free")
   const [membershipTierLoaded, setMembershipTierLoaded] = useState(false)
@@ -74,7 +78,17 @@ export function FacultyShellProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const setBadges = useCallback((partial: Partial<FacultyBadges>) => {
-    setBadgesState((prev) => ({ ...prev, ...partial }))
+    setBadgesState((prev) => {
+      let changed = false
+      for (const key of Object.keys(partial) as (keyof FacultyBadges)[]) {
+        if (prev[key] !== partial[key]) {
+          changed = true
+          break
+        }
+      }
+      if (!changed) return prev
+      return { ...prev, ...partial }
+    })
   }, [])
 
   const closeOverlays = useCallback(() => {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import {
   facultyListPageCount,
   facultyListPageLabel,
@@ -54,15 +54,36 @@ export function useFacultyListPager<T>(
   }, [effectiveResetKey])
 
   useEffect(() => {
-    if (page > pageCount - 1) setPage(Math.max(0, pageCount - 1))
+    if (page > pageCount - 1) {
+      setPage(Math.max(0, pageCount - 1))
+    }
   }, [page, pageCount])
+
+  const setPageClamped = useCallback(
+    (next: number) => {
+      setPage(Math.min(Math.max(0, next), Math.max(0, pageCount - 1)))
+    },
+    [pageCount],
+  )
+
+  const stepPage = useCallback(
+    (delta: number) => {
+      setPage((current) => {
+        const max = Math.max(0, pageCount - 1)
+        const clamped = Math.min(Math.max(0, current), max)
+        return Math.min(Math.max(0, clamped + delta), max)
+      })
+    },
+    [pageCount],
+  )
 
   return {
     items: paged,
     page: safePage,
     pageCount,
     pageSize,
-    setPage,
+    setPage: setPageClamped,
+    stepPage,
     label: facultyListPageLabel(noun, items.length, safePage, pageSize),
     total: items.length,
   }

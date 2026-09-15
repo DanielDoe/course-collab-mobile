@@ -101,10 +101,7 @@ export function FacultyProfileMenu({ session }: Props) {
             icon="book-outline"
             label="Switch course"
             detail={courseDetail}
-            onPress={() => {
-              closeProfile()
-              openCoursePicker()
-            }}
+            onPress={() => openCoursePicker()}
             showSeparator
           />
           <GlassMenuRow

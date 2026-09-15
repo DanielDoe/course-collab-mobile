@@ -16,6 +16,8 @@ export function useStudentShellRefresh(session: StudentSession) {
     setMembershipTierLoaded,
     setClassroomPoints,
     setNotificationCount,
+    setBadges,
+    setUnreadMessagesCount,
     registerRefreshStudentData,
   } = useStudentShell()
   const reloadEnrollments = useOptionalStudentActiveCourse()?.reloadEnrollments
@@ -44,6 +46,8 @@ export function useStudentShellRefresh(session: StudentSession) {
               setMembershipTierLoaded,
               setClassroomPoints,
               setNotificationCount,
+              setBadges,
+              setUnreadMessagesCount,
             },
             { syncStripe: force },
           ),
@@ -54,7 +58,16 @@ export function useStudentShellRefresh(session: StudentSession) {
         refreshingRef.current = false
       }
     },
-    [reloadEnrollments, session, setMembershipTier, setMembershipTierLoaded, setClassroomPoints, setNotificationCount],
+    [
+      reloadEnrollments,
+      session,
+      setMembershipTier,
+      setMembershipTierLoaded,
+      setClassroomPoints,
+      setNotificationCount,
+      setBadges,
+      setUnreadMessagesCount,
+    ],
   )
 
   useEffect(() => {

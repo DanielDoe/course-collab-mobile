@@ -34,6 +34,7 @@ import {
   seedStudentDashboardCache,
 } from "./query/prefetch"
 import { enrichStudentContentSession } from "./student-content-session"
+import { messagesApi } from "./messages-api"
 
 let bootstrapInFlight: Promise<void> | null = null
 let bootstrapCompletedKey: string | null = null
@@ -113,8 +114,19 @@ async function bootstrapFacultyForCourse(
     academicTermId: course.academic_term_id ?? null,
     universityId: session.selectedUniversityId ?? null,
   }
-  const [stats, charts, activity, notifications, pendingPoints, issues, officeHours, exchangeSummary, tier] =
-    await Promise.all([
+  const messagesAuth = { kind: "instructor" as const, instructorId: session.id }
+  const [
+    stats,
+    charts,
+    activity,
+    notifications,
+    pendingPoints,
+    issues,
+    officeHours,
+    exchangeSummary,
+    tier,
+    messagesData,
+  ] = await Promise.all([
       fetchInstructorDashboardStats(scope),
       instructorApi.getDashboardCharts(scope).catch(() => ({
         submissionsOverTime: [],
@@ -128,11 +140,16 @@ async function bootstrapFacultyForCourse(
       instructorApi.getOfficeHours(scope).catch(() => []),
       instructorApi.getCourseExchangeSummary(scope).catch(() => ({})),
       fetchEffectiveFacultyMembershipTier(session),
+      messagesApi.listThreads(messagesAuth).catch(() => ({ threads: [] as Array<{ unreadCount?: number }> })),
     ])
 
   const pendingOfficeHours = officeHours.filter(
     (r) => r.status === "pending" || r.status === "requested",
   ).length
+  const unreadMessages = (messagesData.threads ?? []).reduce(
+    (sum, thread) => sum + (thread.unreadCount ?? 0),
+    0,
+  )
 
   if (tier) {
     await setCachedFacultyMembershipTier(session.id, tier)
@@ -149,6 +166,8 @@ async function bootstrapFacultyForCourse(
       pendingIssues: issues.length,
       officeHours: pendingOfficeHours,
       courseExchange: courseExchangeDrawerBadgeCount(exchangeSummary),
+      unreadMessages,
+      pendingAccessRequests: 0,
     },
   })
 

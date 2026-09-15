@@ -1,5 +1,6 @@
 import type { Ionicons } from "@expo/vector-icons"
 import type { MembershipTier } from "../types/dashboard"
+import type { StudentNavBadgeKey } from "../lib/module-nav-badges"
 
 export type StudentNavItem = {
   id: string
@@ -8,6 +9,7 @@ export type StudentNavItem = {
   icon: keyof typeof Ionicons.glyphMap
   locked?: boolean
   minTier?: MembershipTier
+  badgeKey?: StudentNavBadgeKey
 }
 
 export type StudentNavGroup = {
@@ -68,11 +70,11 @@ export const STUDENT_NAV_GROUPS: StudentNavGroup[] = [
     label: "Assessments",
     icon: "clipboard-outline",
     items: [
-      { id: "quizzes", label: "Quizzes", route: "/module/quizzes", icon: "clipboard-outline" },
+      { id: "quizzes", label: "Quizzes", route: "/module/quizzes", icon: "clipboard-outline", badgeKey: "openQuizzes" },
       { id: "quiz-history", label: "History", route: "/module/quiz-history", icon: "time-outline" },
-      { id: "homework", label: "Homework", route: "/module/homework", icon: "book-outline" },
-      { id: "mid-semester-exams", label: "Mid-Semester", route: "/module/mid-semester-exams", icon: "newspaper-outline" },
-      { id: "final-exams", label: "Finals", route: "/module/final-exams", icon: "school-outline" },
+      { id: "homework", label: "Homework", route: "/module/homework", icon: "book-outline", badgeKey: "openHomework" },
+      { id: "mid-semester-exams", label: "Mid-Semester", route: "/module/mid-semester-exams", icon: "newspaper-outline", badgeKey: "openMidSemester" },
+      { id: "final-exams", label: "Finals", route: "/module/final-exams", icon: "school-outline", badgeKey: "openFinalExams" },
       { id: "grades", label: "Grades", route: "/module/grades", icon: "ribbon-outline" },
     ],
   }),
@@ -82,7 +84,7 @@ export const STUDENT_NAV_GROUPS: StudentNavGroup[] = [
     icon: "people-outline",
     items: [
       { id: "forum", label: "Forum Hub", route: "/module/forum", icon: "globe-outline" },
-      { id: "messages", label: "Messages", route: "/module/messages", icon: "mail-outline" },
+      { id: "messages", label: "Messages", route: "/module/messages", icon: "mail-outline", badgeKey: "unreadMessages" },
       { id: "groups", label: "Groups", route: "/module/groups", icon: "people-outline" },
       { id: "projects", label: "Projects", route: "/module/projects", icon: "folder-open-outline" },
       { id: "playground", label: "Playground", route: "/module/playground", icon: "flash-outline" },
@@ -93,8 +95,8 @@ export const STUDENT_NAV_GROUPS: StudentNavGroup[] = [
     label: "Performance & Rewards",
     icon: "trophy-outline",
     items: [
-      { id: "classroom-points", label: "Classroom Points", route: "/module/classroom-points", icon: "trophy-outline" },
-      { id: "attendance", label: "Attendance", route: "/module/attendance", icon: "checkbox-outline" },
+      { id: "classroom-points", label: "Classroom Points", route: "/module/classroom-points", icon: "trophy-outline", badgeKey: "classroomPointTasks" },
+      { id: "attendance", label: "Attendance", route: "/module/attendance", icon: "checkbox-outline", badgeKey: "attendanceOpen" },
       { id: "trade-center", label: "Trade Center", route: "/module/trade-center", icon: "storefront-outline" },
     ],
   }),
@@ -103,7 +105,7 @@ export const STUDENT_NAV_GROUPS: StudentNavGroup[] = [
     label: "Course Info",
     icon: "megaphone-outline",
     items: [
-      { id: "announcements", label: "Announcements", route: "/announcements", icon: "megaphone-outline" },
+      { id: "announcements", label: "Announcements", route: "/announcements", icon: "megaphone-outline", badgeKey: "notifications" },
       { id: "progress-review", label: "Progress Review", route: "/module/progress-review", icon: "trending-up-outline" },
       { id: "syllabus", label: "Syllabus", route: "/module/syllabus", icon: "document-outline" },
       { id: "calendar", label: "Calendar", route: "/module/calendar", icon: "calendar-number-outline" },

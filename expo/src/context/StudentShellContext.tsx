@@ -1,6 +1,10 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react"
 import type { MembershipTier } from "../types/dashboard"
 import type { RefreshStudentDataFn } from "../lib/faculty-shell-refresh-types"
+import {
+  EMPTY_STUDENT_BADGES,
+  type StudentBadges,
+} from "../lib/module-nav-badges"
 
 type StudentShellContextValue = {
   drawerOpen: boolean
@@ -26,6 +30,10 @@ type StudentShellContextValue = {
   setClassroomPoints: (points: number) => void
   notificationCount: number
   setNotificationCount: (count: number) => void
+  unreadMessagesCount: number
+  setUnreadMessagesCount: (count: number) => void
+  badges: StudentBadges
+  setBadges: (partial: Partial<StudentBadges>) => void
   refreshStudentData: RefreshStudentDataFn | null
   registerRefreshStudentData: (fn: RefreshStudentDataFn | null) => void
 }
@@ -43,7 +51,23 @@ export function StudentShellProvider({ children }: { children: ReactNode }) {
   const [membershipTierLoaded, setMembershipTierLoaded] = useState(false)
   const [classroomPoints, setClassroomPoints] = useState(0)
   const [notificationCount, setNotificationCount] = useState(0)
+  const [unreadMessagesCount, setUnreadMessagesCount] = useState(0)
+  const [badges, setBadgesState] = useState<StudentBadges>(EMPTY_STUDENT_BADGES)
   const [refreshStudentData, setRefreshStudentDataState] = useState<RefreshStudentDataFn | null>(null)
+
+  const setBadges = useCallback((partial: Partial<StudentBadges>) => {
+    setBadgesState((prev) => {
+      let changed = false
+      for (const key of Object.keys(partial) as (keyof StudentBadges)[]) {
+        if (prev[key] !== partial[key]) {
+          changed = true
+          break
+        }
+      }
+      if (!changed) return prev
+      return { ...prev, ...partial }
+    })
+  }, [])
 
   const registerRefreshStudentData = useCallback((fn: RefreshStudentDataFn | null) => {
     setRefreshStudentDataState(() => fn)
@@ -136,6 +160,10 @@ export function StudentShellProvider({ children }: { children: ReactNode }) {
       setClassroomPoints,
       notificationCount,
       setNotificationCount,
+      unreadMessagesCount,
+      setUnreadMessagesCount,
+      badges,
+      setBadges,
       refreshStudentData,
       registerRefreshStudentData}),
     [
@@ -158,6 +186,9 @@ export function StudentShellProvider({ children }: { children: ReactNode }) {
       membershipTierLoaded,
       classroomPoints,
       notificationCount,
+      unreadMessagesCount,
+      badges,
+      setBadges,
       refreshStudentData,
       registerRefreshStudentData,
     ],

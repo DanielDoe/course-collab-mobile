@@ -135,10 +135,7 @@ export function ProfileMenu({ session }: Props) {
             icon="book-outline"
             label="Switch course"
             detail={courseLine ?? undefined}
-            onPress={() => {
-              closeProfile()
-              openCoursePicker()
-            }}
+            onPress={() => openCoursePicker()}
             showSeparator
           />
           <GlassMenuRow

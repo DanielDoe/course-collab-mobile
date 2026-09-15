@@ -34,6 +34,12 @@ describe("prepareMessageRichContent", () => {
     assert.equal(prepareMessageRichContent(html), "Please complete the **targeted practice** set.")
   })
 
+  it("collapses empty TipTap paragraphs to blank (no empty WebView)", () => {
+    assert.equal(prepareMessageRichContent("<p></p>"), "")
+    assert.equal(prepareMessageRichContent("<p><br></p>"), "")
+    assert.equal(needsMarkdownRichRender(prepareMessageRichContent("<p></p>")), false)
+  })
+
   it("normalizes markdown math so KaTeX can render it", () => {
     const prepared = prepareMessageRichContent("Average power is \\(P = VI\\cos\\theta\\).")
     assert.match(prepared, /\$P = VI\\cos\\theta\$/)

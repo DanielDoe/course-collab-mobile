@@ -5,7 +5,6 @@ import {
   Text,
   View,
 } from "react-native"
-import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { useFocusEffect, useRouter } from "expo-router"
 import { useSession } from "../../context/SessionProvider"
 import {
@@ -19,9 +18,13 @@ import {
   shouldRefetchInboxOnMessageRefresh,
 } from "../../lib/notifications/notification-events"
 import { usePresenceTracking } from "../../hooks/usePresenceTracking"
+import { useOptionalFacultyShell } from "../../context/FacultyShellContext"
+import { useOptionalStudentShell } from "../../context/StudentShellContext"
 import { useModuleTheme } from "../../lib/themed-module-shell"
 import { FACULTY_COMMUNICATION_COLOR } from "../../lib/faculty-communication-theme"
-import { useChromeBottomInset, useChromeTopInset, useModuleHeaderContentTop } from "../../context/ChromeInsetContext"
+import { useChromeTopInset, useModuleHeaderContentTop } from "../../context/ChromeInsetContext"
+import { useSearchDockBottomInset } from "../../context/ModuleSearchDockContext"
+import { MODULE_LIST_DUAL_PAGER_HEIGHT, moduleListPagerChromeHeight } from "../../lib/module-list-pager"
 import { CommEmptyState } from "../faculty/faculty-communication-ui"
 import { AppErrorNotice } from "../errors/AppErrorNotice"
 import {
@@ -45,9 +48,6 @@ import { MessagesErrorBoundary } from "./MessagesErrorBoundary"
 type StatusFilter = "all" | "unread"
 type RoleFilter = "all" | "faculty" | "students"
 
-/** Bottom clearance for the floating search dock + home indicator. */
-const MESSAGES_LIST_BOTTOM_EXTRA = 88
-
 export function MessagesInboxScreen() {
   const { session } = useSession()
   const auth = useMemo(
@@ -62,16 +62,8 @@ export function MessagesInboxScreen() {
   const { styles: moduleStyles, type } = useModuleTheme()
   const layout = useMessagesLayout()
   const chromeTop = useChromeTopInset()
-  const chromeBottom = useChromeBottomInset()
+  const searchDockInset = useSearchDockBottomInset()
   const headerContentTop = useModuleHeaderContentTop()
-  const insets = useSafeAreaInsets()
-  const listContentPad = useMemo(
-    () => ({
-      paddingBottom: insets.bottom + MESSAGES_LIST_BOTTOM_EXTRA + chromeBottom,
-      paddingTop: headerContentTop,
-    }),
-    [chromeBottom, headerContentTop, insets.bottom],
-  )
   const inboxQuery = useMessagesInbox(auth)
   const threads = inboxQuery.threads
   const setThreads = inboxQuery.setThreads
@@ -204,12 +196,38 @@ export function MessagesInboxScreen() {
       return haystack.includes(q)
     })
   }, [roleFilter, search, statusFilter, threads])
-  const pager = useFacultyListPager(filtered, `${statusFilter}:${roleFilter}:${search}`, "conversations")
+  const pager = useFacultyListPager(filtered, `${statusFilter}:${roleFilter}:${search}`, "conversations", {
+    rowHeight: layout.threadRowMinHeight,
+    pagerHeight: MODULE_LIST_DUAL_PAGER_HEIGHT,
+    viewportBuffer: searchDockInset + 8,
+  })
+
+  const pagerChromeHeight = moduleListPagerChromeHeight(pager.total, pager.pageCount)
+  const listContentPad = useMemo(
+    () => ({
+      paddingBottom: searchDockInset + pagerChromeHeight + 8,
+      paddingTop: headerContentTop,
+    }),
+    [headerContentTop, pagerChromeHeight, searchDockInset],
+  )
+
+  useEffect(() => {
+    listRef.current?.scrollToOffset({ offset: 0, animated: false })
+  }, [pager.page])
 
   const unreadTotal = useMemo(
     () => threads.reduce((sum, thread) => sum + (thread.unreadCount ?? 0), 0),
     [threads],
   )
+
+  const setFacultyUnreadBadge = useOptionalFacultyShell()?.setBadges
+  const setStudentUnreadCount = useOptionalStudentShell()?.setUnreadMessagesCount
+  const setStudentNavBadges = useOptionalStudentShell()?.setBadges
+  useEffect(() => {
+    setFacultyUnreadBadge?.({ unreadMessages: unreadTotal })
+    setStudentUnreadCount?.(unreadTotal)
+    setStudentNavBadges?.({ unreadMessages: unreadTotal })
+  }, [unreadTotal, setFacultyUnreadBadge, setStudentUnreadCount, setStudentNavBadges])
 
   const showBlockingError = Boolean(error && !loading && threads.length === 0)
 
@@ -307,9 +325,7 @@ export function MessagesInboxScreen() {
         automaticallyAdjustContentInsets={false}
         automaticallyAdjustsScrollIndicatorInsets={false}
         ListHeaderComponent={listHeader}
-        ListFooterComponent={
-          loading || showBlockingError ? null : <FacultyListPagerFooter pager={pager} />
-        }
+        ListFooterComponent={null}
         ListEmptyComponent={
           loading ? (
             <QuerySkeleton />
@@ -342,6 +358,15 @@ export function MessagesInboxScreen() {
         }
       />
 
+      {!loading && !showBlockingError ? (
+        <View
+          pointerEvents="box-none"
+          style={[styles.pagerDock, { bottom: searchDockInset, paddingHorizontal: layout.horizontalPadding }]}
+        >
+          <FacultyListPagerFooter pager={pager} variant="dock" />
+        </View>
+      ) : null}
+
       <MessagesComposeModal
         visible={composeOpen}
         auth={auth}
@@ -366,4 +391,10 @@ const styles = StyleSheet.create({
   inlineError: { marginBottom: 8 },
   blockingErrorWrap: { paddingVertical: 12 },
   loadingBox: { paddingVertical: 48, alignItems: "center" },
+  pagerDock: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    zIndex: 2,
+  },
 })
