@@ -23,6 +23,8 @@ export type SyllabusSectionContent = {
   items?: string[]
   imageUrl?: string
   imageCaption?: string
+  documentUrl?: string
+  documentFileName?: string
 }
 
 export type SyllabusSection = {
@@ -47,6 +49,7 @@ export type SyllabusPayload = {
 export type PreparedSyllabus = {
   title: string
   term?: string
+  contentMode?: string
   pdfUrl?: string | null
   sections: SyllabusSection[]
 }

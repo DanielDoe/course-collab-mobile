@@ -378,7 +378,11 @@ export const api = {
       body: JSON.stringify(payload),
     }),
 
-  instructorLogin: async (username: string, password: string) => {
+  instructorLogin: async (
+    username: string,
+    password: string,
+    options?: { universityId?: number; rememberMe?: boolean },
+  ) => {
     const authId = normalizeLoginIdentifier(username)
     const normalizedPassword = normalizeLoginPassword(password)
     const loginKey = instructorMfaLoginKey(authId)
@@ -387,7 +391,12 @@ export const api = {
     const data = await request<InstructorLoginResponse>("/api/instructor/login", {
       method: "POST",
       headers: trustHeaders,
-      body: JSON.stringify({ username: authId, password: normalizedPassword }),
+      body: JSON.stringify({
+        username: authId,
+        password: normalizedPassword,
+        rememberMe: Boolean(options?.rememberMe),
+        ...(options?.universityId != null ? { universityId: options.universityId } : {}),
+      }),
     })
     const record = data as Record<string, unknown>
     if (isMfaGatedResponse(record)) {

@@ -1,4 +1,4 @@
-import { Image, ScrollView, StyleSheet, Text, View } from "react-native"
+import { Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { NativeMarkdownContent } from "./NativeMarkdownContent"
 import { InfoBulletList } from "./course-info-shared"
@@ -105,6 +105,7 @@ export function SyllabusSectionContent({
   const native = useThemedNative()
   const visible = getSyllabusVisibleContent(section, searchQuery)
   const imageUrl = resolveSyllabusAssetUrl(visible.imageUrl)
+  const documentUrl = resolveSyllabusAssetUrl(visible.documentUrl)
 
   if (!syllabusHasRenderableContent(visible)) {
     return searchQuery.trim() ? (
@@ -118,6 +119,23 @@ export function SyllabusSectionContent({
 
   return (
     <View style={styles.sectionBody}>
+      {documentUrl ? (
+        <Pressable
+          style={[styles.documentRow, { backgroundColor: native.fill, borderColor: native.separator }]}
+          onPress={() => void Linking.openURL(documentUrl)}
+          accessibilityRole="link"
+        >
+          <Ionicons name="document-text-outline" size={20} color={native.tint} />
+          <View style={styles.documentCopy}>
+            <Text style={[type.bodyEmphasis, { color: native.label }]}>
+              {visible.documentFileName || "View PDF document"}
+            </Text>
+            <Text style={[type.caption, { color: native.secondaryLabel }]}>Tap to open</Text>
+          </View>
+          <Ionicons name="open-outline" size={18} color={native.tertiaryLabel} />
+        </Pressable>
+      ) : null}
+
       {sectionId === "required-materials" && imageUrl ? (
         <SyllabusTextbookImage imageUrl={imageUrl} caption={visible.imageCaption} />
       ) : null}
@@ -148,6 +166,15 @@ export function SyllabusSectionContent({
 
 const styles = StyleSheet.create({
   sectionBody: { gap: 14 },
+  documentRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 12,
+  },
+  documentCopy: { flex: 1, gap: 2 },
   emptyMatch: { lineHeight: 20, fontStyle: "italic" },
   fieldList: { gap: 0 },
   fieldRow: { gap: 4, paddingVertical: 8 },

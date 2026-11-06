@@ -8,7 +8,7 @@ import { hexToRgba } from "../../constants/app-themes"
 import { useAppThemeTokens } from "../../context/AppearanceProvider"
 import { semanticSoft, useThemedStudentNative } from "../../lib/themed-module-theme"
 import { useSession } from "../../context/SessionProvider"
-import { practiceApi, type SubmitPracticeResult } from "../../lib/practice-api"
+import { practiceApi, type EvaluateResult, type SubmitPracticeResult } from "../../lib/practice-api"
 import {
   buildAnswerForSubmit,
   getQuestionOptions,
@@ -29,6 +29,7 @@ import {
   getActivePracticeSession,
   hydrateActivePracticeSession,
   isMultiSelectType,
+  setActivePracticeSession,
   type PracticeQuestion,
   type PracticeSessionData,
 } from "../../lib/practice-session"
@@ -57,6 +58,23 @@ import {
 function useStudentSession(): StudentSession | null {
   const { session } = useSession()
   return session?.portal === "student" ? session : null
+}
+
+function alreadyAttemptedResult(err: unknown): EvaluateResult | null {
+  if (!(err instanceof ApiError) || err.status !== 409) return null
+  const details = err.details as EvaluateResult | undefined
+  if (!details || details.alreadyAttempted !== true) return null
+  return details
+}
+
+function reviewFeedback(question: PracticeQuestion): string {
+  const review = question.answerReview
+  if (review?.summary) {
+    const extra = review.explanation?.trim()
+    return extra ? `${review.summary}\n\n${extra}` : review.summary
+  }
+  if (question.priorIsCorrect) return "Already attempted — you answered this correctly."
+  return "Already attempted. Review your previous answer and the correct answer below."
 }
 
 function calcXp(difficulty: string, responseTimeMs: number, attemptNum: number): number {
@@ -98,6 +116,7 @@ export function PracticeQuizScreen() {
 
   const questions = practiceSession?.questions ?? []
   const attemptId = practiceSession?.attemptId ?? 0
+  const reviewOnly = practiceSession?.reviewOnly === true
   const currentQuestion = questions[currentIndex]
 
   const unlockedQuestions = useMemo(
@@ -115,6 +134,46 @@ export function PracticeQuizScreen() {
       setCurrentIndex(firstUnlockedIndex)
     }
   }, [questions, currentQuestion?.locked, firstUnlockedIndex])
+
+  useEffect(() => {
+    if (!practiceSession) return
+    const attempted = new Set(
+      practiceSession.questions.filter((q) => q.alreadyAttempted || q.answerReview).map((q) => q.id),
+    )
+    if (attempted.size > 0) setAnsweredIds(attempted)
+  }, [practiceSession])
+
+  useEffect(() => {
+    if (!session || !practiceSession?.questions.length) return
+    const missing = practiceSession.questions.filter((q) => !q.alreadyAttempted).map((q) => q.id)
+    if (missing.length === 0) return
+    let cancelled = false
+    void practiceApi
+      .getPriorAnswers(session, practiceSession.questions.map((q) => q.id))
+      .then(async (data) => {
+        if (cancelled || !data.answers?.length) return
+        const byId = new Map(data.answers.map((row) => [row.questionId, row]))
+        const nextQuestions = practiceSession.questions.map((q) => {
+          const prior = byId.get(q.id)
+          if (!prior) return q
+          return {
+            ...q,
+            alreadyAttempted: true,
+            priorAnswer: prior.priorAnswer ?? q.priorAnswer,
+            priorIsCorrect: prior.priorIsCorrect,
+            answerReview: prior.answerReview ?? q.answerReview,
+          }
+        })
+        const nextSession = { ...practiceSession, questions: nextQuestions }
+        setPracticeSession(nextSession)
+        await setActivePracticeSession(nextSession)
+        setAnsweredIds(new Set(nextQuestions.filter((q) => q.alreadyAttempted).map((q) => q.id)))
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [session, practiceSession?.attemptId, practiceSession?.questions.length])
 
   useEffect(() => {
     if (practiceSession) {
@@ -138,12 +197,6 @@ export function PracticeQuizScreen() {
       router.replace("/module/practice" as never)
     }
   }, [hydrating, practiceSession, router])
-
-  useEffect(() => {
-    if (currentQuestion && !questionStartRef.current[currentQuestion.id]) {
-      questionStartRef.current[currentQuestion.id] = Date.now()
-    }
-  }, [currentQuestion])
 
   const progressPct = useMemo(() => {
     if (!unlockedQuestions.length) return 0
@@ -171,9 +224,40 @@ export function PracticeQuizScreen() {
     }
   }, [])
 
+  const applyPriorAnswer = useCallback((question: PracticeQuestion | undefined) => {
+    if (!question) return
+    const prior = question.priorAnswer
+    if (Array.isArray(prior)) {
+      setSelectedLetters(prior.map(String))
+      setSelectedLetter("")
+    } else if (typeof prior === "string" && prior.trim()) {
+      const raw = prior.trim()
+      if (["A", "B", "C", "D", "E"].includes(raw.toUpperCase())) {
+        setSelectedLetter(raw.toUpperCase())
+        setSelectedLetters([])
+      } else {
+        setTextAnswer(raw)
+      }
+    }
+    if (question.alreadyAttempted || question.answerReview) {
+      setShowFeedback(true)
+      setIsCorrect(question.answerReview?.isCorrect ?? question.priorIsCorrect === true)
+      setFeedbackText(reviewFeedback(question))
+    }
+  }, [])
+
+  useEffect(() => {
+    if (currentQuestion && !questionStartRef.current[currentQuestion.id]) {
+      questionStartRef.current[currentQuestion.id] = Date.now()
+    }
+    if (currentQuestion?.alreadyAttempted || currentQuestion?.answerReview) {
+      applyPriorAnswer(currentQuestion)
+    }
+  }, [currentQuestion, applyPriorAnswer])
+
   const goToIndex = (index: number) => {
     const target = questions[index]
-    if (target?.locked) {
+    if (target?.locked && !target.alreadyAttempted) {
       AppAlert.alert(
         "Question locked",
         "Upgrade to Trailblazer to practice the rest of this topic.",
@@ -186,6 +270,7 @@ export function PracticeQuizScreen() {
     }
     setCurrentIndex(index)
     resetSelection(questions[index])
+    applyPriorAnswer(questions[index])
   }
 
   const nextUnlockedIndex = (fromIndex: number): number | null => {
@@ -199,6 +284,8 @@ export function PracticeQuizScreen() {
     if (
       !session ||
       !currentQuestion ||
+      reviewOnly ||
+      currentQuestion.alreadyAttempted ||
       currentQuestion.locked ||
       submittingAnswer ||
       answeredIds.has(currentQuestion.id)
@@ -265,26 +352,36 @@ export function PracticeQuizScreen() {
         )
       }
 
-      const evalResult = await practiceApi.evaluate(session, {
-        questionId: currentQuestion.id,
-        answer: answerToSubmit,
-        questionType: currentQuestion.question_type,
-        attemptId,
-        responseTimeMs,
-        xpEarned,
-        difficulty: currentQuestion.difficulty,
-      })
+      let evalResult: EvaluateResult
+      try {
+        evalResult = await practiceApi.evaluate(session, {
+          questionId: currentQuestion.id,
+          answer: answerToSubmit,
+          questionType: currentQuestion.question_type,
+          attemptId,
+          responseTimeMs,
+          xpEarned,
+          difficulty: currentQuestion.difficulty,
+        })
+      } catch (err) {
+        const prior = alreadyAttemptedResult(err)
+        if (!prior) throw err
+        evalResult = prior
+      }
 
       setAttemptCounts((prev) => ({ ...prev, [currentQuestion.id]: attemptNum }))
       setAnsweredIds((prev) => new Set(prev).add(currentQuestion.id))
       setIsCorrect(evalResult.isCorrect)
       setFeedbackText(
-        evalResult.feedback ??
-          (evalResult.requiresManualReview
-            ? "Submission recorded for review."
-            : evalResult.isCorrect
-              ? "Correct!"
-              : "Not quite — keep learning!"),
+        evalResult.alreadyAttempted
+          ? evalResult.answerReview?.summary ??
+            "Already attempted. Review your previous answer and the correct answer below."
+          : evalResult.feedback ??
+            (evalResult.requiresManualReview
+              ? "Submission recorded for review."
+              : evalResult.isCorrect
+                ? "Correct!"
+                : "Not quite — keep learning!"),
       )
       setShowFeedback(true)
 
@@ -315,6 +412,11 @@ export function PracticeQuizScreen() {
   }
 
   const finishPractice = async () => {
+    if (reviewOnly || !attemptId) {
+      await clearActivePracticeSession()
+      router.replace("/module/practice" as never)
+      return
+    }
     if (!session || !allAnswered) {
       AppAlert.alert("Incomplete", "Answer all unlocked questions before finishing.")
       return
@@ -401,6 +503,8 @@ export function PracticeQuizScreen() {
   const multiPartPayload = parseMultiPartAnswerJson(multiPartAnswerJson, currentQuestion.subquestions)
   const multiPartReady = multiPartAnswerReady(currentQuestion.subquestions, multiPartPayload)
   const submitDisabled =
+    reviewOnly ||
+    currentQuestion.alreadyAttempted === true ||
     tierLocked ||
     submitted ||
     submittingAnswer ||
@@ -434,6 +538,23 @@ export function PracticeQuizScreen() {
       <View style={[styles.progressTrack, { backgroundColor: hexToRgba(tokens.border, 0.5) }]}>
         <View style={[styles.progressFill, { width: `${progressPct}%`, backgroundColor: tokens.accent }]} />
       </View>
+
+      {reviewOnly || currentQuestion.alreadyAttempted || currentQuestion.answerReview ? (
+        <View
+          style={[
+            styles.alreadyBanner,
+            {
+              backgroundColor: hexToRgba(tokens.warning, 0.12),
+              borderColor: hexToRgba(tokens.warning, 0.4),
+            },
+          ]}
+        >
+          <Text style={[styles.alreadyTitle, { color: tokens.text }]}>Already attempted</Text>
+          <Text style={[styles.alreadyBody, { color: SN.secondaryLabel }]}>
+            This question is locked. Your previous result and the correct answer are shown below.
+          </Text>
+        </View>
+      ) : null}
 
       <ScrollView contentContainerStyle={[styles.content, moduleContent]} showsVerticalScrollIndicator={false}>
         <View style={styles.questionNav}>
@@ -718,7 +839,7 @@ export function PracticeQuizScreen() {
             {submittingFinal ? (
               <ActivityIndicator color="#ffffff" />
             ) : (
-              <Text style={styles.primaryBtnText}>Finish practice</Text>
+              <Text style={styles.primaryBtnText}>{reviewOnly ? "Back to Practice Hub" : "Finish practice"}</Text>
             )}
           </Pressable>
         ) : (
@@ -730,7 +851,13 @@ export function PracticeQuizScreen() {
             {submittingAnswer ? (
               <ActivityIndicator color="#ffffff" />
             ) : (
-              <Text style={styles.primaryBtnText}>{submitted ? "Answer submitted" : "Submit answer"}</Text>
+              <Text style={styles.primaryBtnText}>
+                {reviewOnly || currentQuestion.alreadyAttempted
+                  ? "Already attempted"
+                  : submitted
+                    ? "Answer submitted"
+                    : "Submit answer"}
+              </Text>
             )}
           </Pressable>
         )}
@@ -741,6 +868,17 @@ export function PracticeQuizScreen() {
 }
 
 const styles = StyleSheet.create({
+  alreadyBanner: {
+    marginHorizontal: 16,
+    marginTop: 10,
+    marginBottom: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  alreadyTitle: { fontSize: 14, fontWeight: "700" },
+  alreadyBody: { marginTop: 3, fontSize: 13, lineHeight: 18 },
   root: { flex: 1 },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   topBar: {

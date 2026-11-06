@@ -10,14 +10,22 @@ import {
   View,
 } from "react-native"
 import { AppAlert } from "../../lib/app-alert"
+import * as Clipboard from "expo-clipboard"
 import * as DocumentPicker from "expo-document-picker"
+import * as FileSystem from "expo-file-system/legacy"
 import * as ImagePicker from "expo-image-picker"
 import { useLocalSearchParams, useRouter } from "expo-router"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
+import { useStableTopSafeInset } from "../shell/shell-shared"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useSession } from "../../context/SessionProvider"
 import { presentApiError, type ApiErrorPresentation } from "../../lib/present-api-error"
 import { ApiError } from "../../lib/api"
+import {
+  LOCAL_DEVICE_FILE_PASTE_ERROR,
+  messageIsOnlyLocalDeviceFile,
+  stripLocalDeviceFileUrls,
+} from "../../lib/message-local-file"
 import {
   messagesApi,
   messagesAuthFromSession,
@@ -194,6 +202,7 @@ export function MessagesThreadScreen() {
   const { threadId: rawThreadId } = useLocalSearchParams<{ threadId: string }>()
   const threadId = Number(rawThreadId)
   const router = useRouter()
+  const topSafeInset = useStableTopSafeInset()
   const insets = useSafeAreaInsets()
   const { session } = useSession()
   const auth = useMemo(
@@ -207,7 +216,7 @@ export function MessagesThreadScreen() {
   const tokens = useAppThemeTokens()
   const native = useThemedNative()
   const type = useNativeType()
-  const headerHeight = messagesThreadHeaderHeight(insets.top)
+  const headerHeight = messagesThreadHeaderHeight(topSafeInset)
   const facultyShell = useOptionalFacultyShell()
   const studentSession = session?.portal === "student" ? (session as StudentSession) : null
   const facultySession = session?.portal === "faculty" ? (session as FacultySession) : null
@@ -283,11 +292,40 @@ export function MessagesThreadScreen() {
     })
   }, [load, threadId])
 
+  async function recoverPastedPhoto() {
+    try {
+      const image = await Clipboard.getImageAsync({ format: "jpeg", jpegQuality: 0.85 })
+      const base64 = image?.data?.replace(/^data:image\/\w+;base64,/, "") ?? ""
+      if (!base64 || !FileSystem.cacheDirectory) {
+        AppAlert.alert("Photo didn't upload", LOCAL_DEVICE_FILE_PASTE_ERROR)
+        return
+      }
+      const uri = `${FileSystem.cacheDirectory}message-paste-${Date.now()}.jpg`
+      await FileSystem.writeAsStringAsync(uri, base64, {
+        encoding: FileSystem.EncodingType.Base64,
+      })
+      await uploadFile(uri, `photo-${Date.now()}.jpg`, "image/jpeg")
+    } catch {
+      AppAlert.alert("Photo didn't upload", LOCAL_DEVICE_FILE_PASTE_ERROR)
+    }
+  }
+
   async function handleSend(rawBody?: string) {
     if (!auth || !thread) return
-    const note = (rawBody ?? draft).trim()
+    const raw = (rawBody ?? draft).trim()
+    const pastedPath = messageIsOnlyLocalDeviceFile(raw)
+    const note = stripLocalDeviceFileUrls(raw)
+
+    if (!editingMessage && pastedPath && attachments.length === 0 && !importedQuestion) {
+      await recoverPastedPhoto()
+      return
+    }
 
     if (editingMessage) {
+      if (pastedPath) {
+        AppAlert.alert("Photo didn't upload", LOCAL_DEVICE_FILE_PASTE_ERROR)
+        return
+      }
       if (!note) return
       setSending(true)
       setError(null)
@@ -717,6 +755,7 @@ export function MessagesThreadScreen() {
           onChange={setDraft}
           onSend={(text) => void handleSend(text)}
           onAttach={() => setAttachMenuOpen(true)}
+          onRecoverPastedPhoto={() => void recoverPastedPhoto()}
           placeholder="Message…"
           sending={sending}
           uploading={uploading}

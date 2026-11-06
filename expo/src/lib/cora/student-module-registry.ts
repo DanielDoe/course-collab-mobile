@@ -570,12 +570,21 @@ export function buildStudentCapabilityPacket(moduleIds: StudentCoraModuleId[]): 
   const lines = moduleIds.map((id) => {
     const cap = STUDENT_CORA_MODULE_REGISTRY[id]
     if (!cap) return null
-    return `- ${cap.label} (${cap.resourceClass}): allow [${cap.allowed.join(", ")}]; deny [${cap.denied.join(", ")}]`
+    const route = cap.route ? ` → open ${cap.route}` : ""
+    return `- ${cap.label} (${cap.resourceClass})${route}: allow [${cap.allowed.join(", ")}]; deny [${cap.denied.join(", ")}]`
   })
   return [
     "Student Cora capability packet (authenticated student scope only):",
+    "Native app routes only — never web /student/dashboard-v2/* paths.",
     STUDENT_CORA_AUTHORIZATION_PRINCIPLE,
     "",
     ...lines.filter(Boolean),
   ].join("\n")
+}
+
+/** All native routes Cora may open after student tool confirmations. */
+export function listStudentNativeModuleRoutes(): ReadonlyArray<{ module: StudentCoraModuleId; route: string }> {
+  return Object.values(STUDENT_CORA_MODULE_REGISTRY)
+    .filter((cap): cap is StudentCoraModuleCapability & { route: string } => Boolean(cap.route))
+    .map((cap) => ({ module: cap.module, route: cap.route }))
 }

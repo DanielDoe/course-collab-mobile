@@ -7,8 +7,12 @@ export function normalizeLoginIdentifier(identifier: string): string {
   if (trimmed.includes("@")) {
     return trimmed.replace(/\s+/g, "").toLowerCase()
   }
-  // Numeric / roster IDs often get spaces or dashes from paste/autofill.
-  return trimmed.replace(/[\s-]+/g, "")
+  // Numeric roster IDs often get spaces or dashes from paste/autofill (910-000-001).
+  // Keep intentional hyphens in alphanumeric IDs (dmdoe-demo-p01).
+  if (/^[\d\s-]+$/.test(trimmed)) {
+    return trimmed.replace(/[\s-]+/g, "")
+  }
+  return trimmed.replace(/\s+/g, "")
 }
 
 /**

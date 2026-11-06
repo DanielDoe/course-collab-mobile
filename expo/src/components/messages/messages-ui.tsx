@@ -1,5 +1,5 @@
 import { memo, useEffect, useMemo, useState } from "react"
-import { Linking, Pressable, StyleSheet, Text, View } from "react-native"
+import { Image, Linking, Pressable, StyleSheet, Text, View } from "react-native"
 import Animated, { useAnimatedStyle, useSharedValue, withSequence, withSpring } from "react-native-reanimated"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
@@ -9,6 +9,10 @@ import type { MessageAttachment, MessageDeliveryStatus, ThreadMessage, ThreadSum
 import type { PresenceStatus } from "../../lib/presence/types"
 import { PresenceAvatarBadge } from "../presence/PresenceAvatarBadge"
 import { resolveAttachmentUrl } from "../../lib/messages-api"
+import {
+  localDevicePhotoMissCopy,
+  messageIsOnlyLocalDeviceFile,
+} from "../../lib/message-local-file"
 import {
   deliveryStatusLabel,
   formatMessageMetaLine,
@@ -188,6 +192,8 @@ export const MessageBubble = memo(function MessageBubble({
     if (incompleteImportLabel) return stripCourseImportMarkup(message.body)
     return looksLikeHtml(message.body) ? stripMessageHtml(message.body) : message.body.trim()
   }, [courseImport, incompleteImportLabel, message.body])
+  const localFileOnly = messageIsOnlyLocalDeviceFile(plainBody)
+  const visibleBody = localFileOnly ? "" : plainBody
   const editVersions = message.editHistory ?? []
   const hasEditHistory = editVersions.length > 0
 
@@ -295,7 +301,18 @@ export const MessageBubble = memo(function MessageBubble({
                 : `Course question: ${incompleteImportLabel}`}
             </Text>
           ) : null}
-          {plainBody ? (
+          {localFileOnly && message.attachments.length === 0 ? (
+            <Text
+              style={[
+                type.body,
+                styles.bubbleText,
+                styles.photoMissText,
+                { color: message.isMine ? "rgba(255,255,255,0.88)" : native.secondaryLabel },
+              ]}
+            >
+              {localDevicePhotoMissCopy(message.isMine)}
+            </Text>
+          ) : visibleBody ? (
             <Text
               style={[
                 type.body,
@@ -304,7 +321,7 @@ export const MessageBubble = memo(function MessageBubble({
                 { color: courseImport || !message.isMine ? native.label : "#ffffff" },
               ]}
             >
-              {plainBody}
+              {visibleBody}
             </Text>
           ) : null}
           {message.attachments.map((attachment) => (
@@ -400,9 +417,22 @@ function ReactionChip({
   )
 }
 
+function attachmentLooksLikeImage(attachment: MessageAttachment): boolean {
+  if ((attachment.mimeType ?? "").toLowerCase().startsWith("image/")) return true
+  return /\.(png|jpe?g|gif|webp|heic|heif)$/i.test(attachment.fileName)
+}
+
 function AttachmentChip({ attachment, mine }: { attachment: MessageAttachment; mine: boolean }) {
   const type = useNativeType()
   const url = resolveAttachmentUrl(attachment.fileUrl)
+
+  if (attachmentLooksLikeImage(attachment)) {
+    return (
+      <Pressable onPress={() => void Linking.openURL(url)} accessibilityRole="image" accessibilityLabel={attachment.fileName}>
+        <Image source={{ uri: url }} style={styles.attachmentImage} resizeMode="cover" />
+      </Pressable>
+    )
+  }
 
   return (
     <Pressable
@@ -459,6 +489,13 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   bubbleText: { lineHeight: 20 },
+  photoMissText: { fontStyle: "italic" },
+  attachmentImage: {
+    width: 220,
+    height: 160,
+    borderRadius: 12,
+    backgroundColor: "rgba(0,0,0,0.08)",
+  },
   bubbleTextAfterImport: { marginTop: 2 },
   bubbleTime: { marginTop: 2, marginHorizontal: 4 },
   bubbleTimeMine: { textAlign: "right" },

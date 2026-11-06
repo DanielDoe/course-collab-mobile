@@ -637,6 +637,13 @@ export type QuestionContentSegment =
   | { kind: "text"; content: string }
   | { kind: "math"; content: string; display: boolean }
 
+/** `$8.00 ... $12.00` is a price, not inline math. KaTeX would drop the spaces. */
+function isCurrencyDollarSpan(inner: string): boolean {
+  if (/\\[a-zA-Z]/.test(inner)) return false
+  if (/[A-Za-z]_[A-Za-z0-9]/.test(inner)) return false
+  return /^\d[\d,]*(?:\.\d+)?\b/.test(inner.trim()) && /\s/.test(inner)
+}
+
 /** Split question copy into text and math segments without breaking display blocks. */
 export function parseQuestionSegments(text: string): QuestionContentSegment[] {
   const normalized = prepareQuestionText(text)
@@ -655,7 +662,12 @@ export function parseQuestionSegments(text: string): QuestionContentSegment[] {
     if (raw.startsWith("$$")) {
       segments.push({ kind: "math", content: raw.slice(2, -2).trim(), display: true })
     } else {
-      segments.push({ kind: "math", content: raw.slice(1, -1).trim(), display: false })
+      const inner = raw.slice(1, -1)
+      if (isCurrencyDollarSpan(inner)) {
+        segments.push({ kind: "text", content: raw })
+      } else {
+        segments.push({ kind: "math", content: inner.trim(), display: false })
+      }
     }
     lastIndex = index + raw.length
   }

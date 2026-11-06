@@ -3,6 +3,10 @@
     "name": "CourseCollab",
     "slug": "course-collab-mobile",
     "version": "1.0.0",
+    "runtimeVersion": "1.0.2",
+    "updates": {
+      "url": "https://u.expo.dev/61d3c8bd-2fce-4373-92cb-6f558f9e3cbd"
+    },
     "orientation": "portrait",
     "icon": "./assets/logo-mark.png",
     "scheme": "coursecollab",
@@ -15,13 +19,13 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.coursecollab.app",
-      "buildNumber": "1",
+      "buildNumber": "39",
       "icon": "./assets/CourseCollab.icon",
       "backgroundColor": "#F2F2F7",
       "associatedDomains": [
-        "applinks:coursecollab.vercel.app",
         "applinks:course-collab.com",
-        "applinks:www.course-collab.com"
+        "applinks:www.course-collab.com",
+        "applinks:coursecollab.vercel.app"
       ],
       "infoPlist": {
         "UIUserInterfaceStyle": "Automatic",

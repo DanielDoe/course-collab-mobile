@@ -19,7 +19,7 @@ import { onMessagesRefresh } from "../../lib/notifications/notification-events"
 import { usePresenceTracking } from "../../hooks/usePresenceTracking"
 import { useModuleTheme } from "../../lib/themed-module-shell"
 import { FACULTY_COMMUNICATION_COLOR } from "../../lib/faculty-communication-theme"
-import { useChromeTopInset, useChromeBottomInset } from "../../context/ChromeInsetContext"
+import { useChromeTopInset, useModuleScrollContentPadding } from "../../context/ChromeInsetContext"
 import { CommEmptyState } from "../faculty/faculty-communication-ui"
 import { AppErrorNotice } from "../errors/AppErrorNotice"
 import {
@@ -31,7 +31,6 @@ import { messagePreviewText } from "../../lib/messages-html"
 import { MessageThreadRow } from "./messages-ui"
 import { MessagesComposeModal } from "./MessagesComposeModal"
 import { ModuleFlashList } from "../ModuleFlashList"
-import { useSafeAreaInsets } from "react-native-safe-area-context"
 
 type StatusFilter = "all" | "unread"
 type RoleFilter = "all" | "faculty" | "students"
@@ -52,15 +51,9 @@ export function MessagesInboxScreen() {
     ],
   )
   const router = useRouter()
-  const insets = useSafeAreaInsets()
   const { styles: moduleStyles, type } = useModuleTheme()
   const chromeTop = useChromeTopInset()
-  const chromeBottom = useChromeBottomInset()
-  // Floating chrome: clear the overlay header, then add the intentional gap.
-  // Stacked chrome: header already occupies layout — only the intentional gap.
-  // Never add safe-area top here; the header owns that inset.
-  const listTopPad = (chromeTop > 0 ? chromeTop : 0) + MESSAGES_HEADER_TO_LIST_GAP
-  const listBottomPad = insets.bottom + MESSAGES_LIST_BOTTOM_EXTRA + chromeBottom
+  const scrollPad = useModuleScrollContentPadding(MESSAGES_LIST_BOTTOM_EXTRA, MESSAGES_HEADER_TO_LIST_GAP)
   const [threads, setThreads] = useState<ThreadSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -224,7 +217,7 @@ export function MessagesInboxScreen() {
 
   const listHeader = useMemo(
     () => (
-      <View style={{ paddingTop: listTopPad }}>
+      <View>
         {unreadTotal > 0 && !showBlockingError ? (
           <Text style={[type.caption, styles.unreadNote, { color: FACULTY_COMMUNICATION_COLOR.link }]}>
             {unreadTotal} unread conversation{unreadTotal === 1 ? "" : "s"}
@@ -241,7 +234,7 @@ export function MessagesInboxScreen() {
         ) : null}
       </View>
     ),
-    [error, handleRefresh, listTopPad, showBlockingError, type.caption, unreadTotal],
+    [error, handleRefresh, showBlockingError, type.caption, unreadTotal],
   )
 
   const renderThreadRow = useCallback(
@@ -304,7 +297,7 @@ export function MessagesInboxScreen() {
         extraData={{ filteredLength: filtered.length, unreadTotal }}
         contentContainerStyle={[
           styles.content,
-          { paddingBottom: listBottomPad },
+          scrollPad,
           // Only grow when empty/loading — otherwise FlashList paints a tall empty card.
           (loading || showBlockingError || filtered.length === 0) && styles.contentGrow,
           showBlockingError && styles.contentBlockingError,

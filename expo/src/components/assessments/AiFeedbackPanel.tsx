@@ -11,7 +11,6 @@ import {
   scoreToneColor,
   type RubricRow,
 } from "../../lib/ai-feedback-rubric"
-import { prepareAssessmentReportMarkdownList } from "../../lib/assessment-report-markdown"
 import { useAssessmentTheme, useThemedStudentNative } from "../../lib/themed-module-theme"
 import { reportBadgeColors } from "../../lib/assessment-report-theme"
 import { AssessmentReportMarkdownContent } from "./AssessmentReportMarkdownContent"
@@ -25,6 +24,14 @@ type Props = {
   feedback: AiFeedback
   questionMaxPoints?: number
   pointsEarned?: number
+}
+
+function briefAiFeedback(text: string | null | undefined, maxChars = 280): string {
+  const clean = String(text ?? "").replace(/\s+/g, " ").trim()
+  if (!clean) return ""
+  const two = clean.split(/(?<=[.!])\s+/).slice(0, 2).join(" ")
+  if (two.length <= maxChars) return two
+  return `${two.slice(0, maxChars).replace(/\s+\S*$/, "")}…`
 }
 
 function formatPctDisplay(value: number): string {
@@ -152,7 +159,6 @@ function MarkdownSection({
 export function AiFeedbackPanel({ feedback, questionMaxPoints, pointsEarned }: Props) {
   const { tokens } = useAssessmentTheme()
   const SN = useThemedStudentNative()
-  const breakdown = feedback.gradeBreakdown
 
   if (!hasProcessedAiFeedback(feedback)) return null
 
@@ -253,53 +259,30 @@ export function AiFeedbackPanel({ feedback, questionMaxPoints, pointsEarned }: P
       ) : null}
 
       <View style={styles.body}>
-        {feedback.feedback ? (
-          <MarkdownSection title="Feedback" markdown={feedback.feedback} icon="chatbox-ellipses-outline" />
-        ) : null}
+        {(() => {
+          const explanation = briefAiFeedback(
+            feedback.detailedExplanation ||
+              (!feedback.itemizedIssues?.length ? feedback.feedback : ""),
+          )
+          if (!explanation) return null
+          return (
+            <MarkdownSection title="Grade explanation" markdown={explanation} icon="document-text-outline" />
+          )
+        })()}
 
-        {feedback.detailedExplanation ? (
-          <MarkdownSection
-            title="Detailed explanation"
-            markdown={feedback.detailedExplanation}
-            icon="document-text-outline"
-          />
-        ) : null}
-
-        {breakdown?.reasoning ? (
-          <MarkdownSection title="Reasoning" markdown={breakdown.reasoning} icon="git-branch-outline" />
-        ) : null}
-
-        {breakdown?.strengths && breakdown.strengths.length > 0 ? (
-          <MarkdownSection
-            title="Strengths"
-            markdown={prepareAssessmentReportMarkdownList(breakdown.strengths)}
-            icon="checkmark-circle-outline"
-          />
-        ) : null}
-
-        {breakdown?.weaknesses && breakdown.weaknesses.length > 0 ? (
-          <MarkdownSection
-            title="Areas to improve"
-            markdown={prepareAssessmentReportMarkdownList(breakdown.weaknesses)}
-            icon="alert-circle-outline"
-          />
-        ) : null}
-
-        {breakdown?.improvements && breakdown.improvements.length > 0 ? (
-          <MarkdownSection
-            title="Suggestions"
-            markdown={prepareAssessmentReportMarkdownList(breakdown.improvements)}
-            icon="bulb-outline"
-          />
-        ) : null}
-
-        {feedback.suggestions && feedback.suggestions.length > 0 ? (
-          <MarkdownSection
-            title="Quick tips"
-            markdown={prepareAssessmentReportMarkdownList(feedback.suggestions)}
-            icon="flash-outline"
-          />
-        ) : null}
+        {(feedback.itemizedIssues ?? []).slice(0, 3).map((item, index) => {
+          const issue = String(item.issue ?? "").trim()
+          const fix = String(item.fix ?? "").trim()
+          if (!issue && !fix) return null
+          return (
+            <MarkdownSection
+              key={`${index}-${issue.slice(0, 24)}`}
+              title={`Fix ${index + 1}`}
+              markdown={[issue, fix ? `Fix: ${fix}` : ""].filter(Boolean).join("\n\n")}
+              icon="construct-outline"
+            />
+          )
+        })}
       </View>
     </View>
   )

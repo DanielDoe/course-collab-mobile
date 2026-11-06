@@ -35,6 +35,8 @@ import {
 } from "../../../lib/faculty-cora-theme"
 import { getThemedCoraChatBubblePalette } from "../../ai-tutor/cora-chat-bubble-theme"
 import { CoraActionCard } from "../../cora/CoraActionCard"
+import { openCoraNativeRoute } from "../../../lib/cora/resolve-open-route"
+import { CoraTranscriptGutter } from "../../ai-tutor/CoraTranscriptGutter"
 import { CoraChatDayDivider } from "../../cora/CoraChatDayDivider"
 import { shouldShowChatDayDivider } from "../../../lib/cora/chat-day-divider"
 import {
@@ -1641,20 +1643,22 @@ export function FacultyCoraImmersiveChat({
             ) : null}
             {item.role === "assistant" && item.proposals?.length
               ? item.proposals.map((proposal: CoraActionProposal) => (
-                  <View key={proposal.actionId} style={styles.proposalWrap}>
-                    <CoraActionCard
-                      proposal={proposal}
-                      status={item.proposalStatusById?.[proposal.actionId] ?? "idle"}
-                      result={item.proposalResultById?.[proposal.actionId] ?? null}
-                      resultMessage={item.proposalResultById?.[proposal.actionId]?.message}
-                      onConfirm={() => void confirmProposal(item.id, proposal)}
-                      onCancel={() => cancelProposal(item.id, proposal.actionId)}
-                      onOpen={(route) => {
-                        onClose()
-                        router.push(route as never)
-                      }}
-                    />
-                  </View>
+                  <CoraTranscriptGutter key={proposal.actionId} side="assistant">
+                    <View style={styles.proposalWrap}>
+                      <CoraActionCard
+                        proposal={proposal}
+                        status={item.proposalStatusById?.[proposal.actionId] ?? "idle"}
+                        result={item.proposalResultById?.[proposal.actionId] ?? null}
+                        resultMessage={item.proposalResultById?.[proposal.actionId]?.message}
+                        onConfirm={() => void confirmProposal(item.id, proposal)}
+                        onCancel={() => cancelProposal(item.id, proposal.actionId)}
+                        onOpen={(route) => {
+                          onClose()
+                          openCoraNativeRoute(router, route)
+                        }}
+                      />
+                    </View>
+                  </CoraTranscriptGutter>
                 ))
               : null}
             {item.role === "assistant" && item.actions?.length ? (
@@ -1962,8 +1966,9 @@ const styles = StyleSheet.create({
     paddingBottom: 4,
   },
   proposalWrap: {
-    marginTop: 6,
-    marginBottom: 8,
+    marginTop: 8,
+    marginBottom: 4,
+    width: "100%",
   },
   highlightWrap: {
     borderRadius: 16,

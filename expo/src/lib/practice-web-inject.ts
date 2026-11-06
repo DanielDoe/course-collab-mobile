@@ -9,13 +9,15 @@ export function buildPracticeQuizInjectScript(
   attemptId: number,
   questions: PracticeQuestion[],
   theme?: AppThemeTokens,
+  reviewOnly = false,
 ): string {
   const sessionScript = buildWebSessionInjectScript(session, { theme })
   const practiceScript = `
     (function () {
       try {
-        sessionStorage.setItem('practiceAttemptId', ${JSON.stringify(String(attemptId))});
+        sessionStorage.setItem('practiceAttemptId', ${JSON.stringify(String(attemptId || 0))});
         sessionStorage.setItem('practiceQuestions', ${JSON.stringify(JSON.stringify(questions))});
+        sessionStorage.setItem('practiceReviewOnly', ${JSON.stringify(reviewOnly ? "1" : "0")});
       } catch (e) {}
     })();
     true;

@@ -1,5 +1,6 @@
 import type { ReactNode } from "react"
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native"
+import { initialWindowMetrics, useSafeAreaInsets } from "react-native-safe-area-context"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { BRAND } from "../../constants"
 import { NATIVE, nativeType } from "../../constants/faculty-native-theme"
@@ -11,6 +12,18 @@ import { PresenceAvatarBadge } from "../presence/PresenceAvatarBadge"
 export { nativeType }
 
 export const NATIVE_HEADER_BAR_HEIGHT = 44
+
+const BOOTSTRAP_TOP_INSET = initialWindowMetrics?.insets.top ?? 0
+
+/**
+ * Safe-area top inset that never drops below the initial window value.
+ * Prevents one-frame layout jumps under the dynamic island when returning from
+ * immersive stack screens (e.g. message threads) where insets.top can read 0.
+ */
+export function useStableTopSafeInset(): number {
+  const insets = useSafeAreaInsets()
+  return Math.max(insets.top, BOOTSTRAP_TOP_INSET)
+}
 
 /** iOS HIG / Material label colors for app chrome (bars, sheets, menus). */
 export const nativeChrome = {

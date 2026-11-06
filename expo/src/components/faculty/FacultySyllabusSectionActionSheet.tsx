@@ -51,7 +51,8 @@ function sectionIcon(sectionId: string): keyof typeof Ionicons.glyphMap {
     "lecture-topics": "chatbubbles-outline",
     grading: "pie-chart-outline",
     "course-policies": "shield-checkmark-outline",
-    "university-policies": "business-outline"}
+    "university-policies": "business-outline",
+    "curriculum-vitae": "document-text-outline"}
   return icons[sectionId] ?? "document-text-outline"
 }
 

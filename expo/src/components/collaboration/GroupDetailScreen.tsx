@@ -1,28 +1,33 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { AppAlert } from '../../lib/app-alert'
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native"
+import { AppAlert } from "../../lib/app-alert"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useLocalSearchParams, useRouter } from "expo-router"
-import { useModuleScrollContentPadding } from "../../context/ChromeInsetContext"
-import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { useSession } from "../../context/SessionProvider"
 import { ApiError } from "../../lib/student-api"
 import type { StudentSession } from "../../lib/session"
-import { IOS, SYSTEM } from "../../constants/faculty-communication-theme"
-import { NATIVE, nativeType } from "../../constants/faculty-native-theme"
+import { NATIVE } from "../../constants/faculty-native-theme"
 import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
-import { useThemedStudentNative } from "../../lib/themed-module-theme"
+import { useNativeType, useThemedStudentNative } from "../../lib/themed-module-theme"
 import {
   collaborationApi,
   formatRelativeTime,
   statusTone,
   type GroupRecord,
+  type JoinRequest,
+  type RosterStudent,
 } from "../../lib/collaboration-api"
-import { CommGroupedList, CommSectionFooter } from "../faculty/faculty-communication-ui"
+import {
+  CommGroupedList,
+  CommListRow,
+  CommSectionFooter,
+  CommSectionHeader,
+} from "../faculty/faculty-communication-ui"
 import { FacultyStatusPill } from "../faculty/faculty-shared"
-import { ModuleSectionHeader } from "../modules/ModuleScreen"
-import { CollabScreenTitle } from "./collab-nav"
+import { AppButton } from "../theme/AppButton"
+import { CollabFlowHeader } from "./collab-nav"
 import { useNotificationModuleRefresh } from "../../lib/notifications/notification-events"
+import { CollabActionSheet, type CollabSheetOption } from "./collab-native-sheet"
 
 function useStudentSession(): StudentSession | null {
   const { session } = useSession()
@@ -34,21 +39,33 @@ export function GroupDetailScreen() {
   const groupId = Number(id)
   const session = useStudentSession()
   const router = useRouter()
-  const scrollPad = useModuleScrollContentPadding(24)
   const native = useThemedNative()
+  const type = useNativeType()
   const SN = useThemedStudentNative()
   const tokens = useAppThemeTokens()
   const [group, setGroup] = useState<GroupRecord | null>(null)
+  const [roster, setRoster] = useState<RosterStudent[]>([])
+  const [incoming, setIncoming] = useState<JoinRequest[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [acting, setActing] = useState(false)
+  const [sheet, setSheet] = useState<{ title: string; message?: string; options: CollabSheetOption[] } | null>(null)
+  const [picker, setPicker] = useState<"member" | "call" | null>(null)
+  const [callTitle, setCallTitle] = useState("")
+  const [callMessage, setCallMessage] = useState("")
 
   const load = useCallback(async () => {
     if (!session || !Number.isFinite(groupId)) return
     setError("")
     try {
-      const res = await collaborationApi.getGroup(session, groupId)
+      const [res, rosterRes, inboxRes] = await Promise.all([
+        collaborationApi.getGroup(session, groupId),
+        collaborationApi.getRoster(session),
+        collaborationApi.getMyGroupRequests(session),
+      ])
       setGroup(res.group ?? null)
+      setRoster(rosterRes.students ?? [])
+      setIncoming((inboxRes.incomingJoinRequests ?? []).filter((r) => r.group_id === groupId))
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Failed to load group.")
     }
@@ -69,84 +86,52 @@ export function GroupDetailScreen() {
     () => group?.created_by === Number(session?.databaseId),
     [group?.created_by, session?.databaseId],
   )
-
   const isMember = useMemo(
     () =>
+      isLeader ||
       (group?.members ?? []).some(
         (m) => m.student_id === session?.id || String(m.id) === session?.databaseId,
       ),
-    [group?.members, session?.id, session?.databaseId],
+    [group?.members, session?.id, session?.databaseId, isLeader],
   )
+  const addable = useMemo(() => {
+    const memberIds = new Set((group?.members ?? []).map((m) => Number(m.id)))
+    if (group?.created_by != null) memberIds.add(Number(group.created_by))
+    return roster.filter((s) => !memberIds.has(Number(s.id)))
+  }, [roster, group])
 
-  const requestJoin = async () => {
-    if (!session) return
+  async function act(fn: () => Promise<unknown>, okTitle: string, okBody: string) {
+    if (!session || acting) return
     setActing(true)
     try {
-      await collaborationApi.requestJoinGroup(session, groupId)
-      AppAlert.alert("Request sent", "The group leader will review your request.")
+      await fn()
+      AppAlert.alert(okTitle, okBody)
+      await load()
     } catch (err) {
-      AppAlert.alert("Failed", err instanceof ApiError ? err.message : "Could not send request.")
+      AppAlert.alert("Failed", err instanceof ApiError ? err.message : "Could not complete that action.")
     } finally {
       setActing(false)
     }
   }
 
-  const leaveGroup = () => {
-    if (!session) return
-    AppAlert.alert("Leave group?", "You will need to join or create another group.", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Leave",
-        style: "destructive",
-        onPress: async () => {
-          setActing(true)
-          try {
-            await collaborationApi.removeGroupMember(session, groupId, Number(session.databaseId))
-            router.back()
-          } catch (err) {
-            AppAlert.alert("Failed", err instanceof ApiError ? err.message : "Could not leave group.")
-          } finally {
-            setActing(false)
-          }
-        },
-      },
-    ])
-  }
-
-  const deleteGroup = () => {
-    if (!session) return
-    AppAlert.alert("Delete group?", "This cannot be undone.", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: async () => {
-          setActing(true)
-          try {
-            await collaborationApi.deleteGroup(session, groupId)
-            router.back()
-          } catch (err) {
-            AppAlert.alert("Failed", err instanceof ApiError ? err.message : "Could not delete group.")
-          } finally {
-            setActing(false)
-          }
-        },
-      },
-    ])
-  }
-
   if (loading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color={native.tint} />
+      <View style={[styles.screen, { backgroundColor: native.groupedBackground }]}>
+        <CollabFlowHeader title="Group" fallbackHref="/module/groups" />
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={native.tint} />
+        </View>
       </View>
     )
   }
 
   if (!group) {
     return (
-      <View style={styles.center}>
-        <Text style={styles.errorText}>{error || "Group not found."}</Text>
+      <View style={[styles.screen, { backgroundColor: native.groupedBackground }]}>
+        <CollabFlowHeader title="Group" fallbackHref="/module/groups" />
+        <View style={styles.center}>
+          <Text style={[type.destructive]}>{error || "Group not found."}</Text>
+        </View>
       </View>
     )
   }
@@ -155,129 +140,293 @@ export function GroupDetailScreen() {
   const members = group.members ?? []
 
   return (
-    <ScrollView
-      style={styles.scroll}
-      contentContainerStyle={[styles.content, scrollPad]}
-    >
-      <CollabScreenTitle title={group.name} subtitle={`Led by ${group.leader_name ?? "—"}`} />
+    <View style={[styles.screen, { backgroundColor: native.groupedBackground }]}>
+      <CollabFlowHeader
+        title={group.name}
+        subtitle={`Led by ${group.leader_name ?? "—"}`}
+        fallbackHref="/module/groups"
+        rightSlot={
+          isLeader ? (
+            <Pressable
+              onPress={() =>
+                setSheet({
+                  title: group.name,
+                  options: [
+                    {
+                      label: "Add Member",
+                      icon: "person-add-outline",
+                      onPress: () => setPicker("member"),
+                    },
+                    {
+                      label: "Post Open Call",
+                      icon: "megaphone-outline",
+                      onPress: () => setPicker("call"),
+                    },
+                    {
+                      label: "Submit Project",
+                      icon: "rocket-outline",
+                      onPress: () => router.push(`/collaboration/projects/submit?groupId=${groupId}` as never),
+                    },
+                    {
+                      label: "Delete Group",
+                      icon: "trash-outline",
+                      destructive: true,
+                      onPress: () =>
+                        AppAlert.alert("Delete Group?", "This cannot be undone.", [
+                          { text: "Cancel", style: "cancel" },
+                          {
+                            text: "Delete",
+                            style: "destructive",
+                            onPress: () =>
+                              act(async () => {
+                                await collaborationApi.deleteGroup(session!, groupId)
+                                router.back()
+                              }, "Deleted", "The group was removed."),
+                          },
+                        ]),
+                    },
+                  ],
+                })
+              }
+              hitSlop={8}
+              accessibilityLabel="Group actions"
+            >
+              <Ionicons name="ellipsis-horizontal" size={22} color={tokens.accent} />
+            </Pressable>
+          ) : undefined
+        }
+      />
 
-      <CommGroupedList>
-        <View style={styles.summaryRow}>
-          <FacultyStatusPill label={tone.label} tone="neutral" />
-          <Text style={styles.meta}>
-            {members.length}/4 members · {formatRelativeTime(group.created_at)}
-          </Text>
-        </View>
-      </CommGroupedList>
-
-      <ModuleSectionHeader title="Members" />
-      <CommGroupedList>
-        {members.map((member, index) => (
-          <View key={member.id} style={[styles.memberRow, index < members.length - 1 && styles.rowBorder]}>
-            <View style={[styles.memberAvatar, { backgroundColor: SN.accentSoft }]}>
-              <Text style={[styles.memberInitial, { color: SN.accent }]}>{member.full_name?.charAt(0) ?? "?"}</Text>
-            </View>
-            <View style={styles.memberCopy}>
-              <Text style={styles.memberName}>{member.full_name}</Text>
-              <Text style={styles.memberId}>{member.student_id}</Text>
-            </View>
-            {group.created_by === member.id ? (
-              <Ionicons name="star" size={16} color={tokens.warning} />
-            ) : null}
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <CommGroupedList>
+          <View style={styles.summaryRow}>
+            <FacultyStatusPill label={tone.label} tone="neutral" />
+            <Text style={[type.caption, { color: native.secondaryLabel }]}>
+              {members.length}/4 members · {formatRelativeTime(group.created_at)}
+            </Text>
           </View>
-        ))}
-      </CommGroupedList>
+        </CommGroupedList>
 
-      {!isMember && !isLeader ? (
-        <Pressable style={[styles.primaryBtn, { backgroundColor: SN.accent }]} onPress={requestJoin} disabled={acting}>
-          <Ionicons name="person-add-outline" size={18} color="#ffffff" />
-          <Text style={styles.primaryBtnText}>Request to join</Text>
-        </Pressable>
-      ) : null}
+        <CommSectionHeader title="Members" />
+        <CommGroupedList>
+          {members.map((member, index) => (
+            <CommListRow
+              key={member.id}
+              icon={group.created_by === member.id ? "star" : "person-outline"}
+              iconColor={group.created_by === member.id ? tokens.warning : SN.accent}
+              iconSoft={SN.accentSoft}
+              title={member.full_name}
+              subtitle={member.student_id}
+              meta={group.created_by === member.id ? "Leader" : undefined}
+              isLast={index === members.length - 1}
+              showChevron={isLeader && group.created_by !== member.id}
+              onPress={
+                isLeader && group.created_by !== member.id
+                  ? () =>
+                      setSheet({
+                        title: member.full_name,
+                        message: "Remove this classmate from the group?",
+                        options: [
+                          {
+                            label: "Remove Member",
+                            icon: "close-circle-outline",
+                            destructive: true,
+                            onPress: () =>
+                              act(
+                                () => collaborationApi.removeGroupMember(session!, groupId, member.id),
+                                "Removed",
+                                `${member.full_name} was removed from the group.`,
+                              ),
+                          },
+                        ],
+                      })
+                  : undefined
+              }
+            />
+          ))}
+        </CommGroupedList>
 
-      {isMember && !isLeader ? (
-        <Pressable style={styles.secondaryBtn} onPress={leaveGroup} disabled={acting}>
-          <Text style={[styles.secondaryBtnText, { color: SN.accent }]}>Leave group</Text>
-        </Pressable>
-      ) : null}
+        {isLeader && incoming.length > 0 ? (
+          <>
+            <CommSectionHeader title="Join Requests" />
+            <CommGroupedList>
+              {incoming.map((req, index) => (
+                <CommListRow
+                  key={req.id}
+                  icon="mail-outline"
+                  iconColor={SN.accent}
+                  iconSoft={SN.accentSoft}
+                  title={req.requester_name ?? "Student"}
+                  subtitle={formatRelativeTime(req.created_at)}
+                  isLast={index === incoming.length - 1}
+                  onPress={() =>
+                    setSheet({
+                      title: req.requester_name ?? "Join Request",
+                      message: `Add this student to ${group.name}?`,
+                      options: [
+                        {
+                          label: "Accept",
+                          icon: "checkmark-circle-outline",
+                          onPress: () =>
+                            act(
+                              () => collaborationApi.respondJoinRequest(session!, req.id, "accept"),
+                              "Accepted",
+                              `${req.requester_name ?? "Student"} was added.`,
+                            ),
+                        },
+                        {
+                          label: "Decline",
+                          icon: "close-circle-outline",
+                          destructive: true,
+                          onPress: () =>
+                            act(
+                              () => collaborationApi.respondJoinRequest(session!, req.id, "reject"),
+                              "Declined",
+                              "The join request was declined.",
+                            ),
+                        },
+                      ],
+                    })
+                  }
+                />
+              ))}
+            </CommGroupedList>
+          </>
+        ) : null}
 
-      {isLeader ? (
-        <>
-          <Pressable
-            style={[styles.primaryBtn, { backgroundColor: SN.accent }]}
+        {!isMember ? (
+          <AppButton
+            label="Request to Join"
+            icon="person-add-outline"
+            iconPosition="left"
+            onPress={() =>
+              act(
+                () => collaborationApi.requestJoinGroup(session!, groupId),
+                "Request Sent",
+                "The group leader will review your request.",
+              )
+            }
+            disabled={acting}
+          />
+        ) : null}
+
+        {isMember && !isLeader ? (
+          <AppButton
+            label="Leave Group"
+            variant="outline"
+            onPress={() =>
+              AppAlert.alert("Leave Group?", "You will need to join or create another group.", [
+                { text: "Cancel", style: "cancel" },
+                {
+                  text: "Leave",
+                  style: "destructive",
+                  onPress: () =>
+                    act(async () => {
+                      await collaborationApi.removeGroupMember(session!, groupId, Number(session!.databaseId))
+                      router.back()
+                    }, "Left Group", "You left the group."),
+                },
+              ])
+            }
+            disabled={acting}
+          />
+        ) : null}
+
+        {isLeader ? (
+          <AppButton
+            label="Submit Project"
+            icon="rocket-outline"
+            iconPosition="left"
             onPress={() => router.push(`/collaboration/projects/submit?groupId=${groupId}` as never)}
-          >
-            <Ionicons name="rocket-outline" size={18} color="#ffffff" />
-            <Text style={styles.primaryBtnText}>Submit project</Text>
-          </Pressable>
-          <Pressable style={[styles.dangerBtn, { backgroundColor: SYSTEM.red.soft }]} onPress={deleteGroup} disabled={acting}>
-            <Text style={styles.dangerBtnText}>Delete group</Text>
-          </Pressable>
-        </>
-      ) : null}
+          />
+        ) : null}
 
-      <CommSectionFooter>Group leaders manage members and project submissions.</CommSectionFooter>
-    </ScrollView>
+        <CommSectionFooter>Group leaders manage members, join requests, and project submissions.</CommSectionFooter>
+      </ScrollView>
+
+      <CollabActionSheet
+        visible={sheet != null}
+        onClose={() => setSheet(null)}
+        title={sheet?.title ?? ""}
+        message={sheet?.message}
+        options={sheet?.options ?? []}
+      />
+
+      <CollabActionSheet
+        visible={picker === "member"}
+        onClose={() => setPicker(null)}
+        title="Add Member"
+        message={addable.length === 0 ? "No classmates available to add." : "Choose a classmate to add."}
+        options={addable.map((student) => ({
+          label: student.full_name,
+          detail: student.student_id,
+          icon: "person-outline" as const,
+          onPress: () =>
+            act(
+              () => collaborationApi.addGroupMember(session!, groupId, student.id),
+              "Member Added",
+              `${student.full_name} was added to the group.`,
+            ),
+        }))}
+      />
+
+      <CollabActionSheet
+        visible={picker === "call"}
+        onClose={() => setPicker(null)}
+        title="Post Open Call"
+        message="Classmates can find this on the Join tab."
+      >
+        <View style={[styles.callForm, { backgroundColor: native.fill }]}>
+          <TextInput
+            style={[styles.input, { color: native.label }]}
+            value={callTitle}
+            onChangeText={setCallTitle}
+            placeholder="Looking for a teammate…"
+            placeholderTextColor={native.tertiaryLabel}
+          />
+          <TextInput
+            style={[styles.input, styles.inputMultiline, { color: native.label }]}
+            value={callMessage}
+            onChangeText={setCallMessage}
+            placeholder="What skills or availability do you need?"
+            placeholderTextColor={native.tertiaryLabel}
+            multiline
+          />
+          <AppButton
+            label="Post Call"
+            disabled={acting || !callTitle.trim()}
+            onPress={() =>
+              act(
+                async () => {
+                  await collaborationApi.createOpenCall(session!, {
+                    title: callTitle.trim(),
+                    message: callMessage.trim() || undefined,
+                    groupId,
+                  })
+                  setCallTitle("")
+                  setCallMessage("")
+                  setPicker(null)
+                },
+                "Open Call Posted",
+                "Classmates can find this on the Join tab.",
+              )
+            }
+          />
+        </View>
+      </CollabActionSheet>
+    </View>
   )
 }
 
 const styles = StyleSheet.create({
-  scroll: { flex: 1, backgroundColor: NATIVE.groupedBackground },
-  center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: NATIVE.groupedBackground },
-  content: { padding: NATIVE.pagePadding, gap: 12 },
-  errorText: { ...nativeType.destructive },
-  summaryRow: {
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    gap: 8,
-    backgroundColor: IOS.secondaryGrouped,
+  screen: { flex: 1 },
+  center: { flex: 1, alignItems: "center", justifyContent: "center" },
+  content: { padding: NATIVE.pagePadding, gap: 12, paddingBottom: 40 },
+  summaryRow: { paddingHorizontal: 14, paddingVertical: 12, gap: 8 },
+  callForm: { borderRadius: NATIVE.sectionRadius, padding: 12, gap: 10 },
+  input: {
+    fontSize: 17,
+    paddingVertical: 10,
   },
-  meta: nativeType.caption,
-  rowBorder: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: IOS.separator,
-  },
-  memberRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    minHeight: NATIVE.rowMinHeight,
-    backgroundColor: IOS.secondaryGrouped,
-  },
-  memberAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  memberInitial: { fontSize: 15, fontWeight: "700" },
-  memberCopy: { flex: 1 },
-  memberName: nativeType.bodyEmphasis,
-  memberId: nativeType.footnote,
-  primaryBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    paddingVertical: 14,
-    borderRadius: NATIVE.sectionRadius,
-    marginTop: 4,
-  },
-  primaryBtnText: { color: "#ffffff", fontSize: 15, fontWeight: "600" },
-  secondaryBtn: {
-    alignItems: "center",
-    paddingVertical: 14,
-    borderRadius: NATIVE.sectionRadius,
-    backgroundColor: IOS.secondaryGrouped,
-  },
-  secondaryBtnText: { fontSize: 15, fontWeight: "600" },
-  dangerBtn: {
-    alignItems: "center",
-    paddingVertical: 14,
-    borderRadius: NATIVE.sectionRadius,
-  },
-  dangerBtnText: { fontSize: 15, fontWeight: "600", color: NATIVE.destructive },
+  inputMultiline: { minHeight: 72, textAlignVertical: "top" },
 })

@@ -28,6 +28,7 @@ import { FacultyRecentActivityScreen } from "../components/faculty/FacultyRecent
 import { FacultyProgressReviewsScreen } from "../components/faculty/FacultyProgressReviewsScreen"
 import { FacultyReportsScreen } from "../components/faculty/FacultyReportsScreen"
 import { FacultyStudentProgressScreen } from "../components/faculty/FacultyStudentProgressScreen"
+import { FacultyCoraInsightsScreen } from "../components/faculty/FacultyCoraInsightsScreen"
 import { FacultyRecommendationsScreen } from "../components/faculty/FacultyRecommendationsScreen"
 import { FacultyResultsScreen } from "../components/faculty/FacultyResultsScreen"
 import { FacultyStudentsScreen } from "../components/faculty/FacultyStudentsScreen"
@@ -136,6 +137,7 @@ export const FACULTY_MODULE_RENDERERS: Record<string, ModuleRenderer> = {
   "student-progress": FacultyStudentProgressScreen,
   reports: FacultyReportsScreen,
   "progress-reviews": FacultyProgressReviewsScreen,
+  "cora-insights": FacultyCoraInsightsScreen,
   "recent-activity": FacultyRecentActivityScreen,
 
   notifications: FacultyNotificationsScreen,

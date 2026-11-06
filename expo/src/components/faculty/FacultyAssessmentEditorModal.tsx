@@ -38,6 +38,13 @@ import { FacultyAssessmentQuestionPreview } from "./FacultyAssessmentQuestionPre
 import { FacultyAssessmentSectionsPanel } from "./FacultyAssessmentSectionsPanel"
 import { FacultyAssessmentStudentGrantsPanel } from "./FacultyAssessmentStudentGrantsPanel"
 import { FacultyAssessmentTimePanel } from "./FacultyAssessmentTimePanel"
+import {
+  applyExamWideMinutes,
+  defaultExamWideTimerSeconds,
+  examWideMinuteOptions,
+  isExamWideAssessmentType,
+  resolveExamWideTimerSeconds,
+} from "../../lib/assessment-quiz/exam-wide-timer"
 import { NativeSelect } from "../NativeSelect"
 import {
   CONCURRENT_STUDENT_OPTIONS,
@@ -1249,15 +1256,50 @@ export function FacultyAssessmentEditorModal({quiz,
                 <EditorSectionCard
                   icon="time-outline"
                   title="Timing & availability"
-                  subtitle="Default pacing and when students can access"
+                  subtitle={
+                    isExamWideAssessmentType(assessmentType)
+                      ? "One clock for the whole assessment"
+                      : "Default pacing and when students can access"
+                  }
                 >
-                  <NativeSelect
-                    label="Default time per question"
-                    placeholder="1 minute"
-                    value={String(draft.time_per_question)}
-                    options={secondsSelectOptions(draft.time_per_question)}
-                    onChange={(v) => patchDraft({ time_per_question: Number(v) || 60 })}
-                  />
+                  {isExamWideAssessmentType(assessmentType) ? (
+                    <NativeSelect
+                      label="Total time"
+                      placeholder="1 hour"
+                      value={String(
+                        Math.max(
+                          1,
+                          Math.round(
+                            (resolveExamWideTimerSeconds(draft.section_config, assessmentType) ??
+                              defaultExamWideTimerSeconds(assessmentType)) / 60,
+                          ),
+                        ),
+                      )}
+                      options={examWideMinuteOptions(
+                        Math.round(
+                          (resolveExamWideTimerSeconds(draft.section_config, assessmentType) ??
+                            defaultExamWideTimerSeconds(assessmentType)) / 60,
+                        ),
+                      )}
+                      onChange={(v) =>
+                        patchDraft({
+                          section_config: applyExamWideMinutes(
+                            draft.section_config,
+                            Number(v) || 60,
+                            assessmentType,
+                          ),
+                        })
+                      }
+                    />
+                  ) : (
+                    <NativeSelect
+                      label="Default time per question"
+                      placeholder="1 minute"
+                      value={String(draft.time_per_question)}
+                      options={secondsSelectOptions(draft.time_per_question)}
+                      onChange={(v) => patchDraft({ time_per_question: Number(v) || 60 })}
+                    />
+                  )}
                   <FacultyDateTimeField
                     value={draft.available_from}
                     onChange={(available_from) => patchDraft({ available_from })}

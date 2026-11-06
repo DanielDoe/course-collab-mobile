@@ -1,6 +1,7 @@
 import Constants from "expo-constants"
 import { getAppEnvironment, isProductionEnvironment } from "./environment"
 
+/** Mobile/API traffic stays on the Vercel deployment host. */
 export const PRODUCTION_API_BASE_URL = "https://coursecollab.vercel.app"
 
 const LOCAL_HOST_PATTERNS =

@@ -10,6 +10,13 @@ import { secondsSelectOptions } from "./FacultyNativePickers"
 import {
   EditorNotice,
   EditorSectionCard} from "./FacultyAssessmentEditorUi"
+import {
+  applyExamWideMinutes,
+  defaultExamWideTimerSeconds,
+  examWideMinuteOptions,
+  isExamWideAssessmentType,
+  resolveExamWideTimerSeconds,
+} from "../../lib/assessment-quiz/exam-wide-timer"
 
 type Scope = { instructorId: number; courseId: number }
 
@@ -99,20 +106,44 @@ export function FacultyAssessmentTimePanel({
     return map
   }, [courseDefaults])
 
+  const examWide = isExamWideAssessmentType(assessmentType)
+  const examSeconds =
+    resolveExamWideTimerSeconds(draft.section_config, assessmentType) ??
+    defaultExamWideTimerSeconds(assessmentType)
+  const examMinutes = Math.max(1, Math.round(examSeconds / 60))
+
   return (
     <View style={styles.stack}>
       <EditorSectionCard
         icon="timer-outline"
-        title="Assessment default"
-        subtitle="Used when a question has no time override"
+        title={examWide ? "Total assessment time" : "Assessment default"}
+        subtitle={
+          examWide
+            ? "One countdown for the whole sitting. Students decide how to spend it."
+            : "Used when a question has no time override"
+        }
       >
-        <NativeSelect
-          label="Default time per question"
-          placeholder="1 minute"
-          value={String(draft.time_per_question)}
-          options={secondsSelectOptions(draft.time_per_question)}
-          onChange={(v) => onPatchDraft({ time_per_question: Math.max(10, Number(v) || 60) })}
-        />
+        {examWide ? (
+          <NativeSelect
+            label="Total time"
+            placeholder="1 hour"
+            value={String(examMinutes)}
+            options={examWideMinuteOptions(examMinutes)}
+            onChange={(v) =>
+              onPatchDraft({
+                section_config: applyExamWideMinutes(draft.section_config, Number(v) || examMinutes, assessmentType),
+              })
+            }
+          />
+        ) : (
+          <NativeSelect
+            label="Default time per question"
+            placeholder="1 minute"
+            value={String(draft.time_per_question)}
+            options={secondsSelectOptions(draft.time_per_question)}
+            onChange={(v) => onPatchDraft({ time_per_question: Math.max(10, Number(v) || 60) })}
+          />
+        )}
       </EditorSectionCard>
 
       <EditorSectionCard
@@ -137,7 +168,14 @@ export function FacultyAssessmentTimePanel({
         <EditorNotice tone="info" text="Edit course-wide defaults on the web under Time Settings." />
       </EditorSectionCard>
 
-      <EditorSectionCard
+      {examWide ? (
+        <EditorNotice
+          tone="info"
+          text="MCQ, true/false, and select-all are not timed separately. The total above is the whole assessment."
+        />
+      ) : null}
+
+      {!examWide ? <EditorSectionCard
         icon="list-outline"
         title="Per-question overrides"
         subtitle="Blank uses the assessment default above"
@@ -174,7 +212,7 @@ export function FacultyAssessmentTimePanel({
             </View>
           )
         })}
-      </EditorSectionCard>
+      </EditorSectionCard> : null}
     </View>
   )
 }

@@ -44,6 +44,7 @@ export function prepareSyllabusForDisplay(
   return {
     title: syllabus?.title?.trim() || fallbackTitle,
     term: syllabus?.term?.trim() || undefined,
+    contentMode: syllabus?.contentMode,
     pdfUrl: syllabus?.pdfUrl ?? null,
     sections: prepareStudentSyllabusSections(syllabus?.sections ?? [])}
 }

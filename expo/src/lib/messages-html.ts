@@ -1,3 +1,4 @@
+import { messageIsOnlyLocalDeviceFile } from "./message-local-file"
 import { messageCourseImportPreview } from "./message-course-import"
 import { unsentAuditLabel } from "./message-lifecycle"
 
@@ -20,6 +21,7 @@ export function messagePreviewText(body: string, max = 120): string {
   if (importPreview) return importPreview
 
   const text = stripMessageHtml(body) || body.trim()
+  if (messageIsOnlyLocalDeviceFile(text)) return "Photo didn't upload"
   if (text.length <= max) return text
   return `${text.slice(0, max)}…`
 }

@@ -12,6 +12,8 @@ import { useNotificationModuleRefresh } from "../../lib/notifications/notificati
 import { NATIVE, SYSTEM } from "../../constants/faculty-native-theme"
 import { FacultyEmptyState, FacultyStatusPill } from "./faculty-shared"
 import { FacultyOfficeHourCreateModal } from "./FacultyOfficeHourCreateModal"
+import { FacultyOfficeHourDateTimeField, toOfficeHourDatetimeLocal } from "./FacultyOfficeHourDateTimeField"
+import { NativeSelect } from "../NativeSelect"
 import { FacultyOfficeHoursActionSheet } from "./FacultyOfficeHoursActionSheet"
 import { FacultyRegularOfficeHoursSheet } from "./FacultyRegularOfficeHoursSheet"
 import { useFacultyStickyHeaderScrollLayout,
@@ -25,6 +27,7 @@ import {
   FacultySheetField,
   FacultySheetNotice,
   FacultySheetSection,
+  FacultySheetSubmitButton,
   useSheetPlaceholderColor,
 } from "./faculty-collab-sheet-ui"
 import { SHEET_SECTION } from "./faculty-sheet-semantics"
@@ -61,6 +64,13 @@ export function FacultyOfficeHoursScreen() {
   const [meetingLink, setMeetingLink] = useState("")
   const [meetingVenue, setMeetingVenue] = useState("")
   const [notes, setNotes] = useState("")
+  const [editing, setEditing] = useState(false)
+  const [editTopic, setEditTopic] = useState("")
+  const [editArea, setEditArea] = useState("")
+  const [editDescription, setEditDescription] = useState("")
+  const [editPriority, setEditPriority] = useState("medium")
+  const [editStatus, setEditStatus] = useState("pending")
+  const [scheduledDate, setScheduledDate] = useState("")
   const [submitting, setSubmitting] = useState(false)
   const [actionSheetOpen, setActionSheetOpen] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
@@ -200,9 +210,52 @@ export function FacultyOfficeHoursScreen() {
 
   function openDetail(request: OfficeHourRequest) {
     setSelected(request)
-    setMeetingLink("")
-    setMeetingVenue("")
-    setNotes("")
+    setEditing(false)
+    setMeetingLink(request.meeting_link ?? "")
+    setMeetingVenue(request.meeting_venue ?? "")
+    setNotes(request.instructor_notes ?? "")
+    setEditTopic(request.topic ?? "")
+    setEditArea(request.area_of_concern ?? "")
+    setEditDescription(request.description ?? "")
+    setEditPriority(request.priority || "medium")
+    setEditStatus(request.status === "requested" ? "pending" : request.status || "pending")
+    setScheduledDate(toOfficeHourDatetimeLocal(request.scheduled_date))
+  }
+
+  function canEditRequest(status: string) {
+    return ["pending", "requested", "approved", "scheduled", "completed"].includes(status.toLowerCase())
+  }
+
+  async function saveEdit(request: OfficeHourRequest) {
+    if (!scope) return
+    if (!editTopic.trim()) {
+      AppAlert.alert("Topic required", "Add a topic before saving this request.")
+      return
+    }
+    setSubmitting(true)
+    try {
+      await instructorApi.updateOfficeHourRequest(scope, request.id, {
+        status: editStatus,
+        topic: editTopic.trim(),
+        areaOfConcern: editArea.trim() || null,
+        description: editDescription.trim() || null,
+        priority: editPriority,
+        scheduledDate: scheduledDate || null,
+        meetingLink: meetingLink.trim() || null,
+        meetingVenue: meetingVenue.trim() || null,
+        instructorNotes: notes.trim() || null,
+      })
+      setSelected(null)
+      setEditing(false)
+      await handleRefresh()
+      AppAlert.alert("Request updated", `${request.full_name} will see the updated office hours.`, undefined, {
+        tone: "success",
+      })
+    } catch (err) {
+      AppAlert.alert("Update failed", err instanceof ApiError ? err.message : "Try again.")
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   if (!ready) {
@@ -372,7 +425,117 @@ export function FacultyOfficeHoursScreen() {
                   ))}
                 </FacultySheetSection>
               ) : null}
-              {isPendingOfficeHourStatus(selected.status) ? (
+              {editing ? (
+                <FacultySheetSection label="Edit request" tone={SHEET_SECTION.edit}>
+                  <FacultySheetField label="Status">
+                    <NativeSelect
+                      placeholder="Status"
+                      sheetTitle="Status"
+                      value={editStatus}
+                      options={[
+                        { value: "pending", label: "Pending" },
+                        { value: "approved", label: "Approved" },
+                        { value: "scheduled", label: "Scheduled" },
+                        { value: "completed", label: "Completed" },
+                        { value: "rejected", label: "Rejected" },
+                      ]}
+                      onChange={setEditStatus}
+                    />
+                  </FacultySheetField>
+                  <FacultySheetField label="Topic">
+                    <TextInput
+                      style={collabSheetStyles.fieldInput}
+                      value={editTopic}
+                      onChangeText={setEditTopic}
+                      placeholder="What the meeting is about"
+                      placeholderTextColor={sheetPlaceholder}
+                    />
+                  </FacultySheetField>
+                  <FacultySheetField label="Area of concern">
+                    <TextInput
+                      style={collabSheetStyles.fieldInput}
+                      value={editArea}
+                      onChangeText={setEditArea}
+                      placeholder="Optional"
+                      placeholderTextColor={sheetPlaceholder}
+                    />
+                  </FacultySheetField>
+                  <FacultySheetField label="Description">
+                    <TextInput
+                      style={[collabSheetStyles.fieldInput, collabSheetStyles.textArea]}
+                      value={editDescription}
+                      onChangeText={setEditDescription}
+                      placeholder="What the meeting is about"
+                      placeholderTextColor={sheetPlaceholder}
+                      multiline
+                    />
+                  </FacultySheetField>
+                  <FacultySheetField label="Priority">
+                    <NativeSelect
+                      placeholder="Priority"
+                      sheetTitle="Priority"
+                      value={editPriority}
+                      options={[
+                        { value: "low", label: "Low" },
+                        { value: "medium", label: "Medium" },
+                        { value: "high", label: "High" },
+                        { value: "urgent", label: "Urgent" },
+                      ]}
+                      onChange={setEditPriority}
+                    />
+                  </FacultySheetField>
+                  <FacultySheetField label="Date and time">
+                    <FacultyOfficeHourDateTimeField value={scheduledDate} onChange={setScheduledDate} />
+                  </FacultySheetField>
+                  <FacultySheetField label="Zoom / meeting link">
+                    <TextInput
+                      style={collabSheetStyles.fieldInput}
+                      value={meetingLink}
+                      onChangeText={setMeetingLink}
+                      placeholder="https://zoom.us/j/..."
+                      placeholderTextColor={sheetPlaceholder}
+                      autoCapitalize="none"
+                    />
+                  </FacultySheetField>
+                  <FacultySheetField label="Venue">
+                    <TextInput
+                      style={collabSheetStyles.fieldInput}
+                      value={meetingVenue}
+                      onChangeText={setMeetingVenue}
+                      placeholder="Room or location"
+                      placeholderTextColor={sheetPlaceholder}
+                    />
+                  </FacultySheetField>
+                  <FacultySheetField label="Notes for student">
+                    <TextInput
+                      style={[collabSheetStyles.fieldInput, collabSheetStyles.textArea]}
+                      value={notes}
+                      onChangeText={setNotes}
+                      placeholder="Optional message"
+                      placeholderTextColor={sheetPlaceholder}
+                      multiline
+                    />
+                  </FacultySheetField>
+                  <FacultySheetSubmitButton
+                    label={submitting ? "Saving…" : "Save changes"}
+                    onPress={() => void saveEdit(selected)}
+                    disabled={submitting || !editTopic.trim()}
+                    loading={submitting}
+                  />
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.btn,
+                      styles.secondaryBtn,
+                      { backgroundColor: native.fill, borderColor: native.separator },
+                      pressed && { opacity: NATIVE.pressedOpacity },
+                    ]}
+                    disabled={submitting}
+                    onPress={() => setEditing(false)}
+                  >
+                    <Text style={[type.caption, styles.secondaryText, { color: native.label }]}>Cancel</Text>
+                  </Pressable>
+                </FacultySheetSection>
+              ) : isPendingOfficeHourStatus(selected.status) ? (
                 <>
                   <FacultySheetSection label="Approval details" tone={SHEET_SECTION.edit}>
                     <FacultySheetField label="Meeting link (optional)">
@@ -414,6 +577,18 @@ export function FacultyOfficeHoursScreen() {
                         pressed && { opacity: NATIVE.pressedOpacity },
                       ]}
                       disabled={submitting}
+                      onPress={() => setEditing(true)}
+                    >
+                      <Text style={[type.caption, styles.secondaryText, { color: native.label }]}>Edit</Text>
+                    </Pressable>
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.btn,
+                        styles.secondaryBtn,
+                        { backgroundColor: native.fill, borderColor: native.separator },
+                        pressed && { opacity: NATIVE.pressedOpacity },
+                      ]}
+                      disabled={submitting}
                       onPress={() =>
                         confirmDecline(selected, { instructorNotes: notes.trim() || undefined })
                       }
@@ -441,14 +616,30 @@ export function FacultyOfficeHoursScreen() {
                   </View>
                 </>
               ) : (
-                <FacultySheetNotice
-                  message={
-                    selected.status.toLowerCase() === "declined" ||
-                    selected.status.toLowerCase() === "rejected"
-                      ? "This request was already declined."
-                      : "This request is already approved."
-                  }
-                />
+                <>
+                  <FacultySheetNotice
+                    message={
+                      selected.status.toLowerCase() === "declined" ||
+                      selected.status.toLowerCase() === "rejected"
+                        ? "This request was already declined."
+                        : "This request is already approved."
+                    }
+                  />
+                  {canEditRequest(selected.status) ? (
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.btn,
+                        styles.primaryBtn,
+                        { backgroundColor: FACULTY_OFFICE_HOURS_COLOR.action },
+                        pressed && { opacity: NATIVE.pressedOpacity },
+                      ]}
+                      disabled={submitting}
+                      onPress={() => setEditing(true)}
+                    >
+                      <Text style={[type.caption, styles.primaryText]}>Edit request</Text>
+                    </Pressable>
+                  ) : null}
+                </>
               )}
             </ScrollView>
           </FacultySheetContainer>

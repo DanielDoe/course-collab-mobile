@@ -124,6 +124,7 @@ export const FACULTY_NAV_GROUPS: FacultyNavGroup[] = [
       { id: "student-progress", label: "Student Progress", route: "/module/student-progress", icon: "analytics-outline" },
       { id: "reports", label: "Manage Reports", route: "/module/reports", icon: "document-attach-outline", locked: true, minTier: "Pro" },
       { id: "progress-reviews", label: "Progress Reviews", route: "/module/progress-reviews", icon: "trending-up-outline", locked: true, minTier: "Pro" },
+      { id: "cora-insights", label: "Cora Insights", route: "/module/cora-insights", icon: "sparkles-outline" },
       { id: "recent-activity", label: "Recent Activity", route: "/module/recent-activity", icon: "pulse-outline" },
     ],
   }),
@@ -330,6 +331,9 @@ export function facultyNativeRouteFromLink(link: string | undefined): string {
   if (path.includes("analytics/advanced") || path.includes("student-progress")) return "/module/student-progress"
   if (path.includes("analytics/reports") || path.includes("/reports")) return "/module/reports"
   if (path.includes("progress-reviews")) return "/module/progress-reviews"
+  if (path.includes("cora-insights") || path.includes("ai-monitoring") || path.includes("ai-insights")) {
+    return "/module/cora-insights"
+  }
   if (path.includes("recent-activity")) return "/module/recent-activity"
 
   if (path.includes("communication/notifications") || path.includes("notifications")) return "/module/notifications"

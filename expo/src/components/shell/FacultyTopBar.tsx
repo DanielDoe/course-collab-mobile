@@ -1,7 +1,6 @@
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { usePathname } from "expo-router"
-import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { getFacultyNavLabel, FACULTY_CORA_ROUTE } from "../../constants/faculty-nav"
 import { useFacultyShell } from "../../context/FacultyShellContext"
 import { useFacultyModuleHeaderOptional } from "../../context/FacultyModuleHeaderContext"
@@ -13,14 +12,16 @@ import { CoraBrand } from "../cora/CoraBrand"
 import {
   HeaderProfileButton,
   NATIVE_HEADER_BAR_HEIGHT,
-  shellTopBarStyles} from "./shell-shared"
+  shellTopBarStyles,
+  useStableTopSafeInset,
+} from "./shell-shared"
 
 type Props = {
   session: FacultySession
 }
 
 export function FacultyTopBar({ session }: Props) {
-  const insets = useSafeAreaInsets()
+  const topSafeInset = useStableTopSafeInset()
   const pathname = usePathname()
   const screenTitle = getFacultyNavLabel(pathname)
   const nestedHeader = useFacultyModuleHeaderOptional()?.nestedHeader ?? null
@@ -32,7 +33,7 @@ export function FacultyTopBar({ session }: Props) {
 
   return (
     <GlassChromeBar
-      style={[styles.wrapAndroid, { paddingTop: insets.top }]}
+      style={[styles.wrapAndroid, { paddingTop: topSafeInset }]}
       borderBottomColor={chrome.headerBorder}
     >
       <View style={[shellTopBarStyles.bar, { minHeight: NATIVE_HEADER_BAR_HEIGHT }]}>

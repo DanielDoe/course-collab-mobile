@@ -6,17 +6,20 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { ApiError } from "../../lib/api"
+import { AppAlert } from "../../lib/app-alert"
 import { instructorApi, type InstructorSyllabus, type SyllabusSection } from "../../lib/instructor-api"
 import { useFacultyScope } from "../../hooks/useFacultyScope"
 import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
 import { useFacultyModuleStyles } from "../../lib/faculty-themed-ui"
 import { useNativeType } from "../../lib/themed-module-theme"
 import {
+  getDefaultSyllabusTemplate,
   getSyllabusFieldEntries,
   getSyllabusSectionDisplayTitle,
   getSyllabusVisibleContent,
@@ -28,11 +31,30 @@ import {
   courseInfoSyllabusThumb,
 } from "../../lib/course-info-color-theme"
 import { FacultyEmptyState } from "./faculty-shared"
-import { useFacultyModuleScrollPadding, FacultySearchToolbar } from "./faculty-module-shell"
+import {
+  useFacultyModuleScrollPadding,
+  FacultyModuleStickyHeader,
+  FacultyModuleTabBar,
+  FacultySearchToolbar,
+} from "./faculty-module-shell"
 import { FacultySyllabusSectionEditorModal } from "./FacultySyllabusSectionEditorModal"
 import { FacultySyllabusSectionActionSheet } from "./FacultySyllabusSectionActionSheet"
+import { FacultySyllabusExchangePanel } from "./syllabus/FacultySyllabusExchangePanel"
+import { FacultySyllabusPdfPanel } from "./syllabus/FacultySyllabusPdfPanel"
+import { FacultySyllabusBrandingPanel } from "./syllabus/FacultySyllabusBrandingPanel"
+import { FacultySyllabusPreviewModal } from "./syllabus/FacultySyllabusPreviewModal"
+import { FacultySyllabusProvenanceBanner } from "./syllabus/FacultySyllabusProvenanceBanner"
 import { useSearchDockBottomInset } from "../../context/ModuleSearchDockContext"
 import { SolidListThumbTile } from "../theme/SolidListThumbTile"
+
+type SyllabusTab = "sections" | "exchange" | "pdf" | "branding"
+
+const SYLLABUS_TABS = [
+  { id: "sections" as const, label: "Sections" },
+  { id: "exchange" as const, label: "Find template" },
+  { id: "pdf" as const, label: "PDF upload" },
+  { id: "branding" as const, label: "Logo & branding" },
+]
 
 function sectionPreview(section: SyllabusSection): string {
   const visible = getSyllabusVisibleContent(section)
@@ -81,12 +103,17 @@ export function FacultySyllabusScreen() {
   const type = useNativeType()
   const { scope, ready } = useFacultyScope()
 
+  const [tab, setTab] = useState<SyllabusTab>("sections")
   const [syllabus, setSyllabus] = useState<InstructorSyllabus | null>(null)
+  const [courseInfo, setCourseInfo] = useState<{ university?: string; code?: string; title?: string } | null>(
+    null,
+  )
   const [canEdit, setCanEdit] = useState(false)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
+  const [previewOpen, setPreviewOpen] = useState(false)
 
   const [selectedSection, setSelectedSection] = useState<SyllabusSection | null>(null)
   const [editorSection, setEditorSection] = useState<SyllabusSection | null>(null)
@@ -97,6 +124,8 @@ export function FacultySyllabusScreen() {
     const data = await instructorApi.getSyllabus(scope)
     setSyllabus(data.syllabus)
     setCanEdit(data.canEdit ?? true)
+    const info = data.courseInfo as { university?: string; code?: string; title?: string } | undefined
+    setCourseInfo(info ?? null)
   }, [scope])
 
   const courseId = scope?.courseId
@@ -106,12 +135,15 @@ export function FacultySyllabusScreen() {
       setLoading(false)
       return
     }
+    setTab("sections")
     setSyllabus(null)
+    setCourseInfo(null)
     setCanEdit(false)
     setSelectedSection(null)
     setEditorSection(null)
     setSearch("")
     setError("")
+    setPreviewOpen(false)
     setLoading(true)
     load()
       .catch((err) => setError(err instanceof ApiError ? err.message : "Could not load syllabus."))
@@ -133,13 +165,21 @@ export function FacultySyllabusScreen() {
     })
   }, [sections, search])
 
+  const showFooter = Boolean(syllabus && canEdit && tab !== "exchange")
+
   const listScrollPad = useMemo(
     () => ({
       ...scrollPad,
-      paddingBottom:
-        scrollPad.paddingBottom + (canEdit && syllabus ? FOOTER_BAR_HEIGHT + insets.bottom : 0),
+      paddingBottom: scrollPad.paddingBottom + (showFooter ? FOOTER_BAR_HEIGHT + insets.bottom : 0),
     }),
-    [scrollPad, canEdit, syllabus, insets.bottom],
+    [scrollPad, showFooter, insets.bottom],
+  )
+
+  const panelPad = useMemo(
+    () => ({
+      paddingBottom: scrollPad.paddingBottom + (showFooter ? FOOTER_BAR_HEIGHT + insets.bottom : 0),
+    }),
+    [scrollPad.paddingBottom, showFooter, insets.bottom],
   )
 
   async function handleRefresh() {
@@ -151,6 +191,12 @@ export function FacultySyllabusScreen() {
     } finally {
       setRefreshing(false)
     }
+  }
+
+  function applySyllabusFromServer(next: InstructorSyllabus) {
+    setSyllabus(next)
+    setTab("sections")
+    setError("")
   }
 
   function updateSections(nextSections: SyllabusSection[]) {
@@ -206,6 +252,33 @@ export function FacultySyllabusScreen() {
     setEditorSection(next)
   }
 
+  function loadTemplate() {
+    if (!canEdit || !syllabus) return
+    AppAlert.alert(
+      "Load template",
+      "Replace your current sections with the generic course template?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Load template",
+          onPress: () => {
+            const template = getDefaultSyllabusTemplate({
+              term: syllabus.term,
+              courseCode: courseInfo?.code,
+              courseTitle: courseInfo?.title,
+            })
+            setSyllabus({
+              ...syllabus,
+              title: template.title,
+              term: template.term,
+              sections: template.sections,
+            })
+          },
+        },
+      ],
+    )
+  }
+
   async function save(action?: "publish") {
     if (!scope || !syllabus) return
     setSaving(true)
@@ -226,6 +299,163 @@ export function FacultySyllabusScreen() {
     }
   }
 
+  function renderSectionsTab() {
+    if (loading) {
+      return <ActivityIndicator color={COURSE_INFO_ACTION.fill} style={{ marginTop: 32 }} />
+    }
+    if (!syllabus) {
+      return (
+        <FacultyEmptyState
+          icon="document-text-outline"
+          title="No syllabus"
+          body="Could not load syllabus for this course."
+        />
+      )
+    }
+
+    return (
+      <>
+        <View style={styles.card}>
+          <View style={localStyles.heroTop}>
+            {canEdit ? (
+              <TextInput
+                value={syllabus.title}
+                onChangeText={(title) => setSyllabus({ ...syllabus, title })}
+                placeholder="Syllabus title"
+                placeholderTextColor={native.tertiaryLabel}
+                style={[type.bodyEmphasis, localStyles.heroTitleInput, { color: native.label }]}
+              />
+            ) : (
+              <Text style={[type.bodyEmphasis, localStyles.heroTitle]}>{syllabus.title}</Text>
+            )}
+            <SyllabusStatusChip
+              label={syllabus.status === "published" ? "Published" : "Draft"}
+              colors={
+                syllabus.status === "published"
+                  ? COURSE_INFO_SYLLABUS_STATUS.published
+                  : COURSE_INFO_SYLLABUS_STATUS.draft
+              }
+            />
+          </View>
+          {canEdit ? (
+            <TextInput
+              value={syllabus.term}
+              onChangeText={(term) => setSyllabus({ ...syllabus, term })}
+              placeholder="Term"
+              placeholderTextColor={native.tertiaryLabel}
+              style={[type.caption, localStyles.termInput, { color: native.secondaryLabel }]}
+            />
+          ) : syllabus.term ? (
+            <Text style={[type.caption, localStyles.heroTerm, { color: native.secondaryLabel }]}>
+              {syllabus.term}
+            </Text>
+          ) : null}
+
+          {syllabus.templateProvenance ? (
+            <FacultySyllabusProvenanceBanner provenance={syllabus.templateProvenance} />
+          ) : null}
+
+          {canEdit ? (
+            <View style={localStyles.toolbarRow}>
+              <Pressable
+                style={[localStyles.toolBtn, { backgroundColor: native.secondaryGrouped }]}
+                onPress={loadTemplate}
+                accessibilityRole="button"
+              >
+                <Ionicons name="copy-outline" size={16} color={native.label} />
+                <Text style={[type.caption, { color: native.label, fontWeight: "600" }]}>Load template</Text>
+              </Pressable>
+              <Pressable
+                style={[localStyles.toolBtn, { backgroundColor: native.secondaryGrouped }]}
+                onPress={() => setPreviewOpen(true)}
+                accessibilityRole="button"
+              >
+                <Ionicons name="eye-outline" size={16} color={native.label} />
+                <Text style={[type.caption, { color: native.label, fontWeight: "600" }]}>Preview</Text>
+              </Pressable>
+            </View>
+          ) : null}
+
+          {syllabus.contentMode === "pdf" && syllabus.pdfUrl ? (
+            <Text style={[type.caption, localStyles.pdfNote, { color: native.tertiaryLabel }]}>
+              PDF syllabus attached — open the PDF upload tab to manage the file.
+            </Text>
+          ) : null}
+        </View>
+
+        {error ? (
+          <View style={styles.errorBox}>
+            <Ionicons name="alert-circle-outline" size={16} color={tokens.danger} />
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        ) : null}
+
+        {sections.length === 0 ? (
+          <FacultyEmptyState
+            icon="layers-outline"
+            title="No sections"
+            body={
+              canEdit
+                ? "Add a section or load the course template to get started."
+                : "No syllabus sections for this course."
+            }
+          />
+        ) : filteredSections.length === 0 ? (
+          <FacultyEmptyState icon="search-outline" title="No matches" body="Try another search term." />
+        ) : (
+          filteredSections.map((section, index) => {
+            const preview = sectionPreview(section)
+            const displayTitle = getSyllabusSectionDisplayTitle(section)
+            const thumb = courseInfoSyllabusThumb(index)
+            return (
+              <Pressable
+                key={section.sectionId}
+                style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+                onPress={() => setSelectedSection(section)}
+                accessibilityRole="button"
+              >
+                <View style={localStyles.sectionRow}>
+                  <SolidListThumbTile thumb={thumb} icon="document-text-outline" size="compact" />
+                  <View style={localStyles.sectionCopy}>
+                    <View style={localStyles.sectionTitleRow}>
+                      <Text style={[type.bodyEmphasis, localStyles.sectionTitle, { color: native.label }]}>
+                        {displayTitle}
+                      </Text>
+                      <Ionicons name="chevron-forward" size={18} color={native.tertiaryLabel} />
+                    </View>
+                    <View style={localStyles.sectionBadges}>
+                      {!section.isVisible ? (
+                        <SyllabusStatusChip label="Hidden" colors={COURSE_INFO_SYLLABUS_STATUS.hidden} />
+                      ) : null}
+                      {section.isRequired ? (
+                        <SyllabusStatusChip label="Required" colors={COURSE_INFO_SYLLABUS_STATUS.required} />
+                      ) : null}
+                      {!section.isRequired && section.sectionId.startsWith("custom-") ? (
+                        <SyllabusStatusChip label="Custom" colors={COURSE_INFO_SYLLABUS_STATUS.custom} />
+                      ) : null}
+                    </View>
+                    {preview ? (
+                      <Text
+                        style={[type.caption, localStyles.sectionPreview, { color: native.secondaryLabel }]}
+                        numberOfLines={3}
+                      >
+                        {preview}
+                      </Text>
+                    ) : (
+                      <Text style={[type.caption, localStyles.sectionEmpty, { color: native.tertiaryLabel }]}>
+                        {canEdit ? "Tap to edit content" : "Tap to view section"}
+                      </Text>
+                    )}
+                  </View>
+                </View>
+              </Pressable>
+            )
+          })
+        )}
+      </>
+    )
+  }
+
   if (!ready) {
     return (
       <FacultyEmptyState
@@ -238,145 +468,79 @@ export function FacultySyllabusScreen() {
 
   return (
     <View style={styles.root}>
-      <FacultySearchToolbar
-        value={search}
-        onChange={setSearch}
-        placeholder="Search syllabus sections…"
-        showFilter={false}
-        trailingAction={
-          canEdit
-            ? {
-                onPress: addSection,
-                accessibilityLabel: "Add syllabus section",
-              }
-            : undefined
-        }
-      />
-
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={[styles.content, listScrollPad]}
-        contentInsetAdjustmentBehavior="never"
-        automaticallyAdjustContentInsets={false}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={() => void handleRefresh()} tintColor={COURSE_INFO_ACTION.fill} />
-        }
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
-      >
-        {loading ? (
-          <ActivityIndicator color={COURSE_INFO_ACTION.fill} style={{ marginTop: 32 }} />
-        ) : !syllabus ? (
-          <FacultyEmptyState icon="document-text-outline" title="No syllabus" body="Could not load syllabus for this course." />
-        ) : (
-          <>
-            <View style={styles.card}>
-              <View style={localStyles.heroTop}>
-                <Text style={[type.bodyEmphasis, localStyles.heroTitle]}>{syllabus.title}</Text>
-                <SyllabusStatusChip
-                  label={syllabus.status === "published" ? "Published" : "Draft"}
-                  colors={
-                    syllabus.status === "published"
-                      ? COURSE_INFO_SYLLABUS_STATUS.published
-                      : COURSE_INFO_SYLLABUS_STATUS.draft
+      <FacultyModuleStickyHeader>
+        <FacultyModuleTabBar tabs={SYLLABUS_TABS} tab={tab} onChange={setTab} scrollable />
+        {tab === "sections" ? (
+          <FacultySearchToolbar
+            value={search}
+            onChange={setSearch}
+            placeholder="Search syllabus sections…"
+            showFilter={false}
+            trailingAction={
+              canEdit
+                ? {
+                    onPress: addSection,
+                    accessibilityLabel: "Add syllabus section",
                   }
-                />
-              </View>
-              {syllabus.term ? <Text style={[type.caption, localStyles.heroTerm, { color: native.secondaryLabel }]}>{syllabus.term}</Text> : null}
-              {syllabus.contentMode === "pdf" && syllabus.pdfUrl ? (
-                <Text style={[type.caption, localStyles.pdfNote, { color: native.tertiaryLabel }]}>
-                  PDF syllabus — structured sections still apply for in-app content.
-                </Text>
-              ) : null}
-            </View>
+                : undefined
+            }
+          />
+        ) : null}
+      </FacultyModuleStickyHeader>
 
-            {error ? (
-              <View style={styles.errorBox}>
-                <Ionicons name="alert-circle-outline" size={16} color={tokens.danger} />
-                <Text style={styles.errorText}>{error}</Text>
-              </View>
-            ) : null}
+      {tab === "sections" ? (
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={[styles.content, listScrollPad]}
+          contentInsetAdjustmentBehavior="never"
+          automaticallyAdjustContentInsets={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => void handleRefresh()}
+              tintColor={COURSE_INFO_ACTION.fill}
+            />
+          }
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+        >
+          {renderSectionsTab()}
+        </ScrollView>
+      ) : null}
 
-            {sections.length === 0 ? (
-              <FacultyEmptyState
-                icon="layers-outline"
-                title="No sections"
-                body={canEdit ? "Use + in the search bar to add your first syllabus section." : "No syllabus sections for this course."}
-              />
-            ) : filteredSections.length === 0 ? (
-              <FacultyEmptyState
-                icon="search-outline"
-                title="No matches"
-                body="Try another search term."
-              />
-            ) : (
-              filteredSections.map((section, index) => {
-                const preview = sectionPreview(section)
-                const displayTitle = getSyllabusSectionDisplayTitle(section)
-                const thumb = courseInfoSyllabusThumb(index)
-                return (
-                  <Pressable
-                    key={section.sectionId}
-                    style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
-                    onPress={() => setSelectedSection(section)}
-                    accessibilityRole="button"
-                    accessibilityLabel={
-                      [
-                        displayTitle,
-                        !section.isVisible ? "Hidden" : null,
-                        section.isRequired ? "Required" : null,
-                      ]
-                        .filter(Boolean)
-                        .join(", ")
-                    }
-                  >
-                    <View style={localStyles.sectionRow}>
-                      <SolidListThumbTile thumb={thumb} icon="document-text-outline" size="compact" />
-                      <View style={localStyles.sectionCopy}>
-                        <View style={localStyles.sectionTitleRow}>
-                          <Text style={[type.bodyEmphasis, localStyles.sectionTitle, { color: native.label }]}>
-                            {displayTitle}
-                          </Text>
-                          <Ionicons name="chevron-forward" size={18} color={native.tertiaryLabel} />
-                        </View>
-                        <View style={localStyles.sectionBadges}>
-                          {!section.isVisible ? (
-                            <SyllabusStatusChip label="Hidden" colors={COURSE_INFO_SYLLABUS_STATUS.hidden} />
-                          ) : null}
-                          {section.isRequired ? (
-                            <SyllabusStatusChip label="Required" colors={COURSE_INFO_SYLLABUS_STATUS.required} />
-                          ) : null}
-                          {!section.isRequired && section.sectionId.startsWith("custom-") ? (
-                            <SyllabusStatusChip label="Custom" colors={COURSE_INFO_SYLLABUS_STATUS.custom} />
-                          ) : null}
-                        </View>
-                        {preview ? (
-                          <Text style={[type.caption, localStyles.sectionPreview, { color: native.secondaryLabel }]} numberOfLines={3}>
-                            {preview}
-                          </Text>
-                        ) : (
-                          <Text style={[type.caption, localStyles.sectionEmpty, { color: native.tertiaryLabel }]}>
-                            {canEdit ? "Tap to edit content" : "Tap to view section"}
-                          </Text>
-                        )}
-                      </View>
-                    </View>
-                  </Pressable>
-                )
-              })
-            )}
-          </>
-        )}
-      </ScrollView>
+      {tab === "exchange" && !loading && syllabus ? (
+        <FacultySyllabusExchangePanel onApplied={applySyllabusFromServer} contentPad={panelPad} />
+      ) : tab === "exchange" && loading ? (
+        <ActivityIndicator color={COURSE_INFO_ACTION.fill} style={{ marginTop: 32 }} />
+      ) : null}
 
-      {syllabus && canEdit ? (
+      {tab === "pdf" && syllabus ? (
+        <FacultySyllabusPdfPanel
+          syllabus={syllabus}
+          canEdit={canEdit}
+          onUpdated={applySyllabusFromServer}
+          contentPad={panelPad}
+        />
+      ) : null}
+
+      {tab === "branding" && syllabus ? (
+        <FacultySyllabusBrandingPanel
+          syllabus={syllabus}
+          university={courseInfo?.university}
+          canEdit={canEdit}
+          onUpdated={applySyllabusFromServer}
+          contentPad={panelPad}
+        />
+      ) : null}
+
+      {showFooter ? (
         <View
           style={[
             styles.footerBar,
             {
               paddingBottom: insets.bottom + 12,
-              marginBottom: searchDockInset,
+              marginBottom: tab === "sections" ? searchDockInset : 0,
             },
           ]}
         >
@@ -402,6 +566,12 @@ export function FacultySyllabusScreen() {
         </View>
       ) : null}
 
+      <FacultySyllabusPreviewModal
+        visible={previewOpen}
+        syllabus={syllabus}
+        onClose={() => setPreviewOpen(false)}
+      />
+
       <FacultySyllabusSectionActionSheet
         visible={selectedSection != null}
         section={selectedSection}
@@ -421,6 +591,7 @@ export function FacultySyllabusScreen() {
         section={editorSection}
         onClose={() => setEditorSection(null)}
         onSave={applySectionUpdate}
+        onSyllabusUpdated={applySyllabusFromServer}
       />
     </View>
   )
@@ -429,8 +600,19 @@ export function FacultySyllabusScreen() {
 const localStyles = StyleSheet.create({
   heroTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
   heroTitle: { flex: 1, fontSize: 20 },
+  heroTitleInput: { flex: 1, fontSize: 20, paddingVertical: 0 },
   heroTerm: { fontWeight: "600" },
+  termInput: { fontWeight: "600", paddingVertical: 0 },
   pdfNote: { fontWeight: "600" },
+  toolbarRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 4 },
+  toolBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
   statusChip: {
     borderRadius: 999,
     paddingHorizontal: 10,

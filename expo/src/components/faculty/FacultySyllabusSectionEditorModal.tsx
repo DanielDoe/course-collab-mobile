@@ -32,12 +32,15 @@ import {
 import { useSuppressModuleSearchDock } from "../../context/ModuleSearchDockContext"
 import { useAppThemeTokens } from "../../context/AppearanceProvider"
 import { SHEET_SECTION } from "./faculty-sheet-semantics"
+import { FacultySyllabusSectionDocumentPanel } from "./syllabus/FacultySyllabusSectionDocumentPanel"
+import type { InstructorSyllabus } from "../../lib/instructor-api"
 
 type Props = {
   visible: boolean
   section: ApiSyllabusSection | null
   onClose: () => void
   onSave: (section: ApiSyllabusSection) => void
+  onSyllabusUpdated?: (syllabus: InstructorSyllabus) => void
 }
 
 function cloneSection(section: ApiSyllabusSection): ApiSyllabusSection {
@@ -122,7 +125,13 @@ function TableEditor({
   )
 }
 
-export function FacultySyllabusSectionEditorModal({ visible, section, onClose, onSave }: Props) {
+export function FacultySyllabusSectionEditorModal({
+  visible,
+  section,
+  onClose,
+  onSave,
+  onSyllabusUpdated,
+}: Props) {
   useSuppressModuleSearchDock(visible)
   const collabSheetStyles = useCollabSheetStyles()
   const tokens = useAppThemeTokens()
@@ -334,6 +343,19 @@ export function FacultySyllabusSectionEditorModal({ visible, section, onClose, o
               {tables.map((table, index) => (
                 <TableEditor key={index} table={table} dangerColor={tokens.danger} onChange={(next) => updateTable(index, next)} />
               ))}
+            </FacultySheetSection>
+          ) : null}
+
+          {current.sectionId === "curriculum-vitae" && onSyllabusUpdated ? (
+            <FacultySheetSection label="Curriculum vitae" tone={SHEET_SECTION.tools}>
+              <FacultySyllabusSectionDocumentPanel
+                section={current}
+                onSyllabusUpdated={(syllabus) => {
+                  onSyllabusUpdated(syllabus)
+                  const refreshed = syllabus.sections.find((s) => s.sectionId === current.sectionId)
+                  if (refreshed) setDraft(cloneSection(refreshed))
+                }}
+              />
             </FacultySheetSection>
           ) : null}
         </ScrollView>

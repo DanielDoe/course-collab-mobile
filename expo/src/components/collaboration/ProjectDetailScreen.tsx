@@ -1,16 +1,13 @@
 import { useCallback, useEffect, useState } from "react"
-import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { AppAlert } from '../../lib/app-alert'
-import { Ionicons } from "@/components/icons/AppIcon"
+import { ActivityIndicator, Linking, ScrollView, StyleSheet, Text, TextInput, View } from "react-native"
+import { AppAlert } from "../../lib/app-alert"
 import { useLocalSearchParams, useRouter } from "expo-router"
-import { useModuleScrollContentPadding } from "../../context/ChromeInsetContext"
 import { useSession } from "../../context/SessionProvider"
 import { ApiError } from "../../lib/student-api"
 import type { StudentSession } from "../../lib/session"
-import { IOS } from "../../constants/faculty-communication-theme"
-import { NATIVE, nativeType } from "../../constants/faculty-native-theme"
+import { NATIVE } from "../../constants/faculty-native-theme"
 import { useThemedNative } from "../../context/AppearanceProvider"
-import { useThemedStudentNative } from "../../lib/themed-module-theme"
+import { useNativeType, useThemedStudentNative } from "../../lib/themed-module-theme"
 import {
   collaborationApi,
   formatRelativeTime,
@@ -19,10 +16,15 @@ import {
   type ProjectRecord,
   type ProjectReport,
 } from "../../lib/collaboration-api"
-import { CommGroupedList, CommSectionFooter } from "../faculty/faculty-communication-ui"
+import {
+  CommGroupedList,
+  CommListRow,
+  CommSectionFooter,
+  CommSectionHeader,
+} from "../faculty/faculty-communication-ui"
 import { FacultyStatusPill } from "../faculty/faculty-shared"
-import { ModuleSectionHeader } from "../modules/ModuleScreen"
-import { CollabScreenTitle } from "./collab-nav"
+import { AppButton } from "../theme/AppButton"
+import { CollabFlowHeader } from "./collab-nav"
 
 function useStudentSession(): StudentSession | null {
   const { session } = useSession()
@@ -34,8 +36,8 @@ export function ProjectDetailScreen() {
   const projectId = Number(id)
   const session = useStudentSession()
   const router = useRouter()
-  const scrollPad = useModuleScrollContentPadding(24)
   const native = useThemedNative()
+  const type = useNativeType()
   const SN = useThemedStudentNative()
   const [project, setProject] = useState<ProjectRecord | null>(null)
   const [reports, setReports] = useState<ProjectReport[]>([])
@@ -78,7 +80,7 @@ export function ProjectDetailScreen() {
       await collaborationApi.voteProjectStar(session, projectId)
       AppAlert.alert("Thanks!", "Your vote was recorded.")
     } catch (err) {
-      AppAlert.alert("Vote failed", err instanceof ApiError ? err.message : "Could not vote.")
+      AppAlert.alert("Vote Failed", err instanceof ApiError ? err.message : "Could not vote.")
     }
   }
 
@@ -103,16 +105,22 @@ export function ProjectDetailScreen() {
 
   if (loading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color={native.tint} />
+      <View style={[styles.screen, { backgroundColor: native.groupedBackground }]}>
+        <CollabFlowHeader title="Project" fallbackHref="/module/projects" />
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={native.tint} />
+        </View>
       </View>
     )
   }
 
   if (!project) {
     return (
-      <View style={styles.center}>
-        <Text style={styles.errorText}>{error || "Project not found."}</Text>
+      <View style={[styles.screen, { backgroundColor: native.groupedBackground }]}>
+        <CollabFlowHeader title="Project" fallbackHref="/module/projects" />
+        <View style={styles.center}>
+          <Text style={type.destructive}>{error || "Project not found."}</Text>
+        </View>
       </View>
     )
   }
@@ -120,189 +128,172 @@ export function ProjectDetailScreen() {
   const tone = statusTone(project.status)
 
   return (
-    <ScrollView
-      style={styles.scroll}
-      contentContainerStyle={[styles.content, scrollPad]}
-    >
-      <CollabScreenTitle title={project.title} subtitle={project.group?.name ?? "Group project"} />
-
-      <CommGroupedList>
-        <View style={styles.summaryRow}>
-          <FacultyStatusPill label={tone.label} tone="neutral" />
-          <Text style={styles.meta}>
-            {project.leader?.full_name ? `Led by ${project.leader.full_name}` : ""}
-            {project.target_platform ? ` · ${project.target_platform}` : ""}
-            {project.created_at ? ` · ${formatRelativeTime(project.created_at)}` : ""}
-          </Text>
-        </View>
-      </CommGroupedList>
-
-      {project.summary ? (
-        <>
-          <ModuleSectionHeader title="Summary" />
-          <CommGroupedList>
-            <View style={styles.blockRow}>
-              <Text style={styles.blockBody}>{stripHtml(project.summary)}</Text>
-            </View>
-          </CommGroupedList>
-        </>
-      ) : null}
-
-      {project.deliverables ? (
-        <>
-          <ModuleSectionHeader title="Deliverables" />
-          <CommGroupedList>
-            <View style={styles.blockRow}>
-              <Text style={styles.blockBody}>{stripHtml(project.deliverables)}</Text>
-            </View>
-          </CommGroupedList>
-        </>
-      ) : null}
-
-      {project.project_link ? (
-        <Pressable style={styles.linkBtn} onPress={() => Linking.openURL(project.project_link!)}>
-          <Ionicons name="link-outline" size={18} color={SN.accent} />
-          <Text style={[styles.linkBtnText, { color: SN.accent }]}>Open project link</Text>
-          <Ionicons name="chevron-forward" size={16} color={NATIVE.tertiaryLabel} />
-        </Pressable>
-      ) : null}
-
-      {project.status === "approved" ? (
-        <Pressable style={[styles.primaryBtn, { backgroundColor: SN.accent }]} onPress={voteStar}>
-          <Ionicons name="star-outline" size={18} color="#ffffff" />
-          <Text style={styles.primaryBtnText}>Vote for this project</Text>
-        </Pressable>
-      ) : null}
-
-      {isLeader ? (
-        <Pressable
-          style={styles.secondaryBtn}
-          onPress={() => router.push(`/collaboration/projects/submit?projectId=${projectId}` as never)}
-        >
-          <Text style={[styles.secondaryBtnText, { color: SN.accent }]}>Edit project</Text>
-        </Pressable>
-      ) : null}
-
-      <ModuleSectionHeader title="Progress reports" />
-      {reports.length === 0 ? (
-        <Text style={styles.emptyReports}>No progress reports yet.</Text>
-      ) : (
+    <View style={[styles.screen, { backgroundColor: native.groupedBackground }]}>
+      <CollabFlowHeader
+        title={project.title}
+        subtitle={project.group?.name ?? "Group project"}
+        fallbackHref="/module/projects"
+      />
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <CommGroupedList>
-          {reports.map((report, index) => (
-            <View key={report.id} style={[styles.reportRow, index < reports.length - 1 && styles.rowBorder]}>
-              <Text style={styles.reportAuthor}>{report.student_name ?? "Member"}</Text>
-              <Text style={styles.reportBody}>{report.progress}</Text>
-              {report.challenges ? <Text style={styles.reportSub}>Challenges: {report.challenges}</Text> : null}
-              <Text style={styles.reportTime}>{formatRelativeTime(report.created_at)}</Text>
-            </View>
-          ))}
+          <View style={styles.summaryRow}>
+            <FacultyStatusPill label={tone.label} tone="neutral" />
+            <Text style={[type.caption, { color: native.secondaryLabel }]}>
+              {project.leader?.full_name ? `Led by ${project.leader.full_name}` : "Group project"}
+              {project.target_platform ? ` · ${project.target_platform}` : ""}
+              {project.created_at ? ` · ${formatRelativeTime(project.created_at)}` : ""}
+            </Text>
+          </View>
         </CommGroupedList>
-      )}
 
-      {!showReportForm ? (
-        <Pressable style={styles.secondaryBtn} onPress={() => setShowReportForm(true)}>
-          <Text style={[styles.secondaryBtnText, { color: SN.accent }]}>Submit progress report</Text>
-        </Pressable>
-      ) : (
+        {project.summary ? (
+          <>
+            <CommSectionHeader title="Summary" />
+            <CommGroupedList>
+              <Text style={[type.callout, styles.bodyCopy, { color: native.label }]}>{stripHtml(project.summary)}</Text>
+            </CommGroupedList>
+          </>
+        ) : null}
+
+        {project.deliverables ? (
+          <>
+            <CommSectionHeader title="Deliverables" />
+            <CommGroupedList>
+              <Text style={[type.callout, styles.bodyCopy, { color: native.label }]}>
+                {stripHtml(project.deliverables)}
+              </Text>
+            </CommGroupedList>
+          </>
+        ) : null}
+
+        <CommSectionHeader title="Workspace" />
         <CommGroupedList>
-          <View style={styles.form}>
+          <CommListRow
+            icon="folder-open-outline"
+            iconColor={SN.accent}
+            iconSoft={SN.accentSoft}
+            title="Open Workspace"
+            subtitle="Files, comments, and submission"
+            onPress={() => router.push(`/collaboration/projects/workspace/${projectId}` as never)}
+            isLast={false}
+          />
+          <CommListRow
+            icon="document-text-outline"
+            iconColor={SN.accent}
+            iconSoft={SN.accentSoft}
+            title="View Reports"
+            subtitle="Instructor grades and feedback"
+            onPress={() => router.push(`/collaboration/projects/report/${projectId}` as never)}
+            isLast={!project.project_link && !isLeader}
+          />
+          {project.project_link ? (
+            <CommListRow
+              icon="link-outline"
+              iconColor={SN.accent}
+              iconSoft={SN.accentSoft}
+              title="Open Project Link"
+              onPress={() => Linking.openURL(project.project_link!)}
+              isLast={!isLeader}
+            />
+          ) : null}
+          {isLeader ? (
+            <CommListRow
+              icon="create-outline"
+              iconColor={SN.accent}
+              iconSoft={SN.accentSoft}
+              title="Edit Project"
+              onPress={() => router.push(`/collaboration/projects/submit?projectId=${projectId}` as never)}
+              isLast
+            />
+          ) : null}
+        </CommGroupedList>
+
+        {project.status === "approved" ? (
+          <AppButton
+            label="Vote for This Project"
+            icon="star-outline"
+            iconPosition="left"
+            variant="soft"
+            onPress={() => void voteStar()}
+          />
+        ) : null}
+
+        <CommSectionHeader title="Progress Reports" />
+        {reports.length === 0 ? (
+          <Text style={[type.caption, styles.empty, { color: native.secondaryLabel }]}>No progress reports yet.</Text>
+        ) : (
+          <CommGroupedList>
+            {reports.map((report, index) => (
+              <View
+                key={report.id}
+                style={[
+                  styles.reportRow,
+                  index < reports.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: native.separator },
+                ]}
+              >
+                <Text style={[type.bodyEmphasis, { color: native.label }]}>{report.student_name ?? "Member"}</Text>
+                <Text style={[type.callout, { color: native.label }]}>{report.progress}</Text>
+                {report.challenges ? (
+                  <Text style={[type.footnote, { color: native.secondaryLabel }]}>Challenges: {report.challenges}</Text>
+                ) : null}
+                <Text style={[type.footnote, { color: native.tertiaryLabel }]}>{formatRelativeTime(report.created_at)}</Text>
+              </View>
+            ))}
+          </CommGroupedList>
+        )}
+
+        {!showReportForm ? (
+          <AppButton
+            label="Submit Progress Report"
+            variant="outline"
+            onPress={() => setShowReportForm(true)}
+          />
+        ) : (
+          <CommGroupedList>
             <TextInput
-              style={styles.input}
+              style={[styles.input, { color: native.label }]}
               value={reportProgress}
               onChangeText={setReportProgress}
               placeholder="What progress did you make?"
-              placeholderTextColor={NATIVE.tertiaryLabel}
+              placeholderTextColor={native.tertiaryLabel}
               multiline
             />
+            <View style={[styles.sep, { backgroundColor: native.separator }]} />
             <TextInput
-              style={styles.input}
+              style={[styles.input, { color: native.label }]}
               value={reportChallenges}
               onChangeText={setReportChallenges}
               placeholder="Any blockers? (optional)"
-              placeholderTextColor={NATIVE.tertiaryLabel}
+              placeholderTextColor={native.tertiaryLabel}
               multiline
             />
-            <Pressable style={[styles.primaryBtn, { backgroundColor: SN.accent }]} onPress={submitReport} disabled={submitting}>
-              {submitting ? (
-                <ActivityIndicator color="#ffffff" />
-              ) : (
-                <Text style={styles.primaryBtnText}>Post report</Text>
-              )}
-            </Pressable>
-          </View>
-        </CommGroupedList>
-      )}
+            <View style={styles.formActions}>
+              <AppButton label="Post Report" onPress={() => void submitReport()} loading={submitting} disabled={submitting} />
+            </View>
+          </CommGroupedList>
+        )}
 
-      <CommSectionFooter>Team members can post weekly progress updates for your instructor.</CommSectionFooter>
-    </ScrollView>
+        <CommSectionFooter>Team members can post weekly progress updates for your instructor.</CommSectionFooter>
+      </ScrollView>
+    </View>
   )
 }
 
 const styles = StyleSheet.create({
-  scroll: { flex: 1, backgroundColor: NATIVE.groupedBackground },
-  center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: NATIVE.groupedBackground },
-  content: { padding: NATIVE.pagePadding, gap: 12 },
-  errorText: { ...nativeType.destructive },
-  summaryRow: {
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    gap: 8,
-    backgroundColor: IOS.secondaryGrouped,
-  },
-  meta: nativeType.caption,
-  blockRow: { paddingHorizontal: 14, paddingVertical: 12, backgroundColor: IOS.secondaryGrouped },
-  blockBody: { ...nativeType.callout, lineHeight: 20 },
-  linkBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    minHeight: NATIVE.rowMinHeight,
-    borderRadius: NATIVE.sectionRadius,
-    backgroundColor: IOS.secondaryGrouped,
-  },
-  linkBtnText: { flex: 1, fontSize: 15, fontWeight: "600" },
-  primaryBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    paddingVertical: 14,
-    borderRadius: NATIVE.sectionRadius,
-  },
-  primaryBtnText: { color: "#ffffff", fontSize: 15, fontWeight: "600" },
-  secondaryBtn: {
-    alignItems: "center",
-    paddingVertical: 14,
-    borderRadius: NATIVE.sectionRadius,
-    backgroundColor: IOS.secondaryGrouped,
-  },
-  secondaryBtnText: { fontSize: 15, fontWeight: "600" },
-  emptyReports: { ...nativeType.caption, textAlign: "center", paddingVertical: 12 },
-  rowBorder: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: IOS.separator,
-  },
-  reportRow: {
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    gap: 4,
-    backgroundColor: IOS.secondaryGrouped,
-  },
-  reportAuthor: nativeType.bodyEmphasis,
-  reportBody: { ...nativeType.callout, lineHeight: 20 },
-  reportSub: nativeType.footnote,
-  reportTime: { ...nativeType.footnote, marginTop: 4 },
-  form: { padding: 14, gap: 10, backgroundColor: IOS.secondaryGrouped },
+  screen: { flex: 1 },
+  center: { flex: 1, alignItems: "center", justifyContent: "center" },
+  content: { padding: NATIVE.pagePadding, gap: 12, paddingBottom: 40 },
+  summaryRow: { paddingHorizontal: 14, paddingVertical: 12, gap: 8 },
+  bodyCopy: { paddingHorizontal: 14, paddingVertical: 12, lineHeight: 22 },
+  empty: { textAlign: "center", paddingVertical: 8 },
+  reportRow: { paddingHorizontal: 14, paddingVertical: 12, gap: 4 },
   input: {
-    backgroundColor: NATIVE.fill,
-    borderRadius: NATIVE.sectionRadius,
+    fontSize: 17,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    fontSize: 16,
-    color: IOS.label,
-    minHeight: 80,
+    minHeight: 72,
     textAlignVertical: "top",
   },
+  sep: { height: StyleSheet.hairlineWidth },
+  formActions: { padding: 12 },
 })

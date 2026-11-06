@@ -492,8 +492,17 @@ export function buildMarkdownHtml(
     }
   }
 
+  function isCurrencyProse(expr) {
+    var trimmed = String(expr || "").trim();
+    if (!/^\\d[\\d,]*(?:\\.\\d+)?\\b/.test(trimmed) || !/\\s/.test(expr)) return false;
+    if (/\\\\[a-zA-Z]/.test(expr)) return false;
+    if (/[A-Za-z]_[A-Za-z0-9]/.test(expr)) return false;
+    return true;
+  }
+
   function applyInlineMath(html) {
-    html = html.replace(/(?<!\\\\)\\$([^$\\n]+?)\\$(?!\\$)/g, function(_, expr) {
+    html = html.replace(/(?<!\\\\)\\$([^$\\n]+?)\\$(?!\\$)/g, function(full, expr) {
+      if (isCurrencyProse(expr)) return full;
       return '<span class="md-inline">' + renderMath(expr.trim(), false) + "</span>";
     });
     return html;

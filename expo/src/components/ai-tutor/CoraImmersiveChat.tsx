@@ -44,7 +44,9 @@ import { CoraChatBubble } from "./CoraChatBubble"
 import { CoraScopeFeedbackBar } from "../cora/CoraScopeFeedbackBar"
 import { CoraWorkspaceComposer } from "./CoraWorkspaceComposer"
 import { CoraBrand } from "../cora/CoraBrand"
+import { CoraTranscriptGutter } from "./CoraTranscriptGutter"
 import { CoraActionCard } from "../cora/CoraActionCard"
+import { resolveCoraOpenRoute, openCoraNativeRoute } from "../../lib/cora/resolve-open-route"
 import { CoraChatDayDivider } from "../cora/CoraChatDayDivider"
 import { shouldShowChatDayDivider } from "../../lib/cora/chat-day-divider"
 import { CoraEdgeBackSwipe } from "../cora/CoraEdgeBackSwipe"
@@ -575,9 +577,18 @@ export function CoraImmersiveChat({
                       AppAlert.alert("Could not create", result.message)
                       return
                     }
+                    const deckRoute = resolveCoraOpenRoute(
+                      result.entity?.route,
+                      result.entity?.type ?? "flashcard_deck",
+                    )
                     AppAlert.alert("Flashcards created", result.message, [
-                      ...(result.entity?.route
-                        ? [{ text: "Open deck", onPress: () => router.push(result.entity!.route as never) }]
+                      ...(deckRoute
+                        ? [
+                            {
+                              text: "Open deck",
+                              onPress: () => openCoraNativeRoute(router, deckRoute, "flashcard_deck"),
+                            },
+                          ]
                         : []),
                       { text: "OK", style: "cancel" as const },
                     ])
@@ -837,17 +848,21 @@ export function CoraImmersiveChat({
             ) : null}
             {item.role === "assistant" && item.proposals?.length
               ? item.proposals.map((proposal: CoraActionProposal) => (
-                  <View key={proposal.actionId} style={styles.proposalWrap}>
-                    <CoraActionCard
-                      proposal={proposal}
-                      status={item.proposalStatusById?.[proposal.actionId] ?? "idle"}
-                      result={item.proposalResultById?.[proposal.actionId] ?? null}
-                      resultMessage={item.proposalResultById?.[proposal.actionId]?.message}
-                      onConfirm={() => onConfirmProposal?.(item.id, proposal)}
-                      onCancel={() => onCancelProposal?.(item.id, proposal.actionId)}
-                      onOpen={(route) => router.push(route as never)}
-                    />
-                  </View>
+                  <CoraTranscriptGutter key={proposal.actionId} side="assistant">
+                    <View style={styles.proposalWrap}>
+                      <CoraActionCard
+                        proposal={proposal}
+                        status={item.proposalStatusById?.[proposal.actionId] ?? "idle"}
+                        result={item.proposalResultById?.[proposal.actionId] ?? null}
+                        resultMessage={item.proposalResultById?.[proposal.actionId]?.message}
+                        onConfirm={() => onConfirmProposal?.(item.id, proposal)}
+                        onCancel={() => onCancelProposal?.(item.id, proposal.actionId)}
+                        onOpen={(route) => {
+                          openCoraNativeRoute(router, route)
+                        }}
+                      />
+                    </View>
+                  </CoraTranscriptGutter>
                 ))
               : null}
           </View>
@@ -1116,8 +1131,9 @@ const styles = StyleSheet.create({
     paddingBottom: 4,
   },
   proposalWrap: {
-    marginTop: 6,
-    marginBottom: 8,
+    marginTop: 8,
+    marginBottom: 4,
+    width: "100%",
   },
   welcomeWrap: {
     alignItems: "center",

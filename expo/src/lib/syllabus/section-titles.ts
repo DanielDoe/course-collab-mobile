@@ -4,6 +4,7 @@ import type { SyllabusSection } from "./types"
 const DISPLAY_TITLES: Record<string, string> = {
   "course-header": "Course Overview",
   "instructor-info": "Instructor Information",
+  "curriculum-vitae": "Curriculum Vitae",
   "general-course-info": "General Course Information",
   "objectives-outcomes": "Course Objectives and Student Learning Outcomes",
   "required-materials": "Required Instructional Materials",

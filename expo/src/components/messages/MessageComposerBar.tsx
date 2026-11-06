@@ -1,4 +1,8 @@
 import { startTransition, useEffect, useState } from "react"
+import {
+  plainTextHasLocalDeviceFileUrl,
+  stripLocalDeviceFileUrls,
+} from "../../lib/message-local-file"
 import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useAppThemeTokens } from "../../context/AppearanceProvider"
@@ -22,6 +26,8 @@ type Props = {
   onChange?: (value: string) => void
   onSend: (text: string) => void
   onAttach: () => void
+  /** iPhone pasted a file:// path instead of the photo. Parent uploads the clipboard image. */
+  onRecoverPastedPhoto?: () => void
   placeholder?: string
   sending?: boolean
   uploading?: boolean
@@ -41,6 +47,7 @@ export function MessageComposerBar({
   onChange,
   onSend,
   onAttach,
+  onRecoverPastedPhoto,
   placeholder = "Message…",
   sending = false,
   uploading = false,
@@ -69,6 +76,13 @@ export function MessageComposerBar({
   }, [value])
 
   function handleChange(next: string) {
+    if (plainTextHasLocalDeviceFileUrl(next) && !plainTextHasLocalDeviceFileUrl(text)) {
+      const cleaned = stripLocalDeviceFileUrls(next)
+      setText(cleaned)
+      startTransition(() => onChange?.(cleaned))
+      onRecoverPastedPhoto?.()
+      return
+    }
     setText(next)
     startTransition(() => onChange?.(next))
   }

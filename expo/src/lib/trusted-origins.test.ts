@@ -10,11 +10,12 @@ import {
 } from "./trusted-origins-core"
 
 describe("trusted origins", () => {
-  const trustedHosts = buildTrustedApiHosts("https://coursecollab.vercel.app")
+  const trustedHosts = buildTrustedApiHosts("https://course-collab.com")
 
   it("accepts the production CourseCollab hosts", () => {
-    assert.equal(isAllowedDeepLinkHost("coursecollab.vercel.app", trustedHosts), true)
     assert.equal(isAllowedDeepLinkHost("course-collab.com", trustedHosts), true)
+    assert.equal(isAllowedDeepLinkHost("www.course-collab.com", trustedHosts), true)
+    assert.equal(isAllowedDeepLinkHost("coursecollab.vercel.app", trustedHosts), true)
     assert.equal(isAllowedWebViewHost("checkout.stripe.com", trustedHosts, { membershipFlow: true }), true)
     assert.equal(isAllowedWebViewHost("checkout.stripe.com", trustedHosts), false)
     assert.equal(isVercelBlobHost("abc.public.blob.vercel-storage.com"), true)

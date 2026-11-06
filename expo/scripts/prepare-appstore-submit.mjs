@@ -78,7 +78,7 @@ console.log("5. Age rating + export compliance questionnaires")
 console.log("6. Screenshots (iPhone required; iPad if supporting tablet)")
 console.log("7. Review notes + demo account (expo/docs/APP_STORE_REVIEW_CREDENTIALS.md)")
 console.log("8. Deploy AASA for Universal Links:")
-console.log("   https://coursecollab.vercel.app/.well-known/apple-app-site-association (currently 404)")
+console.log("   https://course-collab.com/.well-known/apple-app-site-association (currently 404)")
 
 console.log("\n=== Build & submit commands ===\n")
 console.log("cd expo")

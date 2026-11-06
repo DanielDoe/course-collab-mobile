@@ -14,6 +14,9 @@ import {
   getSyllabusSectionId,
   normalizeSearchQuery,
   prepareSyllabusForDisplay,
+  buildSyllabusPdfProxyUrl,
+  syllabusHasPublishedContent,
+  syllabusPrefersPdfView,
   type SyllabusSection,
 } from "../../lib/syllabus"
 import { SyllabusSectionContent } from "./SyllabusSectionContent"
@@ -24,6 +27,8 @@ import { EmptyBlock } from "../rewards/rewards-shared"
 import { useThemedNative } from "../../context/AppearanceProvider"
 import { useNativeType } from "../../lib/themed-module-theme"
 import { NATIVE } from "../../constants/faculty-native-theme"
+import { LectureDeckPdfViewer } from "../lectures/LectureDeckPdfViewer"
+import { studentAuthenticatedHeaders } from "../../lib/student-api"
 
 function useStudentSession(): StudentSession | null {
   const { session } = useSession()
@@ -89,7 +94,13 @@ export function SyllabusScreen() {
   const native = useThemedNative()
   const type = useNativeType()
   const [sections, setSections] = useState<SyllabusSection[]>([])
-  const [meta, setMeta] = useState<{ title?: string; term?: string; pdfUrl?: string | null }>({})
+  const [meta, setMeta] = useState<{
+    title?: string
+    term?: string
+    pdfUrl?: string | null
+    contentMode?: string
+  }>({})
+  const [pdfHeaders, setPdfHeaders] = useState<Record<string, string> | undefined>()
   const [courseInfo, setCourseInfo] = useState<Record<string, unknown> | null>(null)
   const [openIds, setOpenIds] = useState<Set<string>>(new Set())
   const [searchQuery, setSearchQuery] = useState("")
@@ -104,13 +115,44 @@ export function SyllabusScreen() {
       const data = await courseInfoApi.getSyllabus(session)
       const prepared = prepareSyllabusForDisplay(data.syllabus)
       setSections(prepared.sections)
-      setMeta({ title: prepared.title, term: prepared.term, pdfUrl: prepared.pdfUrl })
+      setMeta({
+        title: prepared.title,
+        term: prepared.term,
+        pdfUrl: prepared.pdfUrl,
+        contentMode: prepared.contentMode,
+      })
       setCourseInfo(data.courseInfo)
       setOpenIds(defaultExpandedSectionIds(prepared.sections))
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Failed to load syllabus.")
     }
   }, [session])
+
+  const hasStructured = sections.length > 0
+  const hasPdf = Boolean(meta.pdfUrl?.trim())
+  const showPdfPrimary = syllabusPrefersPdfView({
+    sections,
+    pdfUrl: meta.pdfUrl,
+    contentMode: meta.contentMode,
+  })
+  const hasAnyContent = syllabusHasPublishedContent({
+    sections,
+    pdfUrl: meta.pdfUrl,
+    contentMode: meta.contentMode,
+  })
+
+  const pdfProxyUrl = useMemo(() => {
+    if (!session?.courseId || !hasPdf) return null
+    return buildSyllabusPdfProxyUrl(session.courseId, { studentId: session.databaseId })
+  }, [session?.courseId, session?.databaseId, hasPdf])
+
+  useEffect(() => {
+    if (!session || !showPdfPrimary) {
+      setPdfHeaders(undefined)
+      return
+    }
+    void studentAuthenticatedHeaders(session).then(setPdfHeaders)
+  }, [session, showPdfPrimary])
 
   useEffect(() => {
     setLoading(true)
@@ -160,7 +202,7 @@ export function SyllabusScreen() {
     <ModuleScreen
       loading={loading}
       error={error}
-      empty={!loading && sections.length === 0}
+      empty={!loading && !hasAnyContent}
       emptyTitle="Syllabus not published"
       emptyBody="Your instructor has not published the syllabus yet."
       refreshing={refreshing}
@@ -169,21 +211,41 @@ export function SyllabusScreen() {
         load().finally(() => setRefreshing(false))
       }}
     >
-      <StudentSearchToolbar
-        value={searchQuery}
-        onChange={setSearchQuery}
-        placeholder="Search policies, dates, materials…"
-      />
+      {!showPdfPrimary ? (
+        <StudentSearchToolbar
+          value={searchQuery}
+          onChange={setSearchQuery}
+          placeholder="Search policies, dates, materials…"
+        />
+      ) : null}
 
       <InfoHero
         badge={meta.term ? "Current term" : undefined}
         title={meta.title ?? "Course Syllabus"}
         subtitle={subtitle}
-        stat={sections.length > 0 ? String(sections.length) : undefined}
-        statLabel={sections.length === 1 ? "Section" : "Sections"}
+        stat={
+          showPdfPrimary
+            ? "PDF"
+            : sections.length > 0
+              ? String(sections.length)
+              : undefined
+        }
+        statLabel={
+          showPdfPrimary ? "Syllabus" : sections.length === 1 ? "Section" : "Sections"
+        }
       />
 
-      {meta.pdfUrl ? (
+      {showPdfPrimary && pdfProxyUrl ? (
+        <View style={styles.pdfViewerWrap}>
+          <LectureDeckPdfViewer
+            deckUrl={pdfProxyUrl}
+            headers={pdfHeaders}
+            cacheKey={`syllabus-${session.courseId ?? "course"}-${session.databaseId}`}
+          />
+        </View>
+      ) : null}
+
+      {!showPdfPrimary && meta.pdfUrl ? (
         <ModuleSection title="Documents">
           <ModuleListRow
             title="Open PDF syllabus"
@@ -191,7 +253,12 @@ export function SyllabusScreen() {
             icon="document-outline"
             thumbIndex={0}
             last
-            onPress={() => void Linking.openURL(String(meta.pdfUrl))}
+            onPress={() => {
+              const url =
+                pdfProxyUrl ??
+                (meta.pdfUrl?.startsWith("http") ? meta.pdfUrl : null)
+              if (url) void Linking.openURL(url)
+            }}
           />
         </ModuleSection>
       ) : null}
@@ -215,7 +282,7 @@ export function SyllabusScreen() {
         />
       ) : null}
 
-      {filteredSections.length > 0 ? (
+      {!showPdfPrimary && filteredSections.length > 0 ? (
         <View>
           <ModuleSectionHeader
             title="Sections"
@@ -286,4 +353,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   accordionBodyLast: { borderBottomWidth: 0 },
+  pdfViewerWrap: {
+    minHeight: 420,
+    borderRadius: NATIVE.sectionRadius,
+    overflow: "hidden",
+  },
 })

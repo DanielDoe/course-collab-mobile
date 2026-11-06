@@ -317,14 +317,6 @@ export function PracticeTopicScreen() {
       return
     }
 
-    if (topic.completed >= unlockedCount && unlockedCount > 0) {
-      AppAlert.alert(
-        "No new questions",
-        `You've practiced all ${unlockedCount} unlocked questions in this topic. Upgrade to Trailblazer for the rest.`,
-      )
-      return
-    }
-
     setGenerating(true)
     try {
       const fullTopic =
@@ -346,7 +338,12 @@ export function PracticeTopicScreen() {
         return
       }
 
-      if (fullTopic && data.questions.length < sessionQuestionCount) {
+      if (data.reviewOnly) {
+        AppAlert.alert(
+          "Reviewing completed topic",
+          "These questions are locked. Your previous answers and the correct answers are shown.",
+        )
+      } else if (fullTopic && data.questions.length < sessionQuestionCount) {
         AppAlert.alert(
           "Partial practice session",
           `Loaded ${data.questions.length} of ${sessionQuestionCount} questions for this topic.`,
@@ -354,10 +351,11 @@ export function PracticeTopicScreen() {
       }
 
       await setActivePracticeSession({
-        attemptId: data.attemptId,
+        attemptId: data.attemptId != null ? Number(data.attemptId) : 0,
         questions: data.questions,
         topic: topic.name,
         difficulty,
+        reviewOnly: data.reviewOnly === true,
       })
 
       router.push({ pathname: "/practice/quiz" } as never)
@@ -503,7 +501,9 @@ export function PracticeTopicScreen() {
                 ) : (
                   <>
                     <Ionicons name="flash-outline" size={18} color="#ffffff" />
-                    <Text style={styles.startBtnText}>Start Practice</Text>
+                    <Text style={styles.startBtnText}>
+                      {topic.completed >= unlockedCount && unlockedCount > 0 ? "Review Topic" : "Start Practice"}
+                    </Text>
                   </>
                 )}
               </Pressable>

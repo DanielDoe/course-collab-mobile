@@ -29,7 +29,10 @@ import {
 } from "./faculty-collab-sheet-ui"
 import { SHEET_SECTION } from "./faculty-sheet-semantics"
 import { NativeSelect } from "../NativeSelect"
-import { secondsSelectOptions } from "./FacultyNativePickers"
+import {
+  defaultExamWideTimerSeconds,
+  examWideMinuteOptions,
+} from "../../lib/assessment-quiz/exam-wide-timer"
 
 type Scope = { instructorId: number; courseId: number }
 
@@ -61,7 +64,9 @@ export function FacultyAssessmentCreateModal({
 
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
-  const [timeLimit, setTimeLimit] = useState("30")
+  const [timeLimit, setTimeLimit] = useState(() =>
+    String(Math.round(defaultExamWideTimerSeconds(assessmentType) / 60)),
+  )
 
   const [topics, setTopics] = useState<InstructorBankTopic[]>([])
   const [topicsLoading, setTopicsLoading] = useState(false)
@@ -184,8 +189,8 @@ export function FacultyAssessmentCreateModal({
       return
     }
     const limit = Number.parseInt(timeLimit, 10)
-    if (!Number.isFinite(limit) || limit < 5) {
-      AppAlert.alert("Invalid timer", "Seconds per question must be at least 5.")
+    if (!Number.isFinite(limit) || limit < 1) {
+      AppAlert.alert("Invalid timer", "Set a total time of at least 1 minute.")
       return
     }
 
@@ -197,7 +202,8 @@ export function FacultyAssessmentCreateModal({
         description: description.trim() || null,
         question_ids: selectedIds,
         assessment_type: assessmentType,
-        time_limit: limit,
+        time_limit: 60,
+        exam_time_seconds: limit * 60,
       })
       AppAlert.alert(
         "Created",
@@ -258,11 +264,11 @@ export function FacultyAssessmentCreateModal({
                 placeholder="Brief description for students…"
               />
             </FacultySheetField>
-            <FacultySheetField label="Time per question">
+            <FacultySheetField label="Total time">
               <NativeSelect
-                placeholder="30 seconds"
+                placeholder="1 hour"
                 value={timeLimit}
-                options={secondsSelectOptions(Number(timeLimit))}
+                options={examWideMinuteOptions(Number(timeLimit))}
                 onChange={setTimeLimit}
               />
             </FacultySheetField>

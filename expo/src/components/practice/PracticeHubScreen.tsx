@@ -81,7 +81,7 @@ function topicStatusLabel(topic: TopicProgress, practiceLocked: boolean): string
   if (practiceLocked) return "Upgrade to unlock"
   const pct = topicProgressPct(topic)
   if (pct >= 100) return "Complete"
-  if (topic.completed > 0) return `${pct}% progress`
+  if (topic.completed > 0) return `${pct}% complete`
   return "Not started"
 }
 
@@ -374,8 +374,8 @@ export function PracticeHubScreen() {
                   statusLabel={topicStatusLabel(topic, topicLocked)}
                   statusColor={topicLocked ? tokens.warning : pct >= 100 ? tokens.success : SN.accent}
                   statusIcon={topicLocked ? "lock-closed" : pct >= 100 ? "checkmark-circle" : "ellipse"}
-                  trailingValue={topicLocked ? "Locked" : `${topic.accuracy}%`}
-                  trailingValueColor={topicLocked ? tokens.warning : SN.accent}
+                  trailingValue={topicLocked ? "Locked" : undefined}
+                  trailingValueColor={topicLocked ? tokens.warning : undefined}
                   icon={topicLocked ? "lock-closed-outline" : "flash-outline"}
                   accent={topicLocked ? tokens.warning : SN.accent}
                   onPress={() => openTopic(topic)}

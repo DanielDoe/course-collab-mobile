@@ -12,6 +12,11 @@ export * from "./confirm-action"
 export * from "./local-proposals"
 export * from "./proposal-message"
 export {
+  resolveCoraOpenRoute,
+  openCoraNativeRoute,
+  nativeRouteForModuleId,
+} from "./resolve-open-route"
+export {
   classifyCoraTaskDomain,
   classifyCoraTaskComplexity,
   buildCoraDomainHint,

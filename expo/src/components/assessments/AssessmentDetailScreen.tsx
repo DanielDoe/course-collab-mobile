@@ -27,6 +27,10 @@ import {
   openAssessmentResults,
   openAssessmentTake} from "./assessment-navigation"
 import { useNotificationModuleRefresh } from "../../lib/notifications/notification-events"
+import {
+  defaultExamWideTimerSeconds,
+  isExamWideAssessmentType,
+} from "../../lib/assessment-quiz/exam-wide-timer"
 
 function useStudentSession(): StudentSession | null {
   const { session } = useSession()
@@ -346,7 +350,11 @@ export function AssessmentDetailScreen() {
               icon="help-circle-outline"
               label="Questions"
               value={`${item.question_count} questions${
-                item.time_per_question != null ? ` · ${item.time_per_question}s each` : ""
+                isExamWideAssessmentType(assessmentType)
+                  ? ` · ${Math.round(defaultExamWideTimerSeconds(assessmentType) / 60)} min total`
+                  : item.time_per_question != null
+                    ? ` · ${item.time_per_question}s each`
+                    : ""
               }`}
             />
           ) : null}

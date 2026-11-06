@@ -231,6 +231,7 @@ export type CoraImportedProblem = {
   bankQuestionId?: number
   questionId?: number | string
   quizId?: number
+  attemptId?: number
   lectureId?: number
   classroomSubmissionId?: number
   studentDatabaseId?: string | number

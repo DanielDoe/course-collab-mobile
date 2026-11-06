@@ -30,6 +30,8 @@ function isImmersiveRoute(pathname: string, webPath?: string) {
   if (/^\/notes\//.test(pathname)) return true
   if (/^\/notetaker\//.test(pathname)) return true
   if (/^\/collaboration\/playground\//.test(pathname)) return true
+  if (/^\/collaboration\/groups\//.test(pathname)) return true
+  if (/^\/collaboration\/projects\//.test(pathname)) return true
   if (/^\/rewards\/classroom-point\//.test(pathname)) return true
   if (/^\/rewards\/classroom-task\//.test(pathname)) return true
   if (/^\/flashcards\//.test(pathname)) return true

@@ -16,6 +16,7 @@ export type SectionConfig = {
   question_order_end?: number
   timer_mode?: SectionTimerMode
   total_time_seconds?: number
+  exam_shared_timer_seconds?: number
   timers?: SectionQuestionTimers
   allow_backtracking?: boolean
   auto_submit_on_expire?: boolean

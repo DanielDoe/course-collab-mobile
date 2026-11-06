@@ -24,6 +24,13 @@ import { FacultySheetChrome, FacultySheetContainer } from "../faculty/faculty-co
 import { AppErrorNotice } from "../errors/AppErrorNotice"
 import { usePresenceTracking } from "../../hooks/usePresenceTracking"
 import { MessageAvatar } from "./messages-ui"
+import { AppAlert } from "../../lib/app-alert"
+import {
+  LOCAL_DEVICE_FILE_PASTE_ERROR,
+  messageIsOnlyLocalDeviceFile,
+  plainTextHasLocalDeviceFileUrl,
+  stripLocalDeviceFileUrls,
+} from "../../lib/message-local-file"
 
 type Props = {
   visible: boolean
@@ -98,7 +105,20 @@ export function MessagesComposeModal({
     return () => clearTimeout(timer)
   }, [auth, recipientQuery, visible])
 
+  function handleBodyChange(next: string) {
+    if (plainTextHasLocalDeviceFileUrl(next)) {
+      setBody(stripLocalDeviceFileUrls(next))
+      AppAlert.alert("Photo didn't upload", LOCAL_DEVICE_FILE_PASTE_ERROR)
+      return
+    }
+    setBody(next)
+  }
+
   async function handleSend() {
+    if (messageIsOnlyLocalDeviceFile(body)) {
+      AppAlert.alert("Photo didn't upload", LOCAL_DEVICE_FILE_PASTE_ERROR)
+      return
+    }
     if (!selectedRecipient || !body.trim()) return
     setSending(true)
     setError(null)
@@ -212,7 +232,7 @@ export function MessagesComposeModal({
           <TextInput
             style={[styles.messageField, { color: native.label, backgroundColor: native.fill }]}
             value={body}
-            onChangeText={setBody}
+            onChangeText={handleBodyChange}
             placeholder="Write your message…"
             placeholderTextColor={native.tertiaryLabel}
             multiline

@@ -2,6 +2,7 @@ import * as SecureStore from "./secure-store-client"
 import { SESSION_DURATION_MS } from "../constants"
 import type { LoginPortal } from "../constants/portals"
 import { readRememberedUniversity } from "./remembered-student-auth"
+import { readRememberedFacultyUniversity } from "./remembered-faculty-auth"
 
 const SESSION_KEY = "appSession"
 
@@ -63,6 +64,10 @@ export type FacultySession = BaseSession & {
   role?: string
   /** Username or email typed at login — used for MFA device trust lookup. */
   authIdentifier?: string
+  /** Campus selected at sign-in (PVAMU vs UH). */
+  selectedUniversityId?: number
+  universityName?: string
+  universityShortName?: string
   /** First-login gate: must set a new password before dashboard. */
   requiresPasswordChange?: boolean
 }
@@ -112,6 +117,15 @@ export async function getStoredSession(): Promise<AppSession | null> {
       const university = await readRememberedUniversity()
       if (university?.id) {
         parsed.universityId = university.id
+        parsed.universityName = parsed.universityName ?? university.name
+        parsed.universityShortName = parsed.universityShortName ?? university.short_name
+        await SecureStore.setItemAsync(SESSION_KEY, JSON.stringify(parsed))
+      }
+    }
+    if (parsed.portal === "faculty" && parsed.selectedUniversityId == null) {
+      const university = await readRememberedFacultyUniversity()
+      if (university?.id) {
+        parsed.selectedUniversityId = university.id
         parsed.universityName = parsed.universityName ?? university.name
         parsed.universityShortName = parsed.universityShortName ?? university.short_name
         await SecureStore.setItemAsync(SESSION_KEY, JSON.stringify(parsed))

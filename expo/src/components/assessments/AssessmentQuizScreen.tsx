@@ -44,7 +44,9 @@ import type {
   SavedAnswer,
 } from "../../lib/assessment-quiz/assessment-quiz-types"
 import { formatAssessmentType } from "./assessment-config"
+import { formatExamClock, resolveExamWideTimerSeconds } from "../../lib/assessment-quiz/exam-wide-timer"
 import { exitAssessmentQuiz, openAssessmentResults } from "./assessment-navigation"
+import { AssessmentAskCoraSheet, canAskCoraOnQuestion } from "./AssessmentAskCoraSheet"
 import type { AssessmentTakeAction } from "../../constants/module-web-paths"
 import { WaterBreakDurationDialog, WaterBreakOverlay } from "../flashcards/FlashcardWaterBreak"
 import { useModuleContentStyle } from "../../lib/responsive-layout"
@@ -79,11 +81,15 @@ export function AssessmentQuizScreen({ quizId, assessmentType, takeAction }: Pro
 
   const [currentIndex, setCurrentIndex] = useState(0)
   const [showQuestionNav, setShowQuestionNav] = useState(false)
+  const [coraOpen, setCoraOpen] = useState(false)
   const [showContinueLaterModal, setShowContinueLaterModal] = useState(false)
   const [showExitModal, setShowExitModal] = useState(false)
   const [waterBreakPickerOpen, setWaterBreakPickerOpen] = useState(false)
   const [waterBreakActive, setWaterBreakActive] = useState(false)
   const [waterBreakSeconds, setWaterBreakSeconds] = useState(0)
+  const [examRemaining, setExamRemaining] = useState<number | null>(null)
+  const examRemainingRef = useRef<number | null>(null)
+  const examExpiredRef = useRef(false)
 
   const [selectedLetter, setSelectedLetter] = useState("")
   const [selectedLetters, setSelectedLetters] = useState<string[]>([])
@@ -143,6 +149,8 @@ export function AssessmentQuizScreen({ quizId, assessmentType, takeAction }: Pro
         hasSaveAndFinishLaterAccess: !!take.hasSaveAndFinishLaterAccess,
       }
       setQuizSession(sessionData)
+      const examTotal = resolveExamWideTimerSeconds(take.quiz.section_config, assessmentType)
+      let nextExamRemaining = examTotal
 
       const restored = new Set<number>()
       let resumeIndex = 0
@@ -166,6 +174,11 @@ export function AssessmentQuizScreen({ quizId, assessmentType, takeAction }: Pro
             resumeIndex = Math.min(state.currentQuestionIndex, take.questions.length - 1)
           }
 
+          const savedExam = state.sectionTimeRemaining?.["-1"]
+          if (typeof savedExam === "number" && savedExam >= 0) {
+            nextExamRemaining = savedExam
+          }
+
           const submitted = state.submittedQuestionIds ?? state.answeredQuestionIds ?? []
           for (const qid of submitted) restored.add(Number(qid))
 
@@ -180,6 +193,9 @@ export function AssessmentQuizScreen({ quizId, assessmentType, takeAction }: Pro
       if (take.questions[resumeIndex]) {
         questionStartRef.current[take.questions[resumeIndex].id] = Date.now()
       }
+      setExamRemaining(nextExamRemaining)
+      examRemainingRef.current = nextExamRemaining
+      examExpiredRef.current = false
     } catch (err) {
       setLoadError(err instanceof ApiError ? err.message : "Could not load assessment.")
     } finally {
@@ -196,6 +212,18 @@ export function AssessmentQuizScreen({ quizId, assessmentType, takeAction }: Pro
       questionStartRef.current[currentQuestion.id] = Date.now()
     }
   }, [currentQuestion])
+
+  useEffect(() => {
+    examRemainingRef.current = examRemaining
+  }, [examRemaining])
+
+  useEffect(() => {
+    if (examRemaining == null || waterBreakActive || submittingFinal) return
+    const id = setInterval(() => {
+      setExamRemaining((prev) => (prev == null ? prev : Math.max(0, prev - 1)))
+    }, 1000)
+    return () => clearInterval(id)
+  }, [examRemaining != null, waterBreakActive, submittingFinal])
 
   // Anti-cheat: task-switching out of the app mid-attempt is logged against the attempt.
   useAssessmentFocusGuard({
@@ -427,6 +455,30 @@ export function AssessmentQuizScreen({ quizId, assessmentType, takeAction }: Pro
     }
   }
 
+  useEffect(() => {
+    if (examRemaining !== 0 || examExpiredRef.current || !quizSession || submittingFinal) return
+    examExpiredRef.current = true
+    void doFinalize()
+  }, [examRemaining, quizSession, submittingFinal])
+
+  useEffect(() => {
+    if (!session || !quizSession || examRemaining == null || waterBreakActive) return
+    const id = setInterval(() => {
+      const left = examRemainingRef.current
+      if (left == null) return
+      void assessmentQuizApi
+        .saveProgress(session, {
+          attemptId: quizSession.attemptId,
+          currentQuestionIndex: currentIndex,
+          sectionTimeRemaining: { "-1": left },
+        })
+        .catch(() => {
+          /* progress save is best-effort */
+        })
+    }, 15000)
+    return () => clearInterval(id)
+  }, [session, quizSession, examRemaining != null, waterBreakActive, currentIndex])
+
   const persistDraftAnswer = async () => {
     if (!session || !quizSession || !currentQuestion || answeredIds.has(currentQuestion.id)) return
     if (isUnsupportedQuestion(currentQuestion)) return
@@ -656,6 +708,8 @@ export function AssessmentQuizScreen({ quizId, assessmentType, takeAction }: Pro
     />
   )
 
+  const askCora = canAskCoraOnQuestion(currentQuestion.question_type, currentQuestion.subquestions)
+
   return (
     <QuestionPrepareGate
       fetching={false}
@@ -670,9 +724,21 @@ export function AssessmentQuizScreen({ quizId, assessmentType, takeAction }: Pro
         onBackPress={handleExitPress}
         fallbackHref={`/assessment/${quizId}?type=${assessmentType}`}
         rightSlot={
-          <Text style={[styles.headerCounter, { color: SN.secondaryLabel }]}>
-            {currentIndex + 1}/{questions.length}
-          </Text>
+          <View style={styles.headerMeta}>
+            {examRemaining != null ? (
+              <Text
+                style={[
+                  styles.headerClock,
+                  { color: examRemaining <= 300 ? "#b45309" : SN.secondaryLabel },
+                ]}
+              >
+                {formatExamClock(examRemaining)}
+              </Text>
+            ) : null}
+            <Text style={[styles.headerCounter, { color: SN.secondaryLabel }]}>
+              {currentIndex + 1}/{questions.length}
+            </Text>
+          </View>
         }
       />
 
@@ -720,6 +786,23 @@ export function AssessmentQuizScreen({ quizId, assessmentType, takeAction }: Pro
           <Ionicons name="pause-circle-outline" size={16} color={tokens.accent} />
           <Text style={[styles.controlBtnText, { color: tokens.accent }]}>Later</Text>
         </Pressable>
+
+        {askCora ? (
+          <Pressable
+            style={[
+              styles.controlBtn,
+              {
+                borderColor: coraOpen ? tokens.accent : tokens.border,
+                backgroundColor: coraOpen ? hexToRgba(tokens.accent, 0.12) : tokens.surface,
+              },
+            ]}
+            onPress={() => setCoraOpen(true)}
+            accessibilityLabel="Ask Cora"
+          >
+            <Ionicons name="chatbubble-ellipses-outline" size={16} color={tokens.accent} />
+            <Text style={[styles.controlBtnText, { color: tokens.accent }]}>Cora</Text>
+          </Pressable>
+        ) : null}
 
         <Pressable
           style={[styles.controlBtn, styles.controlBtnDanger, { borderColor: hexToRgba(tokens.danger, 0.4), backgroundColor: hexToRgba(tokens.danger, 0.08) }]}
@@ -1004,6 +1087,19 @@ export function AssessmentQuizScreen({ quizId, assessmentType, takeAction }: Pro
         />
       ) : null}
 
+      {askCora && session ? (
+        <AssessmentAskCoraSheet
+          key={currentQuestion.id}
+          visible={coraOpen}
+          onClose={() => setCoraOpen(false)}
+          session={session}
+          question={currentQuestion}
+          questionNumber={currentIndex + 1}
+          quizId={quizId}
+          attemptId={quizSession.attemptId}
+        />
+      ) : null}
+
       {/* Quit modal */}
       <Modal visible={showExitModal} transparent animationType="fade" onRequestClose={() => setShowExitModal(false)}>
         <Pressable style={styles.modalBackdrop} onPress={() => setShowExitModal(false)}>
@@ -1058,6 +1154,8 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   headerTitle: { flex: 1, fontSize: 17, fontWeight: "600" },
+  headerMeta: { alignItems: "flex-end", gap: 2 },
+  headerClock: { fontSize: 15, fontWeight: "800", fontVariant: ["tabular-nums"] },
   headerCounter: { fontSize: 14, fontWeight: "600" },
   progressTrack: { height: 3, marginHorizontal: 16 },
   progressFill: { height: "100%" },

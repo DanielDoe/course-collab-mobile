@@ -22,9 +22,6 @@ import { AiTutorMessageMarkdown } from "./AiTutorMessageMarkdown"
 import { CoraImportedQuestionPreview } from "./CoraImportedQuestionPreview"
 import { CoraThinkingIndicator } from "./CoraThinkingIndicator"
 import {
-  CORA_CHAT_ASSISTANT_TAIL_INSET,
-  CORA_CHAT_EDGE_PADDING,
-  CORA_CHAT_USER_TAIL_INSET,
   CORA_CHAT_USER_TEXT_MAX_WIDTH,
   getAssistantMessageColors,
   getCoraChatChromeMutedColor,
@@ -33,6 +30,7 @@ import {
   getUserPromptBubbleBorderWidth,
   type CoraChatBubblePalette,
 } from "./cora-chat-bubble-theme"
+import { CoraTranscriptGutter } from "./CoraTranscriptGutter"
 import type { UserMessageAnchor } from "./CoraUserMessageContextMenu"
 import {
   CHAT_COLLAPSED_MAX_HEIGHT,
@@ -41,28 +39,6 @@ import {
   shouldCollapseChatText,
   userMessageHasMultipleVersions,
 } from "../../lib/cora-message-versions"
-
-type TranscriptSide = "user" | "assistant"
-
-/** Reliable screen-edge + speaker tail gutters for immersive Cora chat. */
-function ChatTranscriptGutter({
-  side,
-  children,
-}: {
-  side: TranscriptSide
-  children: ReactNode
-}) {
-  return (
-    <View
-      style={[
-        styles.transcriptGutter,
-        side === "user" ? styles.transcriptGutterUser : styles.transcriptGutterAssistant,
-      ]}
-    >
-      {children}
-    </View>
-  )
-}
 
 function FeedbackThumbButton({
   vote,
@@ -351,8 +327,8 @@ export const CoraChatBubble = memo(function CoraChatBubble({
   const assistantSurfaceStyle =
     bubblePalette?.assistantShadow && !tokens.isDark ? styles.facultyAssistantLight : null
   const themedChat = Boolean(bubblePalette)
-  const wrapThemed = (side: TranscriptSide, node: ReactNode) =>
-    themedChat ? <ChatTranscriptGutter side={side}>{node}</ChatTranscriptGutter> : node
+  const wrapThemed = (side: "user" | "assistant", node: ReactNode) =>
+    themedChat ? <CoraTranscriptGutter side={side}>{node}</CoraTranscriptGutter> : node
   const userBlockStyle = styles.userBlock
   const isEmptyAssistant = !isUser && !message.content && isStreaming
   const showActions = !isUser && !!message.content && !isStreaming
@@ -534,17 +510,6 @@ export const CoraChatBubble = memo(function CoraChatBubble({
 })
 
 const styles = StyleSheet.create({
-  transcriptGutter: {
-    width: "100%",
-  },
-  transcriptGutterUser: {
-    paddingLeft: CORA_CHAT_EDGE_PADDING + CORA_CHAT_USER_TAIL_INSET,
-    paddingRight: CORA_CHAT_EDGE_PADDING,
-  },
-  transcriptGutterAssistant: {
-    paddingLeft: CORA_CHAT_EDGE_PADDING,
-    paddingRight: CORA_CHAT_EDGE_PADDING + CORA_CHAT_ASSISTANT_TAIL_INSET,
-  },
   block: {
     width: "100%",
     marginBottom: 10,

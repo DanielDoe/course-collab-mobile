@@ -80,6 +80,7 @@ export function PracticeQuizWebScreen() {
     practiceSession.attemptId,
     practiceSession.questions,
     tokens,
+    practiceSession.reviewOnly === true,
   )
   const uri = `${API_BASE_URL}${appendNativeQuery(QUIZ_PATH)}`
 

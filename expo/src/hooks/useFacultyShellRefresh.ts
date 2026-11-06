@@ -110,6 +110,7 @@ export function useFacultyShellRefresh(session: FacultySession) {
           sessionId: course.session_id ?? null,
           sessionCode: course.session_code ?? null,
           academicTermId: course.academic_term_id ?? null,
+          universityId: session.selectedUniversityId ?? null,
         }
         const [notifications, pendingPoints, issues, officeHours, exchangeSummary] = await Promise.all([
           instructorApi.getNotifications(session.id).catch(() => ({ unread_count: 0 })),

@@ -15,6 +15,8 @@ export type SyllabusVisibleContent = {
   legacyTable: SyllabusTableBlock | null
   imageUrl?: string
   imageCaption?: string
+  documentUrl?: string
+  documentFileName?: string
   isPolicySection: boolean
 }
 
@@ -50,6 +52,8 @@ export function getSyllabusVisibleContent(section: SyllabusSection, query = ""):
     legacyTable,
     imageUrl: content.imageUrl,
     imageCaption: content.imageCaption,
+    documentUrl: content.documentUrl,
+    documentFileName: content.documentFileName,
     isPolicySection: isPolicySyllabusSection(section)}
 }
 
@@ -60,7 +64,8 @@ export function syllabusHasRenderableContent(visible: SyllabusVisibleContent): b
       visible.markdownBlocks.length ||
       visible.tables.length ||
       visible.legacyTable ||
-      visible.imageUrl,
+      visible.imageUrl ||
+      visible.documentUrl,
   )
 }
 

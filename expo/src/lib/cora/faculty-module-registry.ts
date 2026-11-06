@@ -73,6 +73,7 @@ export type FacultyCoraModuleId =
   | "student-progress"
   | "reports"
   | "progress-reviews"
+  | "cora-insights"
   | "recent-activity"
   | "notifications"
   | "messages"
@@ -601,6 +602,16 @@ export const FACULTY_CORA_MODULE_REGISTRY: Record<FacultyCoraModuleId, FacultyCo
     minTier: "Pro",
     denied: [],
   },
+  "cora-insights": {
+    module: "cora-insights",
+    version: 1,
+    label: "Cora Insights",
+    capabilities: ["cora.monitor", "cora.analyzeStruggles", "cora.hotTopics"],
+    risk: { ...READ },
+    serviceHint: "instructor ai-monitoring APIs",
+    route: "/module/cora-insights",
+    denied: [],
+  },
   "recent-activity": {
     module: "recent-activity",
     version: 1,
@@ -931,10 +942,12 @@ export function buildFacultyCapabilityPacket(
       mod.minTier && !facultyTierAllows(tier, mod.minTier)
         ? ` [requires ${mod.minTier}]`
         : ""
-    return `- ${mod.label}${locked}: ${mod.capabilities.slice(0, 8).join(", ")}${mod.capabilities.length > 8 ? ", …" : ""}`
+    const route = mod.route ? ` → open ${mod.route}` : ""
+    return `- ${mod.label}${locked}${route}: ${mod.capabilities.slice(0, 8).join(", ")}${mod.capabilities.length > 8 ? ", …" : ""}`
   })
   return [
     "Faculty Cora capability packet (assigned course scope only):",
+    "Native app routes only — never web /instructor/dashboard-v2/* or /faculty/dashboard/* paths.",
     "",
     ...lines.filter(Boolean),
     "",

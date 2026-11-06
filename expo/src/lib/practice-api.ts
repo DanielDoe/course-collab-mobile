@@ -79,6 +79,9 @@ export type EvaluateResult = {
   requiresManualReview?: boolean
   pointsEarned?: number
   autoApproved?: boolean
+  alreadyAttempted?: boolean
+  priorAnswer?: string | string[]
+  answerReview?: PracticeQuestion["answerReview"]
 }
 
 export type SubmitPracticeResult = {
@@ -104,7 +107,8 @@ export type PracticeConfigResponse = {
 }
 
 export type PracticeGenerateResponse = {
-  attemptId: number
+  attemptId: number | null
+  reviewOnly?: boolean
   questions: PracticeQuestion[]
   access?: PracticeAccess
   unlockedCount?: number
@@ -161,6 +165,22 @@ export const practiceApi = {
       display,
     } satisfies PracticeLeaderboardResponse
   },
+
+  getPriorAnswers: (session: StudentSession, questionIds: number[]) =>
+    studentAuthenticatedRequest<{
+      answers: Array<{
+        questionId: number
+        alreadyAttempted: boolean
+        priorAnswer: string | string[] | null
+        priorIsCorrect: boolean
+        answerReview: PracticeQuestion["answerReview"]
+      }>
+    }>(
+      session,
+      practicePath(session, "/api/practice/prior-answers", {
+        questionIds: questionIds.filter((id) => Number.isFinite(id)).join(","),
+      }),
+    ),
 
   generate: (
     session: StudentSession,

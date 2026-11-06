@@ -1,6 +1,9 @@
 import type { StudentSession } from "./session"
 import { normalizePlaygroundQuestions } from "./playground-question-utils"
-import { studentAuthenticatedRequest } from "./student-api"
+import { ApiError, studentAuthenticatedHeaders, studentAuthenticatedRequest } from "./student-api"
+import { API_BASE_URL } from "../constants"
+import { assertProductionHttpsUrl, createApiAbortSignal } from "./http"
+import { persistHttpCookiesFromResponse } from "./student-http-cookies"
 
 function request<T>(session: StudentSession, path: string, init?: RequestInit): Promise<T> {
   return studentAuthenticatedRequest<T>(session, path, init)
@@ -110,6 +113,113 @@ export type DiscoverData = {
   openGroups: GroupRecord[]
   studentsWithoutGroup: RosterStudent[]
   openCalls: OpenCall[]
+}
+
+export type JoinRequest = {
+  id: number
+  status: string
+  created_at: string
+  group_id: number
+  group_name: string
+  requester_id?: number
+  requester_name?: string
+  requester_student_id?: string
+  leader_name?: string
+}
+
+export type LinkRequest = {
+  id: number
+  status: string
+  created_at: string
+  session: string
+  from_student_id?: number
+  from_student_name?: string
+  from_student_student_id?: string
+  to_student_id?: number
+  to_student_name?: string
+  to_student_student_id?: string
+}
+
+export type GroupInbox = {
+  incomingJoinRequests: JoinRequest[]
+  outgoingJoinRequests: JoinRequest[]
+  incomingLinkRequests: LinkRequest[]
+  outgoingLinkRequests: LinkRequest[]
+}
+
+export type WorkspaceFile = {
+  id: number
+  file_name: string
+  storage_url?: string | null
+  mime_type?: string | null
+  byte_size?: number | null
+  created_at?: string
+  evidence_kind?: string | null
+}
+
+export type WorkspaceComment = {
+  id: number
+  body: string
+  topic?: string
+  author_name?: string | null
+  created_at?: string
+  section_title?: string | null
+}
+
+export type WorkspaceSection = {
+  id: number
+  title?: string
+  status?: string
+  instructions?: string | null
+}
+
+export type WorkspaceChecklistItem = {
+  ok: boolean
+  label?: string
+  title?: string
+  message?: string
+}
+
+export type WorkspaceBundle = {
+  project: { id?: number; title?: string; assignment_id?: number | null }
+  workspace: { id?: number; submission_status?: string }
+  members?: Array<{ id: number; full_name: string; student_id?: string }>
+  leaderId?: number | null
+  viewerId?: number | null
+  assignment?: { title?: string; description?: string | null; instructions?: string | null } | null
+  sections?: WorkspaceSection[]
+  files?: WorkspaceFile[]
+  comments?: WorkspaceComment[]
+  activity?: Array<{ id: number; summary?: string; created_at?: string; actor_name?: string | null }>
+  confirmations?: Array<{ student_id: number; confirmed_at?: string }>
+  checklist?: WorkspaceChecklistItem[]
+  role?: string
+}
+
+export type GradedReport = {
+  title?: string
+  groupName?: string
+  submissionStatus?: string
+  provisional?: boolean
+  maxPoints?: number
+  showScore?: boolean
+  showSectionScores?: boolean
+  showFeedback?: boolean
+  sections?: Array<{
+    id: number
+    title: string
+    instructions?: string | null
+    status?: string
+    config?: { points?: number }
+    current_revision?: { content?: unknown; author_name?: string | null } | null
+  }>
+  grades?: Array<{
+    workspace_section_id: number
+    score?: number | null
+    max_score?: number | null
+    feedback?: string | null
+  }>
+  members?: Array<{ id?: number; full_name?: string }>
 }
 
 export type ProjectRecord = {
@@ -395,6 +505,68 @@ export const collaborationApi = {
         groupId,
         requesterStudentId: Number(session.databaseId)})}),
 
+  getMyGroupRequests: (session: StudentSession) =>
+    request<{ ok?: boolean; data?: GroupInbox }>(
+      session,
+      `/api/groups/requests/my-requests?studentId=${encodeURIComponent(session.databaseId)}&session=${encodeURIComponent(session.section)}`,
+    ).then((body) => ({
+      incomingJoinRequests: body.data?.incomingJoinRequests ?? [],
+      outgoingJoinRequests: body.data?.outgoingJoinRequests ?? [],
+      incomingLinkRequests: body.data?.incomingLinkRequests ?? [],
+      outgoingLinkRequests: body.data?.outgoingLinkRequests ?? [],
+    })),
+
+  respondJoinRequest: (session: StudentSession, requestId: number, action: "accept" | "reject") =>
+    request<{ ok?: boolean }>(session, "/api/groups/requests/respond", {
+      method: "POST",
+      body: JSON.stringify({
+        requestId,
+        action,
+        leaderId: Number(session.databaseId),
+      }),
+    }),
+
+  sendLinkRequest: (session: StudentSession, toStudentId: number) =>
+    request<{ ok?: boolean }>(session, "/api/groups/requests/link", {
+      method: "POST",
+      body: JSON.stringify({
+        fromStudentId: Number(session.databaseId),
+        toStudentId,
+        session: session.section,
+      }),
+    }),
+
+  respondLinkRequest: (session: StudentSession, requestId: number, action: "accept" | "reject") =>
+    request<{ ok?: boolean }>(session, "/api/groups/requests/link/respond", {
+      method: "POST",
+      body: JSON.stringify({
+        requestId,
+        action,
+        responderId: Number(session.databaseId),
+      }),
+    }),
+
+  createOpenCall: (session: StudentSession, payload: { title: string; message?: string; groupId?: number }) =>
+    request<{ ok?: boolean }>(session, "/api/groups/requests/open-call", {
+      method: "POST",
+      body: JSON.stringify({
+        title: payload.title,
+        message: payload.message,
+        session: session.section,
+        groupId: payload.groupId ?? null,
+        ownerStudentId: Number(session.databaseId),
+      }),
+    }),
+
+  closeOpenCall: (session: StudentSession, openCallId: number) =>
+    request<{ ok?: boolean }>(session, "/api/groups/requests/open-call/close", {
+      method: "POST",
+      body: JSON.stringify({
+        openCallId,
+        studentId: Number(session.databaseId),
+      }),
+    }),
+
   getRoster: (session: StudentSession) => {
     const q = new URLSearchParams({
       section: session.section,
@@ -487,6 +659,69 @@ export const collaborationApi = {
       session,
       `/api/projects/leaderboard?session=${encodeURIComponent(session.section)}`,
     ),
+
+  getWorkspace: (session: StudentSession, projectId: number) =>
+    request<WorkspaceBundle>(session, `/api/projects/workspace/${projectId}`),
+
+  getWorkspaceComments: (session: StudentSession, projectId: number) =>
+    request<{ comments?: WorkspaceComment[] }>(session, `/api/projects/workspace/${projectId}/comments`),
+
+  postWorkspaceComment: (session: StudentSession, projectId: number, body: string, topic = "general") =>
+    request<{ comment?: WorkspaceComment }>(session, `/api/projects/workspace/${projectId}/comments`, {
+      method: "POST",
+      body: JSON.stringify({ body, topic }),
+    }),
+
+  submitWorkspace: (session: StudentSession, projectId: number, action: "confirm" | "submit") =>
+    request<{ success?: boolean; status?: string; error?: string; checklist?: WorkspaceChecklistItem[] }>(
+      session,
+      `/api/projects/workspace/${projectId}/submission`,
+      { method: "POST", body: JSON.stringify({ action }) },
+    ),
+
+  deleteWorkspaceFile: (session: StudentSession, projectId: number, fileId: number) =>
+    request<{ success?: boolean }>(session, `/api/projects/workspace/${projectId}/files/${fileId}`, {
+      method: "DELETE",
+    }),
+
+  getGradedReport: (session: StudentSession, projectId: number) =>
+    request<GradedReport>(session, `/api/projects/${projectId}/graded-report`),
+
+  async uploadWorkspaceFile(
+    session: StudentSession,
+    projectId: number,
+    file: { uri: string; name: string; mimeType: string },
+    workspaceSectionId?: number,
+  ): Promise<{ file?: WorkspaceFile }> {
+    const url = `${API_BASE_URL}/api/projects/workspace/${projectId}/files`
+    const formData = new FormData()
+    formData.append("file", { uri: file.uri, name: file.name, type: file.mimeType } as unknown as Blob)
+    if (workspaceSectionId != null) formData.append("workspaceSectionId", String(workspaceSectionId))
+    assertProductionHttpsUrl(url)
+    const headers = await studentAuthenticatedHeaders(session)
+    delete headers["Content-Type"]
+    const response = await fetch(url, {
+      method: "POST",
+      credentials: "include",
+      headers,
+      body: formData,
+      signal: createApiAbortSignal(),
+    })
+    const text = await response.text()
+    let body: unknown = null
+    if (text) {
+      try { body = JSON.parse(text) } catch { body = { error: text } }
+    }
+    if (!response.ok) {
+      const message =
+        body && typeof body === "object" && "error" in body && typeof (body as { error?: unknown }).error === "string"
+          ? (body as { error: string }).error
+          : "Upload failed"
+      throw new ApiError(message, response.status, body)
+    }
+    await persistHttpCookiesFromResponse(url, response.headers)
+    return body as { file?: WorkspaceFile }
+  },
 
   // ── Playground ──
   getPlaygroundCredits: (session: StudentSession) =>

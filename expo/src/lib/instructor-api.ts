@@ -273,6 +273,7 @@ export type CreateQuizFromBankPayload = {
   question_ids: number[]
   assessment_type?: string
   time_limit?: number
+  exam_time_seconds?: number
   custom_time_limits?: Record<number, number>
   available_from?: string | null
   available_until?: string | null
@@ -1067,10 +1068,14 @@ export type OfficeHourRequest = {
   student_code?: string
   email?: string
   topic: string
+  area_of_concern?: string | null
   description?: string
   status: string
   priority?: string
   scheduled_date?: string | null
+  meeting_link?: string | null
+  meeting_venue?: string | null
+  instructor_notes?: string | null
   created_at: string
   preferredDates?: string[]
 }
@@ -1895,6 +1900,56 @@ export const instructorApi = {
     }>(`/api/observability/logs?${q.toString()}`, scope)
   },
 
+  getCoraInsightsEngagement: (scope: Scope, days = 7) =>
+    instructorRequest<{
+      success?: boolean
+      totalStudents: number
+      activeUsers: number
+      inactiveUsers: number
+      totalQuestions?: number
+      engagementRate: number
+      activeUsersList?: Array<{
+        id: number
+        full_name: string
+        student_id: string
+        section: string | null
+        question_count: number
+      }>
+    }>(`/api/instructor/ai-monitoring/engagement?days=${days}`, scope),
+
+  getCoraInsightsActivity: (scope: Scope, minutes = 10080) =>
+    instructorRequest<{
+      success?: boolean
+      activity: Array<{
+        id: number
+        student_name: string
+        topic?: string
+        message: string
+        created_at: string
+        module?: string
+      }>
+      stats?: { active_students?: number; total_questions?: number }
+    }>(`/api/instructor/ai-monitoring/activity?limit=40&minutes=${minutes}`, scope),
+
+  getCoraInsightsHotTopics: (scope: Scope, hours = 168) =>
+    instructorRequest<{
+      success?: boolean
+      hotTopics: Array<{ topic: string; question_count: number; student_count: number }>
+    }>(`/api/instructor/ai-monitoring/hot-topics?hours=${hours}`, scope),
+
+  getCoraInsightsStruggles: (scope: Scope, hours = 168) =>
+    instructorRequest<{
+      success?: boolean
+      struggles: Array<{
+        student_name: string
+        topic: string
+        question_count: number
+        severity: string
+      }>
+      criticalCount?: number
+      highCount?: number
+    }>(`/api/instructor/ai-monitoring/struggle-alerts?hours=${hours}&threshold=2`, scope),
+
   getProgressReviews: (scope: Scope, params?: { reviewPeriod?: string; asOfDate?: string }) => {
     const q = new URLSearchParams()
     if (params?.reviewPeriod) q.set("reviewPeriod", params.reviewPeriod)
@@ -2287,6 +2342,7 @@ export const instructorApi = {
         question_ids: payload.question_ids,
         assessment_type: payload.assessment_type,
         time_limit: payload.time_limit,
+        exam_time_seconds: payload.exam_time_seconds,
         custom_time_limits: payload.custom_time_limits,
         available_from: payload.available_from ?? null,
         available_until: payload.available_until ?? null})}),
@@ -2670,10 +2726,14 @@ export const instructorApi = {
     requestId: number,
     payload: {
       status?: string
+      topic?: string
+      areaOfConcern?: string | null
+      description?: string | null
+      priority?: string
       scheduledDate?: string | null
-      meetingLink?: string
-      meetingVenue?: string
-      instructorNotes?: string
+      meetingLink?: string | null
+      meetingVenue?: string | null
+      instructorNotes?: string | null
     },
   ) =>
     instructorRequest<{ request: OfficeHourRequest }>(

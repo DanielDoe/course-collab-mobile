@@ -23,6 +23,16 @@ export type PracticeQuestion = {
   subquestions?: unknown
   solution_upload_config?: unknown
   locked?: boolean
+  alreadyAttempted?: boolean
+  priorAnswer?: string | string[]
+  priorIsCorrect?: boolean
+  answerReview?: {
+    isCorrect: boolean
+    summary: string
+    correctLetters: string[]
+    correctTexts: string[]
+    explanation?: string | null
+  }
 }
 
 export type PracticeSessionData = {
@@ -30,6 +40,7 @@ export type PracticeSessionData = {
   questions: PracticeQuestion[]
   topic: string
   difficulty?: string
+  reviewOnly?: boolean
 }
 
 let activeSession: PracticeSessionData | null = null

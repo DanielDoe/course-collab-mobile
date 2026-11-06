@@ -8,6 +8,7 @@ export type AiFeedback = {
   feedback?: string
   suggestions?: string[]
   detailedExplanation?: string
+  itemizedIssues?: Array<{ issue?: string; location?: string; fix?: string }>
   criteria?: {
     correctness?: number
     codeQuality?: number

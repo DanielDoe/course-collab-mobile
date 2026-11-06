@@ -301,6 +301,13 @@ export const FACULTY_MODULE_META: Record<string, FacultyModuleMeta> = {
     icon: "storefront-outline",
     features: ["Conversion rules", "Donation review", "Analytics & logs"],
   },
+  "cora-insights": {
+    id: "cora-insights",
+    title: "Cora Insights",
+    summary: "See how students use Cora in this offering — questions, topics, and struggle alerts.",
+    icon: "sparkles-outline",
+    features: ["Live Cora turns", "Hot topics", "Struggle alerts", "Engagement"],
+  },
   cora: {
     id: "cora",
     title: "Cora Copilot",

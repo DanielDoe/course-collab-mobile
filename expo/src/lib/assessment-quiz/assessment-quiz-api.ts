@@ -76,6 +76,7 @@ export const assessmentQuizApi = {
       attemptId: number
       currentQuestionIndex?: number
       questionTimeRemaining?: Record<string, number>
+      sectionTimeRemaining?: Record<string, number>
     },
   ) =>
     studentAuthenticatedRequest<{ ok: boolean }>(session, "/api/student/quiz-progress", {

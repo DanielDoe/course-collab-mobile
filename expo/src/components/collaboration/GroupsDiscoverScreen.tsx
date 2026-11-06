@@ -1,21 +1,29 @@
 import { useCallback, useEffect, useState } from "react"
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { AppAlert } from '../../lib/app-alert'
+import { ActivityIndicator, ScrollView, StyleSheet, View } from "react-native"
+import { AppAlert } from "../../lib/app-alert"
 import { useRouter } from "expo-router"
-import { useModuleScrollContentPadding } from "../../context/ChromeInsetContext"
 import { useSession } from "../../context/SessionProvider"
 import { useNotificationModuleRefresh } from "../../lib/notifications/notification-events"
 import { ApiError } from "../../lib/student-api"
 import type { StudentSession } from "../../lib/session"
 import { NATIVE } from "../../constants/faculty-native-theme"
-import { useThemedStudentNative } from "../../lib/themed-module-theme"
+import { useThemedNative } from "../../context/AppearanceProvider"
 import {
   collaborationApi,
+  formatRelativeTime,
   type GroupRecord,
-  type OpenCall} from "../../lib/collaboration-api"
-import { CollabCard, CollabSectionTitle } from "./collab-shared"
-import { CollabScreenTitle } from "./collab-nav"
-import { useCollabTheme } from "./collab-module-ui"
+  type OpenCall,
+} from "../../lib/collaboration-api"
+import { collabListThumb } from "../../lib/collaboration-list-theme"
+import {
+  CommEmptyState,
+  CommSectionFooter,
+  CommSectionHeader,
+} from "../faculty/faculty-communication-ui"
+import { SignatureListCard } from "../theme/SignatureListCard"
+import { signatureListStyles } from "../theme/TabbedModuleLayout"
+import { CollabFlowHeader } from "./collab-nav"
+import { CollabActionSheet, type CollabSheetOption } from "./collab-native-sheet"
 
 function useStudentSession(): StudentSession | null {
   const { session } = useSession()
@@ -25,12 +33,11 @@ function useStudentSession(): StudentSession | null {
 export function GroupsDiscoverScreen() {
   const session = useStudentSession()
   const router = useRouter()
-  const scrollPad = useModuleScrollContentPadding(24)
-  const theme = useCollabTheme()
-  const SN = useThemedStudentNative()
+  const native = useThemedNative()
   const [openGroups, setOpenGroups] = useState<GroupRecord[]>([])
   const [openCalls, setOpenCalls] = useState<OpenCall[]>([])
   const [loading, setLoading] = useState(true)
+  const [sheet, setSheet] = useState<{ title: string; message?: string; options: CollabSheetOption[] } | null>(null)
 
   const load = useCallback(async () => {
     if (!session) return
@@ -59,86 +66,102 @@ export function GroupsDiscoverScreen() {
     if (!session) return
     try {
       await collaborationApi.requestJoinGroup(session, groupId)
-      AppAlert.alert("Request sent", "The group leader will review your request.")
+      AppAlert.alert("Request Sent", "The group leader will review your request.")
     } catch (err) {
       AppAlert.alert("Failed", err instanceof ApiError ? err.message : "Could not send request.")
     }
   }
 
   return (
-    <ScrollView contentContainerStyle={[styles.content, scrollPad]}>
-      <CollabScreenTitle title="Discover groups" subtitle="Join open teams or browse calls" />
+    <View style={[styles.screen, { backgroundColor: native.groupedBackground }]}>
+      <CollabFlowHeader title="Discover Groups" subtitle="Join open teams or browse calls" fallbackHref="/module/groups" />
+      <ScrollView contentContainerStyle={styles.content}>
         {loading ? (
-          <ActivityIndicator color={theme.primary} style={{ marginTop: 24 }} />
+          <ActivityIndicator color={native.tint} style={{ marginTop: 24 }} />
         ) : (
           <>
-            <CollabSectionTitle title="Open groups" hint="Groups with available spots" />
+            <CommSectionHeader title="Open Groups" />
             {openGroups.length === 0 ? (
-              <Text style={[styles.empty, { color: SN.secondaryLabel }]}>No open groups right now.</Text>
+              <CommEmptyState icon="people-outline" title="No Open Groups" body="No groups are accepting members right now." />
             ) : (
-              openGroups.map((group, index) => (
-                <View key={group.id} style={styles.cardWrap}>
-                  <CollabCard
-                    thumbIndex={index}
-                    icon="people-circle-outline"
+              <View style={signatureListStyles.list}>
+                {openGroups.map((group, index) => (
+                  <SignatureListCard
+                    key={group.id}
+                    index={index}
                     title={group.name}
-                    subtitle={group.leader_name ? `Led by ${group.leader_name}` : undefined}
+                    subtitle={group.leader_name ? `Led by ${group.leader_name}` : "Course group"}
                     meta={`${group.member_count ?? 0}/4 members`}
-                    onPress={() => router.push(`/collaboration/groups/${group.id}` as never)}
+                    metaIcon="people-outline"
+                    statusLabel="Open to join"
+                    statusIcon="radio-outline"
+                    icon="people"
+                    accent={collabListThumb(index).label}
+                    onPress={() =>
+                      setSheet({
+                        title: group.name,
+                        message: group.leader_name ? `Led by ${group.leader_name}` : undefined,
+                        options: [
+                          {
+                            label: "Request to Join",
+                            icon: "person-add-outline",
+                            onPress: () => void requestJoin(group.id),
+                          },
+                          {
+                            label: "View Group",
+                            icon: "people-outline",
+                            onPress: () => router.push(`/collaboration/groups/${group.id}` as never),
+                          },
+                        ],
+                      })
+                    }
                   />
-                  <Pressable
-                    style={[styles.joinBtn, { backgroundColor: theme.soft }]}
-                    onPress={() => requestJoin(group.id)}
-                  >
-                    <Text style={[styles.joinBtnText, { color: theme.primary }]}>Request to join</Text>
-                  </Pressable>
-                </View>
-              ))
+                ))}
+              </View>
             )}
 
-            <CollabSectionTitle title="Open calls" hint="Students looking for teammates" />
+            <CommSectionHeader title="Open Calls" />
             {openCalls.length === 0 ? (
-              <Text style={[styles.empty, { color: SN.secondaryLabel }]}>No open calls posted.</Text>
+              <CommEmptyState icon="megaphone-outline" title="No Open Calls" body="No students are looking for teammates right now." />
             ) : (
-              openCalls.map((call) => (
-                <View
-                  key={call.id}
-                  style={[
-                    styles.callCard,
-                    { backgroundColor: SN.secondaryGrouped, borderColor: SN.separator },
-                  ]}
-                >
-                  <Text style={styles.callTitle}>{call.title}</Text>
-                  {call.message ? <Text style={styles.callBody}>{call.message}</Text> : null}
-                  <Text style={[styles.callMeta, { color: SN.secondaryLabel }]}>
-                    {call.owner_name ?? call.group_name ?? "Student"} · {call.session}
-                  </Text>
-                </View>
-              ))
+              <View style={signatureListStyles.list}>
+                {openCalls.map((call, index) => (
+                  <SignatureListCard
+                    key={call.id}
+                    index={index}
+                    title={call.title}
+                    subtitle={call.message || (call.owner_name ?? call.group_name ?? "Student")}
+                    meta={formatRelativeTime(call.created_at)}
+                    metaIcon="megaphone-outline"
+                    statusLabel="Open"
+                    statusIcon="radio-outline"
+                    icon="megaphone-outline"
+                    accent={collabListThumb(index).label}
+                    onPress={
+                      call.group_id
+                        ? () => router.push(`/collaboration/groups/${call.group_id}` as never)
+                        : undefined
+                    }
+                  />
+                ))}
+              </View>
             )}
+            <CommSectionFooter>Open groups and calls use the same discovery feed as the web app.</CommSectionFooter>
           </>
         )}
       </ScrollView>
+      <CollabActionSheet
+        visible={sheet != null}
+        onClose={() => setSheet(null)}
+        title={sheet?.title ?? ""}
+        message={sheet?.message}
+        options={sheet?.options ?? []}
+      />
+    </View>
   )
 }
 
 const styles = StyleSheet.create({
-  content: { padding: 16, gap: 12 },
-  empty: { fontSize: 13, textAlign: "center", paddingVertical: 12 },
-  cardWrap: { gap: 8 },
-  joinBtn: {
-    alignSelf: "flex-start",
-    marginLeft: 4,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 999,
-  },
-  joinBtnText: { fontSize: 12, fontWeight: "700" },
-  callCard: {
-    borderRadius: 999,
-    padding: 14,
-    borderWidth: 1,
-    gap: 6},
-  callTitle: { fontSize: 15, fontWeight: "600", color: NATIVE.label },
-  callBody: { fontSize: 13, color: "#475569", lineHeight: 18 },
-  callMeta: { fontSize: 11, fontWeight: "600" }})
+  screen: { flex: 1 },
+  content: { padding: NATIVE.pagePadding, gap: 12, paddingBottom: 40 },
+})
