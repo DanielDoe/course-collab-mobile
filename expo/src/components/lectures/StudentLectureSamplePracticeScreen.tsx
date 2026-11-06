@@ -3,12 +3,10 @@ import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-nat
 import { useRouter } from "expo-router"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { ApiError } from "../../lib/api"
-import { fetchStudentLectureViewerData } from "../../lib/student-lecture-api"
+import { fetchStudentLectureSamplePracticeState } from "../../lib/student-lecture-api"
 import { useSession } from "../../context/SessionProvider"
 import type { StudentSession } from "../../lib/session"
-import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
-import { useNativeType } from "../../lib/themed-module-theme"
-import type { LectureSamplePracticeConfig } from "../../lib/lecture-types"
+import type { LectureSamplePracticeAttempt, LectureSamplePracticeConfig } from "../../lib/lecture-types"
 import { formatCourseLabel } from "./lecture-list-utils"
 import { FacultyEmptyState } from "../faculty/faculty-shared"
 import { LectureSlidePreviewToolbar } from "./LectureSlidePreviewToolbar"
@@ -17,6 +15,8 @@ import { StudentLectureWebToolModal } from "./StudentLectureWebToolModal"
 import { QuestionPrepareGate } from "../questions/QuestionPrepareGate"
 import { extractLectureSamplePracticeQuestionTexts } from "../../lib/question-prepare"
 import { buildStudentLectureToolPath } from "../../constants/module-web-paths"
+import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
+import { useNativeType } from "../../lib/themed-module-theme"
 
 type Props = {
   lectureId: number
@@ -41,18 +41,28 @@ export function StudentLectureSamplePracticeScreen({ lectureId, week }: Props) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [config, setConfig] = useState<LectureSamplePracticeConfig | null>(null)
+  const [attempts, setAttempts] = useState<LectureSamplePracticeAttempt[]>([])
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [reviewedIds, setReviewedIds] = useState<Set<string>>(() => new Set())
   const [webOpen, setWebOpen] = useState(false)
+
+  const attemptsByQuestionId = useMemo(
+    () => new Map(attempts.map((attempt) => [attempt.question_id, attempt])),
+    [attempts],
+  )
 
   const load = useCallback(async () => {
     if (!session) return
     setError("")
     try {
-      const data = await fetchStudentLectureViewerData(session, lectureId)
-      const next = data.samplePractice
-      setConfig(next)
-      setExpandedId(next.questions[0]?.id ?? null)
+      const data = await fetchStudentLectureSamplePracticeState(session, lectureId)
+      setConfig(data)
+      setAttempts(data.attempts ?? [])
+      const answered = new Set((data.attempts ?? []).map((attempt) => attempt.question_id))
+      setReviewedIds(answered)
+      const firstUnanswered =
+        data.questions.find((question) => !answered.has(question.id)) ?? data.questions[0]
+      setExpandedId(firstUnanswered?.id ?? null)
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not load sample practice.")
     }
@@ -113,10 +123,12 @@ export function StudentLectureSamplePracticeScreen({ lectureId, week }: Props) {
         keyboardDismissMode="on-drag"
         >
           <StudentLectureSamplePracticePanel
+            session={session}
             lectureId={lectureId}
             studentDatabaseId={session.databaseId}
             courseLabel={courseLabel}
             config={config}
+            attemptsByQuestionId={attemptsByQuestionId}
             expandedId={expandedId}
             reviewedIds={reviewedIds}
             onToggle={(questionId) =>

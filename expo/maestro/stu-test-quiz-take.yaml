@@ -1,0 +1,58 @@
+appId: com.coursecollab.app
+---
+- openLink: coursecollab://dev-student-login?force=1
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 90000
+- openLink: coursecollab:///module/quizzes
+- extendedWaitUntil:
+    visible: "Quizzes"
+    timeout: 45000
+- tapOn: "Search quizzes…"
+- inputText: "STU Test Quiz"
+- hideKeyboard
+- extendedWaitUntil:
+    visible: "STU Test Quiz, Continue"
+    timeout: 30000
+- tapOn: "STU Test Quiz, Continue"
+- extendedWaitUntil:
+    visible:
+      text: "Continue assessment"
+      optional: true
+    timeout: 45000
+- extendedWaitUntil:
+    visible:
+      text: "Start quiz"
+      optional: true
+    timeout: 5000
+- tapOn:
+    text: "Continue assessment"
+    optional: true
+- tapOn:
+    text: "Start quiz"
+    optional: true
+- extendedWaitUntil:
+    visible: "Submit answer"
+    timeout: 90000
+- takeScreenshot: stu-quiz-q1
+- repeat:
+    times: 12
+    commands:
+      - runFlow:
+          when:
+            visible: "Submit answer"
+          commands:
+            - tapOn: "Option A"
+            - tapOn: "Submit answer"
+            - extendedWaitUntil:
+                visible: "Answer submitted"
+                timeout: 45000
+            - takeScreenshot: stu-quiz-answered
+      - tapOn:
+          text: "Next"
+          optional: true
+- extendedWaitUntil:
+    visible: "Submit assessment"
+    timeout: 60000
+    optional: true
+- takeScreenshot: stu-quiz-final

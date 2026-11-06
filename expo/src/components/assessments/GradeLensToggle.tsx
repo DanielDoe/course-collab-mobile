@@ -63,7 +63,9 @@ export function GradeLensToggle({ value, onChange }: Props) {
             accessibilityState={{ selected: active }}
             accessibilityLabel={option.label}
           >
-            <Ionicons name={option.icon} size={15} color={segment.color} />
+            <View style={styles.iconSlot}>
+              <Ionicons name={option.icon} size={15} color={segment.color} />
+            </View>
             <Text style={[styles.label, { color: segment.color }, active && styles.labelActive]}>
               {option.label}
             </Text>
@@ -94,6 +96,12 @@ const styles = StyleSheet.create({
   },
   segmentPressed: {
     opacity: 0.82,
+  },
+  iconSlot: {
+    width: 15,
+    height: 15,
+    alignItems: "center",
+    justifyContent: "center",
   },
   label: {
     fontSize: 14,

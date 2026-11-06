@@ -43,7 +43,7 @@ export function logCoraAudit(input: LogCoraAuditInput): CoraAuditEntry {
     auditBuffer.length = MAX_LOCAL_AUDIT_ENTRIES
   }
 
-  if (__DEV__) {
+  if (typeof __DEV__ !== "undefined" && __DEV__) {
     console.info("[CoraAudit]", {
       requestId: entry.requestId,
       role: entry.role,

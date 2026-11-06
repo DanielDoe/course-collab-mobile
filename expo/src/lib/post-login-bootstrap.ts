@@ -25,6 +25,16 @@ import {
   setStudentDashboardBootstrap,
   setStudentShellBootstrap,
 } from "./app-bootstrap-cache"
+import { getQueryClient } from "./query/client"
+import {
+  prefetchFacultyPhase2,
+  prefetchStudentPhase1,
+  seedAnnouncementsCache,
+  seedFacultyDashboardCache,
+  seedStudentDashboardCache,
+} from "./query/prefetch"
+import { enrichStudentContentSession } from "./student-content-session"
+import { messagesApi } from "./messages-api"
 
 let bootstrapInFlight: Promise<void> | null = null
 let bootstrapCompletedKey: string | null = null
@@ -59,11 +69,12 @@ export function resetAppBootstrapState() {
 }
 
 async function bootstrapStudent(session: StudentSession) {
+  const contentSession = await enrichStudentContentSession(session)
   const [dashboard, announcementData, tier, notifications] = await Promise.all([
-    fetchStudentDashboardBundle(session),
-    studentApi.getAnnouncements(session).catch(() => ({ announcements: [] as Announcement[] })),
-    fetchEffectiveMembershipTier(session),
-    fetchNotificationCount(session),
+    fetchStudentDashboardBundle(contentSession),
+    studentApi.getAnnouncements(contentSession).catch(() => ({ announcements: [] as Announcement[] })),
+    fetchEffectiveMembershipTier(contentSession),
+    fetchNotificationCount(contentSession),
   ])
 
   setStudentDashboardBootstrap({
@@ -83,6 +94,11 @@ async function bootstrapStudent(session: StudentSession) {
     classroomPoints: dashboard.stats.classroomPoints,
     notificationCount: notifications,
   })
+
+  const queryClient = getQueryClient()
+  seedAnnouncementsCache(queryClient, contentSession, announcementData.announcements ?? [])
+  seedStudentDashboardCache(queryClient, contentSession, dashboard)
+  void prefetchStudentPhase1(queryClient, contentSession)
 }
 
 async function bootstrapFacultyForCourse(
@@ -98,8 +114,19 @@ async function bootstrapFacultyForCourse(
     academicTermId: course.academic_term_id ?? null,
     universityId: session.selectedUniversityId ?? null,
   }
-  const [stats, charts, activity, notifications, pendingPoints, issues, officeHours, exchangeSummary, tier] =
-    await Promise.all([
+  const messagesAuth = { kind: "instructor" as const, instructorId: session.id }
+  const [
+    stats,
+    charts,
+    activity,
+    notifications,
+    pendingPoints,
+    issues,
+    officeHours,
+    exchangeSummary,
+    tier,
+    messagesData,
+  ] = await Promise.all([
       fetchInstructorDashboardStats(scope),
       instructorApi.getDashboardCharts(scope).catch(() => ({
         submissionsOverTime: [],
@@ -113,11 +140,16 @@ async function bootstrapFacultyForCourse(
       instructorApi.getOfficeHours(scope).catch(() => []),
       instructorApi.getCourseExchangeSummary(scope).catch(() => ({})),
       fetchEffectiveFacultyMembershipTier(session),
+      messagesApi.listThreads(messagesAuth).catch(() => ({ threads: [] as Array<{ unreadCount?: number }> })),
     ])
 
   const pendingOfficeHours = officeHours.filter(
     (r) => r.status === "pending" || r.status === "requested",
   ).length
+  const unreadMessages = (messagesData.threads ?? []).reduce(
+    (sum, thread) => sum + (thread.unreadCount ?? 0),
+    0,
+  )
 
   if (tier) {
     await setCachedFacultyMembershipTier(session.id, tier)
@@ -134,6 +166,8 @@ async function bootstrapFacultyForCourse(
       pendingIssues: issues.length,
       officeHours: pendingOfficeHours,
       courseExchange: courseExchangeDrawerBadgeCount(exchangeSummary),
+      unreadMessages,
+      pendingAccessRequests: 0,
     },
   })
 
@@ -145,6 +179,14 @@ async function bootstrapFacultyForCourse(
     academicTermId: course.academic_term_id ?? null,
     sessionCode: course.session_code ?? null,
   })
+
+  const queryClient = getQueryClient()
+  seedFacultyDashboardCache(queryClient, scope, {
+    stats,
+    charts,
+    activity: activity.slice(0, 8),
+  })
+  void prefetchFacultyPhase2(queryClient, scope)
 }
 
 async function bootstrapFaculty(session: FacultySession) {

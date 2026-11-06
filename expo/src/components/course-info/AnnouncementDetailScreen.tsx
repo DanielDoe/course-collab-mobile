@@ -1,14 +1,20 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react"
-import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, KeyboardAvoidingView, Linking, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { AppAlert } from '../../lib/app-alert'
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useLocalSearchParams } from "expo-router"
 import { ModuleScreen, ModuleSectionHeader } from "../modules/ModuleScreen"
 import { NotetakerScreenHeader } from "../notetaker/NotetakerScreenHeader"
 import { useSession } from "../../context/SessionProvider"
-import { ApiError, type Announcement, type AnnouncementComment } from "../../lib/student-api"
+import { ApiError, studentApi, type Announcement, type AnnouncementComment } from "../../lib/student-api"
 import type { StudentSession } from "../../lib/session"
-import { courseInfoApi, formatListDate } from "../../lib/course-info-api"
+import { formatListDate } from "../../lib/course-info-api"
+import {
+  useMarkAnnouncementViewed,
+  usePostAnnouncementComment,
+  useReactToAnnouncement,
+  useStudentAnnouncementDetail,
+} from "../../hooks/query/useStudentAnnouncements"
 import { summarizeAnnouncement } from "../../lib/announcement-summary"
 import { ANNOUNCEMENT_LOCKED_MESSAGE } from "../../lib/announcement-content"
 import { AnnouncementBodyWebView } from "./AnnouncementBodyWebView"
@@ -22,6 +28,11 @@ import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProv
 import { useNativeType } from "../../lib/themed-module-theme"
 import { useNotificationModuleRefresh } from "../../lib/notifications/notification-events"
 import { API_BASE_URL } from "../../constants"
+import {
+  announcementCanAddToCalendar,
+  announcementEventEndIso,
+  announcementEventStartIso,
+} from "../../lib/announcement-calendar"
 
 const REACTIONS = [
   { id: "like", emoji: "👍", label: "Like" },
@@ -74,7 +85,13 @@ function AnnouncementDetailShell({
   return (
     <View style={[shellStyles.root, { backgroundColor: native.groupedBackground }]}>
       <NotetakerScreenHeader title={title} fallbackHref="/announcements" />
-      <View style={shellStyles.body}>{children}</View>
+      <KeyboardAvoidingView
+        style={shellStyles.body}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={0}
+      >
+        {children}
+      </KeyboardAvoidingView>
     </View>
   )
 }
@@ -88,51 +105,38 @@ export function AnnouncementDetailScreen() {
   const type = useNativeType()
   const tokens = useAppThemeTokens()
   const aiSummaryStyle = courseInfoAiSummaryStyle(tokens.isDark)
-  const [announcement, setAnnouncement] = useState<Announcement | null>(null)
-  const [comments, setComments] = useState<AnnouncementComment[]>([])
-  const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
-  const [error, setError] = useState("")
+  const detailQuery = useStudentAnnouncementDetail(session, announcementId)
+  const markViewed = useMarkAnnouncementViewed(session)
+  const reactMutation = useReactToAnnouncement(session)
+  const commentMutation = usePostAnnouncementComment(session)
+  const announcement = detailQuery.announcement
+  const comments = detailQuery.comments
+  const loading = detailQuery.isInitialLoading
+  const refreshing = detailQuery.isRefreshing && !detailQuery.isInitialLoading
+  const error = detailQuery.error instanceof ApiError ? detailQuery.error.message : detailQuery.error ? "Could not load announcement." : ""
   const [commentDraft, setCommentDraft] = useState("")
-  const [submittingComment, setSubmittingComment] = useState(false)
-  const [reacting, setReacting] = useState(false)
-
-  const load = useCallback(async () => {
-    if (!session || !Number.isFinite(announcementId)) return
-    setError("")
-    try {
-      const [detail, commentsData] = await Promise.all([
-        courseInfoApi.getAnnouncementById(session, announcementId),
-        courseInfoApi.getAnnouncementComments(session, announcementId).catch(() => ({ comments: [] })),
-      ])
-      setAnnouncement(detail.announcement)
-      setComments(commentsData.comments ?? [])
-
-      void courseInfoApi.markAnnouncementViewed(session, announcementId).catch(() => undefined)
-    } catch (err) {
-      // Stale notification deep links (deleted announcements) should not look like a crash.
-      if (err instanceof ApiError && (err.status === 404 || /not found/i.test(err.message))) {
-        setAnnouncement(null)
-        setComments([])
-        setError("")
-        return
-      }
-      setError(err instanceof ApiError ? err.message : "Could not load announcement.")
-    }
-  }, [session, announcementId])
+  const [calendarAdded, setCalendarAdded] = useState(false)
+  const [calendarBusy, setCalendarBusy] = useState(false)
+  const submittingComment = commentMutation.isPending
+  const reacting = reactMutation.isPending
 
   useEffect(() => {
-    setLoading(true)
-    load().finally(() => setLoading(false))
-  }, [load])
+    if (!session || !Number.isFinite(announcementId) || !announcement) return
+    if (announcement.viewed_by_me || announcement.is_read) return
+    markViewed.mutate(announcementId)
+  }, [session, announcementId, announcement?.id])
 
   const onRefresh = useCallback(async () => {
-    setRefreshing(true)
-    await load()
-    setRefreshing(false)
-  }, [load])
+    await detailQuery.refetch()
+  }, [detailQuery])
 
-  useNotificationModuleRefresh("announcements", onRefresh)
+  useNotificationModuleRefresh("announcements", () => {
+    void detailQuery.refetch()
+  })
+
+  useEffect(() => {
+    if (announcement?.calendar_event_id) setCalendarAdded(true)
+  }, [announcement?.calendar_event_id])
 
   const locked = announcement?.student_content_locked === true
   const summary = useMemo(
@@ -149,39 +153,24 @@ export function AnnouncementDetailScreen() {
 
   async function handleReaction(reactionType: string) {
     if (!session || !announcement || locked || announcement.allow_reactions === false) return
-    setReacting(true)
     try {
-      const result = await courseInfoApi.reactToAnnouncement(session, announcement.id, reactionType)
-      setAnnouncement((prev) =>
-        prev
-          ? {
-              ...prev,
-              my_reaction: result.reactionType}
-          : prev,
-      )
+      await reactMutation.mutateAsync({ announcementId: announcement.id, reactionType })
     } catch (err) {
       AppAlert.alert("Reaction failed", err instanceof ApiError ? err.message : "Try again.")
-    } finally {
-      setReacting(false)
     }
   }
 
   async function submitComment() {
     if (!session || !announcement || !commentDraft.trim()) return
     if (locked || announcement.allow_comments === false) return
-    setSubmittingComment(true)
     try {
-      const result = await courseInfoApi.postAnnouncementComment(
-        session,
-        announcement.id,
-        commentDraft.trim(),
-      )
-      setComments((prev) => [...prev, result.comment])
+      await commentMutation.mutateAsync({
+        announcementId: announcement.id,
+        content: commentDraft.trim(),
+      })
       setCommentDraft("")
     } catch (err) {
       AppAlert.alert("Comment failed", err instanceof ApiError ? err.message : "Try again.")
-    } finally {
-      setSubmittingComment(false)
     }
   }
 
@@ -243,6 +232,54 @@ export function AnnouncementDetailScreen() {
             </View>
             <Text style={[type.body, styles.summaryText, { color: native.label }]}>{summary}</Text>
           </View>
+
+          {announcementCanAddToCalendar(announcement) ? (
+            <Pressable
+              onPress={() => {
+                if (!session || calendarAdded || calendarBusy) return
+                const start = announcementEventStartIso(announcement)
+                if (!start) return
+                setCalendarBusy(true)
+                void studentApi
+                  .createCalendarEvent(session, {
+                    title: announcement.title,
+                    startTime: start,
+                    endTime: announcementEventEndIso(announcement),
+                    location: announcement.event_location,
+                    description: announcement.content_summary ?? announcement.ai_summary ?? undefined,
+                    eventType: announcement.category ?? "exam",
+                    announcementId: announcement.id,
+                  })
+                  .then(() => setCalendarAdded(true))
+                  .catch((err) => {
+                    AppAlert.alert(
+                      "Could not add to calendar",
+                      err instanceof ApiError ? err.message : "Try again.",
+                    )
+                  })
+                  .finally(() => setCalendarBusy(false))
+              }}
+              disabled={calendarAdded || calendarBusy}
+              accessibilityRole="button"
+              accessibilityLabel={calendarAdded ? "Added to calendar" : "Add to calendar"}
+              style={({ pressed }) => [
+                styles.calendarBtn,
+                {
+                  backgroundColor: calendarAdded ? native.fill : COURSE_INFO_ACTION.fill,
+                  opacity: pressed ? 0.88 : 1,
+                },
+              ]}
+            >
+              <Ionicons
+                name={calendarAdded ? "checkmark-circle" : "calendar-outline"}
+                size={16}
+                color={calendarAdded ? tokens.success : "#ffffff"}
+              />
+              <Text style={[styles.calendarBtnText, calendarAdded && { color: native.label }]}>
+                {calendarBusy ? "Adding…" : calendarAdded || announcement.calendar_event_id ? "Added to Calendar" : "Add to Calendar"}
+              </Text>
+            </Pressable>
+          ) : null}
 
           {locked ? (
             <View style={[styles.lockedBox, { backgroundColor: `${tokens.warning}14`, borderColor: `${tokens.warning}40` }]}>
@@ -392,6 +429,16 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     },
   summaryText: { fontSize: 15, lineHeight: 22 },
+  calendarBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    borderRadius: 12,
+    paddingVertical: 12,
+    minHeight: 44,
+  },
+  calendarBtnText: { color: "#ffffff", fontWeight: "700", fontSize: 15 },
   fullAnnouncementSection: { gap: 10 },
   lockedBox: {
     flexDirection: "row",

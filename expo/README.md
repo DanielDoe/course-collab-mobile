@@ -12,7 +12,34 @@ npm install --legacy-peer-deps
 npx expo start
 ```
 
-Scan the QR code with [Expo Go](https://expo.dev/go) on your phone for JS-only iteration.
+### Expo Go on your phone (SDK 57)
+
+The project targets **Expo SDK 57** to match the App Store **Expo Go** app.
+
+```bash
+cd expo
+npm run start:go
+```
+
+Scan the QR code with **Expo Go** (same Wi‑Fi as your Mac). Or open manually:
+
+```bash
+npm run dev:ip   # prints current LAN URLs
+```
+
+Example (your IP will differ):
+
+- Metro: `http://10.32.182.158:8081`
+- Link: `exp://10.32.182.158:8081`
+
+**Expo Go limitations** (native dev build still required for full QA):
+
+- No Stripe native checkout (membership uses web fallback messaging)
+- No in-app PDF viewer (`react-native-pdf`) — WebView fallback
+- No `@react-native-cookies/cookies` jar — fetch cookie header fallback
+- Speech recognition / some native-only modules degrade gracefully
+
+For Liquid Glass, Stripe, PDF, and App Store parity, use `npx expo run:ios` (dev client) instead of Expo Go.
 
 ## iOS native look (Liquid Glass + system chrome)
 

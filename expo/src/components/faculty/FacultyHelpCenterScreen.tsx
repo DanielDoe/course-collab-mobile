@@ -9,7 +9,9 @@ import {
 } from "../../constants/support-guides"
 import { FACULTY_ADMIN_COLOR } from "../../lib/faculty-admin-theme"
 import { facultySupportGuideThumb } from "../../lib/faculty-communication-theme"
+import { useFacultyListPager } from "../../hooks/useFacultyListPager"
 import { useModuleTheme } from "../../lib/themed-module-shell"
+import { FacultyListPagerFooter } from "./FacultyListPagerFooter"
 import { SolidListThumbTile } from "../theme/SolidListThumbTile"
 import {
   CommEmptyState,
@@ -34,7 +36,8 @@ export function FacultyHelpCenterScreen() {
   const [openId, setOpenId] = useState<string | null>("mobile-web")
 
   const filtered = useMemo(() => filterSupportGuides(GUIDES, search), [search])
-  const categories = useMemo(() => groupSupportGuidesByCategory(filtered), [filtered])
+  const pager = useFacultyListPager(filtered, `guides:${search}`, "articles")
+  const categories = useMemo(() => groupSupportGuidesByCategory(pager.items), [pager.items])
 
   const screenStyles = useMemo(() => createScreenStyles(comm), [comm])
 
@@ -106,7 +109,7 @@ export function FacultyHelpCenterScreen() {
             <View key={category} style={screenStyles.guideSection}>
               <Text style={screenStyles.guideCategory}>{category}</Text>
               <CommGroupedList>
-                {filtered
+                {pager.items
                   .filter((item) => item.category === category)
                   .map((item, index, items) => {
                     const open = openId === item.id
@@ -157,6 +160,7 @@ export function FacultyHelpCenterScreen() {
           ))
         )}
 
+        <FacultyListPagerFooter pager={pager} />
         <CommSectionFooter>
           {`${GUIDES.length} articles across ${new Set(GUIDES.map((g) => g.category)).size} topics.`}
         </CommSectionFooter>

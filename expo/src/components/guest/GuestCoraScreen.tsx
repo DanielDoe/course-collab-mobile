@@ -2,8 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   ActivityIndicator,
   FlatList,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -14,7 +12,6 @@ import {
 import { AppAlert } from "../../lib/app-alert"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useLocalSearchParams, useRouter } from "expo-router"
-import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { GUEST_CORA_QUICK_PROMPTS } from "../../constants/guest-cora-prompts"
 import { useGuestEntitlements } from "../../context/GuestEntitlementsProvider"
 import { useSession } from "../../context/SessionProvider"
@@ -30,10 +27,16 @@ import type { GuestCoraChatMessage, GuestCoraConversation } from "../../lib/gues
 import type { GuestSession } from "../../lib/session"
 import { useNativeType } from "../../lib/themed-module-theme"
 import { NotetakerScreenHeader } from "../notetaker/NotetakerScreenHeader"
+import { ChatKeyboardShell } from "../motion/ChatKeyboardShell"
 import { NATIVE } from "../../constants/faculty-native-theme"
+import {
+  insufficientCreditsAlertButtons,
+  iosInsufficientCoraCreditsNotice,
+  isIosPurchaseUiHidden,
+  tierLockedAlertButtons,
+} from "../../lib/purchase-navigation"
 
 export function GuestCoraScreen() {
-  const insets = useSafeAreaInsets()
   const router = useRouter()
   const params = useLocalSearchParams<{ requestId?: string }>()
   const { session } = useSession()
@@ -120,22 +123,20 @@ export function GuestCoraScreen() {
         if (err instanceof ApiError && (code === "GUEST_CORA_UPGRADE" || err.status === 403)) {
           AppAlert.alert(
             "Cora Career required",
-            "Upgrade to Cora Career to use career coaching tools.",
-            [
-              { text: "Not now", style: "cancel" },
-              { text: "View plans", onPress: () => router.push("/module/cora-career" as never) },
-            ],
+            isIosPurchaseUiHidden()
+              ? "This feature requires Cora Career membership."
+              : "Upgrade to Cora Career to use career coaching tools.",
+            tierLockedAlertButtons(() => router.push("/module/cora-career" as never)),
           )
           return
         }
         if (err instanceof ApiError && (code === "GUEST_CREDITS_EXHAUSTED" || err.status === 402)) {
           AppAlert.alert(
             "Credits exhausted",
-            "Purchase more Cora Credits to continue chatting.",
-            [
-              { text: "Not now", style: "cancel" },
-              { text: "Buy credits", onPress: () => router.push("/module/cora-credits" as never) },
-            ],
+            isIosPurchaseUiHidden()
+              ? iosInsufficientCoraCreditsNotice()
+              : "Purchase more Cora Credits to continue chatting.",
+            insufficientCreditsAlertButtons(() => router.push("/module/cora-credits" as never)),
           )
           return
         }
@@ -151,16 +152,19 @@ export function GuestCoraScreen() {
     if (!hasCapability(prompt.capability)) {
       AppAlert.alert(
         "Cora Career required",
-        "Upgrade to Cora Career to use this coaching tool.",
-        [
-          { text: "Not now", style: "cancel" },
-          { text: "View plans", onPress: () => router.push("/module/cora-career" as never) },
-        ],
+        isIosPurchaseUiHidden()
+          ? "This feature requires Cora Career membership."
+          : "Upgrade to Cora Career to use this coaching tool.",
+        tierLockedAlertButtons(() => router.push("/module/cora-career" as never)),
       )
       return
     }
     void sendMessage(prompt.prompt)
   }
+
+  const scrollOnKeyboardShow = useCallback(() => {
+    listRef.current?.scrollToEnd({ animated: true })
+  }, [])
 
   if (!guestSession) return null
 
@@ -183,15 +187,39 @@ export function GuestCoraScreen() {
           <ActivityIndicator color={tokens.accent} />
         </View>
       ) : (
-        <KeyboardAvoidingView
+        <ChatKeyboardShell
           style={styles.flex}
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-          keyboardVerticalOffset={insets.top + 56}
+          onKeyboardShow={scrollOnKeyboardShow}
+          composer={
+            <View style={[styles.composer, { borderTopColor: native.separator }]}>
+              <TextInput
+                style={[styles.input, type.body, { color: native.label, backgroundColor: native.fill, borderColor: native.separator }]}
+                placeholder="Message Cora…"
+                placeholderTextColor={native.tertiaryLabel}
+                value={input}
+                onChangeText={setInput}
+                multiline
+                editable={!sending}
+              />
+              <Pressable
+                style={[styles.sendBtn, { backgroundColor: tokens.accent }, (!input.trim() || sending) && styles.sendDisabled]}
+                onPress={() => void sendMessage(input)}
+                disabled={!input.trim() || sending}
+              >
+                {sending ? (
+                  <ActivityIndicator size="small" color="#ffffff" />
+                ) : (
+                  <Ionicons name="arrow-up" size={18} color="#ffffff" />
+                )}
+              </Pressable>
+            </View>
+          }
         >
           <FlatList
             ref={listRef}
             data={conversation.messages}
             keyExtractor={(_, index) => String(index)}
+            style={styles.flex}
             contentContainerStyle={[styles.messages, { paddingBottom: 12 }]}
             onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
             ListHeaderComponent={
@@ -231,30 +259,7 @@ export function GuestCoraScreen() {
               </Text>
             }
           />
-
-          <View style={[styles.composer, { borderTopColor: native.separator, paddingBottom: insets.bottom + 8 }]}>
-            <TextInput
-              style={[styles.input, type.body, { color: native.label, backgroundColor: native.fill, borderColor: native.separator }]}
-              placeholder="Message Cora…"
-              placeholderTextColor={native.tertiaryLabel}
-              value={input}
-              onChangeText={setInput}
-              multiline
-              editable={!sending}
-            />
-            <Pressable
-              style={[styles.sendBtn, { backgroundColor: tokens.accent }, (!input.trim() || sending) && styles.sendDisabled]}
-              onPress={() => void sendMessage(input)}
-              disabled={!input.trim() || sending}
-            >
-              {sending ? (
-                <ActivityIndicator size="small" color="#ffffff" />
-              ) : (
-                <Ionicons name="arrow-up" size={18} color="#ffffff" />
-              )}
-            </Pressable>
-          </View>
-        </KeyboardAvoidingView>
+        </ChatKeyboardShell>
       )}
     </View>
   )

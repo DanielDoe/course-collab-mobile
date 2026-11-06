@@ -9,6 +9,7 @@ export type MembershipPlan = {
   tagline: string
   monthlyPriceCents: number
   semesterPriceCents: number
+  listPriceCents?: number
   /** Solid plan header background */
   headerBg: string
   accent: string
@@ -58,7 +59,8 @@ export const MEMBERSHIP_PLANS: MembershipPlan[] = [
     name: "Explorer",
     tagline: "AI-powered learning on your schedule",
     monthlyPriceCents: 599,
-    semesterPriceCents: 2499,
+    semesterPriceCents: 1999,
+    listPriceCents: 2999,
     headerBg: "#3A8FB8",
     accent: "#5FACD3",
     accentDark: "#3A8FB8",
@@ -83,6 +85,7 @@ export const MEMBERSHIP_PLANS: MembershipPlan[] = [
     tagline: "Full platform power for top performers",
     monthlyPriceCents: 999,
     semesterPriceCents: 3999,
+    listPriceCents: 4999,
     headerBg: "#C9922A",
     accent: "#FFC349",
     accentDark: "#C9922A",
@@ -217,4 +220,8 @@ export function mergePlanPricing(
     ...plan,
     semesterPriceCents: pricing[plan.id] ?? plan.semesterPriceCents,
   }))
+}
+
+export function formatListPriceFromCents(cents: number): string {
+  return `$${(cents / 100).toFixed(2)}`
 }

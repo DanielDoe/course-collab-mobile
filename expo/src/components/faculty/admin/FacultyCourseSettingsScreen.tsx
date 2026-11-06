@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { Text, View } from "react-native"
+import { useLocalSearchParams, useRouter } from "expo-router"
+import { useFacultyModuleNestedHeader } from "../../../context/FacultyModuleHeaderContext"
 import { instructorAdminApi } from "../../../lib/instructor-admin-api"
 import { instructorApi } from "../../../lib/instructor-api"
 import type { CourseModuleSettings } from "../../../lib/course-module-settings"
@@ -17,6 +19,7 @@ import {
   useAdminSaveState,
 } from "../faculty-admin-ui"
 import { FacultySheetNotice } from "../faculty-collab-sheet-ui"
+import { FacultyCalendarAlertsSection } from "./FacultyCalendarAlertsSection"
 
 type ModuleToggleKey = keyof CourseModuleSettings
 
@@ -39,6 +42,9 @@ export function FacultyCourseSettingsScreen() {
 }
 
 function FacultyCourseSettingsContent() {
+  const router = useRouter()
+  const { from: fromParam } = useLocalSearchParams<{ from?: string }>()
+  const fromCalendar = (Array.isArray(fromParam) ? fromParam[0] : fromParam) === "calendar"
   const { scope } = useFacultyScope()
   const { dirty, saving, error, successMessage, markDirty, resetDirty, setError, clearError, runSave } =
     useAdminSaveState()
@@ -53,6 +59,12 @@ function FacultyCourseSettingsContent() {
     const copied = formatExchangeCopiedAt(exchangeProvenance.copiedAt)
     return copied ? `${source} · copied ${copied}` : source
   }, [exchangeProvenance])
+
+  useFacultyModuleNestedHeader({
+    active: fromCalendar,
+    title: "Course Settings",
+    onBack: useCallback(() => router.back(), [router]),
+  })
 
   const load = useCallback(async () => {
     if (!scope) return
@@ -102,7 +114,6 @@ function FacultyCourseSettingsContent() {
 
   return (
     <FacultyAdminScreen
-      title="Course Modules"
       loading={loading}
       saving={saving}
       refreshing={refreshing}
@@ -135,6 +146,7 @@ function FacultyCourseSettingsContent() {
           />
         ))}
       </FacultyAdminSection>
+      <FacultyCalendarAlertsSection />
     </FacultyAdminScreen>
   )
 }

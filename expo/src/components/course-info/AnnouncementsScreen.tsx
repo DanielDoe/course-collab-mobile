@@ -6,9 +6,12 @@ import { ModuleScreen, ModuleSection, ModuleShowMoreRow } from "../modules/Modul
 import { useSession } from "../../context/SessionProvider"
 import { ApiError, type Announcement } from "../../lib/student-api"
 import type { StudentSession } from "../../lib/session"
-import { courseInfoApi, formatListDate } from "../../lib/course-info-api"
+import { formatListDate } from "../../lib/course-info-api"
+import { useStudentAnnouncements } from "../../hooks/query/useStudentAnnouncements"
+import { QueryRefreshBanner } from "../query/QueryRefreshBanner"
 import { summarizeAnnouncement } from "../../lib/announcement-summary"
 import { useNotificationModuleRefresh } from "../../lib/notifications/notification-events"
+import { useModuleListPageSize } from "../../hooks/useModuleListPageSize"
 import {
   announcementAttachmentCount,
   applyAnnouncementListQuery,
@@ -26,6 +29,7 @@ import { solidListThumb } from "../../lib/solid-list-thumb"
 import { SolidListThumbTile } from "../theme/SolidListThumbTile"
 import { NativeCountBadge } from "../faculty/faculty-shared"
 import { StudentGroupedFilterSheet, StudentSearchToolbar } from "../student/student-search-toolbar"
+import { ModuleListItemMotion } from "../ModuleFlashList"
 
 function useStudentSession(): StudentSession | null {
   const { session } = useSession()
@@ -45,7 +49,6 @@ function formatRelativeDate(value?: string): string {
 }
 
 /** ModuleScreen renders inside a plain ScrollView — page the list instead of mounting every row. */
-const PAGE_SIZE = 20
 
 const FILTER_OPTIONS: Array<{
   id: AnnouncementFilter
@@ -131,39 +134,25 @@ export function AnnouncementsScreen() {
   const router = useRouter()
   const SN = useThemedStudentNative()
   const type = useNativeType()
-  const [announcements, setAnnouncements] = useState<Announcement[]>([])
-  const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
-  const [error, setError] = useState("")
+  const listQuery = useStudentAnnouncements(session)
+  const announcements = listQuery.announcements
+  const loading = listQuery.isInitialLoading
+  const refreshing = listQuery.isRefreshing && !listQuery.isInitialLoading
+  const error = listQuery.error instanceof ApiError ? listQuery.error.message : listQuery.error ? "Could not load announcements." : ""
   const [search, setSearch] = useState("")
   const [filter, setFilter] = useState<AnnouncementFilter>("all")
   const [sort, setSort] = useState<AnnouncementSort>("smart")
   const [filterSheetOpen, setFilterSheetOpen] = useState(false)
-  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
-
-  const load = useCallback(async () => {
-    if (!session) return
-    setError("")
-    try {
-      const data = await courseInfoApi.getAnnouncements(session)
-      setAnnouncements(data.announcements ?? [])
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not load announcements.")
-    }
-  }, [session])
-
-  useEffect(() => {
-    setLoading(true)
-    load().finally(() => setLoading(false))
-  }, [load])
+  const pageSize = useModuleListPageSize({ preset: "standard" })
+  const [visibleCount, setVisibleCount] = useState(pageSize)
 
   const onRefresh = useCallback(async () => {
-    setRefreshing(true)
-    await load()
-    setRefreshing(false)
-  }, [load])
+    await listQuery.refetch()
+  }, [listQuery])
 
-  useNotificationModuleRefresh("announcements", onRefresh)
+  useNotificationModuleRefresh("announcements", () => {
+    void listQuery.refetch()
+  })
 
   const filterCounts = useMemo(() => countAnnouncementsByFilter(announcements), [announcements])
 
@@ -173,8 +162,8 @@ export function AnnouncementsScreen() {
   )
 
   useEffect(() => {
-    setVisibleCount(PAGE_SIZE)
-  }, [search, filter, sort])
+    setVisibleCount(pageSize)
+  }, [search, filter, sort, pageSize])
 
   const visible = useMemo(() => filtered.slice(0, visibleCount), [filtered, visibleCount])
 
@@ -223,6 +212,7 @@ export function AnnouncementsScreen() {
       refreshing={refreshing}
       onRefresh={onRefresh}
     >
+      <QueryRefreshBanner visible={listQuery.refreshFailed} onRetry={() => void onRefresh()} />
       <StudentSearchToolbar
         value={search}
         onChange={setSearch}
@@ -265,22 +255,23 @@ export function AnnouncementsScreen() {
       ) : (
         <ModuleSection>
           {visible.map((item, index) => (
-            <AnnouncementListCard
-              key={item.id}
-              item={item}
-              index={index}
-              last={index === visible.length - 1}
-              onPress={() =>
-                router.push({
-                  pathname: "/announcements/[id]",
-                  params: { id: String(item.id) },
-                } as never)
-              }
-            />
+            <ModuleListItemMotion key={item.id} index={index}>
+              <AnnouncementListCard
+                item={item}
+                index={index}
+                last={index === visible.length - 1}
+                onPress={() =>
+                  router.push({
+                    pathname: "/announcements/[id]",
+                    params: { id: String(item.id) },
+                  } as never)
+                }
+              />
+            </ModuleListItemMotion>
           ))}
           <ModuleShowMoreRow
             remaining={filtered.length - visible.length}
-            onPress={() => setVisibleCount((prev) => prev + PAGE_SIZE)}
+            onPress={() => setVisibleCount((prev) => prev + pageSize)}
           />
         </ModuleSection>
       )}

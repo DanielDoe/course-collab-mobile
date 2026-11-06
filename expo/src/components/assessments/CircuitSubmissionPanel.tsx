@@ -1,7 +1,6 @@
 import { useCallback, useMemo, useState } from "react"
 import {
   ActivityIndicator,
-  Image,
   Platform,
   Pressable,
   StyleSheet,
@@ -13,6 +12,7 @@ import { AppAlert } from '../../lib/app-alert'
 import * as DocumentPicker from "expo-document-picker"
 import * as ImagePicker from "expo-image-picker"
 import { Ionicons } from "@/components/icons/AppIcon"
+import { CachedRemoteImage } from "../media/CachedRemoteImage"
 import { API_BASE_URL } from "../../constants"
 import { hexToRgba } from "../../constants/app-themes"
 import { useAppThemeTokens } from "../../context/AppearanceProvider"
@@ -29,15 +29,11 @@ import {
   type CircuitSubmissionConfig,
 } from "../../lib/circuit-submission-utils"
 import { createEmptyWorkspace, workspaceHasContent } from "../../lib/circuit-workspace"
-import {
-  appendStroke,
-  getActivePage,
-  undoLastStroke,
-} from "../../lib/circuit-workspace-mutations"
 import { assessmentQuizApi } from "../../lib/assessment-quiz/assessment-quiz-api"
 import type { StudentSession } from "../../lib/session"
 import { ApiError } from "../../lib/student-api"
-import { CircuitWorkspaceCanvas, CircuitWorkspaceToolbar } from "./CircuitWorkspaceCanvas"
+import { CircuitWorkspaceEditor } from "../ink/CircuitWorkspaceEditor"
+import { workspaceUploadError } from "../../lib/workspace-upload"
 import { circuitSubmissionUi as ui } from "./circuit-submission-ui"
 import {
   CIRCUIT_NOTES_HEIGHT_PHONE,
@@ -50,8 +46,8 @@ type SubmissionMode = "upload" | "photo" | "workspace"
 
 type Props = {
   session: StudentSession
-  attemptId: number
-  questionId: number
+  attemptId?: number
+  questionId?: number
   value: string
   onChange: (nextJson: string) => void
   config?: unknown
@@ -60,6 +56,14 @@ type Props = {
   notesHeight?: number
   /** @deprecated Prefer notesHeight */
   expandNotes?: boolean
+  onNotesFocus?: () => void
+  onNotesBlur?: () => void
+  uploadFile?: (input: {
+    partId: string
+    uri: string
+    name: string
+    mime: string
+  }) => Promise<{ url: string; name?: string; mime?: string; uploaded_at?: string }>
 }
 
 function resolveFilePreviewUrl(url: string): string {
@@ -77,6 +81,9 @@ export function CircuitSubmissionPanel({
   disabled,
   notesHeight: notesHeightProp,
   expandNotes = false,
+  onNotesFocus,
+  onNotesBlur,
+  uploadFile,
 }: Props) {
   const tokens = useAppThemeTokens()
   const SN = useThemedStudentNative()
@@ -121,14 +128,16 @@ export function CircuitSubmissionPanel({
     setUploading(true)
     try {
       const partId = solutionPartKey(files.length)
-      const uploaded = await assessmentQuizApi.uploadQuizSolutionFile(session, {
-        attemptId,
-        questionId,
-        partId,
-        uri,
-        name,
-        mime,
-      })
+      const uploaded = uploadFile
+        ? await uploadFile({ partId, uri, name, mime })
+        : await assessmentQuizApi.uploadQuizSolutionFile(session, {
+            attemptId: attemptId ?? 0,
+            questionId: questionId ?? 0,
+            partId,
+            uri,
+            name,
+            mime,
+          })
       const uploads: SolutionUploadsMap = { ...(answer.solution_uploads ?? {}) }
       uploads[partId] = {
         url: uploaded.url,
@@ -156,6 +165,11 @@ export function CircuitSubmissionPanel({
     })
     if (result.canceled || !result.assets?.[0]) return
     const asset = result.assets[0]
+    const invalid = workspaceUploadError({ name: asset.name, mime: asset.mimeType, size: asset.size })
+    if (invalid) {
+      AppAlert.alert("File not supported", invalid)
+      return
+    }
     await uploadAsset(asset.uri, asset.name ?? "solution.pdf", asset.mimeType ?? "application/pdf", "upload")
   }
 
@@ -185,6 +199,15 @@ export function CircuitSubmissionPanel({
     if (result.canceled || !result.assets?.[0]) return
     const asset = result.assets[0]
     const name = asset.fileName ?? `solution-${Date.now()}.jpg`
+    const invalid = workspaceUploadError({
+      name,
+      mime: asset.mimeType ?? "image/jpeg",
+      size: asset.fileSize,
+    })
+    if (invalid) {
+      AppAlert.alert("File not supported", invalid)
+      return
+    }
     await uploadAsset(asset.uri, name, asset.mimeType ?? "image/jpeg", "photo")
   }
 
@@ -326,20 +349,14 @@ export function CircuitSubmissionPanel({
 
       {mode === "workspace" ? (
         <View style={styles.workspaceSection}>
-          <CircuitWorkspaceToolbar
-            workspace={workspace}
-            onChange={(next) => updateAnswer({ ...answer, workspace: next, submission_mode: "workspace" })}
-            disabled={disabled || uploading}
-            accentColor={tokens.accent}
-          />
-          <CircuitWorkspaceCanvas
+          <CircuitWorkspaceEditor
             workspace={workspace}
             onChange={(next) => updateAnswer({ ...answer, workspace: next, submission_mode: "workspace" })}
             disabled={disabled || uploading}
           />
           {!workspaceHasContent(workspace) ? (
             <Text style={[styles.workspaceHint, { color: SN.secondaryLabel }]}>
-              Draw your circuit diagram on the ruled notebook above.
+              Draw your circuit diagram on the ruled notebook above. Expand for a larger canvas.
             </Text>
           ) : null}
         </View>
@@ -355,7 +372,7 @@ export function CircuitSubmissionPanel({
       {files.map((file, index) => (
         <View key={`${file.url}-${index}`} style={[styles.fileRow, { backgroundColor: tokens.background, borderColor: tokens.border }]}>
           {file.mime.startsWith("image/") ? (
-            <Image source={{ uri: resolveFilePreviewUrl(file.url) }} style={styles.thumb} />
+            <CachedRemoteImage uri={resolveFilePreviewUrl(file.url)} variant="thumbnail" style={styles.thumb} />
           ) : (
             <View style={[styles.fileIcon, { backgroundColor: hexToRgba(tokens.accent, 0.1) }]}>
               <Ionicons name="document-text-outline" size={22} color={tokens.accent} />
@@ -390,6 +407,8 @@ export function CircuitSubmissionPanel({
           ]}
           value={answer.written_notes ?? ""}
           onChangeText={(written_notes) => updateAnswer({ ...answer, written_notes })}
+          onFocus={onNotesFocus}
+          onBlur={onNotesBlur}
           placeholder="Type steps, calculations, or notes here…"
           placeholderTextColor={SN.secondaryLabel}
           multiline

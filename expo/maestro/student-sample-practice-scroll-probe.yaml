@@ -1,0 +1,9 @@
+appId: com.coursecollab.app
+---
+- scrollUntilVisible:
+    element:
+      text: "Which step in program development involves deciding input and output items?"
+    direction: DOWN
+    timeout: 60000
+    speed: 80
+- takeScreenshot: sample-practice-scrolled-q2

@@ -31,6 +31,7 @@ import {
   recordCoraSuccess,
 } from "../../../lib/cora-rbac"
 import { CoraBrand } from "../../cora/CoraBrand"
+import { AiTutorMessageMarkdown } from "../../ai-tutor/AiTutorMessageMarkdown"
 import { CoraActionCard } from "../../cora/CoraActionCard"
 import { openCoraNativeRoute } from "../../../lib/cora/resolve-open-route"
 import { ComposerSendButton } from "../../theme/ComposerSendButton"
@@ -395,7 +396,7 @@ export function FacultyCoraChatView({
   return (
     <KeyboardAvoidingView
       style={styles.root}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
       keyboardVerticalOffset={Platform.OS === "ios" ? 88 : 0}
     >
       {capability && capabilityAccent ? (
@@ -436,9 +437,12 @@ export function FacultyCoraChatView({
                     : [styles.assistantBubble, materialStyle, { backgroundColor: cardBg }],
                 ]}
               >
-                <Text style={[type.body, { color: isUser ? "#fff" : native.label, lineHeight: 22 }]}>
-                  {message.content}
-                </Text>
+                <AiTutorMessageMarkdown
+                  messageId={`faculty-cora-${index}`}
+                  markdown={message.content}
+                  onAccentSurface={isUser}
+                  compact
+                />
               </View>
               {!isUser && message.scopeFeedback ? (
                 <CoraScopeFeedbackBar
@@ -615,7 +619,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   userBubble: { alignSelf: "flex-end", borderBottomRightRadius: 4 },
-  assistantBubble: { alignSelf: "flex-start", borderBottomLeftRadius: 4 },
+  assistantBubble: { alignSelf: "stretch", borderBottomLeftRadius: 4 },
   actionRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, paddingLeft: 4 },
   actionChip: {
     flexDirection: "row",

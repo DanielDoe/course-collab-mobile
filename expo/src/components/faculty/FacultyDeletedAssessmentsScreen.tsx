@@ -11,7 +11,9 @@ import {
 import type { AssessmentType } from "../../lib/faculty-assessment-utils"
 import { formatFacultyRelativeTime, instructorApi, type InstructorDeletedAssessment } from "../../lib/instructor-api"
 import { useFacultyScope } from "../../hooks/useFacultyScope"
+import { useFacultyListPager } from "../../hooks/useFacultyListPager"
 import { useModuleTheme } from "../../lib/themed-module-shell"
+import { FacultyListPagerFooter } from "./FacultyListPagerFooter"
 import { semanticSoft } from "../../lib/themed-module-theme"
 import { FacultyEmptyState, FacultyStatusPill } from "./faculty-shared"
 import { useFacultyStickyHeaderScrollLayout, FacultyFilterSheet, FacultySearchToolbar } from "./faculty-module-shell"
@@ -92,6 +94,7 @@ export function FacultyDeletedAssessmentsScreen({
         .includes(q),
     )
   }, [items, search])
+  const pager = useFacultyListPager(filtered, `${search}:${typeFilter}`, "assessments")
 
   async function restoreItem(item: InstructorDeletedAssessment) {
     if (!scope) return
@@ -203,15 +206,18 @@ export function FacultyDeletedAssessmentsScreen({
           }
         />
       ) : (
-        filtered.map((item) => (
-          <DeletedCard
-            key={item.id}
-            item={item}
-            acting={actingId === item.id}
-            onRestore={() => void restoreItem(item)}
-            onDelete={() => confirmPermanentDelete(item)}
-          />
-        ))
+        <>
+          {pager.items.map((item) => (
+            <DeletedCard
+              key={item.id}
+              item={item}
+              acting={actingId === item.id}
+              onRestore={() => void restoreItem(item)}
+              onDelete={() => confirmPermanentDelete(item)}
+            />
+          ))}
+          <FacultyListPagerFooter pager={pager} />
+        </>
       )}
 
       {!assessmentType ? (

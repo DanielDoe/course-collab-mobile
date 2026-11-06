@@ -3,6 +3,8 @@ import { ApiError } from "./api"
 import { apiErrorMessage, isApiRouteMissingError } from "./http-errors"
 import type { InstructorScope } from "./instructor-content-api"
 import type { FacultySession, StudentSession } from "./session"
+import { studentAuthenticatedHeaders } from "./student-api"
+import { instructorAuthenticatedHeaders } from "./instructor-api"
 import type { PreparedCoraRequest } from "./cora-rbac/prepare-request"
 import type { CoraCreationPayloadByKind } from "./cora-creation-schemas"
 
@@ -36,13 +38,15 @@ export async function submitCoraGithubFix(args: SubmitArgs): Promise<CoraGithubF
   }
 
   if (args.scope?.instructorId != null) {
-    headers["x-instructor-id"] = String(args.scope.instructorId)
-  }
-  if (args.scope?.courseId != null) {
-    headers["x-course-id"] = String(args.scope.courseId)
-  }
-  if (args.studentSession?.databaseId) {
-    headers["x-student-id"] = args.studentSession.databaseId
+    Object.assign(
+      headers,
+      await instructorAuthenticatedHeaders({
+        instructorId: args.scope.instructorId,
+        courseId: args.scope.courseId,
+      }),
+    )
+  } else if (args.studentSession) {
+    Object.assign(headers, await studentAuthenticatedHeaders(args.studentSession))
   }
 
   let body: Record<string, unknown> = {
@@ -60,6 +64,7 @@ export async function submitCoraGithubFix(args: SubmitArgs): Promise<CoraGithubF
   try {
     const response = await fetch(url, {
       method: "POST",
+      credentials: "include",
       headers,
       body: JSON.stringify(body),
     })

@@ -1,10 +1,11 @@
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Pressable, StyleSheet, Text, View, useWindowDimensions, type ViewStyle } from "react-native"
 import Animated, {
   cancelAnimation,
   Easing,
   interpolate,
   runOnJS,
+  useAnimatedReaction,
   useAnimatedStyle,
   useSharedValue,
   withDelay,
@@ -14,7 +15,6 @@ import Animated, {
 } from "react-native-reanimated"
 import { useAppThemeTokens } from "../../context/AppearanceProvider"
 import { hexToRgba } from "../../constants/app-themes"
-import { useNativeType } from "../../lib/themed-module-theme"
 import {
   FLASHCARD_WABI_RADIUS,
   FLASHCARD_WABI_SPRING,
@@ -29,6 +29,12 @@ import {
   type FlashcardDifficulty,
 } from "../../lib/flashcard-difficulty"
 import { flashcardWabiThemeForDifficulty } from "../../lib/flashcard-difficulty-theme"
+import {
+  flashcardContentNeedsRichRender,
+  flashcardPlainText,
+  prepareFlashcardContentForRender,
+} from "../../lib/flashcard-display"
+import { FlashcardContentWebView } from "./FlashcardContentWebView"
 
 type Props = {
   frontText: string
@@ -39,36 +45,83 @@ type Props = {
   cardKey?: string | number
   cardIndex?: number
   difficulty?: FlashcardDifficulty | string | null
-  /** Next cards in queue — stack peek tints match their difficulty hues. */
   stackDifficulties?: Array<FlashcardDifficulty | string | null | undefined>
   showStack?: boolean
-  /** Play mastered-card exit (slide to back of deck) before advancing. */
   exiting?: boolean
   onExitComplete?: () => void
 }
 
 type KnownExitDirection = "right" | "left" | "top"
+type CardSide = "front" | "back"
+
+const FLIP_MS = 480
 
 function knownExitDirection(cardIndex: number): KnownExitDirection {
   const modes: KnownExitDirection[] = ["right", "left", "top"]
   return modes[cardIndex % modes.length] ?? "right"
 }
 
+function displayText(raw: string): string {
+  const trimmed = raw.trim()
+  if (!trimmed) return ""
+  return flashcardPlainText(prepareFlashcardContentForRender(trimmed)) || trimmed
+}
+
+function FaceCopy({
+  text,
+  color,
+  large,
+  variant,
+}: {
+  text: string
+  color: string
+  large?: boolean
+  variant: "title" | "body"
+}) {
+  const plain = displayText(text)
+  if (!text.trim()) return null
+
+  if (flashcardContentNeedsRichRender(text)) {
+    return (
+      <FlashcardContentWebView
+        text={text}
+        textColor={color}
+        large={variant === "title" ? large : false}
+      />
+    )
+  }
+
+  return (
+    <Text
+      style={[
+        variant === "title" ? styles.cardTitle : styles.cardBody,
+        large && (variant === "title" ? styles.cardTitleLarge : styles.cardBodyLarge),
+        { color },
+      ]}
+    >
+      {plain}
+    </Text>
+  )
+}
+
+/** One complete card face: color, orb, question/answer, divider, footer. */
 function WabiCardFace({
   face,
   title,
   body,
   footer,
   large,
+  titleRaw,
+  bodyRaw,
 }: {
   face: FlashcardWabiFace
   title: string
   body: string
   footer: string
   large?: boolean
+  titleRaw?: string
+  bodyRaw?: string
 }) {
-  const type = useNativeType()
-
   return (
     <View
       style={[
@@ -85,29 +138,19 @@ function WabiCardFace({
         </View>
 
         <View style={styles.copyBlock}>
-          <Text
-            style={[
-              styles.cardTitle,
-              large && styles.cardTitleLarge,
-              type.bodyEmphasis,
-              { color: face.title },
-            ]}
-            selectable
-          >
-            {title}
-          </Text>
-          {body.trim() ? (
-            <Text
-              style={[
-                styles.cardBody,
-                large && styles.cardBodyLarge,
-                type.body,
-                { color: face.body },
-              ]}
-              selectable
-            >
-              {body}
-            </Text>
+          <FaceCopy
+            text={titleRaw ?? title}
+            color={face.title}
+            large={large}
+            variant="title"
+          />
+          {body.trim() || bodyRaw?.trim() ? (
+            <FaceCopy
+              text={bodyRaw ?? body}
+              color={face.body}
+              large={large}
+              variant="body"
+            />
           ) : null}
         </View>
 
@@ -115,7 +158,7 @@ function WabiCardFace({
 
         <View style={styles.footerBlock}>
           <View style={[styles.divider, { backgroundColor: face.divider }]} />
-          <Text style={[styles.cardFooter, large && styles.cardFooterLarge, type.caption, { color: face.footer }]}>
+          <Text style={[styles.cardFooter, large && styles.cardFooterLarge, { color: face.footer }]}>
             {footer}
           </Text>
         </View>
@@ -191,7 +234,6 @@ export function FlashcardFlipCard({
   const cardWidth = flashcardWabiCardWidth(width)
   const cardHeight = flashcardWabiCardHeight(width)
   const exitDistance = Math.round((cardWidth / 272) * 156)
-
   const flipProgress = useSharedValue(flipped ? 1 : 0)
   const enterProgress = useSharedValue(1)
   const stackProgress = useSharedValue(1)
@@ -199,11 +241,23 @@ export function FlashcardFlipCard({
   const lastCardKey = useRef<string | number>(cardKey)
   const onExitCompleteRef = useRef(onExitComplete)
   onExitCompleteRef.current = onExitComplete
+  const [visibleSide, setVisibleSide] = useState<CardSide>(flipped ? "back" : "front")
 
   useEffect(() => {
     if (exiting) return
-    flipProgress.value = withSpring(flipped ? 1 : 0, FLASHCARD_WABI_SPRING.flip)
+    flipProgress.value = withTiming(flipped ? 1 : 0, {
+      duration: FLIP_MS,
+      easing: Easing.inOut(Easing.cubic),
+    })
   }, [flipped, flipProgress, exiting])
+
+  useAnimatedReaction(
+    () => flipProgress.value >= 0.5,
+    (isBack, wasBack) => {
+      if (isBack === wasBack) return
+      runOnJS(setVisibleSide)(isBack ? "back" : "front")
+    },
+  )
 
   useEffect(() => {
     if (!exiting) {
@@ -228,10 +282,12 @@ export function FlashcardFlipCard({
   useEffect(() => {
     if (lastCardKey.current === cardKey) return
     lastCardKey.current = cardKey
+    cancelAnimation(exitProgress)
     flipProgress.value = 0
     exitProgress.value = 0
     enterProgress.value = 0.94
     stackProgress.value = 0
+    setVisibleSide("front")
     enterProgress.value = withSpring(1, FLASHCARD_WABI_SPRING.cardEnter)
     stackProgress.value = withDelay(40, withSpring(1, FLASHCARD_WABI_SPRING.fan))
   }, [cardKey, enterProgress, stackProgress, flipProgress, exitProgress])
@@ -267,30 +323,20 @@ export function FlashcardFlipCard({
     return {
       opacity: interpolate(exit, [0, 0.7, 1], [interpolate(enter, [0.94, 1], [0.72, 1]), 0.5, 0]),
       transform: [{ translateX }, { translateY }, { scale }, { rotateZ: `${rotateZ}deg` }],
-      zIndex: exit > 0 ? 30 : 1,
+      zIndex: exit > 0 ? 30 : 2,
     }
   })
 
-  const flipStageStyle = useAnimatedStyle(() => ({
-    transform: [
-      { perspective: 1400 },
-      { scale: interpolate(flipProgress.value, [0, 0.5, 1], [1, 0.992, 1]) },
-    ],
-  }))
-
-  const frontStyle = useAnimatedStyle(() => {
-    const rotateY = interpolate(flipProgress.value, [0, 1], [0, 180])
-    return {
-      transform: [{ rotateY: `${rotateY}deg` }],
-      zIndex: flipProgress.value < 0.5 ? 2 : 1,
+  const flipStyle = useAnimatedStyle(() => {
+    const p = flipProgress.value
+    if (p <= 0.001 || p >= 0.999) {
+      return {}
     }
-  })
-
-  const backStyle = useAnimatedStyle(() => {
-    const rotateY = interpolate(flipProgress.value, [0, 1], [180, 360])
     return {
-      transform: [{ rotateY: `${rotateY}deg` }],
-      zIndex: flipProgress.value >= 0.5 ? 2 : 1,
+      transform: [
+        { scaleX: interpolate(p, [0, 0.5, 1], [1, 0.012, 1]) },
+        { scaleY: interpolate(p, [0, 0.5, 1], [1, 0.94, 1]) },
+      ],
     }
   })
 
@@ -301,6 +347,28 @@ export function FlashcardFlipCard({
     shadowRadius: tokens.isDark ? 40 : 32,
     elevation: tokens.isDark ? 18 : 12,
   })
+
+  const frontFace = (
+    <WabiCardFace
+      face={theme.front}
+      title={frontText}
+      titleRaw={frontText}
+      body=""
+      footer="Tap to reveal the answer"
+      large={isTablet}
+    />
+  )
+
+  const backFace = (
+    <WabiCardFace
+      face={theme.back}
+      title="Answer"
+      body={backText}
+      bodyRaw={backText}
+      footer="Tap to flip back"
+      large={isTablet}
+    />
+  )
 
   return (
     <View style={[styles.container, { width: cardWidth, height: cardHeight }, style]}>
@@ -316,7 +384,7 @@ export function FlashcardFlipCard({
           ))
         : null}
 
-      <Animated.View style={[styles.topCardShell, shellStyle]}>
+      <Animated.View style={[styles.topCardShell, exiting ? shellStyle : undefined]}>
         <Pressable
           onPress={exiting ? undefined : onFlip}
           disabled={exiting}
@@ -324,26 +392,15 @@ export function FlashcardFlipCard({
           accessibilityRole="button"
           accessibilityLabel={flipped ? "Show question" : "Show answer"}
         >
-          <Animated.View style={[styles.flipStage, flipStageStyle]}>
-            <Animated.View style={[styles.faceShell, cardShadow(theme.front), frontStyle]}>
-              <WabiCardFace
-                face={theme.front}
-                title={frontText}
-                body=""
-                footer="Tap to reveal the answer"
-                large={isTablet}
-              />
-            </Animated.View>
-
-            <Animated.View style={[styles.faceShell, cardShadow(theme.back), backStyle]}>
-              <WabiCardFace
-                face={theme.back}
-                title="Answer"
-                body={backText}
-                footer="Tap to flip back"
-                large={isTablet}
-              />
-            </Animated.View>
+          <Animated.View
+            collapsable={false}
+            style={[
+              styles.iosFaceHost,
+              cardShadow(visibleSide === "back" ? theme.back : theme.front),
+              flipStyle,
+            ]}
+          >
+            {visibleSide === "back" ? backFace : frontFace}
           </Animated.View>
         </Pressable>
       </Animated.View>
@@ -351,7 +408,6 @@ export function FlashcardFlipCard({
   )
 }
 
-/** Thin progress bar for timed mode (1 → 0 as timer elapses). */
 export function FlashcardTimerBar({
   secondsLeft,
   totalSeconds,
@@ -392,16 +448,18 @@ const styles = StyleSheet.create({
   },
   pressable: {
     width: "100%",
+    height: "100%",
   },
-  flipStage: {
-    flex: 1,
-    position: "relative",
+  iosFaceHost: {
+    width: "100%",
+    height: "100%",
+    borderRadius: FLASHCARD_WABI_RADIUS,
+    overflow: "hidden",
   },
   faceShell: {
     ...StyleSheet.absoluteFillObject,
     borderRadius: FLASHCARD_WABI_RADIUS,
     overflow: "hidden",
-    backfaceVisibility: "hidden",
   },
   faceSurface: {
     flex: 1,
@@ -461,6 +519,7 @@ const styles = StyleSheet.create({
     justifyContent: "flex-start",
     gap: 10,
     paddingHorizontal: 4,
+    maxHeight: 220,
   },
   bottomSpacer: {
     flex: 1,
@@ -472,6 +531,7 @@ const styles = StyleSheet.create({
     lineHeight: 30,
     textAlign: "center",
     letterSpacing: -0.3,
+    fontWeight: "600",
   },
   cardTitleLarge: {
     fontSize: 28,
@@ -500,6 +560,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: 20,
     paddingHorizontal: 8,
+    fontSize: 13,
   },
   cardFooterLarge: {
     fontSize: 15,

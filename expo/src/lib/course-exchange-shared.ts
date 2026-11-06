@@ -200,7 +200,7 @@ export const COURSE_EXCHANGE_MODULE_LABELS: Record<CourseExchangeModule, string>
   flashcards: "Flashcards",
   quizzes: "Quizzes",
   homework: "Homework",
-  classroom_points: "Classroom Points",
+  classroom_points: "Classroom Points (assignments only)",
   playground: "Playground",
   mid_semester_exams: "Mid-Semester Exams",
   final_exams: "Final Exams",
@@ -223,7 +223,13 @@ export const COURSE_EXCHANGE_DEFAULT_APPROVAL_MODULES: CourseExchangeModule[] = 
 ]
 
 export const EXCHANGE_INDEPENDENT_COPY_NOTE =
-  "This is an independent copy. Edits here never change the creator's original course, and updates to the source are not synced automatically."
+  "This is an independent copy. Edits here never change the creator's original course, and updates to the source are not synced automatically. Student rosters, grades, and point history are never copied — only teaching materials."
+
+export const EXCHANGE_CLASSROOM_POINTS_NOTE =
+  "Classroom Points copies assignment templates only. Student awards, submissions, and leaderboard history stay in the source section."
+
+export const EXCHANGE_OWN_GROUPS_PROJECTS_NOTE =
+  "Groups and projects are not copied into ELEG1301P01, ELEG1301P02, or ELEG1304P03. Those sections use their own group and project sets."
 
 export const EXCHANGE_PARTIAL_MODULES_NOTE =
   "Request only the modules you need for your term. Fewer modules means a leaner copy and less to review before launch."
@@ -360,6 +366,19 @@ export function pickPreferredDestinationCourseId(
   )
   if (provenanceMatch) return provenanceMatch.course_id
   return deduped[0]?.course_id ?? null
+}
+
+export function resolveExchangeDestinationSessionId(
+  destinationCourseId: number,
+  sessions: ExchangeSessionRow[],
+  scope?: { courseId?: number | null; sessionId?: number | null; sessionCode?: string | null },
+): number | null {
+  if (scope?.courseId === destinationCourseId && scope.sessionId) {
+    return scope.sessionId
+  }
+  const code = scope?.sessionCode?.trim()
+  if (!code) return null
+  return sessions.find((s) => s.course_id === destinationCourseId && s.code === code)?.id ?? null
 }
 
 export function formatExchangeSourceLine(provenance: ExchangeProvenance): string {

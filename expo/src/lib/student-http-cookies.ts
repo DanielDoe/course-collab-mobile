@@ -1,5 +1,6 @@
 import { NativeModules, Platform } from "react-native"
 import { API_BASE_URL } from "../constants"
+import { clearStoredRefreshToken, persistRefreshTokenFromHeaders } from "./refresh-token-store"
 
 type CookieJar = {
   setFromResponse: (url: string, cookie: string) => Promise<void>
@@ -80,6 +81,7 @@ export async function persistHttpCookiesFromResponse(
   url: string,
   headers: Headers,
 ): Promise<void> {
+  await persistRefreshTokenFromHeaders(headers)
   try {
     const CookieManager = loadCookieManager()
     if (!CookieManager) return
@@ -114,6 +116,7 @@ export function mergeCookieHeaders(...parts: Array<string | undefined>): Record<
 }
 
 export async function clearStudentHttpCookies(): Promise<void> {
+  await clearStoredRefreshToken()
   try {
     const CookieManager = loadCookieManager()
     if (!CookieManager) return

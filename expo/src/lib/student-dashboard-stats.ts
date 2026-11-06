@@ -8,7 +8,9 @@ import type {
 } from "../types/dashboard"
 import { parseMembershipTier } from "./membership-tier"
 import type { StudentSession } from "./session"
-import { studentAuthenticatedRequest, type QuizListRolloverPolicy } from "./student-api"
+import { ApiError, studentAuthenticatedRequest, type QuizListRolloverPolicy } from "./student-api"
+import { studentContentPath, normalizedStudentDatabaseId } from "./student-content-context"
+import { enrichStudentContentSession } from "./student-content-session"
 import {
   buildStudentDashboardFromRaw,
   type DashboardRawData,
@@ -29,51 +31,103 @@ function markUnavailable(
   if (result.status === "rejected") unavailable[source] = true
 }
 
+/** Dual-role auth misses and empty-term 500s are 0, not a failed widget. */
+function isDashboardSoftMiss(err: unknown): boolean {
+  if (err instanceof ApiError) {
+    return (
+      err.status === 400 ||
+      err.status === 401 ||
+      err.status === 403 ||
+      err.status === 404 ||
+      err.status === 500 ||
+      err.status === 503 ||
+      err.status === 0
+    )
+  }
+  if (err instanceof Error) {
+    if (err.message === "Student authentication required") return true
+    if (err.name === "AbortError") return true
+  }
+  return false
+}
+
+function emptyIfSoftMiss<T>(promise: Promise<T>, empty: T): Promise<T> {
+  return promise.catch((err) => {
+    if (isDashboardSoftMiss(err)) {
+      return empty
+    }
+    throw err
+  })
+}
+
 async function fetchStudentDashboardRawData(session: StudentSession): Promise<DashboardRawData> {
-  const enc = encodeURIComponent
-  const databaseId = session.databaseId
-  const homeworkStudentId = session.id || databaseId
-  const section = session.section
+  const contentSession = await enrichStudentContentSession(session)
+  const homeworkStudentId =
+    normalizedStudentDatabaseId(contentSession) || contentSession.id?.trim() || ""
 
   const results = await Promise.allSettled([
-    studentAuthenticatedRequest<GradePayload>(
-      session,
-      `/api/grades/student?studentId=${enc(databaseId)}&session=${enc(section)}&recalculate=true`,
+    emptyIfSoftMiss(
+      studentAuthenticatedRequest<GradePayload>(
+        contentSession,
+        studentContentPath(contentSession, "/api/grades/student"),
+      ),
+      {},
     ),
-    studentAuthenticatedRequest<{ quizHistory?: NonNullable<DashboardRawData["quizHistory"]> }>(
-      session,
-      `/api/student/quiz-history?studentId=${enc(databaseId)}`,
+    emptyIfSoftMiss(
+      studentAuthenticatedRequest<{ quizHistory?: NonNullable<DashboardRawData["quizHistory"]> }>(
+        contentSession,
+        studentContentPath(contentSession, "/api/student/quiz-history"),
+      ),
+      { quizHistory: [] },
     ),
-    homeworkStudentId && section
-      ? studentAuthenticatedRequest<{
-          homeworkHistory?: NonNullable<DashboardRawData["homeworkHistory"]>
-          stats?: { overdue?: number; pending?: number }
-        }>(
-          session,
-          `/api/student/homework-history?studentId=${enc(homeworkStudentId)}&session=${enc(section)}`,
+    homeworkStudentId
+      ? emptyIfSoftMiss(
+          studentAuthenticatedRequest<{
+            homeworkHistory?: NonNullable<DashboardRawData["homeworkHistory"]>
+            stats?: { overdue?: number; pending?: number }
+          }>(
+            contentSession,
+            studentContentPath(contentSession, "/api/student/homework-history", {
+              studentId: homeworkStudentId,
+            }),
+          ),
+          { homeworkHistory: [], stats: { overdue: 0, pending: 0 } },
         )
       : Promise.resolve(null),
-    studentAuthenticatedRequest<{ attendance?: Record<string, number> }>(
-      session,
-      `/api/attendance/score?studentId=${enc(databaseId)}`,
+    emptyIfSoftMiss(
+      studentAuthenticatedRequest<{ attendance?: Record<string, number> }>(
+        contentSession,
+        studentContentPath(contentSession, "/api/attendance/score"),
+      ),
+      { attendance: {} },
     ),
-    studentAuthenticatedRequest<{ streak?: { currentStreak?: number } }>(
-      session,
-      `/api/attendance/streaks?studentId=${enc(databaseId)}`,
+    emptyIfSoftMiss(
+      studentAuthenticatedRequest<{ streak?: { currentStreak?: number } }>(
+        contentSession,
+        studentContentPath(contentSession, "/api/attendance/streaks"),
+      ),
+      { streak: { currentStreak: 0 } },
     ),
-    studentAuthenticatedRequest<{ quizzes?: { available_until?: string }[]; rollover_policy?: QuizListRolloverPolicy }>(
-      session,
-      `/api/student/quizzes?studentDatabaseId=${enc(databaseId)}&assessmentType=quiz`,
+    emptyIfSoftMiss(
+      studentAuthenticatedRequest<{ quizzes?: { available_until?: string }[]; rollover_policy?: QuizListRolloverPolicy }>(
+        contentSession,
+        studentContentPath(contentSession, "/api/student/quizzes", { assessmentType: "quiz" }),
+      ),
+      { quizzes: [] },
     ),
-    studentAuthenticatedRequest<{ finals?: { status?: string }[] }>(
-      session,
-      `/api/student/finals?session=${enc(section)}&studentId=${enc(homeworkStudentId)}`,
+    emptyIfSoftMiss(
+      studentAuthenticatedRequest<{ finals?: { status?: string }[] }>(
+        contentSession,
+        studentContentPath(contentSession, "/api/student/finals", { studentId: homeworkStudentId }),
+      ),
+      { finals: [] },
     ),
-    studentAuthenticatedRequest<{ summary?: { total_points?: number | string } }>(
-      session,
-      section && section !== "ALL"
-        ? `/api/classroom-points?studentId=${enc(databaseId)}&session=${enc(section)}`
-        : `/api/classroom-points?studentId=${enc(databaseId)}`,
+    emptyIfSoftMiss(
+      studentAuthenticatedRequest<{ summary?: { total_points?: number | string } }>(
+        contentSession,
+        studentContentPath(contentSession, "/api/classroom-points"),
+      ),
+      { summary: { total_points: 0 } },
     ),
   ])
 
@@ -96,10 +150,6 @@ async function fetchStudentDashboardRawData(session: StudentSession): Promise<Da
   markUnavailable(unavailable, "streaks", streaksResult)
   markUnavailable(unavailable, "finals", finalsResult)
   markUnavailable(unavailable, "points", pointsResult)
-
-  if (!results.some((result) => result.status === "fulfilled")) {
-    throw new Error("Could not load dashboard data.")
-  }
 
   const gradePayload = settledValue(gradeResult)
   const quizPayload = settledValue(quizResult)
@@ -163,12 +213,19 @@ export async function fetchPerformanceInsights(session: StudentSession): Promise
 }
 
 export async function fetchMembershipTier(session: StudentSession): Promise<MembershipTier> {
-  const payload = await studentAuthenticatedRequest<{ membership?: { tier?: string } }>(
-    session,
-    `/api/student/membership?studentId=${encodeURIComponent(session.databaseId)}`,
-  )
-  if (payload.membership?.tier) {
-    return parseMembershipTier(payload.membership.tier)
+  const databaseId = normalizedStudentDatabaseId(session)
+  if (databaseId) {
+    try {
+      const payload = await studentAuthenticatedRequest<{ membership?: { tier?: string } }>(
+        session,
+        `/api/student/membership?studentId=${encodeURIComponent(databaseId)}`,
+      )
+      if (payload.membership?.tier) {
+        return parseMembershipTier(payload.membership.tier)
+      }
+    } catch {
+      /* fall through to /api/student/info */
+    }
   }
 
   if (session.id) {
@@ -186,10 +243,12 @@ export async function fetchMembershipTier(session: StudentSession): Promise<Memb
 
 export async function fetchClassroomPoints(session: StudentSession): Promise<number> {
   const enc = encodeURIComponent
+  const databaseId = normalizedStudentDatabaseId(session)
+  if (!databaseId) return 0
   const path =
     session.section && session.section !== "ALL"
-      ? `/api/classroom-points?studentId=${enc(session.databaseId)}&session=${enc(session.section)}`
-      : `/api/classroom-points?studentId=${enc(session.databaseId)}`
+      ? `/api/classroom-points?studentId=${enc(databaseId)}&session=${enc(session.section)}`
+      : `/api/classroom-points?studentId=${enc(databaseId)}`
   const payload = await studentAuthenticatedRequest<{ summary?: { total_points?: number | string } }>(
     session,
     path,
@@ -198,11 +257,13 @@ export async function fetchClassroomPoints(session: StudentSession): Promise<num
 }
 
 export async function fetchNotificationCount(session: StudentSession): Promise<number> {
+  const databaseId = normalizedStudentDatabaseId(session)
+  if (!databaseId) return 0
   const payload = await studentAuthenticatedRequest<{
     notifications?: { is_read?: boolean }[]
     unreadCount?: number
     unread_count?: number
-  }>(session, `/api/student/notifications?studentId=${encodeURIComponent(session.databaseId)}&limit=50`)
+  }>(session, `/api/student/notifications?studentId=${encodeURIComponent(databaseId)}&limit=50`)
   if (typeof payload.unread_count === "number") return payload.unread_count
   if (typeof payload.unreadCount === "number") return payload.unreadCount
   return Array.isArray(payload.notifications)

@@ -1,13 +1,14 @@
-import { useCallback, useEffect, useMemo, useState, memo, type RefObject } from "react"
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native"
+import { useEffect, useMemo, useState, memo, type RefObject } from "react"
+import { Pressable, StyleSheet, Text, View } from "react-native"
+import { ScrollView } from "react-native-gesture-handler"
+import { Pressable as GesturePressable } from "react-native-gesture-handler"
+import { ShellDrawerChrome, useShellDrawerMotion } from "../navigation/ShellDrawerMotionProvider"
 import { DrawerNavIcon } from "../shell/drawer-nav-icons"
 import { BrandLogoMark } from "../brand/BrandLogoMark"
 import { usePathname, useRouter } from "expo-router"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import Animated, {
-  Easing,
   interpolateColor,
-  runOnJS,
   useAnimatedStyle,
   useSharedValue,
   withSpring,
@@ -45,6 +46,7 @@ export function SummerDrawer({ session }: Props) {
   const router = useRouter()
   const pathname = usePathname()
   const { drawerOpen, closeDrawer } = useSummerShell()
+  const { modalVisible } = useShellDrawerMotion()
   const drawerTheme = useDrawerNavTheme()
   const tokens = useAppThemeTokens()
   const type = useNativeType()
@@ -53,43 +55,9 @@ export function SummerDrawer({ session }: Props) {
   const { scrollRef, contentRef, registerRow, unregisterRow, onRowLayout, onScroll } =
     useDrawerScrollToActive(activeItemId, drawerOpen)
 
-  const [drawerMounted, setDrawerMounted] = useState(false)
-  const [modalVisible, setModalVisible] = useState(false)
-  const backdropOpacity = useSharedValue(0)
-  const panelOpacity = useSharedValue(0)
-  const panelScale = useSharedValue(0.97)
-
-  const finishClose = useCallback(() => setModalVisible(false), [])
-
   useEffect(() => {
     closeDrawer()
   }, [pathname, closeDrawer])
-
-  useEffect(() => {
-    if (drawerOpen) setDrawerMounted(true)
-  }, [drawerOpen])
-
-  useEffect(() => {
-    if (drawerOpen) {
-      setModalVisible(true)
-      backdropOpacity.value = withTiming(1, { duration: 220, easing: Easing.out(Easing.cubic) })
-      panelOpacity.value = withTiming(1, { duration: 240, easing: Easing.out(Easing.cubic) })
-      panelScale.value = withSpring(1, { damping: 19, stiffness: 240 })
-      return
-    }
-
-    backdropOpacity.value = withTiming(0, { duration: 180 })
-    panelOpacity.value = withTiming(0, { duration: 160 })
-    panelScale.value = withTiming(0.97, { duration: 160 }, (finished) => {
-      if (finished) runOnJS(finishClose)()
-    })
-  }, [drawerOpen, backdropOpacity, panelOpacity, panelScale, finishClose])
-
-  const backdropStyle = useAnimatedStyle(() => ({ opacity: backdropOpacity.value }))
-  const panelStyle = useAnimatedStyle(() => ({
-    opacity: panelOpacity.value,
-    transform: [{ scale: panelScale.value }],
-  }))
 
   function navigate(route: string) {
     closeDrawer()
@@ -99,22 +67,13 @@ export function SummerDrawer({ session }: Props) {
   const roleLabel = formatSummerRole(session.studentProgramRole)
   const layout = drawerShellLayout(panelWidth, insets, drawerTheme)
 
-  if (!drawerMounted) return null
-
   return (
-    <Modal visible={modalVisible} transparent animationType="none" onRequestClose={closeDrawer} statusBarTranslucent>
-      <View style={styles.root}>
-        <Animated.View style={[styles.backdrop, backdropStyle]}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={closeDrawer} accessibilityLabel="Close menu" />
-        </Animated.View>
-
-        <Animated.View
-          style={[
-            styles.panel,
-            panelStyle,
-            layout.panel,
-          ]}
-        >
+    <ShellDrawerChrome
+      visible={modalVisible}
+      onRequestClose={closeDrawer}
+      backdropBaseStyle={styles.backdrop}
+      panelBaseStyle={[styles.panel, layout.panel]}
+    >
           <View
             style={[
               styles.header,
@@ -153,13 +112,15 @@ export function SummerDrawer({ session }: Props) {
                   </View>
                 </View>
               </View>
-              <Pressable
+              <GesturePressable
                 style={[styles.closeBtn, { backgroundColor: drawerTheme.closeBtnBg }]}
                 onPress={closeDrawer}
                 hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Close menu"
               >
                 <DrawerNavIcon name="close" size={18} color={drawerTheme.secondaryLabel} />
-              </Pressable>
+              </GesturePressable>
             </View>
           </View>
 
@@ -209,10 +170,8 @@ export function SummerDrawer({ session }: Props) {
                 />
               </DrawerNavAnchor>
             </View>
-          </ScrollView>
-        </Animated.View>
-      </View>
-    </Modal>
+            </ScrollView>
+    </ShellDrawerChrome>
   )
 }
 

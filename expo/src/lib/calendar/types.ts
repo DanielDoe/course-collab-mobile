@@ -42,6 +42,8 @@ export type ClassScheduleContext = {
 export type ClassReminderPrefs = {
   enabled: boolean
   minutesBefore: 15 | 30 | 60
+  notifyBefore: boolean
+  notifyAtStart: boolean
 }
 
 export type ClassSchedulePayload = {
@@ -52,6 +54,7 @@ export type ClassSchedulePayload = {
   schedule?: ParsedClassSchedule | null
   context?: ClassScheduleContext | null
   events?: CalendarEvent[]
+  officeHoursEvents?: CalendarEvent[]
   message?: string
 }
 

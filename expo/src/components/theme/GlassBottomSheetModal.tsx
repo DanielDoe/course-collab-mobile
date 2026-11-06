@@ -1,18 +1,19 @@
-import { useEffect, type ReactElement, type ReactNode } from "react"
+import { useEffect, useMemo, useState, type ReactElement, type ReactNode } from "react"
 import {
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
   StyleSheet,
+  useWindowDimensions,
   View,
   type StyleProp,
   type ViewStyle,
 } from "react-native"
 import type { RefreshControlProps } from "react-native"
-import { Gesture, GestureDetector } from "react-native-gesture-handler"
+import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler"
 import Animated, {
-  Easing,
   runOnJS,
   useAnimatedRef,
   useAnimatedScrollHandler,
@@ -24,11 +25,32 @@ import Animated, {
 import { GLASS_SHEET_BACKDROP } from "./GlassActionSheetMenu"
 import { DismissKeyboardView } from "../ui/DismissKeyboardView"
 import { keyboardDismissScrollProps } from "../../lib/keyboard-dismiss-scroll-props"
+import {
+  durationOrInstant,
+  spring,
+  timing,
+  triggerMotionHaptic,
+  useAppReducedMotion,
+} from "../../lib/motion"
 
 const HIDDEN_OFFSET = 480
 const DISMISS_DRAG = 96
 const DISMISS_VELOCITY = 850
 const HANDLE_DRAG_ZONE = 48
+
+function resolveMaxSheetPx(
+  windowHeight: number,
+  maxHeight: `${number}%` | number,
+  sheetHostStyle?: StyleProp<ViewStyle>,
+): number {
+  const fromHost = StyleSheet.flatten(sheetHostStyle)?.maxHeight
+  const raw = fromHost ?? maxHeight
+  if (typeof raw === "number") return raw
+  if (typeof raw === "string" && raw.endsWith("%")) {
+    return (windowHeight * parseFloat(raw)) / 100
+  }
+  return windowHeight * 0.92
+}
 
 type Props = {
   visible: boolean
@@ -55,6 +77,13 @@ export function GlassBottomSheetModal({
   accessibilityLabel = "Close sheet",
   keyboardAvoiding = false,
 }: Props) {
+  const reduceMotion = useAppReducedMotion()
+  const { height: windowHeight } = useWindowDimensions()
+  const maxSheetPx = useMemo(
+    () => resolveMaxSheetPx(windowHeight, maxHeight, sheetHostStyle),
+    [windowHeight, maxHeight, sheetHostStyle],
+  )
+  const [presented, setPresented] = useState(visible)
   const backdropOpacity = useSharedValue(0)
   const sheetTranslateY = useSharedValue(HIDDEN_OFFSET)
   const dragY = useSharedValue(0)
@@ -63,17 +92,32 @@ export function GlassBottomSheetModal({
 
   useEffect(() => {
     if (visible) {
+      Keyboard.dismiss()
+      setPresented(true)
       dragY.value = 0
       scrollOffsetY.value = 0
-      backdropOpacity.value = withTiming(1, { duration: 220, easing: Easing.out(Easing.quad) })
-      sheetTranslateY.value = withSpring(0, { damping: 24, stiffness: 280, mass: 0.9 })
+      const fadeMs = durationOrInstant(timing.backdropIn.duration, reduceMotion)
+      backdropOpacity.value = withTiming(1, { duration: fadeMs, easing: timing.backdropIn.easing })
+      if (reduceMotion) {
+        sheetTranslateY.value = withTiming(0, { duration: 0 })
+      } else {
+        sheetTranslateY.value = withSpring(0, spring.standard)
+        triggerMotionHaptic("selection")
+      }
       return
     }
 
-    backdropOpacity.value = withTiming(0, { duration: 180 })
-    sheetTranslateY.value = withTiming(HIDDEN_OFFSET, { duration: 220, easing: Easing.in(Easing.quad) })
+    const fadeMs = durationOrInstant(timing.backdropOut.duration, reduceMotion)
+    const outMs = durationOrInstant(timing.sheetOut.duration, reduceMotion)
+    backdropOpacity.value = withTiming(0, { duration: fadeMs }, (finished) => {
+      if (finished) runOnJS(setPresented)(false)
+    })
+    sheetTranslateY.value = withTiming(HIDDEN_OFFSET, {
+      duration: outMs,
+      easing: timing.sheetOut.easing,
+    })
     dragY.value = 0
-  }, [visible, backdropOpacity, sheetTranslateY, dragY, scrollOffsetY])
+  }, [visible, backdropOpacity, sheetTranslateY, dragY, scrollOffsetY, reduceMotion])
 
   const nativeScrollGesture = Gesture.Native()
 
@@ -87,19 +131,19 @@ export function GlassBottomSheetModal({
     })
     .onEnd((event) => {
       if (scrollOffsetY.value > 0) {
-        dragY.value = withSpring(0, { damping: 22, stiffness: 280 })
+        dragY.value = withSpring(0, spring.standard)
         return
       }
 
       const shouldDismiss = dragY.value > DISMISS_DRAG || event.velocityY > DISMISS_VELOCITY
       if (shouldDismiss) {
-        dragY.value = withTiming(HIDDEN_OFFSET, { duration: 220, easing: Easing.in(Easing.quad) })
-        backdropOpacity.value = withTiming(0, { duration: 180 })
+        dragY.value = withTiming(HIDDEN_OFFSET, timing.sheetOut)
+        backdropOpacity.value = withTiming(0, timing.backdropOut)
         runOnJS(onClose)()
         return
       }
 
-      dragY.value = withSpring(0, { damping: 22, stiffness: 280 })
+      dragY.value = withSpring(0, spring.standard)
     })
 
   const handlePanGesture = Gesture.Pan()
@@ -111,13 +155,13 @@ export function GlassBottomSheetModal({
     .onEnd((event) => {
       const shouldDismiss = dragY.value > DISMISS_DRAG || event.velocityY > DISMISS_VELOCITY
       if (shouldDismiss) {
-        dragY.value = withTiming(HIDDEN_OFFSET, { duration: 220, easing: Easing.in(Easing.quad) })
-        backdropOpacity.value = withTiming(0, { duration: 180 })
+        dragY.value = withTiming(HIDDEN_OFFSET, timing.sheetOut)
+        backdropOpacity.value = withTiming(0, timing.backdropOut)
         runOnJS(onClose)()
         return
       }
 
-      dragY.value = withSpring(0, { damping: 22, stiffness: 280 })
+      dragY.value = withSpring(0, spring.standard)
     })
 
   const scrollHandler = useAnimatedScrollHandler({
@@ -137,7 +181,7 @@ export function GlassBottomSheetModal({
   const sheetBody = scrollable ? (
     <View style={styles.sheetBody}>
       <GestureDetector gesture={dismissPanGesture}>
-        <Animated.View style={styles.scrollWrap}>
+        <Animated.View style={[styles.scrollWrap, { maxHeight: maxSheetPx }]}>
           <GestureDetector gesture={nativeScrollGesture}>
             <Animated.ScrollView
               ref={scrollRef}
@@ -148,7 +192,7 @@ export function GlassBottomSheetModal({
               bounces
               {...keyboardDismissScrollProps}
               refreshControl={refreshControl}
-              style={styles.scrollView}
+              style={[styles.scrollView, { maxHeight: maxSheetPx }]}
               contentContainerStyle={styles.scrollContent}
             >
               <DismissKeyboardView>{children}</DismissKeyboardView>
@@ -186,29 +230,40 @@ export function GlassBottomSheetModal({
 
   return (
     <Modal
-      visible={visible}
+      visible={presented}
       transparent
       animationType="none"
       onRequestClose={onClose}
       statusBarTranslucent
       presentationStyle={keyboardAvoiding && Platform.OS === "ios" ? "overFullScreen" : undefined}
     >
-      <KeyboardAvoidingView
-        style={styles.root}
-        behavior={keyboardAvoiding && Platform.OS === "ios" ? "padding" : undefined}
-        pointerEvents="box-none"
-      >
-        <Animated.View style={[styles.backdrop, backdropStyle]} pointerEvents={visible ? "auto" : "none"}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel={accessibilityLabel} />
-        </Animated.View>
-
-        <Animated.View
-          style={[styles.sheetHost, { maxHeight }, sheetHostStyle, animatedSheetStyle]}
-          pointerEvents="box-none"
+      {/* RN Modal is outside the app GH root — without this, gestures steal backdrop presses. */}
+      <GestureHandlerRootView style={styles.root}>
+        <KeyboardAvoidingView
+          style={styles.root}
+          behavior={keyboardAvoiding && Platform.OS === "ios" ? "padding" : undefined}
         >
-          {sheetBody}
-        </Animated.View>
-      </KeyboardAvoidingView>
+          {/* Full-screen press target: any tap outside the sheet closes it. */}
+          <Animated.View style={[styles.backdrop, backdropStyle]}>
+            <Pressable
+              style={StyleSheet.absoluteFill}
+              onPress={onClose}
+              accessibilityRole="button"
+              accessibilityLabel={accessibilityLabel}
+            />
+          </Animated.View>
+
+          {/* Nested Pressable absorbs presses so they do not bubble to the backdrop. */}
+          <Animated.View
+            style={[styles.sheetHost, { maxHeight }, sheetHostStyle, animatedSheetStyle]}
+            pointerEvents="box-none"
+          >
+            <Pressable accessible={false} onPress={() => {}} style={styles.sheetPressAbsorb}>
+              {sheetBody}
+            </Pressable>
+          </Animated.View>
+        </KeyboardAvoidingView>
+      </GestureHandlerRootView>
     </Modal>
   )
 }
@@ -219,16 +274,15 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   backdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: GLASS_SHEET_BACKDROP,
-    zIndex: 1,
   },
   sheetHost: {
     width: "100%",
-    zIndex: 2,
-    overflow: "visible",
+    overflow: "hidden",
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
     // Size to content; maxHeight on the host clamps tall sheets.
-    // flexGrow:1 here left a empty gap under short sheets (gray "cut off" bar).
     flexGrow: 0,
     flexShrink: 1,
     ...Platform.select({
@@ -241,9 +295,13 @@ const styles = StyleSheet.create({
       android: { elevation: 8 },
     }),
   },
+  sheetPressAbsorb: {
+    width: "100%",
+  },
   sheetBody: {
     flexGrow: 0,
     flexShrink: 1,
+    overflow: "hidden",
   },
   handleDragZone: {
     position: "absolute",
@@ -263,12 +321,12 @@ const styles = StyleSheet.create({
   scrollWrap: {
     flexGrow: 0,
     flexShrink: 1,
-    overflow: "visible",
+    overflow: "hidden",
   },
   scrollView: {
     flexGrow: 0,
     flexShrink: 1,
-    overflow: "visible",
+    overflow: "hidden",
   },
   scrollContent: {
     flexGrow: 0,

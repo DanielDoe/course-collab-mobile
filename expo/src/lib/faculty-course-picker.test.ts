@@ -51,20 +51,40 @@ describe("expandFacultyOfferingsForActiveTerm", () => {
     ])
 
     assert.equal(items.length, 3)
-    assert.equal(items.filter((item) => item.picker_is_section_row).length, 2)
-    assert.equal(items.filter((item) => item.id === 6 && !item.picker_is_section_row).length, 1)
+    assert.equal(items.filter((item) => item.picker_is_section_row).length, 3)
     assert.equal(items[0]?.session_code, "ELEG1301P01")
     assert.equal(items[1]?.session_code, "ELEG1301P02")
+    assert.equal(items[2]?.session_code, "ELEG1304P03")
+    assert.equal(items[2]?.picker_display_title, "ELEG1304P03")
   })
 
-  it("keeps a single-section offering as one course row", () => {
+  it("shows a single-section offering as a section row when session_code is present", () => {
     const items = expandFacultyOfferingsForActiveTerm([
       offering(6, 507, "ELEG1304P03", "ELEG 1304", "ELEG1304"),
     ])
 
     assert.equal(items.length, 1)
+    assert.equal(items[0]?.picker_is_section_row, true)
+    assert.equal(items[0]?.picker_display_title, "ELEG1304P03")
+    assert.equal(items[0]?.session_code, "ELEG1304P03")
+  })
+
+  it("falls back to a course row when no session_code exists", () => {
+    const items = expandFacultyOfferingsForActiveTerm([
+      {
+        id: 8,
+        course_id: 8,
+        course_code: "TEST101",
+        course_title: "Faculty Test Course",
+        is_active_term: false,
+        academic_term_id: 70,
+        semester: "Summer 2026",
+      },
+    ])
+
+    assert.equal(items.length, 1)
     assert.equal(items[0]?.picker_is_section_row, false)
-    assert.equal(items[0]?.picker_display_title, "ELEG 1304")
+    assert.equal(items[0]?.picker_display_title, "Faculty Test Course")
   })
 })
 
@@ -79,6 +99,7 @@ describe("expandFacultyCoursesForActiveTerm", () => {
 
     const items = expandFacultyCoursesForActiveTerm([eleg1301, eleg1304], sessions)
     assert.equal(items.length, 3)
-    assert.equal(items.filter((item) => item.picker_is_section_row).length, 2)
+    assert.equal(items.filter((item) => item.picker_is_section_row).length, 3)
+    assert.equal(items[2]?.picker_display_title, "ELEG1304P01")
   })
 })

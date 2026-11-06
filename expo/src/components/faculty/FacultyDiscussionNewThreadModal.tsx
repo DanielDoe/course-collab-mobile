@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Modal, ScrollView, View } from "react-native"
+import { Modal, View } from "react-native"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { ApiError } from "../../lib/api"
 import { instructorApi } from "../../lib/instructor-api"
@@ -15,6 +15,7 @@ import {
   useCollabSheetStyles,
 
 } from "./faculty-collab-sheet-ui"
+import { KeyboardAwareForm } from "../ui/KeyboardAwareForm"
 import { SHEET_SECTION } from "./faculty-sheet-semantics"
 
 type FacultyScope = { instructorId: number; courseId: number }
@@ -90,12 +91,7 @@ export function FacultyDiscussionNewThreadModal({ visible, scope, onClose, onCre
           }
         />
 
-        <ScrollView
-          contentContainerStyle={[collabSheetStyles.scroll, { paddingBottom: insets.bottom + 24 }]}
-          keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
-          showsVerticalScrollIndicator={false}
-        >
+        <KeyboardAwareForm contentContainerStyle={[collabSheetStyles.scroll, { paddingBottom: insets.bottom + 24 }]}>
           {error ? <FacultySheetErrorBanner message={error} /> : null}
 
           <FacultySheetSection label="Thread" tone={SHEET_SECTION.edit}>
@@ -111,7 +107,7 @@ export function FacultyDiscussionNewThreadModal({ visible, scope, onClose, onCre
               />
             </FacultySheetField>
           </FacultySheetSection>
-        </ScrollView>
+        </KeyboardAwareForm>
       </FacultySheetContainer>
     </Modal>
   )

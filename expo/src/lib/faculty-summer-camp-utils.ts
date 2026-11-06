@@ -53,10 +53,15 @@ export function splitCampIsoDate(value: string): { year: string; month: string; 
   return { year: iso.slice(0, 4), month: iso.slice(5, 7), day: iso.slice(8, 10) }
 }
 
-export function campDatePickerYears(now = new Date()): string[] {
+export function campDatePickerYears(
+  now = new Date(),
+  options?: { pastYears?: number; futureYears?: number },
+): string[] {
   const current = now.getFullYear()
+  const past = options?.pastYears ?? 2
+  const future = options?.futureYears ?? 6
   const years: string[] = []
-  for (let year = current - 2; year <= current + 6; year += 1) {
+  for (let year = current - past; year <= current + future; year += 1) {
     years.push(String(year))
   }
   return years

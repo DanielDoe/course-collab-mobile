@@ -1,4 +1,5 @@
 import { useMemo, type ComponentType } from "react"
+import { Platform } from "react-native"
 import { isStripeNativeAvailable } from "../../lib/stripe-native"
 import type { MembershipNativePaymentPresenterProps } from "./MembershipNativePaymentPresenter"
 
@@ -8,7 +9,7 @@ import type { MembershipNativePaymentPresenterProps } from "./MembershipNativePa
  */
 export function MembershipNativePaymentPresenterGate(props: MembershipNativePaymentPresenterProps) {
   const nativeReady = useMemo(() => isStripeNativeAvailable(), [])
-  if (!nativeReady || props.presentKey <= 0) return null
+  if (Platform.OS === "ios" || !nativeReady || props.presentKey <= 0) return null
 
   const Presenter = require("./MembershipNativePaymentPresenter")
     .MembershipNativePaymentPresenter as ComponentType<MembershipNativePaymentPresenterProps>

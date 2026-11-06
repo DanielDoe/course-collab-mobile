@@ -3,7 +3,7 @@ import { Platform, StyleSheet, Text, View } from "react-native"
 import { WebView } from "react-native-webview"
 import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
 import { NATIVE } from "../../constants/faculty-native-theme"
-import { needsMarkdownRichRender } from "../../lib/assessment-report-markdown"
+import { needsMarkdownRichRender, prepareMessageRichContent } from "../../lib/assessment-report-markdown"
 import { buildMarkdownHtml, type MarkdownHtmlVariant } from "../../lib/markdown-html"
 
 type Props = {
@@ -28,11 +28,12 @@ export function MarkdownContentWebView({ markdown, embedded, variant }: Props) {
   const native = useThemedNative()
   const resolvedVariant: MarkdownHtmlVariant | "embedded" =
     variant ?? (embedded ? "embedded" : "default")
-  const rich = useMemo(() => needsMarkdownRichRender(markdown), [markdown])
+  const prepared = useMemo(() => prepareMessageRichContent(markdown), [markdown])
+  const rich = useMemo(() => needsMarkdownRichRender(prepared || markdown), [markdown, prepared])
   const html = useMemo(
     () =>
       buildMarkdownHtml(
-        markdown,
+        prepared,
         resolvedVariant === "embedded" ? "reading" : resolvedVariant,
         {
           accent: tokens.accent,
@@ -45,7 +46,7 @@ export function MarkdownContentWebView({ markdown, embedded, variant }: Props) {
         },
       ),
     [
-      markdown,
+      prepared,
       resolvedVariant,
       tokens.accent,
       tokens.accentSoft,

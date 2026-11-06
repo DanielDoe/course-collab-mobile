@@ -12,6 +12,8 @@ import {
 import { useFacultyShell } from "../context/FacultyShellContext"
 import { instructorApi, type InstructorCourse } from "../lib/instructor-api"
 import { courseExchangeDrawerBadgeCount } from "../lib/course-exchange-shared"
+import { fetchFacultyPendingAccessRequestCount } from "../lib/module-nav-badges"
+import { messagesApi } from "../lib/messages-api"
 import { fetchFacultyCoursePickerItems } from "../lib/faculty-course-picker"
 import {
   getStoredFacultyCourseId,
@@ -24,8 +26,10 @@ import {
   facultyPickerItemMatchesSelection,
   stashFacultyCoursesForSelection,
 } from "../lib/faculty-post-login"
+import { resolveFacultyStoredCourse } from "../lib/faculty-section-scope"
 import type { FacultySession } from "../lib/session"
 import { setAppBadgeCount } from "../lib/notifications/notification-service"
+import { getQueryClient } from "../lib/query/client"
 
 export function useFacultyShellRefresh(session: FacultySession) {
   const {
@@ -45,28 +49,34 @@ export function useFacultyShellRefresh(session: FacultySession) {
 
   const resolveCourse = useCallback(
     async (nextCourses: InstructorCourse[], courseOverride?: InstructorCourse | null) => {
-      let course = courseOverride ?? selectedCourse
-      if ((!course || course.id <= 0) && nextCourses.length > 0) {
+      let course = courseOverride ?? null
+
+      if (!course || course.id <= 0) {
         const storedId = await getStoredFacultyCourseId(session.id)
-        const matches = storedId != null ? nextCourses.filter((c) => c.id === storedId) : []
-        if (matches.length === 1) {
-          course = matches[0]!
-        } else if (matches.length > 1) {
-          const storedSessionCode =
-            storedId != null ? await getStoredFacultySessionCode(session.id, storedId) : null
+        const storedSessionCode =
+          storedId != null ? await getStoredFacultySessionCode(session.id, storedId) : null
+        if (storedId != null) {
+          course = resolveFacultyStoredCourse(nextCourses, storedId, storedSessionCode)
+        }
+      }
+
+      if (!course || course.id <= 0) {
+        if (selectedCourse && selectedCourse.id > 0) {
           course =
-            (storedSessionCode
-              ? matches.find((item) => item.session_code === storedSessionCode)
-              : null) ??
-            matches[0] ??
+            nextCourses.find((item) => facultyPickerItemMatchesSelection(selectedCourse, item)) ??
             null
-        } else {
-          course = null
         }
         if (!course && nextCourses.length === 1) course = nextCourses[0]!
-        if (course) setSelectedCourse(course)
       }
-      return course
+
+      if (!course || course.id <= 0) return course
+
+      const canonical =
+        nextCourses.find((item) => facultyPickerItemMatchesSelection(course, item)) ?? course
+      if (!facultyPickerItemMatchesSelection(selectedCourse, canonical)) {
+        setSelectedCourse(canonical)
+      }
+      return canonical
     },
     [selectedCourse, session.id, setSelectedCourse],
   )
@@ -83,8 +93,13 @@ export function useFacultyShellRefresh(session: FacultySession) {
       const force = options?.force === true || courseOverride != null
       const now = Date.now()
 
-      if (refreshingRef.current) return
-      if (!force && lastRefreshAtRef.current > 0 && now - lastRefreshAtRef.current < SHELL_REFRESH_TTL_MS) {
+      if (refreshingRef.current && courseOverride == null) return
+      if (
+        !force &&
+        courseOverride == null &&
+        lastRefreshAtRef.current > 0 &&
+        now - lastRefreshAtRef.current < SHELL_REFRESH_TTL_MS
+      ) {
         return
       }
 
@@ -93,6 +108,7 @@ export function useFacultyShellRefresh(session: FacultySession) {
         const nextCourses = await fetchFacultyCoursePickerItems(session)
         setCourses(nextCourses)
 
+        const previousCourse = selectedCourse
         const course = await resolveCourse(nextCourses, courseOverride)
         await refreshMembership()
 
@@ -112,12 +128,22 @@ export function useFacultyShellRefresh(session: FacultySession) {
           academicTermId: course.academic_term_id ?? null,
           universityId: session.selectedUniversityId ?? null,
         }
-        const [notifications, pendingPoints, issues, officeHours, exchangeSummary] = await Promise.all([
+        const courseChanged =
+          courseOverride != null ||
+          !facultyPickerItemMatchesSelection(previousCourse, course)
+        if (courseChanged) {
+          void getQueryClient().invalidateQueries({ queryKey: ["faculty"] })
+        }
+        const messagesAuth = { kind: "instructor" as const, instructorId: session.id }
+        const [notifications, pendingPoints, issues, officeHours, exchangeSummary, messagesData, pendingAccessRequests] =
+          await Promise.all([
           instructorApi.getNotifications(session.id).catch(() => ({ unread_count: 0 })),
           instructorApi.getPendingClassroomPoints(scope).catch(() => []),
           instructorApi.getIssues(scope, "open").catch(() => []),
           instructorApi.getOfficeHours(scope).catch(() => []),
           instructorApi.getCourseExchangeSummary(scope).catch(() => ({})),
+          messagesApi.listThreads(messagesAuth).catch(() => ({ threads: [] })),
+          fetchFacultyPendingAccessRequestCount(scope).catch(() => 0),
         ])
 
         setNotificationCount(notifications.unread_count ?? 0)
@@ -127,11 +153,18 @@ export function useFacultyShellRefresh(session: FacultySession) {
           (r) => r.status === "pending" || r.status === "requested",
         ).length
 
+        const unreadMessages = (messagesData.threads ?? []).reduce(
+          (sum: number, t: { unreadCount?: number }) => sum + (t.unreadCount ?? 0),
+          0,
+        )
+
         setBadges({
           pendingPoints: pendingPoints.length,
           pendingIssues: issues.length,
           officeHours: pendingOfficeHours,
           courseExchange: courseExchangeDrawerBadgeCount(exchangeSummary),
+          unreadMessages,
+          pendingAccessRequests,
         })
         lastRefreshAtRef.current = Date.now()
       } catch (err) {
@@ -144,6 +177,7 @@ export function useFacultyShellRefresh(session: FacultySession) {
     [
       refreshMembership,
       resolveCourse,
+      selectedCourse,
       session.id,
       setBadges,
       setCourses,
@@ -156,8 +190,11 @@ export function useFacultyShellRefresh(session: FacultySession) {
     return () => registerRefreshFacultyData(null)
   }, [registerRefreshFacultyData, refreshFacultyData])
 
+  const initialRefreshDoneRef = useRef(false)
+
   useEffect(() => {
     let mounted = true
+    initialRefreshDoneRef.current = false
 
     void (async () => {
       await ensureAppBootstrap(session)
@@ -174,24 +211,34 @@ export function useFacultyShellRefresh(session: FacultySession) {
           null
         if (cachedCourse) setSelectedCourse(cachedCourse)
         setNotificationCount(cachedShell.notificationCount)
-        setBadges(cachedShell.badges)
+        setBadges({
+          pendingPoints: cachedShell.badges.pendingPoints ?? 0,
+          pendingIssues: cachedShell.badges.pendingIssues ?? 0,
+          officeHours: cachedShell.badges.officeHours ?? 0,
+          courseExchange: cachedShell.badges.courseExchange ?? 0,
+          unreadMessages: cachedShell.badges.unreadMessages ?? 0,
+          pendingAccessRequests: cachedShell.badges.pendingAccessRequests ?? 0,
+        })
         if (cachedShell.membershipTier) {
           setMembershipTier(cachedShell.membershipTier)
         }
         setMembershipTierLoaded(true)
         lastRefreshAtRef.current = Date.now()
-        setShellLoading(false)
-        return
+      } else {
+        const cachedTier = await getCachedFacultyMembershipTier(session.id)
+        if (!mounted) return
+        if (cachedTier) {
+          setMembershipTier(cachedTier)
+          setMembershipTierLoaded(true)
+        } else {
+          setMembershipTierLoaded(false)
+        }
       }
 
-      const cachedTier = await getCachedFacultyMembershipTier(session.id)
-      if (!mounted) return
-      if (cachedTier) {
-        setMembershipTier(cachedTier)
-        setMembershipTierLoaded(true)
-      } else {
-        setMembershipTierLoaded(false)
-      }
+      // Run once per session mount — do not depend on refreshFacultyData identity
+      // (that churns when selectedCourse updates and caused infinite update depth).
+      if (initialRefreshDoneRef.current) return
+      initialRefreshDoneRef.current = true
 
       setShellLoading(true)
       try {
@@ -213,18 +260,8 @@ export function useFacultyShellRefresh(session: FacultySession) {
     return () => {
       mounted = false
     }
-  }, [
-    refreshFacultyData,
-    refreshMembership,
-    resolveCourse,
-    session.id,
-    setBadges,
-    setCourses,
-    setMembershipTier,
-    setMembershipTierLoaded,
-    setNotificationCount,
-    setSelectedCourse,
-  ])
+    // Intentionally one-shot per faculty session — avoid refreshFacultyData in deps.
+  }, [session.id])
 
   useEffect(() => {
     const onChange = (state: AppStateStatus) => {

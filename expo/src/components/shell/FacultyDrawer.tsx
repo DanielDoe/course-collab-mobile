@@ -1,13 +1,18 @@
-import { useCallback, useEffect, useMemo, useState, memo, type RefObject } from "react"
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useEffect, useMemo, useState, memo, type RefObject } from "react"
+import { Pressable, StyleSheet, Text, View } from "react-native"
+import { ScrollView } from "react-native-gesture-handler"
+import { Pressable as GesturePressable } from "react-native-gesture-handler"
+import {
+  DrawerPanelScrollHost,
+  ShellDrawerChrome,
+  useShellDrawerMotion,
+} from "../navigation/ShellDrawerMotionProvider"
 import { AppAlert } from '../../lib/app-alert'
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useRouter, usePathname } from "expo-router"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import Animated, {
-  Easing,
   interpolateColor,
-  runOnJS,
   useAnimatedStyle,
   useSharedValue,
   withSpring,
@@ -26,6 +31,7 @@ import {
   type FacultyNavItem,
 } from "../../constants/faculty-nav"
 import { getFacultyNavUpgradePrompt, facultyMembershipTierShortLabel } from "../../lib/faculty-membership-tier"
+import { isIosPurchaseUiHidden, tierLockedAlertButtons } from "../../lib/purchase-navigation"
 import { getFacultyMembershipPlan, nextFacultyUpgradeTier } from "../../lib/faculty-membership-plans"
 import { facultyMembershipTierSolidBadge } from "../../lib/faculty-membership-plan-theme"
 import { useAppThemeTokens } from "../../context/AppearanceProvider"
@@ -38,20 +44,18 @@ import { useGlassChromeActive } from "../theme/GlassSurface"
 import { NativeCountBadge } from "../faculty/faculty-shared"
 import { BrandLogoMark } from "../brand/BrandLogoMark"
 import { useFacultyShell } from "../../context/FacultyShellContext"
+import { resolveFacultyNavBadgeCount } from "../../lib/module-nav-badges"
 import type { FacultySession } from "../../lib/session"
 import type { InstructorCourse } from "../../lib/instructor-api"
 import type { FacultyMembershipTier } from "../../types/dashboard"
 
-function facultyScopeLabel(course: InstructorCourse | null | undefined): string {
-  if (!course) return "Select course"
-  if (course.picker_is_section_row && course.session_code) return course.session_code
-  if (course.picker_display_title && course.picker_is_section_row) return course.picker_display_title
-  return course.course_code
-}
+import { facultyScopeLabel } from "../../lib/faculty-scope-label"
 import { DrawerNavAnchor, useDrawerScrollToActive } from "../../lib/drawer-scroll-to-active"
 import { useDrawerPanelWidth } from "../../lib/responsive-layout"
 import { isFacultyDrawerRouteActive, navigateFacultyDrawerRoute } from "../../lib/faculty-drawer-navigation"
 import { normalizeRoutePathname } from "../../lib/navigation-reset"
+import { getQueryClient } from "../../lib/query/client"
+import { prefetchForRoute } from "../../lib/query/nav-prefetch"
 
 type Props = {
   session: FacultySession
@@ -68,6 +72,7 @@ export function FacultyDrawer({ session }: Props) {
   const pathname = usePathname()
   const { drawerOpen, closeDrawer, badges, selectedCourse, notificationCount, membershipTier, membershipTierLoaded } =
     useFacultyShell()
+  const { modalVisible } = useShellDrawerMotion()
   const drawerTheme = useDrawerNavTheme()
   const tokens = useAppThemeTokens()
   const type = useNativeType()
@@ -77,46 +82,12 @@ export function FacultyDrawer({ session }: Props) {
   const { scrollRef, contentRef, registerRow, unregisterRow, onRowLayout, onScroll } =
     useDrawerScrollToActive(activeItemId, drawerOpen)
 
-  const [modalVisible, setModalVisible] = useState(false)
-  const backdropOpacity = useSharedValue(0)
-  const panelTranslateX = useSharedValue(-panelWidth)
-
-  const finishClose = useCallback(() => setModalVisible(false), [])
-
   useEffect(() => {
     closeDrawer()
   }, [pathname, closeDrawer])
 
-  useEffect(() => {
-    panelTranslateX.value = drawerOpen ? 0 : -panelWidth
-  }, [drawerOpen, panelTranslateX, panelWidth])
-
-  useEffect(() => {
-    if (drawerOpen) {
-      setModalVisible(true)
-      backdropOpacity.value = withTiming(1, { duration: 220, easing: Easing.out(Easing.cubic) })
-      panelTranslateX.value = withSpring(0, { damping: 22, stiffness: 260 })
-      return
-    }
-
-    backdropOpacity.value = withTiming(0, { duration: 180 })
-    panelTranslateX.value = withTiming(-panelWidth, { duration: 200 }, (finished) => {
-      if (finished) runOnJS(finishClose)()
-    })
-  }, [drawerOpen, backdropOpacity, panelTranslateX, panelWidth, finishClose])
-
-  const backdropStyle = useAnimatedStyle(() => ({ opacity: backdropOpacity.value }))
-  const panelStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: panelTranslateX.value }],
-  }))
-
   function badgeFor(item: FacultyNavItem): number | null {
-    if (item.badgeKey === "pendingPoints") return badges.pendingPoints || null
-    if (item.badgeKey === "pendingIssues") return badges.pendingIssues || null
-    if (item.badgeKey === "officeHours") return badges.officeHours || null
-    if (item.badgeKey === "courseExchange") return badges.courseExchange || null
-    if (item.badgeKey === "notifications") return notificationCount || null
-    return null
+    return resolveFacultyNavBadgeCount(badges, notificationCount, item.badgeKey)
   }
 
   function navigate(item: FacultyNavItem) {
@@ -124,18 +95,16 @@ export function FacultyDrawer({ session }: Props) {
       membershipTierLoaded && item.locked && !hasFacultyNavAccess(membershipTier, item.minTier)
     if (locked) {
       const prompt = getFacultyNavUpgradePrompt(item, membershipTier)
-      AppAlert.alert(prompt.title, prompt.message, [
-        { text: "Not now", style: "cancel" },
-        { text: "View plans", onPress: () => navigateTo("/membership") },
-      ])
+      AppAlert.alert(prompt.title, prompt.message, tierLockedAlertButtons(() => navigateTo("/membership")))
       return
     }
     navigateTo(item.route)
   }
 
   function navigateTo(route: string) {
-    navigateFacultyDrawerRoute(router, pathname, route)
+    prefetchForRoute(getQueryClient(), session, route)
     closeDrawer()
+    navigateFacultyDrawerRoute(router, pathname, route)
   }
 
   const tierLabel = membershipTierLoaded ? facultyMembershipTierShortLabel(membershipTier) : "…"
@@ -144,25 +113,16 @@ export function FacultyDrawer({ session }: Props) {
   const layout = drawerShellLayout(panelWidth, insets, drawerTheme)
 
   return (
-    <Modal visible={modalVisible} transparent animationType="none" onRequestClose={closeDrawer} statusBarTranslucent>
-      <View style={styles.root}>
-        <Animated.View style={[styles.backdrop, backdropStyle]}>
-          <Pressable
-            style={StyleSheet.absoluteFill}
-            onPress={closeDrawer}
-            accessible={false}
-            importantForAccessibility="no"
-          />
-        </Animated.View>
-
-        <Animated.View
-          style={[
-            styles.panel,
-            panelStyle,
-            layout.panel,
-            glassChrome && drawerGlassStyles.panelBorder,
-          ]}
-        >
+    <ShellDrawerChrome
+      visible={modalVisible}
+      onRequestClose={closeDrawer}
+      backdropBaseStyle={styles.backdrop}
+      panelBaseStyle={[
+        styles.panel,
+        layout.panel,
+        glassChrome && drawerGlassStyles.panelBorder,
+      ]}
+    >
           {glassChrome ? <DrawerGlassBackground style={StyleSheet.absoluteFill} /> : null}
           <View
             style={[
@@ -214,7 +174,7 @@ export function FacultyDrawer({ session }: Props) {
                   </View>
                 </View>
               </View>
-              <Pressable
+              <GesturePressable
                 style={[styles.closeBtn, { backgroundColor: drawerTheme.closeBtnBg }]}
                 onPress={closeDrawer}
                 hitSlop={8}
@@ -222,10 +182,11 @@ export function FacultyDrawer({ session }: Props) {
                 accessibilityLabel="Close menu"
               >
                 <Ionicons name="close" size={18} color={drawerTheme.secondaryLabel} />
-              </Pressable>
+              </GesturePressable>
             </View>
           </View>
 
+          <DrawerPanelScrollHost>
           <ScrollView
             ref={scrollRef}
             style={[styles.scroll, { backgroundColor: layout.scrollBackground }]}
@@ -317,16 +278,17 @@ export function FacultyDrawer({ session }: Props) {
                 />
               </DrawerNavAnchor>
 
-              <DrawerMembershipUpgradeCard
-                tier={membershipTier}
-                tierLoaded={membershipTierLoaded}
-                onPress={() => navigateTo("/membership")}
-              />
+              {isIosPurchaseUiHidden() ? null : (
+                <DrawerMembershipUpgradeCard
+                  tier={membershipTier}
+                  tierLoaded={membershipTierLoaded}
+                  onPress={() => navigateTo("/membership")}
+                />
+              )}
             </View>
-          </ScrollView>
-        </Animated.View>
-      </View>
-    </Modal>
+            </ScrollView>
+          </DrawerPanelScrollHost>
+    </ShellDrawerChrome>
   )
 }
 

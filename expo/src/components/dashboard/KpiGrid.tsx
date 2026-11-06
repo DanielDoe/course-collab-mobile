@@ -1,4 +1,6 @@
-import { StyleSheet, Text, View } from "react-native"
+import { Pressable, StyleSheet, Text, View } from "react-native"
+import { useRouter } from "expo-router"
+import { pushStudentAppHref } from "../../lib/student-app-href"
 import { Ionicons } from "@/components/icons/AppIcon"
 import type { StudentDashboardStats } from "../../types/dashboard"
 import { DASHBOARD_KPI_THUMBS } from "../../lib/dashboard-theme"
@@ -19,6 +21,7 @@ type KpiDef = {
   sub?: string
   icon: keyof typeof Ionicons.glyphMap
   thumb: SolidListThumb
+  href?: string
 }
 
 function metricOrDash(unavailable: boolean | undefined, value: string): string {
@@ -42,6 +45,7 @@ function buildKpis(stats: StudentDashboardStats): KpiDef[] {
             : stats.letterGrade,
       icon: "ribbon-outline",
       thumb: DASHBOARD_KPI_THUMBS.overallGrade,
+      href: "/module/grades",
     },
     {
       id: "quiz-average",
@@ -50,6 +54,7 @@ function buildKpis(stats: StudentDashboardStats): KpiDef[] {
       sub: stats.classQuizAverage != null ? `Class average ${stats.classQuizAverage}%` : undefined,
       icon: "clipboard-outline",
       thumb: DASHBOARD_KPI_THUMBS.quizAverage,
+      href: "/module/quizzes",
     },
     {
       id: "homework-average",
@@ -58,6 +63,7 @@ function buildKpis(stats: StudentDashboardStats): KpiDef[] {
       sub: unavailable.homework ? undefined : "Completed assignments",
       icon: "book-outline",
       thumb: DASHBOARD_KPI_THUMBS.homeworkAverage,
+      href: "/module/homework",
     },
     {
       id: "attendance",
@@ -70,6 +76,7 @@ function buildKpis(stats: StudentDashboardStats): KpiDef[] {
           : `${stats.classesMissed} classes missed`,
       icon: "calendar-outline",
       thumb: DASHBOARD_KPI_THUMBS.attendance,
+      href: "/module/attendance",
     },
     {
       id: "missing-work",
@@ -78,6 +85,7 @@ function buildKpis(stats: StudentDashboardStats): KpiDef[] {
       sub: unavailable.homework ? undefined : missing ? "Needs attention" : "All caught up",
       icon: "alert-circle-outline",
       thumb: missing ? DASHBOARD_KPI_THUMBS.missingWork : DASHBOARD_KPI_THUMBS.missingWorkClear,
+      href: "/module/homework",
     },
     {
       id: "classroom-points",
@@ -91,6 +99,7 @@ function buildKpis(stats: StudentDashboardStats): KpiDef[] {
         : `${stats.engagementCredits}/10 engagement credits`,
       icon: "flash-outline",
       thumb: DASHBOARD_KPI_THUMBS.classroomPoints,
+      href: "/module/classroom-points",
     },
     {
       id: "deadlines",
@@ -102,6 +111,7 @@ function buildKpis(stats: StudentDashboardStats): KpiDef[] {
       sub: "Quizzes and homework due soon",
       icon: "time-outline",
       thumb: DASHBOARD_KPI_THUMBS.upcoming,
+      href: "/module/calendar",
     },
     {
       id: "engagement",
@@ -110,6 +120,7 @@ function buildKpis(stats: StudentDashboardStats): KpiDef[] {
       sub: unavailable.grade ? undefined : "Participation credits this term",
       icon: "sparkles-outline",
       thumb: DASHBOARD_KPI_THUMBS.engagement,
+      href: "/module/grades?focus=engagement",
     },
   ]
 }
@@ -119,15 +130,13 @@ export function KpiGrid({ stats }: { stats: StudentDashboardStats }) {
   const tokens = useAppThemeTokens()
   const type = useNativeType()
   const cardLayout = useKpiGridCardStyle()
+  const router = useRouter()
   const kpis = buildKpis(stats)
 
   return (
     <View style={styles.grid}>
-      {kpis.map((kpi) => (
-        <View
-          key={kpi.id}
-          style={[styles.card, cardLayout, tokens.cardShadow, { backgroundColor: native.secondaryGrouped }]}
-        >
+      {kpis.map((kpi) => {
+        const card = (
           <View style={styles.cardRow}>
             <View style={styles.copy}>
               <Text {...kpiLabelTextA11yProps} style={[type.caption, styles.label, { color: native.secondaryLabel }]}>
@@ -144,8 +153,35 @@ export function KpiGrid({ stats }: { stats: StudentDashboardStats }) {
             </View>
             <SolidListThumbTile thumb={kpi.thumb} icon={kpi.icon} size="compact" style={styles.iconTile} />
           </View>
-        </View>
-      ))}
+        )
+
+        const surfaceStyle = [
+          styles.card,
+          cardLayout,
+          tokens.cardShadow,
+          { backgroundColor: native.secondaryGrouped },
+        ]
+
+        if (!kpi.href) {
+          return (
+            <View key={kpi.id} style={surfaceStyle}>
+              {card}
+            </View>
+          )
+        }
+
+        return (
+          <Pressable
+            key={kpi.id}
+            onPress={() => pushStudentAppHref(router, kpi.href)}
+            accessibilityRole="button"
+            accessibilityLabel={`${kpi.label}, ${kpi.value}. Open ${kpi.label}`}
+            style={({ pressed }) => [surfaceStyle, { opacity: pressed ? 0.86 : 1 }]}
+          >
+            {card}
+          </Pressable>
+        )
+      })}
     </View>
   )
 }

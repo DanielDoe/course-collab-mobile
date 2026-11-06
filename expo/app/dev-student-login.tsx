@@ -1,13 +1,17 @@
 import { useEffect, useRef, useState, type ComponentType } from "react"
 import { StyleSheet, Text, View } from "react-native"
-import { useRouter } from "expo-router"
+import { useLocalSearchParams, useRouter } from "expo-router"
 import { ApiError, api, type UniversityRecord, type UniversityStudentLoginResponse } from "../src/lib/api"
 import { primeMembershipTierCache } from "../src/lib/membership-tier-cache"
 import { persistMfaDeviceTrustFromLogin, studentMfaLoginKey, studentMfaAliasKeys } from "../src/lib/mfa-device-trust"
 import { parseMfaCompletePayload, parseMfaLoginResponse, type MfaLoginState } from "../src/lib/mfa-types"
 import { useSession } from "../src/context/SessionProvider"
 import { BrandLoadingMark } from "../src/components/login/BrandLoadingMark"
+import { getStoredSession, type StudentSession } from "../src/lib/session"
 import { replaceAuthRoute } from "../src/lib/navigation-reset"
+import { markOnboardingStepComplete } from "../src/lib/onboarding"
+import { markStudentAppearanceSetupComplete } from "../src/lib/appearance-setup"
+import { onboardingStepsForPortal } from "../src/lib/onboarding-logic"
 
 type MfaLoginStepProps = {
   state: MfaLoginState
@@ -21,9 +25,17 @@ type MfaLoginStepProps = {
 /**
  * Dev-only helper: university-first student login via coursecollab://dev-student-login
  * Uses UH + known test credentials against /api/auth/student/login.
+ * Append ?force=1 to replace an existing saved session (Maestro / audit scripts).
  */
+function devLoginForceParam(force: string | string[] | undefined): boolean {
+  const value = Array.isArray(force) ? force[0] : force
+  return value === "1" || value === "true"
+}
+
 export default function DevStudentLoginScreen() {
   const router = useRouter()
+  const { force } = useLocalSearchParams<{ force?: string }>()
+  const forceLogin = devLoginForceParam(force)
   const { signIn } = useSession()
   const [error, setError] = useState("")
   const [mfaState, setMfaState] = useState<MfaLoginState | null>(null)
@@ -51,6 +63,14 @@ export default function DevStudentLoginScreen() {
 
     void (async () => {
       try {
+        if (!forceLogin) {
+          const existing = await getStoredSession()
+          if (existing) {
+            if (mounted && !cancelledRef.current) replaceAuthRoute(router, "/signing-in")
+            return
+          }
+        }
+
         const universityId = 2
         const identifier = "665322590"
         const password = "ECE2202!"
@@ -99,7 +119,7 @@ export default function DevStudentLoginScreen() {
     return () => {
       mounted = false
     }
-  }, [mfaState, router, signIn])
+  }, [forceLogin, mfaState, router, signIn])
 
   async function handleMfaComplete(payload: Record<string, unknown>) {
     const normalized = parseMfaCompletePayload(payload)
@@ -195,6 +215,26 @@ async function completeDevLogin(
     universityName: university?.name,
     universityShortName: university?.short_name,
   })
+
+  const devSession: StudentSession = {
+    portal: "student",
+    id: student.student_id,
+    authIdentifier: loginIdentifier,
+    email: student.email,
+    name: student.full_name,
+    section: student.section ?? enrollment?.section ?? "",
+    databaseId: String(student.id),
+    courseId: enrollment?.courseId ?? (student.course_id != null ? Number(student.course_id) : 7),
+    courseCode: enrollment?.courseCode ?? "ECE2202",
+    courseTitle: enrollment?.courseTitle ?? "ECE 2202",
+    universityId: university?.id ?? ctx.universityId,
+    universityName: university?.name,
+    universityShortName: university?.short_name,
+  }
+  for (const step of onboardingStepsForPortal("student")) {
+    await markOnboardingStepComplete(devSession, step)
+  }
+  await markStudentAppearanceSetupComplete(devSession.databaseId)
 
   if (ctx.mounted && !ctx.cancelled?.current) replaceAuthRoute(ctx.router, "/signing-in")
 }

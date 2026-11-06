@@ -1,6 +1,7 @@
 import { useMemo } from "react"
 import {
   ActivityIndicator,
+  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
@@ -112,7 +113,11 @@ export function CoraStepEngineModal({ visible, problem, onClose }: Props) {
         ) : engine.finished && engine.coraSession ? (
           <FinishedView session={engine.coraSession} onClose={onClose} onRestart={engine.reset} />
         ) : engine.currentStep && engine.coraSession ? (
-          <>
+          <KeyboardAvoidingView
+            style={styles.stepShell}
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            keyboardVerticalOffset={0}
+          >
             <StepRail
               steps={engine.steps}
               activeIndex={engine.stepIndex}
@@ -121,9 +126,9 @@ export function CoraStepEngineModal({ visible, problem, onClose }: Props) {
 
             <ScrollView
               style={styles.scroll}
-              contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 96 }]}
+              contentContainerStyle={styles.scrollContent}
               keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
+              keyboardDismissMode="on-drag"
               showsVerticalScrollIndicator={false}
             >
               {media ? <QuestionMediaView media={media} embedded /> : null}
@@ -242,7 +247,7 @@ export function CoraStepEngineModal({ visible, problem, onClose }: Props) {
                 </Text>
               </Pressable>
             </View>
-          </>
+          </KeyboardAvoidingView>
         ) : null}
       </View>
     </Modal>
@@ -497,6 +502,7 @@ function FinishedView({
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
+  stepShell: { flex: 1 },
   header: {
     paddingHorizontal: 16,
     paddingBottom: 14,
@@ -684,10 +690,6 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   footer: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
     flexDirection: "row",
     gap: 10,
     paddingHorizontal: 16,

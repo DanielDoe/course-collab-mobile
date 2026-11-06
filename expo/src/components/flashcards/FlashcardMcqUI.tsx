@@ -13,6 +13,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated"
 import type { FlashcardMcq } from "../../lib/flashcard-quiz"
+import { letterForOptionIndex } from "../../lib/playground-question-utils"
 import { hexToRgba } from "../../constants/app-themes"
 import { NATIVE } from "../../constants/faculty-native-theme"
 import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
@@ -214,6 +215,7 @@ function ChoiceRow({
     transform: [{ translateX: shake.value }, { scale: pop.value }],
   }))
 
+  const letter = letterForOptionIndex(index)
   const tone = showCorrect ? tokens.success : showWrong ? tokens.danger : null
   const bg = tone
     ? hexToRgba(tone, tokens.isDark ? 0.18 : 0.1)
@@ -229,6 +231,9 @@ function ChoiceRow({
   return (
     <Animated.View style={animStyle}>
       <Pressable
+        testID={`flashcard-choice-${letter}`}
+        accessibilityRole="button"
+        accessibilityLabel={`Option ${letter}`}
         disabled={locked || !interactive}
         onPress={interactive ? onPress : undefined}
         style={({ pressed }) => [
@@ -257,7 +262,7 @@ function ChoiceRow({
             <Ionicons name="close" size={14} color={tokens.danger} />
           ) : (
             <Text style={[type.caption, { color: native.secondaryLabel, fontWeight: "700" }]}>
-              {index + 1}
+              {letter}
             </Text>
           )}
         </View>

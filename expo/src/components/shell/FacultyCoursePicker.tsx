@@ -23,6 +23,7 @@ import {
 } from "../../lib/faculty-course-lists"
 import { facultyPickerItemMatchesSelection } from "../../lib/faculty-post-login"
 import { FacultyCoursePickerRow } from "../faculty/FacultyCollabListCards"
+import { useDeferredShellSheetVisible } from "../navigation/useDeferredShellSheetVisible"
 
 type Props = {
   session: FacultySession
@@ -39,6 +40,7 @@ export function FacultyCoursePicker({ session }: Props) {
     setSelectedCourse,
     refreshFacultyData,
   } = useFacultyShell()
+  const pickerVisible = useDeferredShellSheetVisible(coursePickerOpen)
 
   const [loadingCourses, setLoadingCourses] = useState(false)
   const [loadError, setLoadError] = useState("")
@@ -61,11 +63,11 @@ export function FacultyCoursePicker({ session }: Props) {
 
   async function selectCourse(course: InstructorCourse) {
     if (!course.id || course.id <= 0) return
-    setSelectedCourse(course)
     await persistFacultyCourse(session.id, course.id, course.session_code)
+    setSelectedCourse(course)
     closeCoursePicker()
     try {
-      await refreshFacultyData?.(course)
+      await refreshFacultyData?.(course, { force: true })
     } catch (err) {
       console.warn("[FacultyCoursePicker] refresh failed", err)
     }
@@ -76,14 +78,18 @@ export function FacultyCoursePicker({ session }: Props) {
   const duplicateCodes = useMemo(() => {
     return new Set(
       uniqueCourses
-        .filter((c, i, arr) => arr.findIndex((x) => x.course_code === c.course_code) !== i)
-        .map((c) => c.course_code),
+        .filter(
+          (course, index, arr) =>
+            arr.findIndex((item) => (item.picker_key ?? String(item.id)) === (course.picker_key ?? String(course.id))) !==
+            index,
+        )
+        .map((course) => course.picker_key ?? String(course.id)),
     )
   }, [uniqueCourses])
 
   return (
     <GlassBottomSheetModal
-      visible={coursePickerOpen}
+      visible={pickerVisible}
       onClose={closeCoursePicker}
       accessibilityLabel="Close course picker"
       maxHeight="88%"

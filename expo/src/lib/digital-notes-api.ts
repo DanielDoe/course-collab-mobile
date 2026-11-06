@@ -1,5 +1,6 @@
 import type { StudentSession } from "./session"
 import { ApiError, studentAuthenticatedRequest } from "./student-api"
+import { studentContentPath } from "./student-content-context"
 
 export type StudentDigitalNote = {
   id: number
@@ -11,6 +12,7 @@ export type StudentDigitalNote = {
   isOwner?: boolean
   ownerName?: string | null
   sharedAt?: string | null
+  optimistic?: boolean
 }
 
 export type CourseDigitalNote = {
@@ -25,6 +27,7 @@ export type CourseDigitalNote = {
   isPublished: boolean
   createdAt: string
   updatedAt: string
+  optimistic?: boolean
 }
 
 export type DigitalNoteShare = {
@@ -104,12 +107,9 @@ export const digitalNotesApi = {
   },
 
   listCourseNotes(session: StudentSession) {
-    const params = new URLSearchParams({ studentDatabaseId: session.databaseId })
-    if (session.courseId) params.set("courseId", String(session.courseId))
-    if (session.section) params.set("session", session.section)
     return studentRequest<{ notes: CourseDigitalNote[]; courseId: number | null; session: string | null }>(
       session,
-      `/api/student/course-notes?${params.toString()}`,
+      studentContentPath(session, "/api/student/course-notes"),
     )
   },
 
@@ -127,12 +127,21 @@ export const digitalNotesApi = {
   },
 }
 
-let cachedCourseNotes: CourseDigitalNote[] = []
-
-export function setCachedCourseNotes(notes: CourseDigitalNote[]) {
-  cachedCourseNotes = notes
-}
+/** @deprecated Course notes now live in TanStack Query. Kept for CourseNoteViewerScreen. */
+export function setCachedCourseNotes(_notes: CourseDigitalNote[]) {}
 
 export function getCachedCourseNote(noteId: number): CourseDigitalNote | null {
-  return cachedCourseNotes.find((note) => note.id === noteId) ?? null
+  const { getQueryClient } = require("./query/client") as typeof import("./query/client")
+  const client = getQueryClient()
+  for (const query of client.getQueryCache().getAll()) {
+    const key = query.queryKey
+    if (key[0] !== "student" || key[1] !== "notes" || key[5] !== "course") continue
+    const notes = (query.state.data as { notes?: CourseDigitalNote[] } | undefined)?.notes
+    const found = notes?.find((note) => note.id === noteId)
+    if (!found) continue
+    // Persist strips bodies — don't treat title-only cache as the full note.
+    if (!String(found.bodyText ?? "").trim() && found.inkWorkspace == null) continue
+    return found
+  }
+  return null
 }

@@ -13,13 +13,16 @@ export { nativeType }
 
 export const NATIVE_HEADER_BAR_HEIGHT = 44
 
+/** `shellTopBarStyles.bar` uses paddingVertical: 6 — include both edges in floating chrome inset. */
+export const NATIVE_HEADER_BAR_VERTICAL_PADDING = 12
+
+export function floatingTopChromeInset(topSafeInset: number): number {
+  return topSafeInset + NATIVE_HEADER_BAR_HEIGHT + NATIVE_HEADER_BAR_VERTICAL_PADDING
+}
+
 const BOOTSTRAP_TOP_INSET = initialWindowMetrics?.insets.top ?? 0
 
-/**
- * Safe-area top inset that never drops below the initial window value.
- * Prevents one-frame layout jumps under the dynamic island when returning from
- * immersive stack screens (e.g. message threads) where insets.top can read 0.
- */
+/** Floors top inset so chrome does not collapse under the status bar during stack pops. */
 export function useStableTopSafeInset(): number {
   const insets = useSafeAreaInsets()
   return Math.max(insets.top, BOOTSTRAP_TOP_INSET)
@@ -104,6 +107,61 @@ export function getStudentCourseLine(
 ): string | null {
   return getCourseDisplayLine(session.courseCode, session.courseTitle)
 }
+
+/** Compact top-bar course chip — opens the existing course picker. */
+export function HeaderCourseChip({
+  label,
+  onPress,
+  interactive,
+}: {
+  label: string
+  onPress: () => void
+  interactive: boolean
+}) {
+  const tokens = useAppThemeTokens()
+  const chrome = useShellChrome()
+  const text = label.trim() || "Course"
+  return (
+    <Pressable
+      onPress={interactive ? onPress : undefined}
+      disabled={!interactive}
+      accessibilityRole={interactive ? "button" : "text"}
+      accessibilityLabel={interactive ? `Current course ${text}. Switch course` : `Current course ${text}`}
+      hitSlop={6}
+      style={({ pressed }) => [
+        headerCourseChipStyles.chip,
+        {
+          backgroundColor: tokens.accentSoft,
+          borderColor: tokens.border,
+          opacity: pressed && interactive ? 0.86 : 1,
+        },
+      ]}
+    >
+      <Text style={[headerCourseChipStyles.label, { color: chrome.label }]} numberOfLines={1}>
+        {text}
+      </Text>
+      {interactive ? <Ionicons name="chevron-down" size={12} color={chrome.secondaryLabel} /> : null}
+    </Pressable>
+  )
+}
+
+const headerCourseChipStyles = StyleSheet.create({
+  chip: {
+    maxWidth: 108,
+    minHeight: 32,
+    paddingHorizontal: 8,
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+  },
+  label: {
+    fontSize: 12,
+    fontWeight: "700",
+    flexShrink: 1,
+  },
+})
 
 export function formatFacultyRoleLabel(role?: string | null): string {
   const trimmed = role?.trim()

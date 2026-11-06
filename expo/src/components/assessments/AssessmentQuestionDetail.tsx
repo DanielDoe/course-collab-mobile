@@ -22,6 +22,7 @@ import {
   reportOptionRowColors,
 } from "../../lib/assessment-report-theme"
 import {
+  extractPlotImage,
   extractStudentAnswer,
   formatCorrectAnswer,
   formatDisplayAnswer,
@@ -240,7 +241,7 @@ export function AssessmentQuestionDetail({ q }: { q: AssessmentResultQuestion })
   const isCode = isCodeQuestionType(type)
   const feedback = q.ai_feedback as AiFeedback | null | undefined
   const showAiFeedbackOnly = hasProcessedAiFeedback(feedback)
-  const qExt = q as AssessmentResultQuestion & { plotImage?: string; code?: string }
+  const plotUri = extractPlotImage(q)
   const overridePoints = q.override_points
   const earned = Number(q.points_earned ?? 0)
   const maxPts = Number(q.max_points ?? q.points ?? 1)
@@ -327,14 +328,24 @@ export function AssessmentQuestionDetail({ q }: { q: AssessmentResultQuestion })
         </View>
       ) : null}
 
-      {!showAiFeedbackOnly && type === "multi_part" ? (
+      {isCode ? (
+        <View style={styles.stack}>
+          <AnswerBlock
+            label="Your code"
+            value={studentDisplay}
+            tone={studentTone}
+            monospace
+          />
+          {plotUri ? <PlotImage uri={plotUri} /> : null}
+        </View>
+      ) : !showAiFeedbackOnly && type === "multi_part" ? (
         <MultiPartSection q={q} />
       ) : !showAiFeedbackOnly && isCircuit ? (
         <View style={styles.stack}>
           <Text style={[styles.fieldLabel, { color: tokens.textSecondary }]}>Your submission</Text>
           <AssessmentSubmissionReviewSection answerRaw={studentRaw} />
         </View>
-      ) : !showAiFeedbackOnly && hasMcqOptions(q) && !isCode && !isCircuit ? (
+      ) : !showAiFeedbackOnly && hasMcqOptions(q) && !isCircuit ? (
         <View style={styles.stack}>
           <Text style={[styles.fieldLabel, { color: tokens.textSecondary }]}>Answer choices</Text>
           {batchRichOptions ? (
@@ -381,8 +392,6 @@ export function AssessmentQuestionDetail({ q }: { q: AssessmentResultQuestion })
           ) : null}
         </View>
       ) : null}
-
-      {!showAiFeedbackOnly && qExt.plotImage ? <PlotImage uri={qExt.plotImage} /> : null}
 
       {!showAiFeedbackOnly && q.sample_answers && q.sample_answers.length > 0 ? (
         <SampleAnswersSection samples={q.sample_answers} />

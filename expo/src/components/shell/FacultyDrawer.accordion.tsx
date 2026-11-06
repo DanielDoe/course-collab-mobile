@@ -45,6 +45,7 @@ import {
   setStoredFacultyDrawerExpandedGroup,
 } from "../../lib/faculty-drawer-memory"
 import { useFacultyShell } from "../../context/FacultyShellContext"
+import { resolveFacultyNavBadgeCount } from "../../lib/module-nav-badges"
 import type { FacultySession } from "../../lib/session"
 import { BRAND } from "../../constants"
 import { useDrawerPanelWidth } from "../../lib/responsive-layout"
@@ -183,12 +184,7 @@ export function FacultyDrawerAccordion({ session }: Props) {
     transform: [{ scale: panelScale.value }]}))
 
   function badgeFor(item: FacultyNavItem): number | null {
-    if (item.badgeKey === "pendingPoints") return badges.pendingPoints || null
-    if (item.badgeKey === "pendingIssues") return badges.pendingIssues || null
-    if (item.badgeKey === "officeHours") return badges.officeHours || null
-    if (item.badgeKey === "courseExchange") return badges.courseExchange || null
-    if (item.badgeKey === "notifications") return notificationCount || null
-    return null
+    return resolveFacultyNavBadgeCount(badges, notificationCount, item.badgeKey)
   }
 
   function navigate(item: FacultyNavItem) {

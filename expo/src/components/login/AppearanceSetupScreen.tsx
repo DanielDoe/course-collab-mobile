@@ -23,6 +23,7 @@ import {
   type ThemeId,
 } from "../../constants/app-themes"
 import { NATIVE } from "../../constants/faculty-native-theme"
+import { LoginBackLink } from "./login-chrome"
 import { persistAppearanceSetupComplete } from "../../lib/appearance-setup"
 import { onboardingStepMeta } from "../../lib/onboarding"
 import { authFlowContentMaxWidth, useAuthFlowContentStyle, useAuthFlowLayout } from "../../lib/responsive-layout"
@@ -205,7 +206,7 @@ export function AppearanceSetupScreen() {
   const router = useRouter()
   const systemScheme = useColorScheme()
   const { width: windowWidth } = useWindowDimensions()
-  const { session } = useSession()
+  const { session, isLoading: sessionLoading } = useSession()
   const { ready, prefs, tokens, setAppearanceMode, setThemeId } = useAppearance()
   const { LOGIN, loginType } = useLoginTheme()
   const contentStyle = useAuthFlowContentStyle(520)
@@ -228,6 +229,7 @@ export function AppearanceSetupScreen() {
   }, [session])
 
   useEffect(() => {
+    if (sessionLoading) return
     if (!session) {
       router.replace("/login")
       return
@@ -235,7 +237,7 @@ export function AppearanceSetupScreen() {
     if (session.portal !== "student") {
       router.replace("/dashboard")
     }
-  }, [router, session])
+  }, [router, session, sessionLoading])
 
   async function finish() {
     if (!session || session.portal !== "student") {
@@ -253,7 +255,7 @@ export function AppearanceSetupScreen() {
     }
   }
 
-  if (!session || session.portal !== "student") {
+  if (sessionLoading || !session || session.portal !== "student") {
     return null
   }
 
@@ -277,6 +279,9 @@ export function AppearanceSetupScreen() {
         <Text style={[styles.progressLabel, { color: LOGIN.secondaryLabel }]}>
           Step {progressMeta.stepIndex + 1} of {progressMeta.totalSteps}
         </Text>
+        {progressMeta.stepIndex > 0 ? (
+          <LoginBackLink label="Back" onPress={() => router.back()} style={styles.appearanceBack} />
+        ) : null}
       </View>
 
       <View style={[styles.scrollHost, contentStyle]}>
@@ -406,6 +411,10 @@ const styles = StyleSheet.create({
   progressLabel: {
     fontSize: 12,
     fontWeight: Platform.OS === "ios" ? "500" : "600",
+  },
+  appearanceBack: {
+    marginTop: 8,
+    alignSelf: "flex-start",
   },
   scrollHost: { flex: 1, minHeight: 0, width: "100%", alignSelf: "center" },
   scrollView: { flex: 1 },

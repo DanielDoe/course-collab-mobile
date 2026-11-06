@@ -1,5 +1,5 @@
-import { OnboardingConsentScreen } from "../../src/components/login/OnboardingConsentScreen"
+import { Redirect } from "expo-router"
 
 export default function OnboardingPrivacyRoute() {
-  return <OnboardingConsentScreen kind="privacy" />
+  return <Redirect href="/(auth)/onboarding-terms" />
 }

@@ -2,12 +2,15 @@ import { createContext, useCallback, useContext, useMemo, useState, type ReactNo
 import type { InstructorCourse } from "../lib/instructor-api"
 import type { FacultyMembershipTier } from "../types/dashboard"
 import type { RefreshFacultyDataFn } from "../lib/faculty-shell-refresh-types"
+import { setFacultyQueryCourseId } from "../lib/query/faculty-course"
 
 export type FacultyBadges = {
   pendingPoints: number
   pendingIssues: number
   officeHours: number
   courseExchange: number
+  unreadMessages: number
+  pendingAccessRequests: number
 }
 
 type FacultyShellContextValue = {
@@ -51,7 +54,11 @@ export function FacultyShellProvider({ children }: { children: ReactNode }) {
   const [profileOpen, setProfileOpen] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [coursePickerOpen, setCoursePickerOpen] = useState(false)
-  const [selectedCourse, setSelectedCourse] = useState<InstructorCourse | null>(null)
+  const [selectedCourse, setSelectedCourseState] = useState<InstructorCourse | null>(null)
+  const setSelectedCourse = useCallback((course: InstructorCourse | null) => {
+    setSelectedCourseState(course)
+    setFacultyQueryCourseId(course?.id ?? null)
+  }, [])
   const [courses, setCourses] = useState<InstructorCourse[]>([])
   const [notificationCount, setNotificationCount] = useState(0)
   const [badges, setBadgesState] = useState<FacultyBadges>({
@@ -59,6 +66,8 @@ export function FacultyShellProvider({ children }: { children: ReactNode }) {
     pendingIssues: 0,
     officeHours: 0,
     courseExchange: 0,
+    unreadMessages: 0,
+    pendingAccessRequests: 0,
   })
   const [membershipTier, setMembershipTier] = useState<FacultyMembershipTier>("Free")
   const [membershipTierLoaded, setMembershipTierLoaded] = useState(false)
@@ -69,7 +78,17 @@ export function FacultyShellProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const setBadges = useCallback((partial: Partial<FacultyBadges>) => {
-    setBadgesState((prev) => ({ ...prev, ...partial }))
+    setBadgesState((prev) => {
+      let changed = false
+      for (const key of Object.keys(partial) as (keyof FacultyBadges)[]) {
+        if (prev[key] !== partial[key]) {
+          changed = true
+          break
+        }
+      }
+      if (!changed) return prev
+      return { ...prev, ...partial }
+    })
   }, [])
 
   const closeOverlays = useCallback(() => {

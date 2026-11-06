@@ -105,11 +105,14 @@ export function CoraThinkingIndicator({
   context = "generic",
   /** Hide the left logo column when the screen header already shows Cora branding. */
   hideBrand = false,
+  /** Center copy for full-screen loading states. */
+  centered = false,
 }: {
   domain?: string | null
   hasImportedQuestion?: boolean
   context?: CoraThinkingContext
   hideBrand?: boolean
+  centered?: boolean
 }) {
   const native = useThemedNative()
   const SN = useThemedStudentNative()
@@ -180,7 +183,11 @@ export function CoraThinkingIndicator({
 
   return (
     <View
-      style={[styles.wrap, hideBrand && styles.wrapCompact]}
+      style={[
+        styles.wrap,
+        hideBrand && styles.wrapCompact,
+        centered && styles.wrapCentered,
+      ]}
       accessibilityRole="text"
       accessibilityLabel={`${CORA_NAME} is thinking`}
     >
@@ -204,30 +211,53 @@ export function CoraThinkingIndicator({
         </View>
       )}
 
-      <View style={[styles.copy, hideBrand && styles.copyCompact]}>
-        <View style={styles.labelRow}>
-          <Animated.Text
-            key={phase.label}
-            entering={FadeInUp.duration(280).springify().damping(18)}
-            exiting={FadeOut.duration(160)}
-            style={[type.bodyEmphasis, styles.phaseLabel, { color: native.label }]}
-          >
-            {phase.label}
-          </Animated.Text>
-          <ThinkingDots color={SN.accent} />
-        </View>
-
-        <View style={styles.detailTrack}>
-          <Animated.View style={[styles.detailSweep, sweepStyle, { backgroundColor: SN.accent }]} />
-          <Animated.Text
-            key={`${phaseIndex}-detail`}
-            entering={FadeIn.duration(260).delay(60)}
-            exiting={FadeOut.duration(140)}
-            style={[type.caption, styles.phaseDetail, { color: SN.secondaryLabel }]}
-          >
-            {phase.detail}
-          </Animated.Text>
-        </View>
+      <View style={[styles.copy, hideBrand && styles.copyCompact, centered && styles.copyCentered]}>
+        {centered ? (
+          <>
+            <ThinkingDots color={SN.accent} />
+            <Animated.Text
+              key={phase.label}
+              entering={FadeInUp.duration(280).springify().damping(18)}
+              exiting={FadeOut.duration(160)}
+              style={[type.bodyEmphasis, styles.phaseLabel, styles.phaseCentered, { color: native.label }]}
+            >
+              {phase.label}
+            </Animated.Text>
+            <Animated.Text
+              key={`${phaseIndex}-detail`}
+              entering={FadeIn.duration(260).delay(60)}
+              exiting={FadeOut.duration(140)}
+              style={[type.caption, styles.phaseDetail, styles.phaseCentered, { color: SN.secondaryLabel }]}
+            >
+              {phase.detail}
+            </Animated.Text>
+          </>
+        ) : (
+          <>
+            <View style={styles.labelRow}>
+              <Animated.Text
+                key={phase.label}
+                entering={FadeInUp.duration(280).springify().damping(18)}
+                exiting={FadeOut.duration(160)}
+                style={[type.bodyEmphasis, styles.phaseLabel, { color: native.label }]}
+              >
+                {phase.label}
+              </Animated.Text>
+              <ThinkingDots color={SN.accent} />
+            </View>
+            <View style={styles.detailTrack}>
+              <Animated.View style={[styles.detailSweep, sweepStyle, { backgroundColor: SN.accent }]} />
+              <Animated.Text
+                key={`${phaseIndex}-detail`}
+                entering={FadeIn.duration(260).delay(60)}
+                exiting={FadeOut.duration(140)}
+                style={[type.caption, styles.phaseDetail, { color: SN.secondaryLabel }]}
+              >
+                {phase.detail}
+              </Animated.Text>
+            </View>
+          </>
+        )}
       </View>
     </View>
   )
@@ -242,6 +272,28 @@ const styles = StyleSheet.create({
   },
   wrapCompact: {
     paddingVertical: 0,
+  },
+  wrapCentered: {
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    alignSelf: "center",
+    width: "100%",
+    maxWidth: 320,
+    gap: 10,
+  },
+  copyCentered: {
+    flexGrow: 0,
+    flexShrink: 1,
+    alignItems: "center",
+    width: "100%",
+    gap: 8,
+    paddingTop: 0,
+  },
+  phaseCentered: {
+    textAlign: "center",
+    alignSelf: "center",
+    flexShrink: 0,
   },
   iconColumn: {
     width: 58,

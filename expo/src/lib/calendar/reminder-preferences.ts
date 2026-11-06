@@ -6,7 +6,10 @@ const APPLE_CALENDAR_KEY = "course-collab.apple-calendar-event"
 
 export const DEFAULT_CLASS_REMINDER_PREFS: ClassReminderPrefs = {
   enabled: true,
-  minutesBefore: 30}
+  minutesBefore: 15,
+  notifyBefore: true,
+  notifyAtStart: true,
+}
 
 export async function getClassReminderPrefs(): Promise<ClassReminderPrefs> {
   try {
@@ -15,7 +18,10 @@ export async function getClassReminderPrefs(): Promise<ClassReminderPrefs> {
     const parsed = JSON.parse(raw) as Partial<ClassReminderPrefs>
     return {
       enabled: parsed.enabled ?? DEFAULT_CLASS_REMINDER_PREFS.enabled,
-      minutesBefore: parsed.minutesBefore ?? DEFAULT_CLASS_REMINDER_PREFS.minutesBefore}
+      minutesBefore: parsed.minutesBefore ?? DEFAULT_CLASS_REMINDER_PREFS.minutesBefore,
+      notifyBefore: parsed.notifyBefore ?? true,
+      notifyAtStart: parsed.notifyAtStart ?? true,
+    }
   } catch {
     return DEFAULT_CLASS_REMINDER_PREFS
   }

@@ -1,20 +1,17 @@
-import { useCallback, useEffect, useMemo, useState, memo, type RefObject } from "react"
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useEffect, useMemo, memo, type RefObject } from "react"
+import { Pressable, StyleSheet, Text, View } from "react-native"
+import { ScrollView } from "react-native-gesture-handler"
 import { AppAlert } from '../../lib/app-alert'
 import type { IoniconName } from "@/components/icons/AppIcon"
 import { DrawerNavIcon } from "./drawer-nav-icons"
 import { BrandLogoMark } from "../brand/BrandLogoMark"
 import { useRouter, usePathname } from "expo-router"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
-import Animated, {
-  Easing,
-  interpolateColor,
-  runOnJS,
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-  withTiming,
-} from "react-native-reanimated"
+import {
+  DrawerPanelScrollHost,
+  ShellDrawerChrome,
+  useShellDrawerMotion,
+} from "../navigation/ShellDrawerMotionProvider"
 import {
   STUDENT_DASHBOARD_LINK,
   STUDENT_NAV_GROUPS,
@@ -26,10 +23,15 @@ import {
   type StudentNavItem,
 } from "../../constants/student-nav"
 import { useStudentShell } from "../../context/StudentShellContext"
+import {
+  resolveStudentNavBadgeCount,
+  studentNavBadgeTotal,
+} from "../../lib/module-nav-badges"
 import { getNavUpgradePrompt } from "../../lib/membership-tier"
 import type { StudentSession } from "../../lib/session"
 import type { MembershipTier } from "../../types/dashboard"
 import { NATIVE } from "../../constants/faculty-native-theme"
+import { NativeCountBadge } from "../faculty/faculty-shared"
 import { useAppThemeTokens } from "../../context/AppearanceProvider"
 import { getMembershipPlan, nextUpgradeTier } from "../../lib/membership-plans"
 import { membershipTierSolidBadge } from "../../lib/membership-plan-theme"
@@ -49,6 +51,14 @@ import { DrawerNavAnchor, useDrawerScrollToActive } from "../../lib/drawer-scrol
 import { useDrawerPanelWidth } from "../../lib/responsive-layout"
 import { isDrawerShellRouteActive, navigateDrawerShellRoute } from "../../lib/drawer-shell-navigation"
 import { normalizeRoutePathname } from "../../lib/navigation-reset"
+import { getQueryClient } from "../../lib/query/client"
+import { prefetchForRoute } from "../../lib/query/nav-prefetch"
+import Animated, {
+  interpolateColor,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+} from "react-native-reanimated"
 
 type Props = {
   session: StudentSession
@@ -63,7 +73,17 @@ export function StudentDrawer({ session }: Props) {
   const panelWidth = useDrawerPanelWidth()
   const router = useRouter()
   const pathname = usePathname()
-  const { drawerOpen, closeDrawer, membershipTier, membershipTierLoaded } = useStudentShell()
+  const {
+    drawerOpen,
+    closeDrawer,
+    membershipTier,
+    membershipTierLoaded,
+    unreadMessagesCount,
+    notificationCount,
+    badges,
+  } = useStudentShell()
+  const { modalVisible } = useShellDrawerMotion()
+  const drawerOverlayVisible = drawerOpen || modalVisible
   const drawerTheme = useDrawerNavTheme()
   const tokens = useAppThemeTokens()
   const type = useNativeType()
@@ -72,40 +92,20 @@ export function StudentDrawer({ session }: Props) {
   const { scrollRef, contentRef, registerRow, unregisterRow, onRowLayout, onScroll } =
     useDrawerScrollToActive(activeItemId, drawerOpen)
 
-  const [modalVisible, setModalVisible] = useState(false)
-  const backdropOpacity = useSharedValue(0)
-  const panelTranslateX = useSharedValue(-panelWidth)
-
-  const finishClose = useCallback(() => setModalVisible(false), [])
+  function badgeFor(item: StudentNavItem): number | null {
+    if (item.id === STUDENT_DASHBOARD_LINK.id) {
+      const total = studentNavBadgeTotal(badges, notificationCount)
+      return total > 0 ? total : null
+    }
+    return resolveStudentNavBadgeCount(badges, notificationCount, unreadMessagesCount, item.badgeKey)
+  }
 
   useEffect(() => {
     closeDrawer()
   }, [pathname, closeDrawer])
 
-  useEffect(() => {
-    panelTranslateX.value = drawerOpen ? 0 : -panelWidth
-  }, [drawerOpen, panelTranslateX, panelWidth])
-
-  useEffect(() => {
-    if (drawerOpen) {
-      setModalVisible(true)
-      backdropOpacity.value = withTiming(1, { duration: 220, easing: Easing.out(Easing.cubic) })
-      panelTranslateX.value = withSpring(0, { damping: 22, stiffness: 260 })
-      return
-    }
-
-    backdropOpacity.value = withTiming(0, { duration: 180 })
-    panelTranslateX.value = withTiming(-panelWidth, { duration: 200 }, () => {
-      runOnJS(finishClose)()
-    })
-  }, [drawerOpen, backdropOpacity, panelTranslateX, panelWidth, finishClose])
-
-  const backdropStyle = useAnimatedStyle(() => ({ opacity: backdropOpacity.value }))
-  const panelStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: panelTranslateX.value }],
-  }))
-
   function navigate(route: string) {
+    prefetchForRoute(getQueryClient(), session, route)
     closeDrawer()
     navigateDrawerShellRoute(router, pathname, route)
   }
@@ -132,19 +132,12 @@ export function StudentDrawer({ session }: Props) {
   const layout = drawerShellLayout(panelWidth, insets, drawerTheme)
 
   return (
-    <Modal visible={modalVisible} transparent animationType="none" onRequestClose={closeDrawer} statusBarTranslucent>
-      <View style={styles.root}>
-        <Animated.View style={[styles.backdrop, backdropStyle]}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={closeDrawer} accessibilityLabel="Close menu" />
-        </Animated.View>
-
-        <Animated.View
-          style={[
-            styles.panel,
-            panelStyle,
-            layout.panel,
-          ]}
-        >
+    <ShellDrawerChrome
+      visible={drawerOverlayVisible}
+      onRequestClose={closeDrawer}
+      backdropBaseStyle={styles.backdrop}
+      panelBaseStyle={[styles.panel, layout.panel]}
+    >
           <View
             style={[
               styles.header,
@@ -193,12 +186,15 @@ export function StudentDrawer({ session }: Props) {
                 style={[styles.closeBtn, { backgroundColor: drawerTheme.closeBtnBg }]}
                 onPress={closeDrawer}
                 hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Close menu"
               >
                 <DrawerNavIcon name="close" size={18} color={drawerTheme.secondaryLabel} />
               </Pressable>
             </View>
           </View>
 
+          <DrawerPanelScrollHost>
           <ScrollView
             ref={scrollRef}
             style={[styles.scroll, { backgroundColor: layout.scrollBackground }]}
@@ -217,6 +213,7 @@ export function StudentDrawer({ session }: Props) {
                   <NavRow
                     item={STUDENT_DASHBOARD_LINK}
                     active={isDrawerShellRouteActive(normalizedPathname, STUDENT_DASHBOARD_LINK.route)}
+                    badge={badgeFor(STUDENT_DASHBOARD_LINK)}
                     tier={membershipTier}
                     tierLoaded={membershipTierLoaded}
                     onPress={() => handleNavPress(STUDENT_DASHBOARD_LINK)}
@@ -228,6 +225,7 @@ export function StudentDrawer({ session }: Props) {
                     key={group.id}
                     group={group}
                     pathname={normalizedPathname}
+                    badgeFor={badgeFor}
                     tier={membershipTier}
                     tierLoaded={membershipTierLoaded}
                     onPress={handleNavPress}
@@ -248,6 +246,7 @@ export function StudentDrawer({ session }: Props) {
                   <NavRow
                     item={STUDENT_SETTINGS_LINK}
                     active={isDrawerShellRouteActive(normalizedPathname, STUDENT_SETTINGS_LINK.route)}
+                    badge={badgeFor(STUDENT_SETTINGS_LINK)}
                     tier={membershipTier}
                     tierLoaded={membershipTierLoaded}
                     onPress={() => handleNavPress(STUDENT_SETTINGS_LINK)}
@@ -257,6 +256,7 @@ export function StudentDrawer({ session }: Props) {
                 <FlatNavSection
                   group={STUDENT_SUPPORT_GROUP}
                   pathname={normalizedPathname}
+                  badgeFor={badgeFor}
                   tier={membershipTier}
                   tierLoaded={membershipTierLoaded}
                   onPress={handleNavPress}
@@ -272,9 +272,8 @@ export function StudentDrawer({ session }: Props) {
                 />
               </View>
             </ScrollView>
-        </Animated.View>
-      </View>
-    </Modal>
+          </DrawerPanelScrollHost>
+    </ShellDrawerChrome>
   )
 }
 
@@ -365,6 +364,7 @@ function DrawerUpgradeCard({
 function FlatNavSection({
   group,
   pathname,
+  badgeFor,
   tier,
   tierLoaded,
   onPress,
@@ -374,6 +374,7 @@ function FlatNavSection({
 }: {
   group: StudentNavGroup
   pathname: string
+  badgeFor: (item: StudentNavItem) => number | null
   tier: MembershipTier
   tierLoaded: boolean
   onPress: (item: StudentNavItem) => void
@@ -398,6 +399,7 @@ function FlatNavSection({
           <NavRow
             item={item}
             active={isDrawerShellRouteActive(pathname, item.route)}
+            badge={badgeFor(item)}
             tier={tier}
             tierLoaded={tierLoaded}
             onPress={() => onPress(item)}
@@ -413,12 +415,14 @@ const AnimatedPressable = Animated.createAnimatedComponent(Pressable)
 function NavRowComponent({
   item,
   active,
+  badge,
   tier,
   tierLoaded,
   onPress,
 }: {
   item: StudentNavItem
   active: boolean
+  badge: number | null
   tier: MembershipTier
   tierLoaded: boolean
   onPress: () => void
@@ -464,6 +468,7 @@ function NavRowComponent({
         {item.label}
       </Text>
 
+      {badge ? <NativeCountBadge count={badge} variant="compact" /> : null}
       {locked ? (
         <View style={[styles.lockChip, { backgroundColor: theme.iconWellBg }]}>
           <DrawerNavIcon name="lock-closed" size={11} color={theme.inactiveIcon} strokeWidth={2.25} />
@@ -476,7 +481,6 @@ function NavRowComponent({
 const NavRow = memo(NavRowComponent)
 
 const styles = StyleSheet.create({
-  root: { flex: 1, flexDirection: "row", alignItems: "stretch" },
   backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: GLASS_SHEET_BACKDROP },
   panel: {
     borderTopRightRadius: 24,

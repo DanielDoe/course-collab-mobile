@@ -2,10 +2,11 @@ import { useEffect, type ReactNode } from "react"
 import { StyleSheet, View } from "react-native"
 import { GestureHandlerRootView } from "react-native-gesture-handler"
 import { SafeAreaProvider } from "react-native-safe-area-context"
-import { SessionProvider } from "../../context/SessionProvider"
+import { QueryProvider } from "../../context/QueryProvider"
 import { AppearanceProvider } from "../../context/AppearanceProvider"
 import { NotificationProvider } from "../../context/NotificationProvider"
 import { AppAlertProvider } from "../../context/AppAlertProvider"
+import { AppToastProvider } from "../../context/AppToastProvider"
 import { PresenceSelfProvider } from "../../context/PresenceSelfProvider"
 import { StripeAppProvider } from "../../context/StripeAppProvider"
 import { SystemErrorBoundary } from "../SystemErrorBoundary"
@@ -13,8 +14,6 @@ import { SystemErrorCapture } from "../SystemErrorCapture"
 import { BootDiagnosticsShell } from "../BootDiagnosticsShell"
 import { installEarlyStartupErrorCapture } from "../../lib/startup-error-capture"
 import { bootLog } from "../../lib/boot-diagnostics"
-
-const BOOT_BG = "#582c83"
 
 export function FullRootProviders({ children }: { children: ReactNode }) {
   useEffect(() => {
@@ -27,20 +26,22 @@ export function FullRootProviders({ children }: { children: ReactNode }) {
       <GestureHandlerRootView style={styles.fill}>
         <View style={styles.fill}>
           <SafeAreaProvider>
-            <SessionProvider>
+            <QueryProvider>
               <SystemErrorCapture />
               <AppearanceProvider>
                 <StripeAppProvider>
                   <AppAlertProvider>
-                    <PresenceSelfProvider>
-                      <NotificationProvider>
-                        <SystemErrorBoundary>{children}</SystemErrorBoundary>
-                      </NotificationProvider>
-                    </PresenceSelfProvider>
+                    <AppToastProvider>
+                      <PresenceSelfProvider>
+                        <NotificationProvider>
+                          <SystemErrorBoundary>{children}</SystemErrorBoundary>
+                        </NotificationProvider>
+                      </PresenceSelfProvider>
+                    </AppToastProvider>
                   </AppAlertProvider>
                 </StripeAppProvider>
               </AppearanceProvider>
-            </SessionProvider>
+            </QueryProvider>
           </SafeAreaProvider>
         </View>
       </GestureHandlerRootView>
@@ -51,6 +52,5 @@ export function FullRootProviders({ children }: { children: ReactNode }) {
 const styles = StyleSheet.create({
   fill: {
     flex: 1,
-    backgroundColor: BOOT_BG,
   },
 })

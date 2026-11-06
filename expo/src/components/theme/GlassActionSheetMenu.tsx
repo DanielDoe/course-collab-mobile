@@ -6,7 +6,7 @@ import { useNativeType } from "../../lib/themed-module-theme"
 import { useGlassChromeActive } from "./GlassSurface"
 
 /** Dimmed scrim behind action sheets — strong enough for text contrast on glass. */
-export const GLASS_SHEET_BACKDROP = "rgba(0, 0, 0, 0.48)"
+export const GLASS_SHEET_BACKDROP = "rgba(0, 0, 0, 0.58)"
 
 /** Grab handle for bottom sheets. */
 export function GlassSheetHandle() {
@@ -117,11 +117,13 @@ export function GlassMenuRow({
 /** Selectable filter row — checkmark on active, rows sit on sheet glass (no nested cards). */
 export function GlassFilterOptionRow({
   label,
+  detail,
   active = false,
   onPress,
   showSeparator,
 }: {
   label: string
+  detail?: string
   active?: boolean
   onPress: () => void
   showSeparator?: boolean
@@ -139,20 +141,30 @@ export function GlassFilterOptionRow({
         style={({ pressed }) => [styles.filterRow, pressed && { backgroundColor: pressedBg }]}
         onPress={onPress}
         accessibilityRole="button"
-        accessibilityLabel={label}
+        accessibilityLabel={detail ? `${label}, ${detail}` : label}
         accessibilityState={{ selected: active }}
       >
-        <Text
-          style={[
-            type.body,
-            styles.filterRowLabel,
-            { color: chrome.label },
-            active && { color: tokens.accentDark, fontWeight: "600" },
-          ]}
-          numberOfLines={2}
-        >
-          {label}
-        </Text>
+        <View style={styles.filterRowCopy}>
+          <Text
+            style={[
+              type.body,
+              styles.filterRowLabel,
+              { color: chrome.label },
+              active && { color: tokens.accentDark, fontWeight: "600" },
+            ]}
+            numberOfLines={1}
+          >
+            {label}
+          </Text>
+          {detail ? (
+            <Text
+              style={[type.caption, styles.filterRowDetail, { color: chrome.secondaryLabel }]}
+              numberOfLines={1}
+            >
+              {detail}
+            </Text>
+          ) : null}
+        </View>
         {active ? <Ionicons name="checkmark-circle" size={20} color={tokens.accent} /> : null}
       </Pressable>
       {showSeparator ? <View style={[styles.filterSeparator, { backgroundColor: chrome.separator }]} /> : null}
@@ -207,14 +219,17 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   filterRow: {
-    minHeight: 48,
+    minHeight: 52,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     gap: 12,
   },
-  filterRowLabel: { flex: 1, minWidth: 0 },
+  filterRowCopy: { flex: 1, minWidth: 0, gap: 2 },
+  filterRowLabel: { minWidth: 0 },
+  filterRowDetail: { fontWeight: "500" },
   filterSeparator: {
     height: StyleSheet.hairlineWidth,
     marginHorizontal: 4,

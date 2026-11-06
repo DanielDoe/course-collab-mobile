@@ -11,6 +11,8 @@ import {
 } from "../../lib/support-tickets"
 import { semanticSoft, useNativeType } from "../../lib/themed-module-theme"
 import { FacultyEmptyState } from "../faculty/faculty-shared"
+import { MobbinPillSegmentControl } from "../theme/MobbinPillSegmentControl"
+import type { IoniconName } from "@/components/icons/AppIcon"
 
 type Props = {
   tickets: SupportTicket[]
@@ -152,58 +154,25 @@ export function SupportTicketHistoryPanel({
 }
 
 type TabProps<T extends string> = {
-  tabs: Array<{ id: T; label: string }>
+  tabs: Array<{ id: T; label: string; icon?: IoniconName }>
   tab: T
   onChange: (tab: T) => void
 }
 
+/** Student-style pill tabs — lavender track + gliding white selection pill. */
 export function SupportTabBar<T extends string>({ tabs, tab, onChange }: TabProps<T>) {
-  const native = useThemedNative()
-  const tokens = useAppThemeTokens()
-  const type = useNativeType()
+  const options = tabs.map((item) => ({
+    id: item.id,
+    label: item.label,
+    icon: item.icon,
+  }))
 
   return (
-    <View
-      style={{
-        flexDirection: "row",
-        gap: 8,
-        paddingVertical: 4,
-      }}
-    >
-      {tabs.map((item) => {
-        const active = item.id === tab
-        const accent = tokens.accent ?? tokens.native.tint
-        return (
-          <Pressable
-            key={item.id}
-            onPress={() => onChange(item.id)}
-            style={({ pressed }) => [
-              {
-                flex: 1,
-                minHeight: 40,
-                borderRadius: NATIVE.sectionRadius,
-                alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: active ? semanticSoft(accent, tokens.isDark, 0.14) : native.fill,
-                borderWidth: StyleSheet.hairlineWidth,
-                borderColor: active ? accent : native.separator,
-              },
-              pressed && Platform.OS === "ios" && { opacity: NATIVE.pressedOpacity },
-            ]}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: active }}
-          >
-            <Text
-              style={[
-                type.bodyEmphasis,
-                { color: active ? accent : native.secondaryLabel, fontSize: 14 },
-              ]}
-            >
-              {item.label}
-            </Text>
-          </Pressable>
-        )
-      })}
-    </View>
+    <MobbinPillSegmentControl
+      options={options}
+      value={tab}
+      onChange={onChange}
+      scrollable={false}
+    />
   )
 }

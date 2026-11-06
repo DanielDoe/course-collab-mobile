@@ -1,7 +1,6 @@
 import { useCallback, useState } from "react"
 import {
   ActivityIndicator,
-  Image,
   Pressable,
   StyleSheet,
   Text,
@@ -12,6 +11,7 @@ import { AppAlert } from "../../lib/app-alert"
 import * as DocumentPicker from "expo-document-picker"
 import * as ImagePicker from "expo-image-picker"
 import { Ionicons } from "@/components/icons/AppIcon"
+import { CachedRemoteImage } from "../media/CachedRemoteImage"
 import type { StudentSession } from "../../lib/session"
 import { ApiError } from "../../lib/student-api"
 import { API_BASE_URL } from "../../constants"
@@ -29,6 +29,7 @@ import {
 import { useStudentSubmissionLayout } from "../../lib/circuit-submission-layout"
 import { rewardsApi } from "../../lib/rewards-api"
 import { circuitSubmissionUi as ui } from "../assessments/circuit-submission-ui"
+import { workspaceUploadError } from "../../lib/workspace-upload"
 
 type SubmissionMode = "upload" | "photo"
 
@@ -124,6 +125,15 @@ export function CircuitSolutionSubmitPanel({
     })
     if (result.canceled || !result.assets?.[0]) return
     const asset = result.assets[0]
+    const invalid = workspaceUploadError({
+      name: asset.name,
+      mime: asset.mimeType,
+      size: asset.size,
+    })
+    if (invalid) {
+      AppAlert.alert("File not supported", invalid)
+      return
+    }
     await uploadAsset(asset.uri, asset.name ?? "solution.pdf", asset.mimeType ?? "application/pdf", "upload")
   }
 
@@ -153,6 +163,15 @@ export function CircuitSolutionSubmitPanel({
     if (result.canceled || !result.assets?.[0]) return
     const asset = result.assets[0]
     const name = asset.fileName ?? `solution-${Date.now()}.jpg`
+    const invalid = workspaceUploadError({
+      name,
+      mime: asset.mimeType ?? "image/jpeg",
+      size: asset.fileSize,
+    })
+    if (invalid) {
+      AppAlert.alert("File not supported", invalid)
+      return
+    }
     await uploadAsset(asset.uri, name, asset.mimeType ?? "image/jpeg", "photo")
   }
 
@@ -290,7 +309,7 @@ export function CircuitSolutionSubmitPanel({
       {files.map((file, index) => (
         <View key={`${file.url}-${index}`} style={[styles.fileRow, { backgroundColor: tokens.background, borderColor: tokens.border }]}>
           {file.mime.startsWith("image/") ? (
-            <Image source={{ uri: resolveFilePreviewUrl(file.url) }} style={styles.thumb} />
+            <CachedRemoteImage uri={resolveFilePreviewUrl(file.url)} variant="thumbnail" style={styles.thumb} />
           ) : (
             <View style={[styles.fileIcon, { backgroundColor: hexToRgba(tokens.accent, 0.1) }]}>
               <Ionicons name="document-text-outline" size={22} color={tokens.accent} />

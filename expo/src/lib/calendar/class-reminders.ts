@@ -1,6 +1,6 @@
 import { Platform } from "react-native"
 import type { CalendarEvent } from "./types"
-import { formatEventTimeRange, isClassMeetingEvent } from "./calendar-utils"
+import { formatEventTimeRange, isClassMeetingEvent, parseCalendarWallClock } from "./calendar-utils"
 import { getClassReminderPrefs } from "./reminder-preferences"
 import {
   getNotificationsModule,
@@ -10,8 +10,9 @@ import {
 import { NOTIFICATION_CATEGORY } from "../notifications/notification-categories"
 
 const REMINDER_PREFIX = "class-reminder-"
-const MAX_SCHEDULED = 48
+const MAX_MEETINGS = 30
 const HORIZON_DAYS = 14
+const MINUTES_BEFORE = 15
 
 export async function initClassReminderNotifications(): Promise<void> {
   await initializeNotificationSystem()
@@ -21,8 +22,8 @@ export async function ensureNotificationPermission(): Promise<boolean> {
   return requestNotificationPermissions()
 }
 
-function reminderIdentifier(event: CalendarEvent): string {
-  return `${REMINDER_PREFIX}${event.id}-${event.start_time}`
+function reminderIdentifier(event: CalendarEvent, kind: "soon" | "now"): string {
+  return `${REMINDER_PREFIX}${kind}-${event.id}-${event.start_time}`
 }
 
 export async function cancelClassReminders(): Promise<void> {
@@ -64,38 +65,44 @@ export async function syncClassMeetingReminders(classMeetings: CalendarEvent[]):
 
     const upcoming = classMeetings
       .filter((event) => isClassMeetingEvent(event) && event.start_time)
-      .map((event) => ({ event, startMs: new Date(event.start_time!).getTime() }))
-      .filter(({ startMs }) => startMs > now && startMs <= horizon)
+      .map((event) => ({ event, startMs: parseCalendarWallClock(event.start_time!).getTime() }))
+      .filter(({ startMs }) => Number.isFinite(startMs) && startMs > now && startMs <= horizon)
       .sort((a, b) => a.startMs - b.startMs)
-      .slice(0, MAX_SCHEDULED)
+      .slice(0, MAX_MEETINGS)
 
     let scheduled = 0
 
     for (const { event, startMs } of upcoming) {
-      const triggerDate = new Date(startMs - prefs.minutesBefore * 60_000)
-      if (triggerDate.getTime() <= now) continue
-
       const timeLabel = formatEventTimeRange(event)
       const location = event.location ? ` · ${event.location}` : ""
+      const fires: Array<{ kind: "soon" | "now"; at: number; title: string }> = []
+      if (prefs.notifyBefore !== false) {
+        fires.push({ kind: "soon", at: startMs - MINUTES_BEFORE * 60_000, title: "Class starting soon" })
+      }
+      if (prefs.notifyAtStart !== false) {
+        fires.push({ kind: "now", at: startMs, title: "Class starting now" })
+      }
 
-      await Notifications.scheduleNotificationAsync({
-        identifier: reminderIdentifier(event),
-        content: {
-          title: "Class starting soon",
-          subtitle: event.title,
-          body: `${timeLabel}${location}`,
-          data: { route: "/module/calendar", eventType: "class_meeting", type: "class" },
-          sound: "default",
-          categoryIdentifier: NOTIFICATION_CATEGORY.CLASS,
-          ...(Platform.OS === "android" ? { channelId: "class-reminders" } : {}),
-        },
-        trigger: {
-          type: Notifications.SchedulableTriggerInputTypes.DATE,
-          date: triggerDate,
-        },
-      })
-
-      scheduled += 1
+      for (const fire of fires) {
+        if (fire.at <= now) continue
+        await Notifications.scheduleNotificationAsync({
+          identifier: reminderIdentifier(event, fire.kind),
+          content: {
+            title: fire.title,
+            subtitle: event.title,
+            body: `${timeLabel}${location}`,
+            data: { route: "/module/calendar", eventType: "class_meeting", type: "class" },
+            sound: "default",
+            categoryIdentifier: NOTIFICATION_CATEGORY.CLASS,
+            ...(Platform.OS === "android" ? { channelId: "class-reminders" } : {}),
+          },
+          trigger: {
+            type: Notifications.SchedulableTriggerInputTypes.DATE,
+            date: new Date(fire.at),
+          },
+        })
+        scheduled += 1
+      }
     }
 
     return { scheduled, permissionGranted: true }

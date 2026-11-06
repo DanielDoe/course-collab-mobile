@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { AppAlert } from '../../lib/app-alert'
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useLocalSearchParams, useRouter } from "expo-router"
+import { safeRouterBack } from "../../lib/safe-router-back"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { useModuleContentTopPadding } from "../../context/ChromeInsetContext"
 import { useSession } from "../../context/SessionProvider"
 import { useStudentShell } from "../../context/StudentShellContext"
 import { hasNavAccess } from "../../constants/student-nav"
 import { prepareCoraRequest } from "../../lib/cora-rbac"
+import { filterCoraOutput } from "../../lib/cora-security/output-filter"
 import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
 import { hexToRgba } from "../../constants/app-themes"
 import { NATIVE } from "../../constants/faculty-native-theme"
@@ -19,11 +21,17 @@ import {
   type CodebenchLanguageId,
   type CodebenchLearningMode,
 } from "../../constants/codebench-languages"
-import { codebenchApi,
+import { codebenchAiFailureMessage, codebenchApi,
   type ClassroomAssignmentOption,
   type CodebenchEvaluateQuestion,
+  type DailyChallenge,
 } from "../../lib/codebench-api"
 import { CODEBENCH_CPP_WALKTHROUGH_SAMPLE } from "../../lib/codebench-samples"
+import { consumePendingDailyChallenge } from "../../lib/codebench-daily-challenge-pending"
+import { filterOpenCodeClassroomAssignments } from "../../lib/codebench-classroom-assignments"
+import { shortenTaskTitle } from "../../lib/classroom-submission"
+import { rewardsApi } from "../../lib/rewards-api"
+import { formatDailyChallengeProblem } from "../../lib/codebench-daily-challenge-problem"
 import { enrichReplaySteps, type CodeReplayStep } from "../../lib/codebench-replay"
 import {
   awardCodebenchXp,
@@ -40,7 +48,6 @@ import { useNativeType } from "../../lib/themed-module-theme"
 import {
   useCodebenchAiPanelMinHeight,
   useCodebenchEditorMinHeight,
-  useCompactPhoneLayout,
 } from "../../lib/responsive-layout"
 import { buildProblemContextForApi, type CoraComposerAttachment } from "../../lib/cora-composer-attachments"
 import type { CoraImportedProblem } from "../../lib/cora-api"
@@ -54,6 +61,7 @@ import { MarkdownContentWebView } from "../course-info/MarkdownContentWebView"
 import { StudentThemedLocked } from "../student/student-themed-hero"
 import { GlassBottomSheetModal } from "../theme/GlassBottomSheetModal"
 import { GlassSheetHandle } from "../theme/GlassActionSheetMenu"
+import { useAuthNestedBack } from "../navigation/useAuthNestedBack"
 
 type ToolId =
   | "explain"
@@ -65,12 +73,15 @@ type ToolId =
   | "practice"
   | "evaluate"
 
-type PanelMode = "ready" | "result" | "walkthrough" | "tutor" | "practice" | "evaluate" | "xp"
+type PanelMode = "idle" | "ready" | "result" | "walkthrough" | "tutor" | "practice" | "evaluate" | "xp"
 
 type TutorMessage = { role: "user" | "assistant"; content: string }
 type SheetKind = "language" | "mode" | "cora-tool" | "assignment" | null
 
 const CORA_ACCENT = "#7C3AED"
+const ACTION_BAR_PAD = 12
+const CHIP_GAP = 8
+const CHIP_HEIGHT = 44
 
 const FULLSCREEN_AI_PANELS = new Set<PanelMode>(["result", "practice", "evaluate", "xp"])
 
@@ -89,6 +100,184 @@ const CORA_TOOLS: Array<{
   { id: "practice", label: "Practice", subtitle: "Generate a problem", icon: "fitness-outline" },
   { id: "evaluate", label: "Evaluate", subtitle: "Comprehension quiz", icon: "checkmark-done-outline" },
 ]
+
+type IdeChipColors = {
+  panel: string
+  border: string
+  title: string
+  muted: string
+  gold: string
+  accent: string
+}
+
+function classroomPointDueLabel(expiresAt?: string | null): string {
+  if (!expiresAt) return "Open now"
+  const exp = new Date(expiresAt)
+  if (!Number.isFinite(exp.getTime())) return "Open now"
+  return `Due ${exp.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`
+}
+
+function IdeSheetHeader({
+  icon,
+  title,
+  subtitle,
+  iconColor,
+  iconBg,
+  titleColor,
+  subtitleColor,
+  closeColor,
+  closeBg,
+  onClose,
+}: {
+  icon: keyof typeof Ionicons.glyphMap
+  title: string
+  subtitle: string
+  iconColor: string
+  iconBg: string
+  titleColor: string
+  subtitleColor: string
+  closeColor: string
+  closeBg: string
+  onClose: () => void
+}) {
+  return (
+    <View style={styles.sheetHeader}>
+      <View style={[styles.sheetHeaderIcon, { backgroundColor: iconBg }]}>
+        <Ionicons name={icon} size={18} color={iconColor} />
+      </View>
+      <View style={styles.sheetHeaderCopy}>
+        <Text style={[styles.sheetHeaderTitle, { color: titleColor }]}>{title}</Text>
+        <Text style={[styles.sheetHeaderSubtitle, { color: subtitleColor }]} numberOfLines={2}>
+          {subtitle}
+        </Text>
+      </View>
+      <Pressable
+        onPress={onClose}
+        accessibilityRole="button"
+        accessibilityLabel="Close"
+        hitSlop={8}
+        style={[styles.sheetClose, { backgroundColor: closeBg }]}
+      >
+        <Ionicons name="close" size={16} color={closeColor} />
+      </Pressable>
+    </View>
+  )
+}
+
+function IdeSheetChoice({
+  icon,
+  title,
+  subtitle,
+  active,
+  colors,
+  onPress,
+}: {
+  icon: keyof typeof Ionicons.glyphMap
+  title: string
+  subtitle?: string
+  active: boolean
+  colors: IdeChipColors
+  onPress: () => void
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityState={{ selected: active }}
+      accessibilityLabel={subtitle ? `${title}, ${subtitle}` : title}
+      style={[
+        styles.sheetCard,
+        {
+          backgroundColor: active ? hexToRgba(colors.accent, 0.14) : hexToRgba(colors.title, 0.04),
+          borderColor: active ? hexToRgba(colors.accent, 0.55) : colors.border,
+        },
+      ]}
+    >
+      <View
+        style={[
+          styles.sheetCardIcon,
+          { backgroundColor: active ? hexToRgba(colors.accent, 0.2) : hexToRgba(colors.gold, 0.16) },
+        ]}
+      >
+        <Ionicons name={icon} size={18} color={active ? colors.accent : colors.gold} />
+      </View>
+      <View style={styles.sheetCardCopy}>
+        <Text style={[styles.sheetCardTitle, { color: colors.title }]} numberOfLines={2}>
+          {title}
+        </Text>
+        {subtitle ? (
+          <Text style={[styles.sheetCardSubtitle, { color: colors.muted }]} numberOfLines={1}>
+            {subtitle}
+          </Text>
+        ) : null}
+      </View>
+      {active ? (
+        <Ionicons name="checkmark-circle" size={22} color={colors.accent} />
+      ) : (
+        <Ionicons name="chevron-forward" size={16} color={colors.muted} />
+      )}
+    </Pressable>
+  )
+}
+
+function IdeToolbarChip({
+  label,
+  icon,
+  onPress,
+  colors,
+  accessibilityLabel,
+  iconColor,
+  emphasized = false,
+  showChevron = true,
+  disabled = false,
+  loading = false,
+  width,
+}: {
+  label: string
+  icon: keyof typeof Ionicons.glyphMap
+  onPress: () => void
+  colors: IdeChipColors
+  accessibilityLabel?: string
+  iconColor?: string
+  emphasized?: boolean
+  showChevron?: boolean
+  disabled?: boolean
+  loading?: boolean
+  width: number
+}) {
+  const fg = emphasized ? colors.accent : colors.title
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel ?? label}
+      style={[
+        styles.gridChip,
+        {
+          width,
+          backgroundColor: colors.panel,
+          borderColor: emphasized ? colors.accent : colors.border,
+          opacity: disabled ? 0.65 : 1,
+        },
+      ]}
+    >
+      {loading ? (
+        <ActivityIndicator color={fg} size="small" />
+      ) : (
+        <Ionicons name={icon} size={16} color={iconColor ?? (emphasized ? colors.accent : colors.gold)} />
+      )}
+      <Text style={[styles.gridChipText, { color: fg }]} numberOfLines={1}>
+        {label}
+      </Text>
+      {showChevron ? (
+        <Ionicons name="chevron-down" size={14} color={colors.muted} />
+      ) : (
+        <View style={styles.gridChipSlot} />
+      )}
+    </Pressable>
+  )
+}
 
 function formatToolResult(tool: ToolId, data: Record<string, unknown>): string {
   if (tool === "explain") return String(data.explanation ?? "No explanation returned.")
@@ -135,14 +324,16 @@ export function CodebenchIdeScreen() {
   const isLocked = membershipTierLoaded && !hasNavAccess(membershipTier, "Trailblazer")
   const editorMinHeight = useCodebenchEditorMinHeight()
   const aiPanelMinHeight = useCodebenchAiPanelMinHeight()
-  const compactPhone = useCompactPhoneLayout()
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions()
+  const pickerListMaxHeight = Math.round(Math.min(windowHeight * 0.5, 440))
+  const chipWidth = (windowWidth - ACTION_BAR_PAD * 2 - CHIP_GAP) / 2
   const params = useLocalSearchParams<{ tool?: string }>()
   const tokens = useAppThemeTokens()
   const native = useThemedNative()
   const type = useNativeType()
 
   const [ready, setReady] = useState(false)
-  const [languageId, setLanguageId] = useState<CodebenchLanguageId>("javascript")
+  const [languageId, setLanguageId] = useState<CodebenchLanguageId>("cpp")
   const [learningMode, setLearningMode] = useState<CodebenchLearningMode>("intermediate")
   const [codeByLang, setCodeByLang] = useState<Partial<Record<CodebenchLanguageId, string>>>({})
   const [xp, setXp] = useState(0)
@@ -158,22 +349,38 @@ export function CodebenchIdeScreen() {
   const [tutorInput, setTutorInput] = useState("")
   const [tutorMessages, setTutorMessages] = useState<TutorMessage[]>([])
   const [practiceProblem, setPracticeProblem] = useState("")
+  const [activeDailyChallenge, setActiveDailyChallenge] = useState<DailyChallenge | null>(null)
   const [evalQuestions, setEvalQuestions] = useState<CodebenchEvaluateQuestion[]>([])
   const [evalIndex, setEvalIndex] = useState(0)
   const [evalAnswers, setEvalAnswers] = useState<string[]>([])
   const [assignments, setAssignments] = useState<ClassroomAssignmentOption[]>([])
-  const [assignmentId, setAssignmentId] = useState("practice")
+  const [assignmentId, setAssignmentId] = useState("")
+  const submittedAssignmentIdsRef = useRef(new Set<string>())
   const bootTool = useRef(typeof params.tool === "string" ? params.tool : "")
+  const toolRunEpoch = useRef(0)
 
   const language = getCodebenchLanguage(languageId)
   const code = codeByLang[languageId] ?? language.defaultCode
   const level = codebenchLevel(xp)
   const xpInLevel = xp % 100
   const modeLabel = LEARNING_MODE_OPTIONS.find((m) => m.value === learningMode)?.label ?? "Intermediate"
-  const assignmentLabel =
-    assignmentId === "practice"
-      ? "Practice"
-      : assignments.find((a) => String(a.id) === assignmentId)?.title ?? "Assignment"
+  const selectedAssignment = assignments.find((a) => String(a.id) === assignmentId) ?? null
+  const assignmentLabel = selectedAssignment
+    ? shortenTaskTitle(selectedAssignment.title)
+    : assignments.length > 0
+      ? "Classroom points"
+      : "No assignments"
+  const canSubmitClassroom = /^\d+$/.test(assignmentId) && selectedAssignment != null
+  const coraChipLabel =
+    panel === "walkthrough"
+      ? "Walkthrough"
+      : panel === "tutor"
+        ? "Ask Cora"
+        : panel === "practice"
+          ? "Practice"
+          : panel === "evaluate"
+            ? "Evaluate"
+            : "Ask Cora"
   const studentFirstName = session?.name?.split(" ")[0] ?? "there"
   const tutorDisplayMessages = useMemo(
     () =>
@@ -185,6 +392,43 @@ export function CodebenchIdeScreen() {
           ),
       ),
     [tutorMessages],
+  )
+
+  const inlineExpandedActive = useMemo(() => {
+    if (!aiExpanded) return false
+    if (panel === "idle" || panel === "tutor" || panel === "walkthrough") return false
+    if (FULLSCREEN_AI_PANELS.has(panel)) return false
+    return true
+  }, [aiExpanded, panel])
+
+  const collapseAiPanel = useCallback(() => setAiExpanded(false), [])
+
+  const closeAiPanel = useCallback(() => {
+    // Invalidate any tool request still in flight so its result cannot reopen the panel.
+    toolRunEpoch.current += 1
+    setBusy(false)
+    setAiExpanded(false)
+    setPracticeProblem("")
+    setActiveDailyChallenge(null)
+    setPanel("idle")
+  }, [])
+
+  /** Dismiss back to the editor with Cora options, cancelling any in-flight tool. */
+  const dismissAiPanel = useCallback(() => {
+    toolRunEpoch.current += 1
+    setBusy(false)
+    setAiExpanded(false)
+    setPanel("ready")
+  }, [])
+
+  const handleInlineExpandedBack = useCallback(() => {
+    collapseAiPanel()
+  }, [collapseAiPanel])
+
+  const inlineExpandedBackSwipe = useAuthNestedBack(
+    inlineExpandedActive,
+    handleInlineExpandedBack,
+    insets.top,
   )
 
   // IDE surface — high-contrast dark canvas for code, themed chrome around it
@@ -226,7 +470,11 @@ export function CodebenchIdeScreen() {
       setLanguageId(lang)
       setLearningMode(mode)
       setXp(currentXp)
-      setAssignments(classroom)
+      setAssignments(
+        filterOpenCodeClassroomAssignments(classroom, {
+          excludeIds: submittedAssignmentIdsRef.current,
+        }),
+      )
       setCodeByLang((prev) => ({
         ...prev,
         [lang]: prev[lang] ?? getCodebenchLanguage(lang).defaultCode,
@@ -251,6 +499,20 @@ export function CodebenchIdeScreen() {
     return true
   }
 
+  function dropSubmittedAssignment(id: string) {
+    submittedAssignmentIdsRef.current.add(id)
+    setAssignments((prev) => prev.filter((row) => String(row.id) !== id))
+    setAssignmentId((current) => (current === id ? "" : current))
+  }
+
+  async function reloadClassroomAssignments() {
+    if (!session || session.portal !== "student") return
+    const next = await codebenchApi.getClassroomAssignments(session).catch(() => [] as ClassroomAssignmentOption[])
+    setAssignments(
+      filterOpenCodeClassroomAssignments(next, { excludeIds: submittedAssignmentIdsRef.current }),
+    )
+  }
+
   const runWalkthrough = useCallback(
     async (codeOverride?: string) => {
       if (!session || session.portal !== "student") return
@@ -267,6 +529,10 @@ export function CodebenchIdeScreen() {
       const replayLanguage =
         codeToWalk === CODEBENCH_CPP_WALKTHROUGH_SAMPLE ? "cpp" : language.apiLanguage
 
+      const epoch = toolRunEpoch.current
+      const dismissed = () => toolRunEpoch.current !== epoch
+
+      setSheet(null)
       setPanel("walkthrough")
       setWalkthroughSteps([])
       setWalkthroughIndex(0)
@@ -280,6 +546,7 @@ export function CodebenchIdeScreen() {
           language: replayLanguage,
           learningMode,
         })
+        if (dismissed()) return
         if (res.accessDenied) throw new ApiError("Trailblazer membership required.", 403)
 
         const steps = enrichReplaySteps(codeToWalk, res.steps ?? [])
@@ -290,10 +557,12 @@ export function CodebenchIdeScreen() {
         setWalkthroughSteps(steps)
         setXp(await awardCodebenchXp("explain"))
       } catch (err) {
-        AppAlert.alert("Walkthrough", err instanceof ApiError ? err.message : "Walkthrough failed.")
+        if (dismissed()) return
+        AppAlert.alert("Walkthrough", codebenchAiFailureMessage(err, "Walkthrough failed."))
+        setAiExpanded(false)
         setPanel("ready")
       } finally {
-        setBusy(false)
+        if (!dismissed()) setBusy(false)
       }
     },
     [session, code, language.apiLanguage, learningMode, membershipTier, membershipTierLoaded],
@@ -313,6 +582,8 @@ export function CodebenchIdeScreen() {
         return
       }
       if (!requireCode()) return
+      const epoch = toolRunEpoch.current
+      const dismissed = () => toolRunEpoch.current !== epoch
       setAiExpanded(true)
       setBusy(true)
       try {
@@ -331,10 +602,28 @@ export function CodebenchIdeScreen() {
             isProblemGeneration: true,
             prepared,
           })
+          if (dismissed()) return
           if (res.accessDenied || res.rbacBlocked) {
             throw new ApiError(res.blockReason ?? "Trailblazer membership required.", 403)
           }
-          setPracticeProblem(res.response?.trim() || "Could not generate a practice problem.")
+          if (res.error?.trim()) {
+            throw new ApiError(res.error.trim(), 500)
+          }
+          // Under an active attempt Cora refuses to generate practice. Say so instead
+          // of rendering the refusal text as if it were the problem statement.
+          if (res.examBlocked || res.assessmentIntegrity) {
+            throw new ApiError(
+              res.response?.trim() ||
+                "Practice problems are paused while you have an assessment attempt in progress.",
+              403,
+            )
+          }
+          const generated = filterCoraOutput(res.response ?? "").text.trim()
+          if (!generated) {
+            throw new ApiError("No practice problem was generated. Try again with more complete code.", 500)
+          }
+          setActiveDailyChallenge(null)
+          setPracticeProblem(generated)
           setPanel("practice")
           setXp(await awardCodebenchXp("practice"))
           return
@@ -342,6 +631,7 @@ export function CodebenchIdeScreen() {
 
         if (tool === "evaluate") {
           const res = await codebenchApi.evaluate(session, toolPayload)
+          if (dismissed()) return
           const questions = res.questions ?? []
           if (questions.length === 0) throw new ApiError("No evaluation questions returned.", 500)
           setEvalQuestions(questions)
@@ -357,13 +647,16 @@ export function CodebenchIdeScreen() {
         else if (tool === "improve") data = await codebenchApi.improve(session, toolPayload)
         else data = await codebenchApi.pseudocode(session, toolPayload)
 
+        if (dismissed()) return
         if (data.accessDenied) throw new ApiError("Trailblazer membership required.", 403)
         setResultTitle(CORA_TOOLS.find((t) => t.id === tool)?.label ?? "Result")
         setResultBody(formatToolResult(tool, data))
         setPanel("result")
         setXp(await awardCodebenchXp(tool === "pseudocode" ? "pseudocode" : tool))
       } catch (err) {
-        AppAlert.alert("CodeBench", err instanceof ApiError ? err.message : "Request failed.")
+        if (dismissed()) return
+        AppAlert.alert("CodeBench", codebenchAiFailureMessage(err, "Request failed."))
+        setAiExpanded(false)
       } finally {
         setBusy(false)
       }
@@ -372,7 +665,20 @@ export function CodebenchIdeScreen() {
   )
 
   useEffect(() => {
-    if (!ready || isLocked || !bootTool.current) return
+    if (!ready || isLocked) return
+
+    const pendingDailyChallenge = consumePendingDailyChallenge()
+    if (pendingDailyChallenge) {
+      bootTool.current = ""
+      setActiveDailyChallenge(pendingDailyChallenge)
+      setPracticeProblem(formatDailyChallengeProblem(pendingDailyChallenge))
+      setPanel("practice")
+      setAiExpanded(true)
+      setBusy(false)
+      return
+    }
+
+    if (!bootTool.current) return
     const tool = bootTool.current as ToolId
     bootTool.current = ""
     if (CORA_TOOLS.some((t) => t.id === tool)) void runTool(tool)
@@ -428,7 +734,7 @@ export function CodebenchIdeScreen() {
       ])
       setXp(await awardCodebenchXp("tutor"))
     } catch (err) {
-      AppAlert.alert("Tutor", err instanceof ApiError ? err.message : "Could not reach AI Tutor.")
+      AppAlert.alert("Tutor", codebenchAiFailureMessage(err, "Could not reach AI Tutor."))
     } finally {
       setBusy(false)
     }
@@ -440,15 +746,33 @@ export function CodebenchIdeScreen() {
     if (!requireCode()) return
     setBusy(true)
     try {
-      await codebenchApi.submitPractice(session, {
-        code,
-        problem: practiceProblem.slice(0, 2000),
-        feedback: "Submitted from native CodeBench IDE",
-      })
+      if (activeDailyChallenge) {
+        await codebenchApi.submitDailyChallenge(session, {
+          code,
+          challengeId: activeDailyChallenge.id,
+          challengeTitle: activeDailyChallenge.title,
+          challengeDescription: activeDailyChallenge.description,
+          score: 0,
+          feedback: "Submitted from native CodeBench IDE",
+        })
+      } else {
+        await codebenchApi.submitPractice(session, {
+          code,
+          problem: practiceProblem.slice(0, 2000),
+          feedback: "Submitted from native CodeBench IDE",
+        })
+      }
       await saveCodebenchLatestCode(code)
       await codebenchApi.recordStreak(session).catch(() => null)
       setXp(await awardCodebenchXp("submit"))
-      AppAlert.alert("Submitted", "Practice attempt recorded.")
+      AppAlert.alert(
+        "Submitted",
+        activeDailyChallenge
+          ? "Daily challenge submitted. Points are pending instructor approval."
+          : "Practice attempt recorded.",
+      )
+      setActiveDailyChallenge(null)
+      setAiExpanded(false)
       setPanel("ready")
     } catch (err) {
       AppAlert.alert("Submit failed", err instanceof ApiError ? err.message : "Try again.")
@@ -466,8 +790,7 @@ export function CodebenchIdeScreen() {
     }))
     setBusy(true)
     try {
-      const submissionId =
-        assignmentId !== "practice" && /^\d+$/.test(assignmentId) ? Number(assignmentId) : null
+      const submissionId = canSubmitClassroom ? Number(assignmentId) : null
       const res = await codebenchApi.submit(session, {
         code,
         score: 0,
@@ -478,16 +801,71 @@ export function CodebenchIdeScreen() {
       await saveCodebenchLatestCode(code)
       await codebenchApi.recordStreak(session).catch(() => null)
       setXp(await awardCodebenchXp("evaluate"))
+      if (submissionId != null) {
+        dropSubmittedAssignment(String(submissionId))
+        void reloadClassroomAssignments()
+      }
       setResultTitle("Evaluation complete")
       setResultBody(
         [
           res.pointsAwarded != null ? `Points awarded: ${res.pointsAwarded}` : "",
-          res.evaluation?.feedback || res.message || "Submitted for review.",
+          submissionId != null
+            ? `${selectedAssignment?.title ?? "This classroom point"} is waiting for your instructor to review and approve.`
+            : res.evaluation?.feedback || res.message || "Submitted for review.",
         ]
           .filter(Boolean)
           .join("\n\n"),
       )
       setPanel("result")
+    } catch (err) {
+      AppAlert.alert("Submit failed", err instanceof ApiError ? err.message : "Try again.")
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function submitCode() {
+    if (!session || session.portal !== "student") return
+    if (membershipTierLoaded && !hasNavAccess(membershipTier, "Trailblazer")) return
+    if (activeDailyChallenge || panel === "practice") {
+      await submitPractice()
+      return
+    }
+    if (!requireCode()) return
+    if (!canSubmitClassroom) {
+      AppAlert.alert(
+        "Select a classroom point",
+        assignments.length > 0
+          ? "Pick an open classroom point problem, then submit your code."
+          : "There are no open classroom point problems right now.",
+      )
+      if (assignments.length > 0) setSheet("assignment")
+      return
+    }
+    setBusy(true)
+    const submittedId = assignmentId
+    const submittedTitle = selectedAssignment?.title ?? assignmentLabel
+    try {
+      const res = await rewardsApi.submitClassroomCode(session, {
+        submissionId: Number(submittedId),
+        code,
+        description: `Submitted from CodeBench: ${submittedTitle}`,
+      })
+      dropSubmittedAssignment(submittedId)
+      void reloadClassroomAssignments()
+      const points =
+        res.pointsAwarded != null && Number.isFinite(Number(res.pointsAwarded))
+          ? Number(res.pointsAwarded).toFixed(2)
+          : null
+      AppAlert.alert(
+        res.autoApproved ? "Submitted and scored" : "Submitted for classroom points",
+        res.autoApproved
+          ? `${submittedTitle} — ${points ?? "points"} recorded.`
+          : `${submittedTitle} is waiting for your instructor to review and approve.`,
+      )
+      await saveCodebenchLatestCode(code)
+      await codebenchApi.recordStreak(session).catch(() => null)
+      setXp(await awardCodebenchXp("submit"))
     } catch (err) {
       AppAlert.alert("Submit failed", err instanceof ApiError ? err.message : "Try again.")
     } finally {
@@ -523,7 +901,7 @@ export function CodebenchIdeScreen() {
     return (
       <StudentThemedLocked
         icon="code-slash"
-        subtitle="Write, run, and improve code in many languages with AI — available on Trailblazer."
+        subtitle="Write C++, C, or Python and review it with Cora — available on Trailblazer."
         paddingTop={lockedTopPad}
         onUpgrade={() => router.push("/membership" as never)}
       />
@@ -540,27 +918,39 @@ export function CodebenchIdeScreen() {
   }
 
   const currentEval = evalQuestions[evalIndex]
-  const sheetTitle =
+  const sheetMeta =
     sheet === "language"
-      ? "Language"
+      ? {
+          title: "Language",
+          subtitle: "Cora uses this to explain your code. The phone IDE does not compile or run it.",
+          icon: "code-slash-outline" as const,
+        }
       : sheet === "mode"
-        ? "Learning Level"
+        ? {
+            title: "Learning level",
+            subtitle: "How deep Cora’s explanations go.",
+            icon: "school-outline" as const,
+          }
         : sheet === "cora-tool"
-          ? "Cora tools"
-          : "Assignment"
+          ? {
+              title: "Cora tools",
+              subtitle: "Pick a tool to analyze the code in the editor.",
+              icon: "sparkles-outline" as const,
+            }
+          : {
+              title: "Classroom points",
+              subtitle:
+                assignments.length > 0
+                  ? `${assignments.length} open problem${assignments.length === 1 ? "" : "s"} · instructor reviews after you submit.`
+                  : "Submitted work is waiting for instructor review.",
+              icon: "trophy-outline" as const,
+            }
 
   const aiPanelFullscreen = aiExpanded && FULLSCREEN_AI_PANELS.has(panel)
   const hideAiPanel =
+    panel === "idle" ||
     (panel === "tutor" && aiExpanded) ||
-    (panel === "walkthrough" && aiExpanded) ||
     aiPanelFullscreen
-
-  const closeAiPanel = () => {
-    setAiExpanded(false)
-    setPanel("ready")
-  }
-
-  const collapseAiPanel = () => setAiExpanded(false)
 
   const evaluateFooter = (
     <View style={[styles.evalActions, aiPanelFullscreen && styles.evalActionsFullscreen]}>
@@ -682,6 +1072,7 @@ export function CodebenchIdeScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: ide.canvas }]}>
+      {inlineExpandedBackSwipe}
       <KeyboardAvoidingView
         style={[styles.flex, { paddingTop: insets.top }]}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -689,9 +1080,11 @@ export function CodebenchIdeScreen() {
         {/* Top bar */}
         <View style={[styles.topBar, { borderBottomColor: ide.border }]}>
           <Pressable
-            onPress={() => router.back()}
+            onPress={() => safeRouterBack(router, "/module/codebench")}
             hitSlop={10}
             style={[styles.roundBtn, { backgroundColor: "rgba(255,255,255,0.1)" }]}
+            accessibilityRole="button"
+            accessibilityLabel="Back to CodeBench"
           >
             <Ionicons name="chevron-back" size={20} color={ide.title} />
           </Pressable>
@@ -710,71 +1103,53 @@ export function CodebenchIdeScreen() {
           </Pressable>
         </View>
 
-        {/* Action row → opens sheets (flexGrow:0 so horizontal ScrollView does not expand vertically) */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
-          style={styles.actionScroll}
-          contentContainerStyle={styles.actionRow}
-        >
-          <Pressable
-            onPress={() => setSheet("language")}
-            style={[styles.sheetTrigger, { backgroundColor: ide.panel, borderColor: ide.border, minWidth: compactPhone ? 108 : undefined }]}
-          >
-            <Ionicons name="code-slash" size={15} color={ide.gold} />
-            <Text style={[styles.sheetTriggerText, { color: ide.title }]} numberOfLines={1}>
-              {language.label}
-            </Text>
-            <Ionicons name="chevron-down" size={14} color={ide.muted} />
-          </Pressable>
-
-          <Pressable
-            onPress={() => setSheet("mode")}
-            style={[styles.sheetTrigger, { backgroundColor: ide.panel, borderColor: ide.border, maxWidth: compactPhone ? 108 : 120 }]}
-          >
-            <Ionicons name="school" size={15} color={ide.gold} />
-            <Text style={[styles.sheetTriggerText, { color: ide.title }]} numberOfLines={1}>
-              {modeLabel}
-            </Text>
-            <Ionicons name="chevron-down" size={14} color={ide.muted} />
-          </Pressable>
-
-          <Pressable
-            onPress={() => setSheet("cora-tool")}
-            style={[styles.sheetTrigger, { backgroundColor: ide.panel, borderColor: ide.border, maxWidth: compactPhone ? 96 : 118 }]}
-          >
-            <CoraBrand size="xs" />
-            <Ionicons name="chevron-down" size={14} color={ide.muted} />
-          </Pressable>
-
-          {assignments.length > 0 ? (
-            <Pressable
+        <View style={styles.actionBar}>
+          <View style={styles.actionRow}>
+            <IdeToolbarChip
+              label={coraChipLabel}
+              icon="sparkles"
+              iconColor={CORA_ACCENT}
+              onPress={() => {
+                if (panel === "idle") setPanel("ready")
+                setSheet("cora-tool")
+              }}
+              colors={ide}
+              width={chipWidth}
+              accessibilityLabel="Cora tools"
+            />
+            <IdeToolbarChip
+              label={modeLabel}
+              icon="school"
+              onPress={() => setSheet("mode")}
+              colors={ide}
+              width={chipWidth}
+            />
+          </View>
+          <View style={styles.actionRow}>
+            <IdeToolbarChip
+              label={assignmentLabel}
+              icon="clipboard-outline"
               onPress={() => setSheet("assignment")}
-              style={[styles.sheetTrigger, { backgroundColor: ide.panel, borderColor: ide.border, flex: 0, maxWidth: compactPhone ? 108 : 120 }]}
-            >
-              <Text style={[styles.sheetTriggerText, { color: ide.title }]} numberOfLines={1}>
-                {assignmentLabel}
-              </Text>
-            </Pressable>
-          ) : null}
-
-          <Pressable
-            onPress={() => void runTool("evaluate")}
-            disabled={busy}
-            style={[styles.runBtn, { backgroundColor: ide.gold }, busy && { opacity: 0.65 }]}
-          >
-            {busy && panel === "ready" ? (
-              <ActivityIndicator color="#1a1025" size="small" />
-            ) : (
-              <>
-                <Ionicons name="paper-plane" size={15} color="#1a1025" />
-                <Text style={styles.runText}>Evaluate</Text>
-              </>
-            )}
-          </Pressable>
-        </ScrollView>
+              colors={ide}
+              width={chipWidth}
+              accessibilityLabel={`Classroom point problem, ${assignmentLabel}`}
+            />
+            <IdeToolbarChip
+              label="Submit"
+              icon="paper-plane"
+              onPress={() => void submitCode()}
+              colors={ide}
+              width={chipWidth}
+              emphasized
+              showChevron={false}
+              disabled={busy}
+              loading={busy && (panel === "ready" || panel === "idle")}
+              accessibilityLabel={
+                canSubmitClassroom ? `Submit to ${assignmentLabel}` : "Submit classroom point"
+              }
+            />
+          </View>
+        </View>
 
         {/* Editor — full-width code buffer for AI tools (no line-number gutter) */}
         <View
@@ -784,11 +1159,19 @@ export function CodebenchIdeScreen() {
           ]}
         >
           <View style={[styles.editorChrome, { borderBottomColor: ide.border, backgroundColor: ide.gutter }]}>
-            <View style={[styles.fileTab, { backgroundColor: ide.panel, borderColor: ide.border }]}>
+            <Pressable
+              onPress={() => setSheet("language")}
+              accessibilityRole="button"
+              accessibilityLabel={`Language ${language.label}`}
+              style={[styles.fileTab, { backgroundColor: ide.panel, borderColor: ide.border }]}
+            >
               <Ionicons name="document-text" size={13} color={ide.gold} />
               <Text style={[styles.fileTabText, { color: ide.title }]}>{language.fileName}</Text>
-            </View>
-            <Text style={[styles.lineMeta, { color: ide.muted }]}>{language.label}</Text>
+              <Ionicons name="chevron-down" size={12} color={ide.muted} />
+            </Pressable>
+            <Text style={[styles.lineMeta, { color: ide.muted }]}>
+              {language.label} · Cora review
+            </Text>
           </View>
           <TextInput
             value={code}
@@ -800,7 +1183,7 @@ export function CodebenchIdeScreen() {
             textAlignVertical="top"
             keyboardAppearance="dark"
             style={[styles.editorInput, { color: ide.body }]}
-            placeholder="// Write or paste code, then use Cora tools above"
+            placeholder="// Write or paste C++, C, or Python. Cora reviews it — nothing compiles on the phone."
             placeholderTextColor={ide.faint}
           />
         </View>
@@ -866,7 +1249,9 @@ export function CodebenchIdeScreen() {
                   {busy
                     ? "Tracing your code step by step"
                     : panel === "ready"
-                      ? "Choose a Cora tool from the toolbar, or walk through your code below."
+                      ? aiExpanded
+                        ? "Full screen · swipe from the left edge or tap collapse to return to the editor"
+                        : "Choose a Cora tool from the toolbar, or walk through your code below."
                       : aiExpanded
                         ? "Full screen · tap collapse to return to the editor"
                         : "Results stay here while you edit"}
@@ -877,10 +1262,10 @@ export function CodebenchIdeScreen() {
                 </Text>
               ) : null}
             </View>
-            {panel !== "ready" ? (
+            {(aiExpanded && panel === "ready") || panel !== "ready" ? (
               <View style={styles.aiHeadActions}>
                 <Pressable
-                  onPress={() => setAiExpanded((v) => !v)}
+                  onPress={() => (aiExpanded ? collapseAiPanel() : setAiExpanded(true))}
                   hitSlop={8}
                   style={[styles.aiClose, { backgroundColor: native.fill }]}
                   accessibilityLabel={aiExpanded ? "Collapse AI assistant" : "Expand AI assistant"}
@@ -893,8 +1278,11 @@ export function CodebenchIdeScreen() {
                 </Pressable>
                 <Pressable
                   onPress={() => {
-                    setAiExpanded(false)
-                    setPanel("ready")
+                    if (panel === "ready") {
+                      closeAiPanel()
+                      return
+                    }
+                    dismissAiPanel()
                   }}
                   hitSlop={8}
                   style={styles.aiClose}
@@ -906,11 +1294,31 @@ export function CodebenchIdeScreen() {
             ) : null}
           </View>
 
+          {panel === "walkthrough" ? (
+            <View style={styles.walkthroughHost}>
+              {busy && walkthroughSteps.length === 0 ? (
+                <View style={styles.thinkingHost}>
+                  <CoraThinkingIndicator context="codebench" hideBrand />
+                </View>
+              ) : (
+                <CodebenchWalkthroughPanel
+                  steps={walkthroughSteps}
+                  sourceCode={walkthroughCode || code}
+                  index={walkthroughIndex}
+                  onIndexChange={setWalkthroughIndex}
+                  bottomInset={insets.bottom}
+                />
+              )}
+            </View>
+          ) : null}
+
           {panel === "ready" ? (
             <View style={styles.coraReady}>
               <Pressable
                 onPress={() => void walkThroughWithCora()}
                 disabled={busy}
+                accessibilityRole="button"
+                accessibilityLabel="Walk through with Cora"
                 style={({ pressed }) => [
                   styles.walkthroughBtn,
                   { backgroundColor: CORA_ACCENT },
@@ -935,24 +1343,6 @@ export function CodebenchIdeScreen() {
                 <Text style={[type.body, { color: native.label, fontWeight: "600" }]}>All Cora tools</Text>
                 <Ionicons name="chevron-forward" size={16} color={native.tertiaryLabel} />
               </Pressable>
-            </View>
-          ) : null}
-
-          {panel === "walkthrough" && !aiExpanded ? (
-            <View style={styles.walkthroughHost}>
-              {busy && walkthroughSteps.length === 0 ? (
-                <View style={styles.thinkingHost}>
-                  <CoraThinkingIndicator context="codebench" hideBrand />
-                </View>
-              ) : (
-                <CodebenchWalkthroughPanel
-                  steps={walkthroughSteps}
-                  sourceCode={walkthroughCode || code}
-                  index={walkthroughIndex}
-                  onIndexChange={setWalkthroughIndex}
-                  bottomInset={insets.bottom}
-                />
-              )}
             </View>
           ) : null}
 
@@ -992,7 +1382,13 @@ export function CodebenchIdeScreen() {
                 style={[styles.aiScroll, aiExpanded ? styles.aiScrollExpanded : styles.aiScrollCollapsed]}
                 contentContainerStyle={{ paddingBottom: 8 }}
               >
-                <MarkdownContentWebView markdown={practiceProblem} embedded />
+                {practiceProblem.trim() ? (
+                  <MarkdownContentWebView markdown={practiceProblem} embedded />
+                ) : (
+                  <Text style={[type.body, { color: native.secondaryLabel, paddingHorizontal: 4, paddingTop: 8 }]}>
+                    No practice problem was generated. Close this panel and try again with more complete code.
+                  </Text>
+                )}
               </ScrollView>
               <Pressable
                 onPress={() => void submitPractice()}
@@ -1031,6 +1427,20 @@ export function CodebenchIdeScreen() {
         ) : null}
       </KeyboardAvoidingView>
 
+      {panel === "walkthrough" ? (
+        <CodebenchWalkthroughPanel
+          steps={walkthroughSteps}
+          sourceCode={walkthroughCode || code}
+          index={walkthroughIndex}
+          onIndexChange={setWalkthroughIndex}
+          fullscreen
+          visible={aiExpanded}
+          loading={busy && walkthroughSteps.length === 0}
+          onCollapse={collapseAiPanel}
+          onClose={dismissAiPanel}
+        />
+      ) : null}
+
       {panel === "tutor" && aiExpanded && session ? (
         <CodebenchAskCoraPanel
           session={session}
@@ -1042,10 +1452,7 @@ export function CodebenchIdeScreen() {
           expanded
           fullscreen
           onCollapse={() => setAiExpanded(false)}
-          onClose={() => {
-            setAiExpanded(false)
-            setPanel("ready")
-          }}
+          onClose={dismissAiPanel}
           onSend={async (payload) => {
             await sendTutor({
               message: payload.message,
@@ -1057,24 +1464,11 @@ export function CodebenchIdeScreen() {
         />
       ) : null}
 
-      {panel === "walkthrough" && aiExpanded ? (
-        <CodebenchWalkthroughPanel
-          steps={walkthroughSteps}
-          sourceCode={walkthroughCode || code}
-          index={walkthroughIndex}
-          onIndexChange={setWalkthroughIndex}
-          fullscreen
-          loading={busy && walkthroughSteps.length === 0}
-          onCollapse={collapseAiPanel}
-          onClose={closeAiPanel}
-        />
-      ) : null}
-
       {aiPanelFullscreen && panel === "result" ? (
         <CodebenchAiFullscreenShell
           title={resultTitle}
           onCollapse={collapseAiPanel}
-          onClose={closeAiPanel}
+          onClose={dismissAiPanel}
         >
           <MarkdownContentWebView markdown={resultBody} embedded />
         </CodebenchAiFullscreenShell>
@@ -1084,7 +1478,7 @@ export function CodebenchIdeScreen() {
         <CodebenchAiFullscreenShell
           title="Practice problem"
           onCollapse={collapseAiPanel}
-          onClose={closeAiPanel}
+          onClose={dismissAiPanel}
           footer={
             <Pressable
               onPress={() => void submitPractice()}
@@ -1095,7 +1489,13 @@ export function CodebenchIdeScreen() {
             </Pressable>
           }
         >
-          <MarkdownContentWebView markdown={practiceProblem} embedded />
+          {practiceProblem.trim() ? (
+            <MarkdownContentWebView markdown={practiceProblem} embedded />
+          ) : (
+            <Text style={[type.body, { color: native.secondaryLabel, paddingHorizontal: 16, paddingTop: 12 }]}>
+              No practice problem was generated. Close this panel and try again with more complete code.
+            </Text>
+          )}
         </CodebenchAiFullscreenShell>
       ) : null}
 
@@ -1103,7 +1503,7 @@ export function CodebenchIdeScreen() {
         <CodebenchAiFullscreenShell
           title={`Evaluate ${evalIndex + 1}/${evalQuestions.length}`}
           onCollapse={collapseAiPanel}
-          onClose={closeAiPanel}
+          onClose={dismissAiPanel}
           footer={evaluateFooter}
         >
           {evaluateBody}
@@ -1114,13 +1514,13 @@ export function CodebenchIdeScreen() {
         <CodebenchAiFullscreenShell
           title="Your progress"
           onCollapse={collapseAiPanel}
-          onClose={closeAiPanel}
+          onClose={dismissAiPanel}
         >
           {xpBody}
         </CodebenchAiFullscreenShell>
       ) : null}
 
-      {/* Native bottom sheet — scrollable list + fixed cancel above home indicator */}
+      {/* Native bottom sheet — header + scrollable picker */}
       <GlassBottomSheetModal
         visible={sheet != null}
         onClose={() => setSheet(null)}
@@ -1138,23 +1538,27 @@ export function CodebenchIdeScreen() {
           ]}
         >
           <GlassSheetHandle />
-          <Text style={[type.sheetTitle, { color: native.label, marginBottom: 4 }]}>{sheetTitle}</Text>
-          <Text style={[type.caption, { color: native.secondaryLabel, marginBottom: 12, lineHeight: 18 }]}>
-            {sheet === "language"
-              ? "Choose the language for the editor and Cora"
-              : sheet === "mode"
-                ? "Adjust how deep Cora explanations go"
-                : sheet === "cora-tool"
-                  ? "Pick a Cora tool to analyze your code"
-                  : "Submit toward a classroom assignment or practice"}
-          </Text>
+          <IdeSheetHeader
+            icon={sheetMeta.icon}
+            title={sheetMeta.title}
+            subtitle={sheetMeta.subtitle}
+            iconColor={ide.gold}
+            iconBg={hexToRgba(ide.gold, 0.16)}
+            titleColor={ide.title}
+            subtitleColor={ide.muted}
+            closeColor={ide.muted}
+            closeBg={hexToRgba(ide.title, 0.08)}
+            onClose={() => setSheet(null)}
+          />
 
           <ScrollView
-            style={styles.sheetScroll}
+            style={[styles.sheetScroll, { maxHeight: pickerListMaxHeight }]}
             contentContainerStyle={styles.sheetScrollContent}
-            showsVerticalScrollIndicator={false}
+            showsVerticalScrollIndicator
+            persistentScrollbar
+            nestedScrollEnabled
             keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
+            keyboardDismissMode="on-drag"
           >
             <View style={styles.sheetList}>
             {sheet === "cora-tool" ? (
@@ -1176,150 +1580,83 @@ export function CodebenchIdeScreen() {
             ) : null}
 
             {sheet === "language"
-              ? CODEBENCH_LANGUAGES.map((lang, index) => {
-                  const active = lang.id === languageId
-                  return (
-                    <Pressable
-                      key={lang.id}
-                      onPress={() => void onChangeLanguage(lang.id)}
-                      style={[
-                        styles.sheetOption,
-                        { borderBottomColor: native.separator },
-                        index === CODEBENCH_LANGUAGES.length - 1 && styles.sheetOptionLast,
-                        active && { backgroundColor: hexToRgba(tokens.accent, 0.12) },
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          type.body,
-                          {
-                            color: active ? tokens.accent : native.label,
-                            fontWeight: active ? "700" : "500",
-                            flex: 1,
-                          },
-                        ]}
-                      >
-                        {lang.label}
-                      </Text>
-                      {active ? <Ionicons name="checkmark-circle" size={22} color={tokens.accent} /> : null}
-                    </Pressable>
-                  )
-                })
+              ? CODEBENCH_LANGUAGES.map((lang) => (
+                  <IdeSheetChoice
+                    key={lang.id}
+                    icon="document-text-outline"
+                    title={lang.label}
+                    subtitle={lang.fileName}
+                    active={lang.id === languageId}
+                    colors={ide}
+                    onPress={() => void onChangeLanguage(lang.id)}
+                  />
+                ))
               : null}
 
             {sheet === "mode"
-              ? LEARNING_MODE_OPTIONS.map((mode, index) => {
-                  const active = mode.value === learningMode
-                  return (
-                    <Pressable
-                      key={mode.value}
-                      onPress={() => void onChangeMode(mode.value)}
-                      style={[
-                        styles.sheetOption,
-                        { borderBottomColor: native.separator },
-                        index === LEARNING_MODE_OPTIONS.length - 1 && styles.sheetOptionLast,
-                        active && { backgroundColor: hexToRgba(tokens.accent, 0.12) },
-                      ]}
-                    >
-                      <View style={{ flex: 1, gap: 2 }}>
-                        <Text
-                          style={[
-                            type.body,
-                            {
-                              color: active ? tokens.accent : native.label,
-                              fontWeight: active ? "700" : "500",
-                            },
-                          ]}
-                        >
-                          {mode.label}
-                        </Text>
-                        <Text style={[type.caption, { color: native.secondaryLabel }]}>
-                          {mode.value === "beginner"
-                            ? "Simpler explanations"
-                            : mode.value === "expert"
-                              ? "Deeper analysis"
-                              : "Balanced guidance"}
-                        </Text>
-                      </View>
-                      {active ? <Ionicons name="checkmark-circle" size={22} color={tokens.accent} /> : null}
-                    </Pressable>
-                  )
-                })
+              ? LEARNING_MODE_OPTIONS.map((mode) => (
+                  <IdeSheetChoice
+                    key={mode.value}
+                    icon={
+                      mode.value === "beginner"
+                        ? "leaf-outline"
+                        : mode.value === "expert"
+                          ? "rocket-outline"
+                          : "school-outline"
+                    }
+                    title={mode.label}
+                    subtitle={
+                      mode.value === "beginner"
+                        ? "Simpler explanations"
+                        : mode.value === "expert"
+                          ? "Deeper analysis"
+                          : "Balanced guidance"
+                    }
+                    active={mode.value === learningMode}
+                    colors={ide}
+                    onPress={() => void onChangeMode(mode.value)}
+                  />
+                ))
               : null}
 
             {sheet === "assignment" ? (
-              <>
-                <Pressable
-                  onPress={() => {
-                    setAssignmentId("practice")
-                    setSheet(null)
-                  }}
-                  style={[
-                    styles.sheetOption,
-                    { borderBottomColor: native.separator },
-                    assignments.length === 0 && styles.sheetOptionLast,
-                    assignmentId === "practice" && { backgroundColor: hexToRgba(tokens.accent, 0.12) },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      type.body,
-                      {
-                        color: assignmentId === "practice" ? tokens.accent : native.label,
-                        fontWeight: assignmentId === "practice" ? "700" : "500",
-                        flex: 1,
-                      },
-                    ]}
-                  >
-                    Practice
+              assignments.length === 0 ? (
+                <View style={[styles.sheetEmpty, { borderColor: ide.border, backgroundColor: hexToRgba(ide.title, 0.04) }]}>
+                  <View style={[styles.sheetCardIcon, { backgroundColor: hexToRgba(ide.gold, 0.16) }]}>
+                    <Ionicons name="checkmark-done-outline" size={18} color={ide.gold} />
+                  </View>
+                  <Text style={[styles.sheetCardTitle, { color: ide.title }]}>You're all caught up</Text>
+                  <Text style={[styles.sheetEmptyCopy, { color: ide.muted }]}>
+                    Submitted classroom points wait here for instructor review.
                   </Text>
-                  {assignmentId === "practice" ? (
-                    <Ionicons name="checkmark-circle" size={22} color={tokens.accent} />
-                  ) : null}
-                </Pressable>
-                {assignments.map((a, index) => {
-                  const active = assignmentId === String(a.id)
-                  return (
-                    <Pressable
-                      key={a.id}
-                      onPress={() => {
-                        setAssignmentId(String(a.id))
-                        setSheet(null)
-                      }}
-                      style={[
-                        styles.sheetOption,
-                        { borderBottomColor: native.separator },
-                        index === assignments.length - 1 && styles.sheetOptionLast,
-                        active && { backgroundColor: hexToRgba(tokens.accent, 0.12) },
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          type.body,
-                          {
-                            color: active ? tokens.accent : native.label,
-                            fontWeight: active ? "700" : "500",
-                            flex: 1,
-                          },
-                        ]}
-                        numberOfLines={2}
-                      >
-                        {a.title}
-                      </Text>
-                      {active ? <Ionicons name="checkmark-circle" size={22} color={tokens.accent} /> : null}
-                    </Pressable>
-                  )
-                })}
-              </>
+                </View>
+              ) : (
+                assignments.map((a) => (
+                  <IdeSheetChoice
+                    key={a.id}
+                    icon="code-slash-outline"
+                    title={a.title}
+                    subtitle={`${classroomPointDueLabel(a.expires_at)} · instructor reviews after submit`}
+                    active={assignmentId === String(a.id)}
+                    colors={ide}
+                    onPress={() => {
+                      setAssignmentId(String(a.id))
+                      setSheet(null)
+                    }}
+                  />
+                ))
+              )
             ) : null}
           </View>
           </ScrollView>
 
           <Pressable
             onPress={() => setSheet(null)}
-            style={[styles.cancelBtn, { backgroundColor: native.fill }]}
+            accessibilityRole="button"
+            accessibilityLabel="Cancel"
+            style={[styles.cancelBtn, { backgroundColor: hexToRgba(ide.title, 0.08) }]}
           >
-            <Text style={[type.bodyEmphasis, { color: native.label, textAlign: "center" }]}>Cancel</Text>
+            <Text style={[styles.cancelBtnText, { color: ide.title }]}>Cancel</Text>
           </Pressable>
         </View>
       </GlassBottomSheetModal>
@@ -1360,40 +1697,37 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   xpText: { fontSize: 13, fontWeight: "800" },
-  actionScroll: {
+  actionBar: {
     flexGrow: 0,
     flexShrink: 0,
+    gap: CHIP_GAP,
+    paddingHorizontal: ACTION_BAR_PAD,
+    paddingTop: 10,
+    paddingBottom: 10,
   },
   actionRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    flexGrow: 0,
+    gap: CHIP_GAP,
   },
-  sheetTrigger: {
-    flexGrow: 0,
-    flexShrink: 0,
-    minWidth: 0,
+  gridChip: {
+    height: CHIP_HEIGHT,
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    height: 38,
+    gap: 8,
     paddingHorizontal: 12,
     borderRadius: 12,
     borderWidth: 1,
   },
-  sheetTriggerText: { flex: 1, fontSize: 14, fontWeight: "700" },
-  runBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    height: 38,
-    paddingHorizontal: 16,
-    borderRadius: 999,
+  gridChipText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: "700",
   },
-  runText: { color: "#1a1025", fontSize: 14, fontWeight: "800" },
+  gridChipSlot: {
+    width: 14,
+    height: 14,
+  },
   editorShell: {
     flex: 1,
     marginHorizontal: 12,
@@ -1436,6 +1770,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 18,
     borderTopWidth: StyleSheet.hairlineWidth,
     maxHeight: "46%",
+    overflow: "hidden",
     ...NATIVE.raisedShadow,
   },
   aiPanelExpanded: {
@@ -1494,14 +1829,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  walkthroughHost: {
+    flex: 1,
+    minHeight: 0,
+  },
   coraReady: {
     paddingHorizontal: 14,
     paddingBottom: 6,
     gap: 10,
-  },
-  walkthroughHost: {
-    flex: 1,
-    minHeight: 0,
   },
   walkthroughBtn: {
     flexDirection: "row",
@@ -1616,22 +1951,97 @@ const styles = StyleSheet.create({
     flexGrow: 0,
   },
   sheetList: {
-    borderRadius: 14,
-    overflow: "hidden",
+    gap: 10,
+    paddingBottom: 8,
   },
-  sheetOption: {
-    minHeight: 52,
+  sheetHeader: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    marginBottom: 14,
   },
-  sheetOptionLast: { borderBottomWidth: 0 },
+  sheetHeaderIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sheetHeaderCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  sheetHeaderTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    letterSpacing: -0.3,
+  },
+  sheetHeaderSubtitle: {
+    fontSize: 13,
+    fontWeight: "600",
+    lineHeight: 17,
+  },
+  sheetClose: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sheetCard: {
+    minHeight: 64,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  sheetCardIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 11,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sheetCardCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 3,
+  },
+  sheetCardTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    letterSpacing: -0.2,
+  },
+  sheetCardSubtitle: {
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  sheetEmpty: {
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 18,
+    paddingVertical: 22,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  sheetEmptyCopy: {
+    fontSize: 13,
+    fontWeight: "600",
+    textAlign: "center",
+    lineHeight: 18,
+  },
   cancelBtn: {
     marginTop: 12,
     borderRadius: 999,
     paddingVertical: 14,
+  },
+  cancelBtnText: {
+    fontSize: 16,
+    fontWeight: "700",
+    textAlign: "center",
   },
 })

@@ -1,0 +1,17 @@
+appId: com.coursecollab.app
+---
+- launchApp
+- openLink: coursecollab://dev-eleg-student-login
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 120000
+- openLink: "coursecollab:///results/5458?type=homework"
+- extendedWaitUntil:
+    visible: "Homework Performance Summary|AI Feedback|Provisional|Demo 1"
+    timeout: 120000
+- takeScreenshot: demo-hw-results
+- scroll
+- takeScreenshot: demo-hw-results-2
+- tapOn:
+    text: ".*Code Write.*|.*1.*"
+    optional: true

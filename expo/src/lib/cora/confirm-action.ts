@@ -5,8 +5,24 @@ import type { InstructorScope } from "../instructor-content-api"
 import type { StudentSession } from "../session"
 import type { PreparedCoraRequest } from "../cora-rbac/prepare-request"
 import { studentAuthenticatedRequest } from "../student-api"
+import { adminAuthenticatedHeaders } from "../admin-session-headers"
 import { recordActivityFromConfirmResult } from "./activity-store"
 import type { CoraActionProposal, CoraConfirmActionResult } from "./types"
+import { applyCoraMutationToCache } from "../query/cora-cache"
+import { getQueryClient } from "../query/client"
+import { facultyQueryScope, studentQueryScope } from "../query/scope"
+
+function applyCoraCacheFromStudent(session: StudentSession, result: CoraConfirmActionResult) {
+  applyCoraMutationToCache(getQueryClient(), studentQueryScope(session), result)
+}
+
+function applyCoraCacheFromFaculty(scope: InstructorScope, result: CoraConfirmActionResult) {
+  applyCoraMutationToCache(
+    getQueryClient(),
+    facultyQueryScope({ id: scope.instructorId }, scope.courseId ?? null),
+    result,
+  )
+}
 
 function confirmFailureMessage(result: CoraConfirmActionResult): string {
   if (result.error === "in_progress") {
@@ -65,6 +81,7 @@ export async function confirmFacultyCoraAction(
   }
   const result = normalizeConfirmResult(parsed)
   await recordActivityFromConfirmResult(result, "faculty", scope.courseId)
+  applyCoraCacheFromFaculty(scope, result)
   return result
 }
 
@@ -80,6 +97,7 @@ export async function confirmStudentCoraAction(
   })
   const result = normalizeConfirmResult(parsed)
   await recordActivityFromConfirmResult(result, "student", session.courseId)
+  applyCoraCacheFromStudent(session, result)
   return result
 }
 
@@ -92,11 +110,8 @@ export async function confirmAdminCoraAction(
   const url = `${API_BASE_URL}/api/admin/cora/actions/confirm`
   const response = await fetch(url, {
     method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      "x-admin-id": String(adminId),
-    },
+    credentials: "include",
+    headers: await adminAuthenticatedHeaders(adminId),
     body: JSON.stringify({
       proposal,
       ...(options?.institutionId != null ? { institutionId: options.institutionId } : {}),

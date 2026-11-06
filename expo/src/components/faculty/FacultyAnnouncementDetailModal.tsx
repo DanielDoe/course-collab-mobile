@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import { ActivityIndicator, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useRouter } from "expo-router"
 import { AppAlert } from '../../lib/app-alert'
 import { AppAlertHost } from "../../context/AppAlertProvider"
 import { Ionicons } from "@/components/icons/AppIcon"
@@ -22,6 +23,10 @@ import { FacultySectionCard } from "./faculty-shared"
 import { SolidListThumbTile } from "../theme/SolidListThumbTile"
 import { ApiError } from "../../lib/api"
 import { useModuleTheme } from "../../lib/themed-module-shell"
+import {
+  announcementCanAddToCalendar,
+  announcementEventWhenLabel,
+} from "../../lib/announcement-calendar"
 
 type Scope = { instructorId: number; courseId: number }
 
@@ -115,6 +120,7 @@ function AttachmentTile({
 export function FacultyAnnouncementDetailModal({ item, scope, onClose, onEdit, onDelete }: Props) {
   const { styles: moduleStyles, native, tokens, type } = useModuleTheme()
   const insets = useSafeAreaInsets()
+  const router = useRouter()
   const [detail, setDetail] = useState<InstructorAnnouncement | null>(null)
   const [heldItem, setHeldItem] = useState<InstructorAnnouncement | null>(null)
   const [loading, setLoading] = useState(false)
@@ -356,6 +362,44 @@ export function FacultyAnnouncementDetailModal({ item, scope, onClose, onEdit, o
                 </View>
               </View>
 
+              {announcementCanAddToCalendar(announcement) ? (
+                <FacultySectionCard title="Event" icon="calendar-outline">
+                  <Text style={[type.body, { color: native.label }]}>
+                    {announcementEventWhenLabel(announcement)}
+                    {announcement.event_location?.trim()
+                      ? ` · ${announcement.event_location.trim()}`
+                      : ""}
+                  </Text>
+                  <Text style={[type.caption, { color: native.secondaryLabel }]}>
+                    Students can add this date to their calendar. It also appears on your course calendar.
+                  </Text>
+                  <Pressable
+                    onPress={() => {
+                      const date = announcement.event_date?.slice(0, 10)
+                      onClose()
+                      router.push({
+                        pathname: "/module/calendar",
+                        params: date ? { date } : undefined,
+                      } as never)
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel="View on calendar"
+                    style={({ pressed }) => [
+                      styles.calendarBtn,
+                      {
+                        backgroundColor: FACULTY_ANNOUNCEMENT_COLOR.action,
+                        opacity: pressed ? 0.88 : 1,
+                      },
+                    ]}
+                  >
+                    <Ionicons name="calendar-outline" size={16} color={FACULTY_ANNOUNCEMENT_COLOR.actionInk} />
+                    <Text style={[type.bodyEmphasis, { color: FACULTY_ANNOUNCEMENT_COLOR.actionInk }]}>
+                      View on Calendar
+                    </Text>
+                  </Pressable>
+                </FacultySectionCard>
+              ) : null}
+
               <FacultySectionCard title="Full announcement" icon="document-text-outline">
                 <AnnouncementBodyWebView
                   content={announcement.content ?? ""}
@@ -527,6 +571,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   attachmentCopy: { flex: 1, gap: 2 },
+  calendarBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    borderRadius: 12,
+    paddingVertical: 12,
+    marginTop: 4,
+  },
   footer: {
     position: "absolute",
     left: 0,

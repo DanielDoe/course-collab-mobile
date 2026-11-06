@@ -10,7 +10,7 @@ const here = dirname(fileURLToPath(import.meta.url))
 describe("student lecture client auth contract", () => {
   it("builds lecture list/detail through studentRequest", () => {
     const source = readFileSync(join(here, "student-api.ts"), "utf8")
-    assert.match(source, /getLectures:\s*\(session/)
+    assert.match(source, /getLectures:\s*(?:async\s*)?\(session/)
     assert.match(source, /studentRequest/)
     assert.match(source, /updateLectureProgress/)
     for (const path of LECTURE_STUDENT_API_PATHS) {
@@ -64,6 +64,7 @@ describe("student lecture client auth contract", () => {
     assert.doesNotMatch(viewer, /WebModuleScreen/)
     assert.match(pdfViewer, /react-native-pdf/)
     assert.match(pdfViewer, /loadLectureDeckPdf|useResolvedLectureDeckSource/)
+    assert.doesNotMatch(pdfViewer, /import Pdf from ["']react-native-pdf["']/)
     assert.doesNotMatch(pdfViewer, /WebView/)
   })
 })

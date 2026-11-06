@@ -1,5 +1,11 @@
 import { appendNativeQuery } from "../constants/module-web-paths"
 import type { MembershipTier } from "../types/dashboard"
+import {
+  openMembershipPurchase,
+  openPurchaseWebPath,
+  isIosPurchaseUiHidden,
+  requiresExternalWebPurchase,
+} from "./purchase-navigation"
 
 export type MembershipBillingCadence = "semester" | "monthly"
 
@@ -41,12 +47,22 @@ export function openMembershipCheckout(
   router: { push: (href: never) => void },
   plan: MembershipTier,
 ) {
+  if (isIosPurchaseUiHidden()) return
+  if (requiresExternalWebPurchase()) {
+    void openMembershipPurchase({ tier: plan, portal: "student" })
+    return
+  }
   router.push({
     pathname: "/membership/checkout",
     params: { plan },
   } as never)
 }
 
-export function openMembershipManage(router: { push: (href: never) => void }) {
+export async function openMembershipManage(router: { push: (href: never) => void }) {
+  if (isIosPurchaseUiHidden()) return
+  if (requiresExternalWebPurchase()) {
+    await openPurchaseWebPath(buildMembershipManageWebPath())
+    return
+  }
   router.push("/membership/manage" as never)
 }

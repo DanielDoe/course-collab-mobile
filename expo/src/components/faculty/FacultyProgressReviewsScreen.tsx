@@ -14,9 +14,7 @@ import { ApiError } from "../../lib/api"
 import { filterProgressReviews } from "../../lib/faculty-analytics-utils"
 import {
   formatAsOfLabel,
-  filterProgressReviewsForAsOfDate,
   getReviewPeriodConfig,
-  normalizeAsOfDate,
   REVIEW_PERIOD_OPTIONS,
   todayIsoDate,
   type ProgressReviewPeriod,
@@ -42,7 +40,9 @@ import { useFacultyStickyHeaderScrollLayout,
 import { FacultyProgressReviewDetailModal } from "./FacultyProgressReviewDetailModal"
 import { FacultyProgressReviewRunSheet } from "./FacultyProgressReviewRunSheet"
 import { FacultySummerCampDatePicker } from "./FacultySummerCampDatePicker"
+import { useFacultyListPager } from "../../hooks/useFacultyListPager"
 import { useModuleTheme } from "../../lib/themed-module-shell"
+import { FacultyListPagerFooter } from "./FacultyListPagerFooter"
 
 export function FacultyProgressReviewsScreen() {
   const { styles: moduleStyles, native, tokens, type } = useModuleTheme()
@@ -64,37 +64,22 @@ export function FacultyProgressReviewsScreen() {
   const [runSheetOpen, setRunSheetOpen] = useState(false)
 
   const periodCfg = getReviewPeriodConfig(period)
-  const customAsOfDate = period === "custom" ? normalizeAsOfDate(asOfDate) : null
 
   const load = useCallback(async () => {
     if (!scope) return
     setError("")
-    if (period === "custom" && !customAsOfDate) {
-      setReviews([])
-      setSavedCount(0)
-      setMissingCount(0)
-      setEnrolledCount(0)
-      return
-    }
+    // Custom browse lists all custom + targeted reviews for the offering (no as-of date filter).
+    // Snapshot date is only used when generating a dated batch from the run sheet.
     const res = await instructorApi.getProgressReviews(scope, {
       reviewPeriod: period,
-      ...(customAsOfDate ? { asOfDate: customAsOfDate } : {}),
     })
     const enrolled = res.enrolledStudentCount ?? res.studentCount ?? 0
-    let list = res.reviews ?? []
-    if (period === "custom" && customAsOfDate) {
-      list = filterProgressReviewsForAsOfDate(list, customAsOfDate)
-    }
+    const list = res.reviews ?? []
     setReviews(list)
-    if (period === "custom" && customAsOfDate) {
-      setSavedCount(list.length)
-      setMissingCount(Math.max(0, enrolled - list.length))
-    } else {
-      setSavedCount(res.savedReviewCount ?? list.length)
-      setMissingCount(res.missingReviewCount ?? 0)
-    }
+    setSavedCount(res.savedReviewCount ?? list.length)
+    setMissingCount(res.missingReviewCount ?? 0)
     setEnrolledCount(enrolled)
-  }, [scope, period, customAsOfDate])
+  }, [scope, period])
 
   useEffect(() => {
     if (!ready) {
@@ -123,6 +108,7 @@ export function FacultyProgressReviewsScreen() {
   useSuppressModuleSearchDock(runSheetOpen || selectedReview != null)
 
   const filtered = useMemo(() => filterProgressReviews(reviews, search), [reviews, search])
+  const pager = useFacultyListPager(filtered, `${period}:${search}:${asOfDate}`, "reviews")
 
   if (!ready) {
     return (
@@ -197,11 +183,13 @@ export function FacultyProgressReviewsScreen() {
               onChange={setAsOfDate}
               accessibilityLabel="Snapshot date"
             />
-            {asOfDate.trim() ? (
-              <Text style={[type.caption, { color: native.tertiaryLabel }]}>
-                Reviews saved for as of {formatAsOfLabel(asOfDate) ?? asOfDate}
-              </Text>
-            ) : null}
+            <Text style={[type.caption, { color: native.tertiaryLabel }]}>
+              Used when generating a dated snapshot. Targeted practice and other custom reviews for
+              this course appear below.
+              {asOfDate.trim()
+                ? ` Generate as of ${formatAsOfLabel(asOfDate) ?? asOfDate}.`
+                : ""}
+            </Text>
           </View>
         ) : null}
 
@@ -241,25 +229,24 @@ export function FacultyProgressReviewsScreen() {
           <FacultyEmptyState
             icon="sparkles-outline"
             title={
-              period === "custom" && !customAsOfDate
-                ? "Select a snapshot date"
-                : reviews.length === 0
-                  ? `No ${periodCfg.shortLabel.toLowerCase()} reviews yet`
-                  : "No matches"
+              reviews.length === 0
+                ? `No ${periodCfg.shortLabel.toLowerCase()} reviews yet`
+                : "No matches"
             }
             body={
-              period === "custom" && !customAsOfDate
-                ? "Enter an as-of date above, then generate or view saved custom reviews."
-                : reviews.length === 0
-                  ? "Generate reviews for this period, or switch to another review type."
-                  : "Try another search term."
+              reviews.length === 0
+                ? period === "custom"
+                  ? "Generate a dated snapshot, or open Cora Insights to send targeted practice — those reviews show here."
+                  : "Generate reviews for this period, or switch to another review type."
+                : "Try another search term."
             }
           />
         ) : (
           <View style={styles.list}>
-            {filtered.map((review) => (
+            {pager.items.map((review) => (
               <FacultyProgressReviewCard key={review.id} review={review} onPress={() => setSelectedReview(review)} />
             ))}
+            <FacultyListPagerFooter pager={pager} />
           </View>
         )}
       </ScrollView>

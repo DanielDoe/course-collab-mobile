@@ -20,6 +20,7 @@ import { LectureDeckPdfViewer } from "../lectures/LectureDeckPdfViewer"
 import { LectureSlidePreviewToolbar } from "../lectures/LectureSlidePreviewToolbar"
 import { StudentLectureToolsSheet } from "../lectures/StudentLectureToolsSheet"
 import { lectureViewerRootStyle, lectureViewerWebHostStyle } from "../lectures/lecture-viewer-layout"
+import { lectureDisplayTitle } from "../lectures/lecture-list-utils"
 
 type Props = {
   lectureId: number
@@ -66,7 +67,7 @@ export function FacultyLectureSlidePreviewScreen({ lectureId }: Props) {
   }, [scope, ready, lectureId, load])
 
   const deckRequest = buildFacultyDeckRequest(deckUrl, scope ?? undefined)
-  const title = lecture?.title?.trim() || "Lecture preview"
+  const title = lecture ? lectureDisplayTitle(lecture) : "Lecture preview"
   const samplePracticeLabel = samplePractice?.button_label?.trim() || "Sample Practice"
   const workspaceLabel = workspace?.button_label?.trim() || workspace?.title?.trim() || "Workspace"
   const samplePracticeCount = samplePractice?.questions.length ?? 0

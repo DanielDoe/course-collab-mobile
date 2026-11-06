@@ -1,0 +1,142 @@
+appId: com.coursecollab.app
+---
+# Verify select_all grading on lecture 254 (ELEG 130X L1) after the client-side
+# empty-key fix, which previously scored every select_all 0 and painted correct
+# picks red. Covers all five select_all questions in the lecture: Q6 and Q8-Q10
+# answered fully correct, Q7 answered with one deliberate wrong pick to prove
+# partial credit still reports as not-fully-correct.
+#
+# Accordion handling, per question: expand the header, wait for the last option,
+# then a CONTROLLED swipe with explicit coordinates to bring option A into frame.
+# A bare `swipe: {direction: DOWN}` flings the list back to the top, and
+# `scrollUntilVisible` reports success while the option is still above the fold
+# (off-screen nodes count as visible in the hierarchy), so its tap silently
+# missed. Each swipe is followed by a settle wait plus an assertVisible, because
+# the first tap after a scroll is otherwise absorbed halting scroll momentum.
+#
+# Option labels render as "A, FORTRAN" and Maestro `text:` is a full match, so
+# every option selector is a regex.
+#
+# Reset attempts first, or a card replays its stored result instead of accepting
+# a new answer:
+#   DELETE FROM lecture_sample_practice_attempts WHERE student_id=958 AND lecture_id=254
+
+- stopApp
+- openLink: coursecollab://dev-eleg-student-login
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 120000
+
+- openLink: coursecollab:///lecture/1?lectureId=254
+- extendedWaitUntil:
+    visible: "Open lecture tools"
+    timeout: 120000
+- tapOn:
+    text: "Open lecture tools"
+- extendedWaitUntil:
+    visible: "Slide tools"
+    timeout: 30000
+- tapOn:
+    text: ".*Sample Practice.*"
+- extendedWaitUntil:
+    visible: "Sample Practice"
+    timeout: 60000
+
+# ---------- Q6: keys are FORTRAN, ALGOL, COBOL, Pascal (NOT C++) ----------
+- runFlow:
+    file: subflows/sample-practice-expand.yaml
+    env:
+      HEADER: ".*early procedural.*"
+      LAST_OPTION: ".*Pascal.*"
+      FIRST_OPTION: ".*FORTRAN.*"
+      SHOT: "q6-01-expanded"
+- tapOn: ".*FORTRAN.*"
+- tapOn: ".*ALGOL.*"
+- tapOn: ".*COBOL.*"
+- tapOn: ".*Pascal.*"
+- takeScreenshot: q6-02-selected
+- runFlow:
+    file: subflows/sample-practice-submit-correct.yaml
+    env:
+      SHOT: "q6-03-graded-correct"
+
+# ---------- Q7: "Testing frequently" is wrong, must not grade as correct ----------
+- runFlow:
+    file: subflows/sample-practice-expand.yaml
+    env:
+      HEADER: ".*common programming mistakes.*"
+      LAST_OPTION: ".*Poor documentation.*"
+      FIRST_OPTION: ".*Not backing up code.*"
+      SHOT: "q7-01-expanded"
+- tapOn: ".*Not backing up code.*"
+- tapOn: ".*Ignoring error messages.*"
+- tapOn: ".*Testing frequently.*"
+- takeScreenshot: q7-02-selected-with-one-wrong
+- scrollUntilVisible:
+    element:
+      text: ".*Submit answer.*"
+    direction: DOWN
+    timeout: 20000
+    speed: 15
+    waitToSettleTimeoutMs: 1000
+- waitForAnimationToEnd:
+    timeout: 5000
+- tapOn: ".*Submit answer.*"
+- extendedWaitUntil:
+    visible: ".*Not quite.*|.*Partially correct.*"
+    timeout: 60000
+- takeScreenshot: q7-03-graded-not-fully-correct
+- assertNotVisible: ".*Correct — nice work.*"
+
+# ---------- Q8: keys are Program description, Algorithm changes, Sample test runs, Users' manual ----------
+- runFlow:
+    file: subflows/sample-practice-expand.yaml
+    env:
+      HEADER: ".*problem solution documentation.*"
+      LAST_OPTION: ".*Users. manual.*"
+      FIRST_OPTION: ".*Program description.*"
+      SHOT: "q8-01-expanded"
+- tapOn: ".*Program description.*"
+- tapOn: ".*Algorithm changes.*"
+- tapOn: ".*Sample test runs.*"
+- tapOn: ".*Users. manual.*"
+- takeScreenshot: q8-02-selected
+- runFlow:
+    file: subflows/sample-practice-submit-correct.yaml
+    env:
+      SHOT: "q8-03-graded-correct"
+
+# ---------- Q9: keys are the four valid declarations, NOT `real gpa` ----------
+- runFlow:
+    file: subflows/sample-practice-expand.yaml
+    env:
+      HEADER: ".*valid variable declarations.*"
+      LAST_OPTION: ".*char grade.*"
+      FIRST_OPTION: ".*int age.*"
+      SHOT: "q9-01-expanded"
+- tapOn: ".*int age.*"
+- tapOn: ".*double pi.*"
+- tapOn: ".*bool student.*"
+- tapOn: ".*char grade.*"
+- takeScreenshot: q9-02-selected
+- runFlow:
+    file: subflows/sample-practice-submit-correct.yaml
+    env:
+      SHOT: "q9-03-graded-correct"
+
+# ---------- Q10: keys are ALU, Control Unit, Memory Unit (3 of 5, not 4) ----------
+- runFlow:
+    file: subflows/sample-practice-expand.yaml
+    env:
+      HEADER: ".*parts of a CPU.*"
+      LAST_OPTION: ".*Memory Unit.*"
+      FIRST_OPTION: ".*ALU.*"
+      SHOT: "q10-01-expanded"
+- tapOn: ".*ALU.*"
+- tapOn: ".*Control Unit.*"
+- tapOn: ".*Memory Unit.*"
+- takeScreenshot: q10-02-selected
+- runFlow:
+    file: subflows/sample-practice-submit-correct.yaml
+    env:
+      SHOT: "q10-03-graded-correct"

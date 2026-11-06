@@ -1,5 +1,6 @@
 import { API_BASE_URL } from "../constants"
 import { ApiError } from "./api"
+import { instructorAuthenticatedHeaders } from "./instructor-api"
 import type { MessagesAuth, ParticipantKind } from "./messages-api"
 import type {
   ManualPresenceStatus,
@@ -8,12 +9,13 @@ import type {
   PresenceRecord,
 } from "./presence/types"
 import { presenceKey } from "./presence/types"
+import { studentAuthenticatedHeaders } from "./student-api"
 
-function authHeaders(auth: MessagesAuth): Record<string, string> {
+async function authHeaders(auth: MessagesAuth): Promise<Record<string, string>> {
   if (auth.kind === "student") {
-    return { Accept: "application/json", "x-student-id": auth.databaseId }
+    return studentAuthenticatedHeaders({ databaseId: auth.databaseId })
   }
-  return { Accept: "application/json", "x-instructor-id": String(auth.instructorId) }
+  return instructorAuthenticatedHeaders({ instructorId: auth.instructorId })
 }
 
 async function parseJsonResponse(response: Response): Promise<unknown> {
@@ -41,14 +43,14 @@ function errorMessage(body: unknown, status: number): string {
 async function presenceRequest<T>(auth: MessagesAuth, path: string, init?: RequestInit): Promise<T> {
   const url = `${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`
   const headers: Record<string, string> = {
-    ...authHeaders(auth),
+    ...(await authHeaders(auth)),
     ...(init?.headers as Record<string, string> | undefined),
   }
   if (init?.body && !headers["Content-Type"]) {
     headers["Content-Type"] = "application/json"
   }
 
-  const response = await fetch(url, { ...init, headers })
+  const response = await fetch(url, { ...init, credentials: "include", headers })
   const body = await parseJsonResponse(response)
   if (!response.ok) {
     throw new ApiError(errorMessage(body, response.status), response.status, body)

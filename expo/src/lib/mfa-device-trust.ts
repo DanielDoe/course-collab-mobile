@@ -291,10 +291,6 @@ export async function mfaTrustRequestHeadersForStudent(
   if (!trust && keys[0]) {
     trust = await ensureTrustFromJar(keys[0], keys, "student")
   }
-  if (!trust) {
-    const records = await readAll()
-    trust = records.find((entry) => entry.userType === "student" && isActive(entry)) ?? null
-  }
   if (!trust) return {}
   return buildMergedMfaTrustCookie(trust.token)
 }

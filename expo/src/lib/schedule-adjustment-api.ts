@@ -1,5 +1,6 @@
 import { studentAuthenticatedRequest } from "./student-api"
 import type { StudentSession } from "./session"
+import { filterScheduleAdjustmentsToSection } from "./schedule-adjustment/section-scope"
 import type { AvailabilitySlotState } from "./schedule-adjustment/time-slots"
 
 export type ScheduleAdjustmentRequest = {
@@ -8,6 +9,7 @@ export type ScheduleAdjustmentRequest = {
   meeting_type: string
   reason: string
   section_code?: string | null
+  adjustment_mode?: string | null
   availability_ends_at?: string
   proposed_day?: string | null
   proposed_start_time?: string | null
@@ -21,6 +23,13 @@ export type ScheduleAdjustmentRequest = {
   poll_kind?: "recurring" | "one_off"
   missed_class_date?: string | null
   proposed_date?: string | null
+  instructor_led_day?: string | null
+  instructor_led_start_time?: string | null
+  instructor_led_end_time?: string | null
+  structured_session_day?: string | null
+  structured_session_start_time?: string | null
+  structured_session_end_time?: string | null
+  attendance_late_threshold_minutes?: number | null
   created_at?: string
 }
 
@@ -30,9 +39,25 @@ export type ScheduleAdjustmentDetail = {
   myAvailability?: { availability_data?: { slots?: Record<string, AvailabilitySlotState> }; submitted_at?: string | null } | null
   myConsent?: { status?: string; signature_name?: string | null } | null
   pollStats?: { responded: number; enrolled: number }
+  consentStats?: {
+    agreed: number
+    declined: number
+    pending: number
+    total: number
+    thresholdPercent: number
+    required: number
+    remaining: number
+    percentOfClass: number
+    percentTowardThreshold: number
+    thresholdMet: boolean
+  }
   consentStatement?: string
+  consentIntro?: string
+  consentAffirmations?: string[]
   safeguardNotice?: string
   conflictDisclaimer?: string
+  instructorName?: string
+  studentName?: string
 }
 
 export type SlotHeatmapCell = {
@@ -71,11 +96,16 @@ function qs(session: StudentSession) {
 }
 
 export const scheduleAdjustmentApi = {
-  list: (session: StudentSession) =>
-    studentAuthenticatedRequest<{ success?: boolean; requests: ScheduleAdjustmentRequest[] }>(
+  list: async (session: StudentSession) => {
+    const data = await studentAuthenticatedRequest<{ success?: boolean; requests: ScheduleAdjustmentRequest[] }>(
       session,
       `/api/student/schedule-adjustments?${qs(session)}`,
-    ),
+    )
+    return {
+      ...data,
+      requests: filterScheduleAdjustmentsToSection(data.requests ?? [], session.section),
+    }
+  },
 
   getDetail: (session: StudentSession, requestId: number) =>
     studentAuthenticatedRequest<ScheduleAdjustmentDetail>(

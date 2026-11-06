@@ -22,7 +22,10 @@ import {
 } from "../../../lib/guest-mobile-payment-api"
 import { openGuestCoraCreditsSuccess } from "../../../lib/guest-checkout-paths"
 import { openGuestCreditPackHostedCheckout } from "../../../lib/guest-stripe-hosted-checkout"
-import { shouldBlockNativeDigitalCheckout } from "../../../lib/compliance/ios-purchase-policy"
+import {
+  openGuestCreditPurchase,
+  requiresExternalWebPurchase,
+} from "../../../lib/purchase-navigation"
 import type { GuestSession } from "../../../lib/session"
 import type { MobilePaymentSheetResponse } from "../../../lib/membership-payment-api"
 import { AppAlert } from "../../../lib/app-alert"
@@ -79,10 +82,11 @@ export function GuestCoraCreditsCheckoutScreen({ packId }: Props) {
     if (!guestSession || !pack) return
     setPaymentNotice("")
 
-    if (shouldBlockNativeDigitalCheckout()) {
+    if (requiresExternalWebPurchase()) {
       try {
         setPaymentLoading(true)
-        await openHostedCheckout()
+        await openGuestCreditPurchase(guestSession, pack.id)
+        setPaymentNotice("Complete payment in Safari. When you return, your balance will refresh automatically.")
       } catch (err) {
         setPaymentNotice(err instanceof ApiError ? err.message : "Could not open web checkout.")
       } finally {

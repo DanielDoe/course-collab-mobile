@@ -1,5 +1,4 @@
 import {
-  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -8,8 +7,6 @@ import {
   View,
 } from "react-native"
 import { useId, useMemo } from "react"
-import { Ionicons } from "@/components/icons/AppIcon"
-import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { NATIVE } from "../../constants/faculty-native-theme"
 import { STUDENT_BRAND, STUDENT_NATIVE } from "../../constants/student-theme"
 import { useAppThemeTokens } from "../../context/AppearanceProvider"
@@ -24,7 +21,7 @@ import {
 } from "../theme/LiquidGlassSearchField"
 import { GlassFilterOptionRow, GlassMenuList } from "../theme/GlassActionSheetMenu"
 import { useGlassChromeActive } from "../theme/GlassSurface"
-import { FacultySheetChrome, FacultySheetContainer } from "../faculty/faculty-collab-sheet-ui"
+import { ModuleFilterBottomSheet } from "../motion/ModuleFilterBottomSheet"
 import { useNativeType } from "../../lib/themed-module-theme"
 import type { FacultyFilterOption } from "../faculty/faculty-module-shell"
 
@@ -108,7 +105,7 @@ export function StudentSearchToolbarInner({
           <LiquidGlassSearchIconButton
             icon={FILTER_TOOLBAR_ICON}
             onPress={onOpenFilter}
-            accessibilityLabel="Open filters"
+            accessibilityLabel={filterLabel ?? "Open filters"}
             active={filterActive}
           />
         ) : null}
@@ -142,7 +139,7 @@ export function StudentSearchToolbarInner({
               style={styles.filterOnlyInner}
               onPress={onOpenFilter}
               accessibilityRole="button"
-              accessibilityLabel="Open filters"
+              accessibilityLabel={filterLabel ?? "Open filters"}
             >
               <Ionicons name={FILTER_TOOLBAR_ICON} size={18} color={filterIconColor} />
               <Text
@@ -191,7 +188,7 @@ export function StudentSearchToolbarInner({
           style={styles.filterOnlyInner}
           onPress={onOpenFilter}
           accessibilityRole="button"
-          accessibilityLabel="Open filters"
+          accessibilityLabel={filterLabel ?? "Open filters"}
         >
           <Ionicons name={FILTER_TOOLBAR_ICON} size={18} color={filterIconColor} />
           <Text style={[styles.filterOnlyLabel, filterActive && { color: theme.accentDark, fontWeight: "600" }]} numberOfLines={1}>
@@ -226,7 +223,7 @@ export function StudentSearchToolbarInner({
           style={[styles.toolbarFilterBtn, filterActive && { backgroundColor: theme.accentSoftStrong }]}
           onPress={onOpenFilter}
           accessibilityRole="button"
-          accessibilityLabel="Open filters"
+          accessibilityLabel={filterLabel ?? "Open filters"}
         >
           <Ionicons name={FILTER_TOOLBAR_ICON} size={18} color={filterIconColor} />
         </Pressable>
@@ -288,37 +285,20 @@ export function StudentFilterSheet({
   onSelect: (value: string) => void
   onClose: () => void
 }) {
-  const insets = useSafeAreaInsets()
-  const theme = useAppThemeTokens()
-  const type = useNativeType()
-
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <FacultySheetContainer style={styles.filterSheet}>
-        <FacultySheetChrome topInset={insets.top} title={title} onClose={onClose} />
-        {subtitle ? (
-          <Text style={[type.secondary, styles.filterSheetSub, { color: theme.textSecondary }]}>{subtitle}</Text>
-        ) : null}
-        <ScrollView
-          contentContainerStyle={[styles.filterSheetList, { paddingBottom: insets.bottom + 24 }]}
-          keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
-          showsVerticalScrollIndicator={false}
-        >
-          <GlassMenuList>
-            {options.map((opt, index) => (
-              <GlassFilterOptionRow
-                key={opt.value}
-                label={opt.label}
-                active={value === opt.value}
-                onPress={() => onSelect(opt.value)}
-                showSeparator={index < options.length - 1}
-              />
-            ))}
-          </GlassMenuList>
-        </ScrollView>
-      </FacultySheetContainer>
-    </Modal>
+    <ModuleFilterBottomSheet visible={visible} title={title} subtitle={subtitle} onClose={onClose}>
+      <GlassMenuList>
+        {options.map((opt, index) => (
+          <GlassFilterOptionRow
+            key={opt.value}
+            label={opt.label}
+            active={value === opt.value}
+            onPress={() => onSelect(opt.value)}
+            showSeparator={index < options.length - 1}
+          />
+        ))}
+      </GlassMenuList>
+    </ModuleFilterBottomSheet>
   )
 }
 
@@ -337,44 +317,30 @@ export function StudentGroupedFilterSheet({
   onSelect: (groupId: string, value: string) => void
   onClose: () => void
 }) {
-  const insets = useSafeAreaInsets()
   const theme = useAppThemeTokens()
   const type = useNativeType()
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <FacultySheetContainer style={styles.filterSheet}>
-        <FacultySheetChrome topInset={insets.top} title={title} onClose={onClose} />
-        {subtitle ? (
-          <Text style={[type.secondary, styles.filterSheetSub, { color: theme.textSecondary }]}>{subtitle}</Text>
-        ) : null}
-        <ScrollView
-          contentContainerStyle={[styles.groupedFilterList, { paddingBottom: insets.bottom + 24 }]}
-          keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
-          showsVerticalScrollIndicator={false}
-        >
-          {groups.map((group) => (
-            <View key={group.id} style={styles.filterGroup}>
-              <Text style={[type.sectionHeader, styles.filterGroupTitle, { color: theme.textSecondary }]}>
-                {group.title}
-              </Text>
-              <GlassMenuList>
-                {group.options.map((opt, index) => (
-                  <GlassFilterOptionRow
-                    key={`${group.id}-${opt.value}`}
-                    label={opt.label}
-                    active={group.value === opt.value}
-                    onPress={() => onSelect(group.id, opt.value)}
-                    showSeparator={index < group.options.length - 1}
-                  />
-                ))}
-              </GlassMenuList>
-            </View>
-          ))}
-        </ScrollView>
-      </FacultySheetContainer>
-    </Modal>
+    <ModuleFilterBottomSheet visible={visible} title={title} subtitle={subtitle} onClose={onClose}>
+      {groups.map((group) => (
+        <View key={group.id} style={styles.filterGroup}>
+          <Text style={[type.sectionHeader, styles.filterGroupTitle, { color: theme.textSecondary }]}>
+            {group.title}
+          </Text>
+          <GlassMenuList>
+            {group.options.map((opt, index) => (
+              <GlassFilterOptionRow
+                key={`${group.id}-${opt.value}`}
+                label={opt.label}
+                active={group.value === opt.value}
+                onPress={() => onSelect(group.id, opt.value)}
+                showSeparator={index < group.options.length - 1}
+              />
+            ))}
+          </GlassMenuList>
+        </View>
+      ))}
+    </ModuleFilterBottomSheet>
   )
 }
 

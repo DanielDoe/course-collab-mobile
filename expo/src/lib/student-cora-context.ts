@@ -28,6 +28,7 @@ export type StudentCoraContext = {
   version: typeof STUDENT_CORA_CONTEXT_VERSION
   studentId: string
   studentName?: string
+  courseId?: number
   courseCode?: string
   courseTitle?: string
   section?: string
@@ -177,6 +178,7 @@ export async function buildStudentCoraContext(
     version: STUDENT_CORA_CONTEXT_VERSION,
     studentId: session.databaseId,
     studentName: payload.account?.fullName ?? session.name,
+    courseId: session.courseId,
     courseCode: payload.account?.courseCode ?? session.courseCode,
     courseTitle: payload.account?.courseTitle ?? undefined,
     section: payload.account?.section ?? session.section,

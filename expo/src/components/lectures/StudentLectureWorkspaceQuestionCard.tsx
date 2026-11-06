@@ -1,17 +1,21 @@
-import { useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { SYSTEM, NATIVE } from "../../constants/faculty-native-theme"
 import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
 import { useNativeType } from "../../lib/themed-module-theme"
 import type { LectureWorkspaceQuestion } from "../../lib/lecture-types"
-import { categoryLabel, solutionMarkdownFromQuestion } from "../../lib/lecture-workspace-utils"
+import { categoryLabel, isWorkspaceSolutionUnlocked, solutionMarkdownFromQuestion, workspaceQuestionHasAuthoredSolution } from "../../lib/lecture-workspace-utils"
 import { QuestionContentWebView, QuestionMediaView } from "../rewards/QuestionContent"
 
 import { CoraSolveButton } from "../cora/CoraSolveButton"
 import { useCora } from "../cora/CoraProvider"
 import { buildWorkspaceCoraProblem } from "../../lib/cora-problem"
 import { StudentLectureWorkspaceInkPanel } from "./StudentLectureWorkspaceInkPanel"
+import { CircuitSubmissionPanel } from "../assessments/CircuitSubmissionPanel"
+import { studentApi } from "../../lib/student-api"
+import { useSession } from "../../context/SessionProvider"
+import type { StudentSession } from "../../lib/session"
 
 const ACCENTS = [SYSTEM.teal, SYSTEM.blue, SYSTEM.purple, SYSTEM.orange] as const
 
@@ -22,6 +26,7 @@ type Props = {
   index: number
   expanded: boolean
   onToggle: () => void
+  savedAnswer?: string | null
 }
 
 export function StudentLectureWorkspaceQuestionCard({
@@ -31,16 +36,66 @@ export function StudentLectureWorkspaceQuestionCard({
   index,
   expanded,
   onToggle,
+  savedAnswer,
 }: Props) {
   const { openCora } = useCora()
+  const { session: rawSession } = useSession()
+  const session = rawSession?.portal === "student" ? (rawSession as StudentSession) : null
   const tokens = useAppThemeTokens()
   const native = useThemedNative()
   const type = useNativeType()
   const accent = ACCENTS[index % ACCENTS.length] ?? SYSTEM.teal
   const [showSolution, setShowSolution] = useState(false)
+  const [answerJson, setAnswerJson] = useState(
+    () =>
+      savedAnswer?.trim() ||
+      JSON.stringify({
+        solution_uploads: {},
+        workspace: null,
+        submission_mode: "workspace",
+      }),
+  )
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle")
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const persistDraft = useCallback(
+    async (json: string) => {
+      setSaveState("saving")
+      try {
+        let parsed: unknown = json
+        try {
+          parsed = JSON.parse(json)
+        } catch {
+          parsed = json
+        }
+        if (!session) return
+        await studentApi.saveLectureWorkspaceDraft(session, lectureId, question.id, parsed)
+        setSaveState("saved")
+      } catch {
+        setSaveState("error")
+      }
+    },
+    [lectureId, question.id, session],
+  )
+
+  function handleAnswerChange(next: string) {
+    setAnswerJson(next)
+    if (saveTimer.current) clearTimeout(saveTimer.current)
+    saveTimer.current = setTimeout(() => {
+      void persistDraft(next)
+    }, 1200)
+  }
+
+  useEffect(() => {
+    return () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current)
+    }
+  }, [])
 
   const solutionMarkdown = solutionMarkdownFromQuestion(question)
-  const hasSolution = Boolean(solutionMarkdown.trim())
+  const hasSolution = workspaceQuestionHasAuthoredSolution(question)
+  const solutionLocked = hasSolution && !isWorkspaceSolutionUnlocked(question)
+  const canShowSolution = hasSolution && isWorkspaceSolutionUnlocked(question)
   const category = question.topic?.trim() || categoryLabel(question.category)
 
   const borderColor = useMemo(() => {
@@ -90,7 +145,46 @@ export function StudentLectureWorkspaceQuestionCard({
 
           <StudentLectureWorkspaceInkPanel workspace={question.instructor_solution_workspace} />
 
-          {hasSolution ? (
+          {session ? (
+            <CircuitSubmissionPanel
+              session={session}
+              value={answerJson}
+              onChange={handleAnswerChange}
+              uploadFile={async ({ partId, uri, name, mime }) =>
+                studentApi.uploadLectureWorkspaceFile(session, lectureId, {
+                  uri,
+                  name,
+                  mimeType: mime,
+                  workspaceQuestionId: question.id,
+                  partId,
+                })
+              }
+            />
+          ) : null}
+          {saveState === "saving" ? (
+            <Text style={[type.caption, { color: native.secondaryLabel }]}>Saving your work…</Text>
+          ) : saveState === "saved" ? (
+            <Text style={[type.caption, { color: native.secondaryLabel }]}>Saved to this lecture</Text>
+          ) : saveState === "error" ? (
+            <Text style={[type.caption, { color: SYSTEM.red.color }]}>
+              Could not save. Try again after you add a file or stroke.
+            </Text>
+          ) : null}
+
+          {solutionLocked ? (
+            <View style={[styles.solutionLockedBox, { backgroundColor: native.fill, borderColor: tokens.border }]}>
+              <Ionicons name="lock-closed-outline" size={18} color={native.secondaryLabel} />
+              <View style={styles.solutionLockedCopy}>
+                <Text style={[type.bodyEmphasis, { color: native.label }]}>Step-by-step solution locked</Text>
+                <Text style={[type.caption, { color: native.secondaryLabel }]}>
+                  Work through the problem in the workspace first. Your instructor will unlock the solution when
+                  ready.
+                </Text>
+              </View>
+            </View>
+          ) : null}
+
+          {canShowSolution ? (
             <>
               <Pressable
                 style={[styles.solutionToggle, { backgroundColor: tokens.accentSoft, borderColor: tokens.accentBorder }]}
@@ -164,6 +258,19 @@ const styles = StyleSheet.create({
   },
   promptBlock: {
     paddingHorizontal: 2,
+  },
+  solutionLockedBox: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  solutionLockedCopy: {
+    flex: 1,
+    gap: 4,
   },
   solutionToggle: {
     flexDirection: "row",

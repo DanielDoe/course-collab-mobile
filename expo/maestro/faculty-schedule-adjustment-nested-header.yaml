@@ -1,0 +1,16 @@
+appId: com.coursecollab.app
+---
+- openLink: coursecollab://dev-faculty-login
+- extendedWaitUntil:
+    visible: "Open navigation menu|Dashboard|All courses"
+    timeout: 60000
+- openLink: coursecollab:///module/schedule-adjustment?from=calendar
+- extendedWaitUntil:
+    visible: "Schedule Adjustment"
+    timeout: 20000
+- assertVisible: "Go back"
+- assertNotVisible: "Open navigation menu"
+- tapOn: "Go back"
+- extendedWaitUntil:
+    visible: "Open navigation menu|Dashboard|All courses"
+    timeout: 10000

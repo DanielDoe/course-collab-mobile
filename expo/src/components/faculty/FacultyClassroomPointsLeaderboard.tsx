@@ -1,4 +1,6 @@
 import { useMemo } from "react"
+import { useFacultyListPager } from "../../hooks/useFacultyListPager"
+import { FacultyListPagerFooter } from "./FacultyListPagerFooter"
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { LinearGradient } from "expo-linear-gradient"
@@ -93,6 +95,7 @@ export function FacultyClassroomPointsLeaderboard({
     }),
     [filtered],
   )
+  const pager = useFacultyListPager(filtered, search ?? "", "students", { preset: "compact" })
 
   const heroColors = podiumHeroGradient(tokens.isDark)
 
@@ -159,8 +162,8 @@ export function FacultyClassroomPointsLeaderboard({
       ) : null}
 
       <View style={styles.list}>
-        {filtered.map((row, index) => {
-          const rank = index + 1
+        {pager.items.map((row) => {
+          const rank = filtered.findIndex((item) => item.student_id === row.student_id && item.session === row.session) + 1
           const thumb =
             rank <= 3
               ? podiumRankSolidThumb(rank as PodiumRank)
@@ -191,6 +194,7 @@ export function FacultyClassroomPointsLeaderboard({
             />
           )
         })}
+        <FacultyListPagerFooter pager={pager} />
       </View>
     </View>
   )

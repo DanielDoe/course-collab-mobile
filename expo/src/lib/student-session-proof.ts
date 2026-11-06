@@ -11,6 +11,8 @@ export type StudentAuthSession = {
   id?: string
   authIdentifier?: string
   email?: string
+  courseId?: number
+  academicTermId?: number
 }
 
 export function flattenRequestHeaders(init?: HeadersInit): Record<string, string> {
@@ -100,6 +102,8 @@ export const DASHBOARD_STUDENT_API_PATHS = [
   "/api/student/membership",
   "/api/student/info",
   "/api/student/notifications",
+  "/api/student/enrollments",
+  "/api/student/active-enrollment",
 ] as const
 
 /** Student assessment take / issues endpoints that must never be fetched with header-only identity. */

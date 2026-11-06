@@ -9,6 +9,7 @@ export type SupportTicket = {
   status: SupportTicketStatus | string
   moduleId?: string | null
   moduleLabel?: string | null
+  attachments?: Array<{ url: string; name?: string; mime?: string; size?: number }>
   createdAt?: string
   updatedAt?: string
 }

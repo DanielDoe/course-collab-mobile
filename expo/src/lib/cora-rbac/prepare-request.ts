@@ -1,6 +1,7 @@
 import type { InstructorScope } from "../instructor-content-api"
 import type { AppSession } from "../session"
 import type { MembershipTier } from "../../types/dashboard"
+import { bindCoraResourceScope, type CoraRequestedResource } from "../cora-security/resource-scope"
 import { logCoraAudit } from "./audit"
 import { filterStudentContextForCora } from "./context-policy"
 import { buildCoraAccessEnvelope, coraAccessBody } from "./envelope"
@@ -21,6 +22,7 @@ export type PrepareCoraRequestInput = {
   membershipTier?: MembershipTier | null
   scope?: InstructorScope | null
   dataSources?: string[]
+  requestedResource?: CoraRequestedResource
 }
 
 export type PreparedCoraRequest = {
@@ -62,6 +64,20 @@ export function prepareCoraRequest(input: PrepareCoraRequestInput): PreparedCora
     throw new CoraAccessDeniedError(input.tool, identity.role, guard.reason)
   }
 
+  const scoped = bindCoraResourceScope(identity, input.requestedResource)
+  if (!scoped.allowed) {
+    logCoraAudit({
+      identity,
+      requestId: `blocked-${Date.now()}`,
+      tool: input.tool,
+      permissionChecks: [...guard.checks, "resource_scope=denied"],
+      outcome: "blocked",
+      prompt: input.prompt,
+      blockReason: scoped.reason,
+    })
+    throw new CoraAccessDeniedError(input.tool, identity.role, scoped.reason)
+  }
+
   const envelope = buildCoraAccessEnvelope({
     identity,
     claims,
@@ -90,6 +106,10 @@ export function prepareCoraRequestOrThrow(input: PrepareCoraRequestInput): Prepa
 
   const claims = buildPermissionClaims(identity)
   const checks = assertToolAccess(identity, claims, input.tool)
+  const scoped = bindCoraResourceScope(identity, input.requestedResource)
+  if (!scoped.allowed) {
+    throw new CoraAccessDeniedError(input.tool, identity.role, scoped.reason)
+  }
   const envelope = buildCoraAccessEnvelope({
     identity,
     claims,

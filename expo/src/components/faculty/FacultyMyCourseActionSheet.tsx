@@ -113,9 +113,9 @@ export function FacultyMyCourseActionSheet({
   const canRemove = Boolean(course.academic_term_id)
 
   return (
-    <FacultySheetModal visible={visible} onRequestClose={onClose}>
+    <FacultySheetModal visible={visible} onRequestClose={onClose} layout="glassBottom">
       <FacultySheetContainer>
-        <FacultySheetChrome topInset={insets.top} title="Course" onClose={onClose} accentColor={FACULTY_ADMIN_COLOR.link} />
+        <FacultySheetChrome topInset={insets.top} title="Course" onClose={onClose} accentColor={FACULTY_ADMIN_COLOR.link} pageSheet />
 
         <ScrollView
           contentContainerStyle={[collabSheetStyles.scroll, { paddingBottom: insets.bottom + 24 }]}

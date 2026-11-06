@@ -85,4 +85,11 @@ describe("campDatePickerYears", () => {
     assert.equal(years[0], "2024")
     assert.equal(years[years.length - 1], "2032")
   })
+
+  it("can start at the current year for upcoming deadlines", () => {
+    const years = campDatePickerYears(new Date(2026, 5, 1), { pastYears: 0 })
+    assert.equal(years[0], "2026")
+    assert.equal(years.includes("2024"), false)
+    assert.equal(years[years.length - 1], "2032")
+  })
 })

@@ -40,6 +40,14 @@ import {
 } from "./FacultyProjectsModulePanels"
 import type { ProjectLeaderboardEntry, ProjectLeaderboardStats } from "../../lib/instructor-api"
 import { filterRowsToCourseSessions } from "../../lib/faculty-projects-module-utils"
+import {
+  facultySessionCodesForScope,
+  fetchFacultyTermSessions,
+  rowMatchesFacultySection,
+  useFacultySectionFilter,
+} from "../../lib/faculty-section-scope"
+import { useFacultyListPager } from "../../hooks/useFacultyListPager"
+import { FacultyListPagerFooter } from "./FacultyListPagerFooter"
 
 type ProjectModuleTab = "overview" | "score" | "leaderboard" | "manage" | "presentations" | "config" | "grades"
 type StatusFilter = "all" | "pending" | "approved" | "rejected"
@@ -75,6 +83,7 @@ export function FacultyProjectsScreen() {
   const styles = useFacultyModuleStyles()
   const type = useNativeType()
   const { scope, ready } = useFacultyScope()
+  const { sessionFilter, setSessionFilter, apiSession } = useFacultySectionFilter(scope)
 
   const [tab, setTab] = useState<ProjectModuleTab>("overview")
   const [presentationStatusFilter, setPresentationStatusFilter] = useState<PresentationStatusFilter>("all")
@@ -89,7 +98,6 @@ export function FacultyProjectsScreen() {
 
   const [search, setSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all")
-  const [sessionFilter, setSessionFilter] = useState("all")
   const [filterSheetOpen, setFilterSheetOpen] = useState(false)
   const [createMenuOpen, setCreateMenuOpen] = useState(false)
   const [groupCreateOpen, setGroupCreateOpen] = useState(false)
@@ -115,21 +123,20 @@ export function FacultyProjectsScreen() {
 
   const load = useCallback(async () => {
     if (!scope) return
-    const session = sessionFilter === "all" ? undefined : sessionFilter
     const status =
       tab === "manage" && statusFilter === "pending"
         ? undefined
         : tab === "manage" && statusFilter !== "all"
           ? statusFilter
           : undefined
-    const boardSession = tab === "leaderboard" && sessionFilter !== "all" ? sessionFilter : undefined
+    const boardSession = tab === "leaderboard" ? apiSession : undefined
     const warnings: string[] = []
     const [projectResult, boardResult, sessionResult] = await Promise.allSettled([
-      instructorApi.getProjects(scope, { session, status }),
+      instructorApi.getProjects(scope, { session: apiSession, status }),
       tab === "leaderboard"
         ? instructorApi.getProjectLeaderboard(scope, { session: boardSession, limit: 50 })
         : Promise.resolve({ leaderboard: [] as ProjectLeaderboardEntry[], stats: undefined }),
-      instructorApi.getSessions(scope, scope.academicTermId ?? undefined),
+      fetchFacultyTermSessions(scope),
     ])
     if (projectResult.status === "rejected") {
       throw projectResult.reason
@@ -144,13 +151,20 @@ export function FacultyProjectsScreen() {
       warnings.push("Could not load the leaderboard.")
     }
     if (sessionResult.status === "fulfilled") {
-      setSessions((sessionResult.value.sessions ?? []).filter((s) => s.code.toUpperCase() !== "BETA"))
+      setSessions(sessionResult.value)
     } else {
       setSessions([])
       warnings.push("Could not load sections.")
     }
     setError(warnings.join(" "))
-  }, [scope, sessionFilter, statusFilter, tab])
+  }, [scope, apiSession, statusFilter, tab])
+
+  useEffect(() => {
+    if (!scope) return
+    setProjects([])
+    setLeaderboard([])
+    setLeaderboardStats(null)
+  }, [scope?.courseId, scope?.sessionId])
 
   useEffect(() => {
     if (!ready) {
@@ -164,7 +178,7 @@ export function FacultyProjectsScreen() {
   }, [ready, load])
 
   const filtered = useMemo(() => {
-    let rows = projects
+    let rows = projects.filter((project) => rowMatchesFacultySection(project.group ?? project, scope, sessionFilter))
     if (tab === "manage" && statusFilter === "pending") {
       rows = rows.filter((p) => p.status === "pending" || p.status === "pending_update")
     }
@@ -176,11 +190,11 @@ export function FacultyProjectsScreen() {
         (p.group?.name.toLowerCase().includes(q) ?? false) ||
         (p.leader?.full_name.toLowerCase().includes(q) ?? false),
     )
-  }, [projects, search, tab])
+  }, [projects, search, tab, statusFilter, scope, sessionFilter])
 
   const courseSessionCodes = useMemo(
-    () => sessions.map((session) => session.code),
-    [sessions],
+    () => facultySessionCodesForScope(scope, sessions),
+    [scope, sessions],
   )
 
   const filteredLeaderboard = useMemo(() => {
@@ -195,6 +209,8 @@ export function FacultyProjectsScreen() {
         (entry.session ?? "").toLowerCase().includes(q),
     )
   }, [leaderboard, search, courseSessionCodes])
+
+  const pager = useFacultyListPager(filtered, `${tab}:${search}:${statusFilter}:${sessionFilter}`, "projects")
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true)
@@ -442,7 +458,7 @@ export function FacultyProjectsScreen() {
             />
         ) : tab === "manage" ? (
           <View style={localStyles.list}>
-            {filtered.map((project, index) => (
+            {pager.items.map((project, index) => (
               <FacultyProjectListCard
                 key={project.id}
                 project={project}
@@ -453,6 +469,7 @@ export function FacultyProjectsScreen() {
                 onReview={() => setSelected(project)}
               />
             ))}
+            <FacultyListPagerFooter pager={pager} />
           </View>
         ) : null}
       </ScrollView>

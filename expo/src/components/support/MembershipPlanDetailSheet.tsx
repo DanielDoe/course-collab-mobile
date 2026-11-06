@@ -17,14 +17,16 @@ import {
   type MembershipDetailsResponse,
 } from "../../lib/membership-details-api"
 import {
+  formatPriceFromCents,
   formatSemesterPrice,
   getMembershipPlan,
   isTierAtLeast,
   type MembershipPlan,
 } from "../../lib/membership-plans"
-import { semesterPriceCentsForTier, type MembershipPlansResponse } from "../../lib/membership-pricing-api"
+import { listPriceCentsForTier, semesterPriceCentsForTier, type MembershipPlansResponse } from "../../lib/membership-pricing-api"
 import { resolveThemedMembershipPlan } from "../../lib/membership-plan-theme"
 import { openMembershipCheckout } from "../../lib/membership-web-paths"
+import { shouldShowPurchaseCta } from "../../lib/purchase-navigation"
 import { GlassSheetBackground } from "../theme/GlassSurface"
 import {
   GlassMenuList,
@@ -103,6 +105,7 @@ export function MembershipPlanDetailSheet({
   const tokens = useAppThemeTokens()
   const native = useThemedNative()
   const type = useNativeType()
+  const showPurchaseActions = shouldShowPurchaseCta()
   const [actionLoading, setActionLoading] = useState(false)
 
   const themedPlan = useMemo(
@@ -114,6 +117,7 @@ export function MembershipPlanDetailSheet({
   const isCurrentPlan = plan?.id === currentTier
   const isOwnedLowerTier = plan ? isTierAtLeast(currentTier, plan.id) && !isCurrentPlan : false
   const semesterCents = plan ? semesterPriceCentsForTier(pricing, plan.id) : 0
+  const listCents = plan ? listPriceCentsForTier(pricing, plan.id) : 0
 
   const status = useMemo(() => {
     if (!plan) return { label: "", tone: "inactive" as const }
@@ -177,7 +181,7 @@ export function MembershipPlanDetailSheet({
       accessibilityLabel="Close plan details"
       sheetHostStyle={styles.sheetHost}
     >
-      <GlassSheetBackground style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+      <GlassSheetBackground menuSheet style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 16) }]}>
         <GlassSheetHandle />
 
         <View
@@ -204,7 +208,11 @@ export function MembershipPlanDetailSheet({
         </View>
 
         <Text style={[type.caption, styles.priceLine, { color: chrome.secondaryLabel }]}>
-          {semesterCents <= 0 ? "Free with enrollment" : formatSemesterPrice(semesterCents)}
+          {semesterCents <= 0
+            ? "Free with enrollment"
+            : listCents > semesterCents
+              ? `${formatSemesterPrice(semesterCents)}  ·  was ${formatPriceFromCents(listCents)}`
+              : formatSemesterPrice(semesterCents)}
         </Text>
 
         {detailsLoading ? (
@@ -280,7 +288,7 @@ export function MembershipPlanDetailSheet({
           </View>
         ) : (
           <GlassMenuList>
-            {!isCurrentPlan && !isOwnedLowerTier && plan.id !== "Scholar" ? (
+            {showPurchaseActions && !isCurrentPlan && !isOwnedLowerTier && plan.id !== "Scholar" ? (
               <GlassMenuRow
                 icon="rocket-outline"
                 label={`Upgrade to ${plan.name}`}
@@ -292,7 +300,7 @@ export function MembershipPlanDetailSheet({
               />
             ) : null}
 
-            {isCurrentPlan && !subscription?.isFreeTier ? (
+            {showPurchaseActions && isCurrentPlan && !subscription?.isFreeTier ? (
               <GlassMenuRow
                 icon="card-outline"
                 label="Manage billing"
@@ -302,7 +310,7 @@ export function MembershipPlanDetailSheet({
               />
             ) : null}
 
-            {isCurrentPlan && subscription?.cancelAtPeriodEnd ? (
+            {showPurchaseActions && isCurrentPlan && subscription?.cancelAtPeriodEnd ? (
               <GlassMenuRow
                 icon="refresh-outline"
                 label="Renew membership"
@@ -318,7 +326,8 @@ export function MembershipPlanDetailSheet({
               />
             ) : null}
 
-            {isCurrentPlan &&
+            {showPurchaseActions &&
+            isCurrentPlan &&
             subscription &&
             !subscription.isFreeTier &&
             !subscription.hasStripeSubscription &&
@@ -334,7 +343,8 @@ export function MembershipPlanDetailSheet({
               />
             ) : null}
 
-            {isCurrentPlan &&
+            {showPurchaseActions &&
+            isCurrentPlan &&
             subscription?.hasStripeSubscription &&
             !subscription.cancelAtPeriodEnd &&
             !subscription.isFreeTier ? (

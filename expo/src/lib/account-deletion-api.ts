@@ -6,9 +6,10 @@ import {
 } from "../config/legal"
 import { ApiError } from "./api"
 import { extractApiErrorMessage } from "./api-error-message"
-import { mfaTrustRequestHeadersForStudent } from "./mfa-device-trust"
-import { mergeCookieHeaders, persistHttpCookiesFromResponse, studentHttpCookieHeader } from "./student-http-cookies"
+import { persistHttpCookiesFromResponse } from "./student-http-cookies"
 import type { AppSession } from "./session"
+import { studentAuthenticatedHeaders } from "./student-api"
+import { instructorAuthenticatedHeaders } from "./instructor-api"
 import { assertProductionHttpsUrl, createApiAbortSignal, noteApiFailure } from "./http"
 
 export type AccountDeletionRequest = {
@@ -25,21 +26,16 @@ export type AccountDeletionResult = {
 }
 
 async function buildHeaders(session: AppSession): Promise<Record<string, string>> {
-  const headers: Record<string, string> = {
+  if (session.portal === "student" || session.portal === "guest" || session.portal === "summer") {
+    return studentAuthenticatedHeaders(session)
+  }
+  if (session.portal === "faculty") {
+    return instructorAuthenticatedHeaders({ instructorId: session.id })
+  }
+  return {
     Accept: "application/json",
     "Content-Type": "application/json",
   }
-
-  if (session.portal === "student" || session.portal === "guest" || session.portal === "summer") {
-    headers["x-student-id"] = session.databaseId
-    const jarCookie = await studentHttpCookieHeader()
-    const trust = await mfaTrustRequestHeadersForStudent(session)
-    Object.assign(headers, mergeCookieHeaders(trust.Cookie, jarCookie))
-  } else if (session.portal === "faculty") {
-    headers["x-instructor-id"] = String(session.id)
-  }
-
-  return headers
 }
 
 export function canDeleteAccount(
@@ -96,8 +92,9 @@ export async function requestAccountDeletion(
   await persistHttpCookiesFromResponse(url, response.headers)
 
   if (!response.ok) {
-    noteApiFailure(ACCOUNT_DELETION_API_PATH, response.status)
-    throw new ApiError(extractApiErrorMessage(body, response.status, ACCOUNT_DELETION_API_PATH), response.status, body)
+    const message = extractApiErrorMessage(body, response.status, ACCOUNT_DELETION_API_PATH)
+    noteApiFailure(ACCOUNT_DELETION_API_PATH, response.status, message)
+    throw new ApiError(message, response.status, body)
   }
 
   const record = (body ?? {}) as Record<string, unknown>

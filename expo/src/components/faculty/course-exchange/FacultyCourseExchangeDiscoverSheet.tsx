@@ -5,14 +5,18 @@ import { useSafeAreaInsets } from "react-native-safe-area-context"
 import {
   COURSE_EXCHANGE_DEFAULT_APPROVAL_MODULES,
   EXCHANGE_DESTINATION_SHELL_NOTE,
+  EXCHANGE_OWN_GROUPS_PROJECTS_NOTE,
   EXCHANGE_PARTIAL_MODULES_NOTE,
   type CourseExchangeModule,
   type DestinationCourseRow,
   type DiscoverableCourse,
-  type ExchangeSessionRow,
   discoverRelationshipLabel,
   exchangeRequestStatusColor,
 } from "../../../lib/course-exchange-shared"
+import {
+  filterGroupsProjectsForOwnSession,
+  isOwnGroupsProjectsSession,
+} from "../../../lib/course-exchange/groups-projects-session-policy"
 import {
   FACULTY_COURSE_EXCHANGE_COLOR,
   facultyCourseExchangeDiscoverThumb,
@@ -23,6 +27,7 @@ import {
   FacultySheetField,
   FacultySheetHero,
   FacultySheetModal,
+  FacultySheetFormLayout,
   FacultySheetNotice,
   FacultySheetSection,
   FacultySheetStatChip,
@@ -41,7 +46,6 @@ type Props = {
   visible: boolean
   course: DiscoverableCourse | null
   destinationCourses: DestinationCourseRow[]
-  sessions: ExchangeSessionRow[]
   preferredDestinationCourseId?: number | null
   loading: boolean
   onClose: () => void
@@ -51,7 +55,6 @@ type Props = {
     modules: CourseExchangeModule[]
     purpose: string
     destinationCourseId: number
-    destinationSessionId?: number | null
   }) => Promise<void>
 }
 
@@ -59,7 +62,6 @@ export function FacultyCourseExchangeDiscoverSheet({
   visible,
   course,
   destinationCourses,
-  sessions,
   preferredDestinationCourseId,
   loading,
   onClose,
@@ -85,12 +87,17 @@ export function FacultyCourseExchangeDiscoverSheet({
   const [selected, setSelected] = useState<CourseExchangeModule[]>([])
   const [purpose, setPurpose] = useState("")
   const [destinationCourseId, setDestinationCourseId] = useState<number | null>(null)
-  const [destinationSessionId, setDestinationSessionId] = useState<number | null>(null)
 
-  const filteredSessions = useMemo(() => {
-    if (!destinationCourseId) return []
-    return sessions.filter((s) => s.course_id === destinationCourseId)
-  }, [destinationCourseId, sessions])
+  const destinationSessionCode = useMemo(() => {
+    if (!destinationCourseId) return null
+    return destinationCourses.find((c) => c.course_id === destinationCourseId)?.course_code ?? null
+  }, [destinationCourseId, destinationCourses])
+
+  const selectableModules = useMemo(() => {
+    return filterGroupsProjectsForOwnSession(allowed, destinationSessionCode).modules
+  }, [allowed, destinationSessionCode])
+
+  const groupsProjectsExcluded = isOwnGroupsProjectsSession(destinationSessionCode)
 
   useEffect(() => {
     if (visible && course) {
@@ -98,7 +105,6 @@ export function FacultyCourseExchangeDiscoverSheet({
       setSelected([...allowed])
       setPurpose("")
       setDestinationCourseId(null)
-      setDestinationSessionId(null)
     }
   }, [visible, course, allowed])
 
@@ -107,6 +113,11 @@ export function FacultyCourseExchangeDiscoverSheet({
     const preferred = preferredDestinationCourseId ?? destinationCourses[0]?.course_id ?? null
     if (preferred != null) setDestinationCourseId(preferred)
   }, [visible, step, preferredDestinationCourseId, destinationCourses])
+
+  useEffect(() => {
+    if (!visible || step !== "request") return
+    setSelected((prev) => filterGroupsProjectsForOwnSession(prev, destinationSessionCode).modules)
+  }, [visible, step, destinationSessionCode])
 
   if (!course) return null
 
@@ -120,28 +131,35 @@ export function FacultyCourseExchangeDiscoverSheet({
 
   async function handleSubmit() {
     if (!destinationCourseId || selected.length === 0) return
-    await onSubmit({
-      modules: selected,
-      purpose,
-      destinationCourseId,
-      destinationSessionId,
-    })
+    await onSubmit({ modules: selected, purpose, destinationCourseId })
   }
 
   return (
-    <FacultySheetModal visible={visible} onRequestClose={onClose}>
+    <FacultySheetModal visible={visible} onRequestClose={onClose} layout="glassBottom" keyboardAvoiding>
       <FacultySheetChrome
         topInset={insets.top}
         title={step === "details" ? "Course details" : "Request modules"}
         subtitle={`${course.courseCode}${course.autoApprove ? " · Instant import" : " · Creator review"}`}
         onClose={onClose}
         accentColor={FACULTY_COURSE_EXCHANGE_COLOR.action}
+        pageSheet
       />
-      <ScrollView
+      <FacultySheetFormLayout
         contentContainerStyle={[collabSheetStyles.scroll, { paddingBottom: insets.bottom + 24 }]}
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
-        showsVerticalScrollIndicator={false}
+        footer={
+          step === "request" ? (
+            <View style={styles.footerActions}>
+              <AppButton label="Back" variant="secondary" onPress={() => setStep("details")} />
+              <AppButton
+                label={course.autoApprove ? "Import now" : "Send request"}
+                onPress={() => void handleSubmit()}
+                disabled={loading || !destinationCourseId || selected.length === 0}
+                loading={loading}
+                backgroundColor={FACULTY_COURSE_EXCHANGE_COLOR.action}
+              />
+            </View>
+          ) : undefined
+        }
       >
         {step === "details" ? (
           <>
@@ -248,8 +266,11 @@ export function FacultyCourseExchangeDiscoverSheet({
         ) : (
           <>
             <FacultySheetSection label="Select teaching modules">
+              {groupsProjectsExcluded ? (
+                <FacultySheetNotice message={EXCHANGE_OWN_GROUPS_PROJECTS_NOTE} />
+              ) : null}
               <FacultyCourseExchangeModulePicker
-                allowed={allowed}
+                allowed={selectableModules}
                 selected={selected}
                 onChange={setSelected}
                 defaults={COURSE_EXCHANGE_DEFAULT_APPROVAL_MODULES}
@@ -273,10 +294,7 @@ export function FacultyCourseExchangeDiscoverSheet({
                   return (
                     <Pressable
                       key={c.course_id}
-                      onPress={() => {
-                        setDestinationCourseId(c.course_id)
-                        setDestinationSessionId(null)
-                      }}
+                      onPress={() => setDestinationCourseId(c.course_id)}
                       style={[
                         styles.courseRow,
                         {
@@ -301,61 +319,9 @@ export function FacultyCourseExchangeDiscoverSheet({
                 })}
               </View>
             </FacultySheetSection>
-
-            {filteredSessions.length > 0 ? (
-              <FacultySheetSection label="Destination section (optional)">
-                <View style={styles.courseList}>
-                  <Pressable
-                    onPress={() => setDestinationSessionId(null)}
-                    style={[
-                      styles.courseRow,
-                      {
-                        borderColor:
-                          destinationSessionId == null ? FACULTY_COURSE_EXCHANGE_COLOR.action : native.separator,
-                        backgroundColor:
-                          destinationSessionId == null
-                            ? `${FACULTY_COURSE_EXCHANGE_COLOR.action}12`
-                            : native.fill,
-                      },
-                    ]}
-                  >
-                    <Text style={[type.body, { color: native.label }]}>No section mapping</Text>
-                  </Pressable>
-                  {filteredSessions.map((s) => {
-                    const active = destinationSessionId === s.id
-                    return (
-                      <Pressable
-                        key={s.id}
-                        onPress={() => setDestinationSessionId(s.id)}
-                        style={[
-                          styles.courseRow,
-                          {
-                            borderColor: active ? FACULTY_COURSE_EXCHANGE_COLOR.action : native.separator,
-                            backgroundColor: active ? `${FACULTY_COURSE_EXCHANGE_COLOR.action}12` : native.fill,
-                          },
-                        ]}
-                      >
-                        <Text style={[type.bodyEmphasis, { color: native.label }]}>{s.code}</Text>
-                      </Pressable>
-                    )
-                  })}
-                </View>
-              </FacultySheetSection>
-            ) : null}
-
-            <View style={styles.footerActions}>
-              <AppButton label="Back" variant="secondary" onPress={() => setStep("details")} />
-              <AppButton
-                label={course.autoApprove ? "Import now" : "Send request"}
-                onPress={() => void handleSubmit()}
-                disabled={loading || !destinationCourseId || selected.length === 0}
-                loading={loading}
-                backgroundColor={FACULTY_COURSE_EXCHANGE_COLOR.action}
-              />
-            </View>
           </>
         )}
-      </ScrollView>
+      </FacultySheetFormLayout>
     </FacultySheetModal>
   )
 }
@@ -370,5 +336,5 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: StyleSheet.hairlineWidth,
   },
-  footerActions: { flexDirection: "row", gap: 10, marginTop: 8 },
+  footerActions: { flexDirection: "row", gap: 10 },
 })

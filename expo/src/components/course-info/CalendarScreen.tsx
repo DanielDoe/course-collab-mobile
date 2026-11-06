@@ -1,16 +1,23 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { ActivityIndicator, AppState, RefreshControl, StyleSheet, Text, View } from "react-native"
+import { AppState, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native"
 import { ScrollView } from "react-native-gesture-handler"
 import { Ionicons } from "@/components/icons/AppIcon"
+import { useRouter } from "expo-router"
 import { useSession } from "../../context/SessionProvider"
 import { ApiError } from "../../lib/student-api"
 import type { StudentSession } from "../../lib/session"
-import { courseInfoApi, type CalendarEvent } from "../../lib/course-info-api"
+import { type CalendarEvent } from "../../lib/course-info-api"
+import { useStudentCalendar } from "../../hooks/query/useStudentCalendar"
+import { QueryRefreshBanner } from "../query/QueryRefreshBanner"
+import { QuerySkeleton } from "../query/QuerySkeleton"
 import {
   addMonths,
   calendarEventColors,
   endOfMonth,
   eventTypeConfig,
+  filterCalendarEvents,
+  filterCalendarEventsByKind,
+  type CalendarEventKindFilter,
   formatEventTimeRange,
   isClassMeetingEvent,
   CALENDAR_COLOR,
@@ -18,8 +25,11 @@ import {
   startOfMonth,
   syncClassMeetingReminders,
   syncStudySessionReminders,
-  initClassReminderNotifications,
-  type ClassSchedulePayload} from "../../lib/calendar"
+  initClassReminderNotifications} from "../../lib/calendar"
+import {
+  isStudySessionEvent,
+  resolveStudySessionRoute,
+} from "../../lib/calendar/study-session-navigation"
 import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
 import { useModuleScrollContentPadding } from "../../context/ChromeInsetContext"
 import { useModuleContentStyle } from "../../lib/responsive-layout"
@@ -31,6 +41,12 @@ import { ClassScheduleCard } from "./ClassScheduleCard"
 import { CalendarMonthGrid, eventsForSelectedDay, selectedDateLabel } from "./CalendarMonthGrid"
 import { useNativeType } from "../../lib/themed-module-theme"
 import { useNotificationModuleRefresh } from "../../lib/notifications/notification-events"
+import { useThrottledFocusRefresh } from "../../lib/use-throttled-focus-refresh"
+import { StudentFilterSheet, StudentSearchToolbar } from "../student/student-search-toolbar"
+import { ModuleAddActionSheet } from "../modules/ModuleAddActionSheet"
+import { CalendarPersonalEventSheet } from "../calendar/CalendarPersonalEventSheet"
+import { useOptionalStudentActiveCourse } from "../../context/StudentActiveCourseContext"
+import { useResetOnScopeChange } from "../../hooks/use-reset-on-scope-change"
 
 function useStudentSession(): StudentSession | null {
   const { session } = useSession()
@@ -45,11 +61,18 @@ function filterDayEvents(events: CalendarEvent[], filter: AgendaFilter): Calenda
   return events
 }
 
-function AgendaEventRow({ event }: { event: CalendarEvent }) {
+function AgendaEventRow({
+  event,
+  onStudy,
+}: {
+  event: CalendarEvent
+  onStudy?: (event: CalendarEvent) => void
+}) {
   const tokens = useAppThemeTokens()
   const native = useThemedNative()
   const type = useNativeType()
   const config = eventTypeConfig(event, calendarEventColors(tokens))
+  const showStudyAction = isStudySessionEvent(event)
 
   return (
     <View style={[styles.agendaRow, { borderBottomColor: native.separator }]}>
@@ -69,13 +92,32 @@ function AgendaEventRow({ event }: { event: CalendarEvent }) {
           </Text>
         ) : null}
       </View>
-      <StatusBadge label={config.label} tone="purple" />
+      {showStudyAction ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Start study session"
+          onPress={() => onStudy?.(event)}
+          style={({ pressed }) => [
+            styles.studyBtn,
+            {
+              backgroundColor: `${config.color}18`,
+              borderColor: config.color,
+              opacity: pressed ? 0.85 : 1,
+            },
+          ]}
+        >
+          <Text style={[styles.studyBtnLabel, { color: config.color }]}>Study</Text>
+        </Pressable>
+      ) : (
+        <StatusBadge label={config.label} tone="purple" />
+      )}
     </View>
   )
 }
 
 export function CalendarScreen() {
   const session = useStudentSession()
+  const router = useRouter()
   const native = useThemedNative()
   const tokens = useAppThemeTokens()
   const type = useNativeType()
@@ -83,13 +125,17 @@ export function CalendarScreen() {
   const moduleContentStyle = useModuleContentStyle()
   const [month, setMonth] = useState(() => startOfMonth(new Date()))
   const [selectedDate, setSelectedDate] = useState(() => new Date())
-  const [personalEvents, setPersonalEvents] = useState<CalendarEvent[]>([])
-  const [classMeetings, setClassMeetings] = useState<CalendarEvent[]>([])
-  const [classSchedule, setClassSchedule] = useState<ClassSchedulePayload>({ hasSchedule: false })
   const [agendaFilter, setAgendaFilter] = useState<AgendaFilter>("all")
-  const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
-  const [error, setError] = useState("")
+  const [search, setSearch] = useState("")
+  const [kindFilter, setKindFilter] = useState<CalendarEventKindFilter>("all")
+  const [addOpen, setAddOpen] = useState(false)
+  const [filterOpen, setFilterOpen] = useState(false)
+  const [eventOpen, setEventOpen] = useState(false)
+  const courseKey = useOptionalStudentActiveCourse()?.activeCourse?.pickerKey
+  useResetOnScopeChange(courseKey, useCallback(() => {
+    setSearch("")
+    setKindFilter("all")
+  }, []))
 
   const range = useMemo(() => {
     const start = startOfMonth(month)
@@ -97,38 +143,29 @@ export function CalendarScreen() {
     return { startDate: start, endDate: end }
   }, [month])
 
-  const load = useCallback(async () => {
-    if (!session) return
-    setError("")
-    try {
-      const [eventsData, scheduleData] = await Promise.all([
-        courseInfoApi.getCalendarEvents(session, range),
-        courseInfoApi.getClassSchedule(session, range),
-      ])
-      setPersonalEvents(eventsData)
-      setClassMeetings((scheduleData.events ?? []) as CalendarEvent[])
-      setClassSchedule(scheduleData)
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to load calendar.")
-    }
-  }, [session, range])
+  const calendarQuery = useStudentCalendar(session, range)
+  const personalEvents = calendarQuery.personalEvents
+  const classMeetings = calendarQuery.classMeetings as CalendarEvent[]
+  const officeHourEvents = calendarQuery.officeHourEvents
+  const classSchedule = calendarQuery.classSchedule
+  const loading = calendarQuery.isInitialLoading
+  const refreshing = calendarQuery.isRefreshing && !calendarQuery.isInitialLoading
+  const error = calendarQuery.error instanceof ApiError
+    ? calendarQuery.error.message
+    : calendarQuery.error
+      ? "Failed to load calendar."
+      : ""
 
   useEffect(() => {
     void initClassReminderNotifications()
   }, [])
 
-  useEffect(() => {
-    setLoading(true)
-    load().finally(() => setLoading(false))
-  }, [load])
-
   const onRefresh = useCallback(async () => {
-    setRefreshing(true)
-    await load()
-    setRefreshing(false)
-  }, [load])
+    await calendarQuery.refetch()
+  }, [calendarQuery.refetch])
 
-  useNotificationModuleRefresh("calendar", onRefresh)
+  useNotificationModuleRefresh(["calendar", "schedule-adjustment", "office-hours"], onRefresh)
+  useThrottledFocusRefresh(onRefresh, Boolean(session))
 
   useEffect(() => {
     const sub = AppState.addEventListener("change", (state) => {
@@ -159,22 +196,62 @@ export function CalendarScreen() {
   }, [personalEvents])
 
   const allEvents = useMemo(
-    () => mergeCalendarEvents(personalEvents, classMeetings),
-    [personalEvents, classMeetings],
+    () => [...mergeCalendarEvents(personalEvents, classMeetings), ...officeHourEvents],
+    [personalEvents, classMeetings, officeHourEvents],
   )
+
+  const visibleEvents = useMemo(
+    () => filterCalendarEventsByKind(filterCalendarEvents(allEvents, search), kindFilter),
+    [allEvents, search, kindFilter],
+  )
+  const searchActive = Boolean(search.trim())
 
   const monthEvents = useMemo(() => {
     const monthStart = startOfMonth(month)
     const monthEnd = endOfMonth(month)
-    return allEvents.filter((event) => {
+    return visibleEvents.filter((event) => {
       const t = event.start_time ? new Date(event.start_time).getTime() : 0
       return t >= monthStart.getTime() && t <= monthEnd.getTime()
     })
-  }, [allEvents, month])
+  }, [visibleEvents, month])
 
   const dayEvents = useMemo(
-    () => eventsForSelectedDay(allEvents, selectedDate),
-    [allEvents, selectedDate],
+    () => eventsForSelectedDay(visibleEvents, selectedDate),
+    [visibleEvents, selectedDate],
+  )
+
+  const searchResults = useMemo(() => {
+    if (!searchActive) return dayEvents
+    return [...visibleEvents].sort(
+      (a, b) => new Date(a.start_time ?? 0).getTime() - new Date(b.start_time ?? 0).getTime(),
+    )
+  }, [dayEvents, searchActive, visibleEvents])
+
+  const addActions = useMemo(
+    () => [
+      {
+        id: "event",
+        label: "Add personal event",
+        detail: "Save a reminder on this course calendar",
+        icon: "calendar-outline" as const,
+        onPress: () => setEventOpen(true),
+      },
+      {
+        id: "office-hours",
+        label: "Request office hours",
+        detail: "Ask your instructor for a session",
+        icon: "cafe-outline" as const,
+        onPress: () => router.push("/module/office-hours" as never),
+      },
+      {
+        id: "project",
+        label: "Submit project",
+        detail: "Open the project submission form",
+        icon: "folder-open-outline" as const,
+        onPress: () => router.push("/collaboration/projects/submit" as never),
+      },
+    ],
+    [router],
   )
 
   const filteredByTab = useMemo(
@@ -195,19 +272,28 @@ export function CalendarScreen() {
     [],
   )
 
+  const openStudySession = useCallback(
+    (event: CalendarEvent) => {
+      router.push(resolveStudySessionRoute(event) as never)
+    },
+    [router],
+  )
+
   function renderAgendaPage(filter: AgendaFilter) {
-    const selectedEvents = filteredByTab[filter]
+    const selectedEvents = searchActive ? filterDayEvents(searchResults, filter) : filteredByTab[filter]
     if (selectedEvents.length === 0) {
       return (
         <EmptyBlock
-          icon="calendar-outline"
-          title="Nothing scheduled"
+          icon={searchActive ? "search-outline" : "calendar-outline"}
+          title={searchActive ? "No matching events" : "Nothing scheduled"}
           body={
-            filter === "classes"
-              ? "No class meetings on this day."
-              : filter === "events"
-                ? "No personal events on this day. Add events on web to sync here."
-                : "No events on this day."
+            searchActive
+              ? `Nothing matched “${search.trim()}”. Try a title, type, or location.`
+              : filter === "classes"
+                ? "No class meetings on this day."
+                : filter === "events"
+                  ? "No personal events on this day. Add events on web to sync here."
+                  : "No events on this day."
           }
         />
       )
@@ -216,7 +302,7 @@ export function CalendarScreen() {
     return (
       <View style={[styles.agendaCard, { backgroundColor: native.secondaryGrouped, borderColor: native.separator }]}>
         {selectedEvents.map((event) => (
-          <AgendaEventRow key={`${event.id}-${event.start_time}`} event={event} />
+          <AgendaEventRow key={`${event.id}-${event.start_time}`} event={event} onStudy={openStudySession} />
         ))}
       </View>
     )
@@ -224,6 +310,52 @@ export function CalendarScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: native.groupedBackground }]}>
+      <StudentSearchToolbar
+        value={search}
+        onChange={setSearch}
+        placeholder="Search events, classes, projects…"
+        filterActive={kindFilter !== "all"}
+        filterLabel="Filter events"
+        onOpenFilter={() => setFilterOpen(true)}
+        trailingAction={{
+          onPress: () => setAddOpen(true),
+          accessibilityLabel: "Open calendar actions",
+          icon: "add",
+        }}
+      />
+      <StudentFilterSheet
+        visible={filterOpen}
+        title="Filter events"
+        subtitle="Narrow the calendar without clearing search."
+        value={kindFilter}
+        onSelect={(value) => {
+          setKindFilter(value as CalendarEventKindFilter)
+          setFilterOpen(false)
+        }}
+        onClose={() => setFilterOpen(false)}
+        options={[
+          { value: "all", label: "All types" },
+          { value: "classes", label: "Classes" },
+          { value: "exams", label: "Exams & quizzes" },
+          { value: "office_hours", label: "Office hours" },
+          { value: "study", label: "Study sessions" },
+          { value: "projects", label: "Projects" },
+          { value: "other", label: "Other" },
+        ]}
+      />
+      <ModuleAddActionSheet
+        visible={addOpen}
+        title="Calendar"
+        subtitle="Add something to this course."
+        actions={addActions}
+        onClose={() => setAddOpen(false)}
+      />
+      <CalendarPersonalEventSheet
+        visible={eventOpen}
+        session={session}
+        onClose={() => setEventOpen(false)}
+        onCreated={() => void onRefresh()}
+      />
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={[
@@ -241,6 +373,7 @@ export function CalendarScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={tokens.accent} />
         }
       >
+        <QueryRefreshBanner visible={calendarQuery.refreshFailed} onRetry={() => void onRefresh()} />
         {error ? (
           <View style={[styles.errorBox, styles.section, { backgroundColor: `${tokens.danger}18` }]}>
             <Text style={[type.destructive, styles.errorText]}>{error}</Text>
@@ -248,10 +381,7 @@ export function CalendarScreen() {
         ) : null}
 
         {loading && !refreshing ? (
-          <View style={styles.loadingBox}>
-            <ActivityIndicator size="large" color={tokens.accent} />
-            <Text style={[type.caption, { color: native.secondaryLabel }]}>Loading calendar…</Text>
-          </View>
+          <QuerySkeleton />
         ) : (
           <>
             <View style={styles.section}>
@@ -288,9 +418,13 @@ export function CalendarScreen() {
 
             <View style={styles.section}>
               <View style={styles.agendaHead}>
-                <Text style={[styles.agendaDate, { color: CALENDAR_COLOR.agendaDate }]}>{selectedDateLabel(selectedDate)}</Text>
+                <Text style={[styles.agendaDate, { color: CALENDAR_COLOR.agendaDate }]}>
+                  {searchActive ? "Search results" : selectedDateLabel(selectedDate)}
+                </Text>
                 <Text style={[type.caption, styles.agendaCount]}>
-                  {filteredByTab[agendaFilter].length} item{filteredByTab[agendaFilter].length === 1 ? "" : "s"}
+                  {searchActive
+                    ? `${filterDayEvents(searchResults, agendaFilter).length} match${filterDayEvents(searchResults, agendaFilter).length === 1 ? "" : "es"}`
+                    : `${filteredByTab[agendaFilter].length} item${filteredByTab[agendaFilter].length === 1 ? "" : "s"}`}
                 </Text>
               </View>
 
@@ -314,12 +448,6 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingHorizontal: NATIVE.pagePadding,
   },
-  loadingBox: {
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 10,
-    paddingVertical: 48,
-  },
   errorBox: { padding: 12, borderRadius: NATIVE.sectionRadius },
   errorText: { fontSize: 14, lineHeight: 20 },
   agendaHead: { gap: 2 },
@@ -340,4 +468,14 @@ const styles = StyleSheet.create({
   agendaBody: { flex: 1, gap: 3 },
   agendaTop: { flexDirection: "row", alignItems: "center", gap: 6 },
   agendaTitle: { flex: 1 },
-  agendaDesc: { lineHeight: 18, marginTop: 2 }})
+  agendaDesc: { lineHeight: 18, marginTop: 2 },
+  studyBtn: {
+    alignSelf: "flex-start",
+    marginTop: 2,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  studyBtnLabel: { fontSize: 13, fontWeight: "700" },
+})

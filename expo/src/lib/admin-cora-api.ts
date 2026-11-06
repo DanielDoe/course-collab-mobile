@@ -5,6 +5,8 @@ import type { ChatMessage } from "./ai-tutor-api"
 import type { CoraActionProposal } from "./cora/types"
 import { parseCoraChatMeta } from "./cora/models"
 import type { AdminSession } from "./session"
+import { adminAuthenticatedHeaders } from "./admin-session-headers"
+import { applyCoraOutputGate, evaluateCoraSecurityTurn, sanitizeCoraUserError } from "./cora-security"
 
 export type AdminCoraChatResponse = {
   reply: string
@@ -36,14 +38,19 @@ export async function sendAdminCoraMessage(params: {
   confirmScopeRelated?: boolean
   declaredAcademicContext?: string | null
 }): Promise<AdminCoraChatResponse> {
+  const security = evaluateCoraSecurityTurn({
+    actor: "admin",
+    message: params.message,
+    history: params.conversationHistory,
+  })
+  if (security.action !== "allow" && security.reply) {
+    return { reply: applyCoraOutputGate(security.reply, "admin") }
+  }
   const url = `${API_BASE_URL}/api/admin/cora/chat`
   const response = await fetch(url, {
     method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      "x-admin-id": String(params.session.id),
-    },
+    credentials: "include",
+    headers: await adminAuthenticatedHeaders(params.session.id),
     body: JSON.stringify({
       message: params.message,
       conversationHistory: params.conversationHistory.slice(-8).map((m) => ({
@@ -68,12 +75,14 @@ export async function sendAdminCoraMessage(params: {
     }
   }
   if (!response.ok) {
-    throw new ApiError(apiErrorMessage(parsed, response.status), response.status, parsed)
+    throw new ApiError(sanitizeCoraUserError(apiErrorMessage(parsed, response.status)), response.status, parsed)
   }
   const raw = (parsed ?? {}) as AdminCoraChatResponse
   const meta = parseCoraChatMeta(raw as unknown as Record<string, unknown>)
   return {
     ...raw,
+    reply: applyCoraOutputGate(raw.reply ?? "", "admin"),
+    toolCalls: undefined,
     profile: meta.profile,
     publicMode: meta.publicMode,
     routing: meta.routing,

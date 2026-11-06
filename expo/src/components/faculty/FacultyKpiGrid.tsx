@@ -1,4 +1,5 @@
-import { StyleSheet, Text, View } from "react-native"
+import { Pressable, StyleSheet, Text, View } from "react-native"
+import { useRouter } from "expo-router"
 import { useKpiGridCardStyle } from "../../lib/responsive-layout"
 import { Ionicons } from "@/components/icons/AppIcon"
 import type { InstructorDashboardStats } from "../../lib/instructor-api"
@@ -11,14 +12,19 @@ import {
 import { DASHBOARD_SURFACE } from "../dashboard/DashboardCard"
 import { SolidListThumbTile } from "../theme/SolidListThumbTile"
 import type { SolidListThumb } from "../../lib/solid-list-thumb"
+import {
+  facultyDashboardKpiHref,
+  type FacultyDashboardKpiId,
+} from "../../lib/faculty-dashboard-kpi-nav"
 
 type KpiDef = {
-  id: string
+  id: FacultyDashboardKpiId
   label: string
   value: string
   sub?: string
   icon: keyof typeof Ionicons.glyphMap
   thumb: SolidListThumb
+  href?: string
 }
 
 function buildKpis(
@@ -35,6 +41,7 @@ function buildKpis(
       sub: termLabel ? `${stats.totalQuizzes} scheduled · ${termLabel}` : `${stats.totalQuizzes} scheduled this term`,
       icon: "clipboard-outline",
       thumb: FACULTY_DASHBOARD_KPI_THUMBS.activeQuizzes,
+      href: facultyDashboardKpiHref("active-quizzes"),
     },
     {
       id: "students",
@@ -43,6 +50,7 @@ function buildKpis(
       sub: sessionCode ? "Enrolled in selected section" : "Enrolled in selected course",
       icon: "people-outline",
       thumb: FACULTY_DASHBOARD_KPI_THUMBS.students,
+      href: facultyDashboardKpiHref("students"),
     },
     {
       id: "attempts",
@@ -51,6 +59,7 @@ function buildKpis(
       sub: termLabel ? `Submissions · ${termLabel}` : "Submissions this term",
       icon: "bar-chart-outline",
       thumb: FACULTY_DASHBOARD_KPI_THUMBS.quizAttempts,
+      href: facultyDashboardKpiHref("attempts"),
     },
     {
       id: "issues",
@@ -59,6 +68,7 @@ function buildKpis(
       sub: pendingIssues > 0 ? "Student reports" : "All clear",
       icon: "alert-circle-outline",
       thumb: facultyDashboardKpiThumb("pendingIssues", pendingIssues > 0),
+      href: facultyDashboardKpiHref("issues"),
     },
     {
       id: "upcoming",
@@ -67,6 +77,7 @@ function buildKpis(
       sub: "Opening within 7 days",
       icon: "calendar-outline",
       thumb: FACULTY_DASHBOARD_KPI_THUMBS.upcoming,
+      href: facultyDashboardKpiHref("upcoming"),
     },
     {
       id: "submissions-24h",
@@ -75,6 +86,7 @@ function buildKpis(
       sub: "New attempts today",
       icon: "pulse-outline",
       thumb: FACULTY_DASHBOARD_KPI_THUMBS.submissions24h,
+      href: facultyDashboardKpiHref("submissions-24h"),
     },
   ]
 }
@@ -89,16 +101,14 @@ export function FacultyKpiGrid({
   termLabel?: string | null
 }) {
   const { native, tokens, type } = useModuleTheme()
+  const router = useRouter()
   const cardLayout = useKpiGridCardStyle()
   const kpis = buildKpis(stats, sessionCode, termLabel)
 
   return (
     <View style={styles.grid}>
-      {kpis.map((kpi) => (
-        <View
-          key={kpi.id}
-          style={[styles.card, cardLayout, tokens.cardShadow, { backgroundColor: native.secondaryGrouped }]}
-        >
+      {kpis.map((kpi) => {
+        const body = (
           <View style={styles.cardRow}>
             <View style={styles.copy}>
               <Text {...kpiLabelTextA11yProps} style={[type.caption, styles.label, { color: native.secondaryLabel }]}>{kpi.label}</Text>
@@ -107,8 +117,27 @@ export function FacultyKpiGrid({
             </View>
             <SolidListThumbTile thumb={kpi.thumb} icon={kpi.icon} size="compact" style={styles.iconTile} />
           </View>
-        </View>
-      ))}
+        )
+        const surfaceStyle = [styles.card, cardLayout, tokens.cardShadow, { backgroundColor: native.secondaryGrouped }]
+        if (!kpi.href) {
+          return (
+            <View key={kpi.id} style={surfaceStyle}>
+              {body}
+            </View>
+          )
+        }
+        return (
+          <Pressable
+            key={kpi.id}
+            onPress={() => router.push(kpi.href as never)}
+            accessibilityRole="button"
+            accessibilityLabel={`${kpi.label}, ${kpi.value}. Open ${kpi.label}`}
+            style={({ pressed }) => [surfaceStyle, { opacity: pressed ? 0.86 : 1 }]}
+          >
+            {body}
+          </Pressable>
+        )
+      })}
     </View>
   )
 }

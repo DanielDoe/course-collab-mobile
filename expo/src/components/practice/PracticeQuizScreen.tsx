@@ -1,17 +1,29 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native"
 import { AppAlert } from '../../lib/app-alert'
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useRouter } from "expo-router"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { hexToRgba } from "../../constants/app-themes"
+import { SYSTEM } from "../../constants/faculty-native-theme"
 import { useAppThemeTokens } from "../../context/AppearanceProvider"
 import { semanticSoft, useThemedStudentNative } from "../../lib/themed-module-theme"
 import { useSession } from "../../context/SessionProvider"
-import { practiceApi, type EvaluateResult, type SubmitPracticeResult } from "../../lib/practice-api"
+import { practiceApi, type SubmitPracticeResult } from "../../lib/practice-api"
 import {
   buildAnswerForSubmit,
   getQuestionOptions,
+  restoreSelectionFromSavedAnswer,
 } from "../../lib/assessment-quiz/assessment-answer-mapper"
 import {
   circuitSubmissionHasRequiredUpload,
@@ -45,7 +57,22 @@ import { ApiError } from "../../lib/student-api"
 import { QuestionContentWebView, QuestionMediaView } from "../rewards/QuestionContent"
 import { parseQuestionMedia } from "../../lib/classroom-submission"
 import { QuestionPrepareGate } from "../questions/QuestionPrepareGate"
+import { useQuestionPaintReady } from "../../hooks/useQuestionPaintReady"
+import { useKeyboardHeight } from "../ui/KeyboardAwareForm"
+import { countQuestionPaintTargets } from "../../lib/question-paint-ready"
+import { resolvePracticeQuestionMcqEarnedFraction } from "../../lib/practice-mcq-earned-fraction"
+import {
+  buildPartialCreditFallbackReview,
+  isEvalPartialCredit,
+  practiceAnswerReviewOptionState,
+  practiceHubFeedbackSummary,
+  programmedAnswerKeyFromReview,
+  resolveObjectiveAnswerReview,
+} from "../../lib/lecture-sample-practice-grading"
+import type { PracticeAnswerReview } from "../../lib/lecture-types"
 import { extractPracticeQuestionTexts } from "../../lib/question-prepare"
+import { getQueryClient, invalidateByAction, studentQueryScope } from "../../lib/query"
+import { getGradableSubquestions, subquestionOptionLabels } from "../../lib/lecture-sample-practice-utils"
 import type { StudentSession } from "../../lib/session"
 import {
   emptyMultiPartAnswer,
@@ -58,23 +85,6 @@ import {
 function useStudentSession(): StudentSession | null {
   const { session } = useSession()
   return session?.portal === "student" ? session : null
-}
-
-function alreadyAttemptedResult(err: unknown): EvaluateResult | null {
-  if (!(err instanceof ApiError) || err.status !== 409) return null
-  const details = err.details as EvaluateResult | undefined
-  if (!details || details.alreadyAttempted !== true) return null
-  return details
-}
-
-function reviewFeedback(question: PracticeQuestion): string {
-  const review = question.answerReview
-  if (review?.summary) {
-    const extra = review.explanation?.trim()
-    return extra ? `${review.summary}\n\n${extra}` : review.summary
-  }
-  if (question.priorIsCorrect) return "Already attempted — you answered this correctly."
-  return "Already attempted. Review your previous answer and the correct answer below."
 }
 
 function calcXp(difficulty: string, responseTimeMs: number, attemptNum: number): number {
@@ -110,14 +120,68 @@ export function PracticeQuizScreen() {
   const [submittingAnswer, setSubmittingAnswer] = useState(false)
   const [submittingFinal, setSubmittingFinal] = useState(false)
   const [answeredIds, setAnsweredIds] = useState<Set<number>>(new Set())
+  const [answersByQuestion, setAnswersByQuestion] = useState<Record<number, string | string[]>>({})
+  const [answerReviews, setAnswerReviews] = useState<Record<number, PracticeAnswerReview>>({})
   const [attemptCounts, setAttemptCounts] = useState<Record<number, number>>({})
   const [results, setResults] = useState<SubmitPracticeResult | null>(null)
   const questionStartRef = useRef<Record<number, number>>({})
+  const advanceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (advanceTimeoutRef.current != null) clearTimeout(advanceTimeoutRef.current)
+    }
+  }, [])
 
   const questions = practiceSession?.questions ?? []
   const attemptId = practiceSession?.attemptId ?? 0
-  const reviewOnly = practiceSession?.reviewOnly === true
   const currentQuestion = questions[currentIndex]
+  const [answerFieldFocused, setAnswerFieldFocused] = useState(false)
+  const scrollRef = useRef<ScrollView>(null)
+  const keyboardHeight = useKeyboardHeight()
+  const keyboardOpen = keyboardHeight > 0
+
+  const paintOptionTexts = useMemo(() => {
+    if (!currentQuestion || currentQuestion.locked) return []
+    if (
+      isCircuitQuestion(currentQuestion) ||
+      isCodeQuestion(currentQuestion) ||
+      isTextInputQuestion(currentQuestion)
+    ) {
+      return []
+    }
+    if (isMultiPartQuestion(currentQuestion)) {
+      return getGradableSubquestions(currentQuestion.subquestions).flatMap((sq) => [
+        sq.prompt,
+        ...subquestionOptionLabels(sq).map((option) => option.text),
+      ])
+    }
+    return getQuestionOptions(asAssessmentQuestion(currentQuestion)).map((option) => option.text)
+  }, [currentQuestion])
+
+  const { ready: questionPaintReady, markReady: markQuestionPaintReady } = useQuestionPaintReady(
+    currentQuestion?.id,
+    countQuestionPaintTargets({
+      promptText: currentQuestion?.question_text,
+      optionTexts: paintOptionTexts,
+    }),
+  )
+  const [initialPaintDone, setInitialPaintDone] = useState(false)
+
+  useEffect(() => {
+    if (!currentQuestion || !questionPaintReady) return
+    setInitialPaintDone(true)
+  }, [currentQuestion, questionPaintReady])
+
+  const sessionPaintReady = initialPaintDone
+
+  useEffect(() => {
+    if (!keyboardOpen || !answerFieldFocused) return
+    const timer = setTimeout(() => {
+      scrollRef.current?.scrollToEnd({ animated: true })
+    }, 80)
+    return () => clearTimeout(timer)
+  }, [keyboardOpen, answerFieldFocused])
 
   const unlockedQuestions = useMemo(
     () => questions.filter((q) => !q.locked),
@@ -128,52 +192,6 @@ export function PracticeQuizScreen() {
     const idx = questions.findIndex((q) => !q.locked)
     return idx >= 0 ? idx : 0
   }, [questions])
-
-  useEffect(() => {
-    if (questions.some((q) => q.locked) && currentQuestion?.locked) {
-      setCurrentIndex(firstUnlockedIndex)
-    }
-  }, [questions, currentQuestion?.locked, firstUnlockedIndex])
-
-  useEffect(() => {
-    if (!practiceSession) return
-    const attempted = new Set(
-      practiceSession.questions.filter((q) => q.alreadyAttempted || q.answerReview).map((q) => q.id),
-    )
-    if (attempted.size > 0) setAnsweredIds(attempted)
-  }, [practiceSession])
-
-  useEffect(() => {
-    if (!session || !practiceSession?.questions.length) return
-    const missing = practiceSession.questions.filter((q) => !q.alreadyAttempted).map((q) => q.id)
-    if (missing.length === 0) return
-    let cancelled = false
-    void practiceApi
-      .getPriorAnswers(session, practiceSession.questions.map((q) => q.id))
-      .then(async (data) => {
-        if (cancelled || !data.answers?.length) return
-        const byId = new Map(data.answers.map((row) => [row.questionId, row]))
-        const nextQuestions = practiceSession.questions.map((q) => {
-          const prior = byId.get(q.id)
-          if (!prior) return q
-          return {
-            ...q,
-            alreadyAttempted: true,
-            priorAnswer: prior.priorAnswer ?? q.priorAnswer,
-            priorIsCorrect: prior.priorIsCorrect,
-            answerReview: prior.answerReview ?? q.answerReview,
-          }
-        })
-        const nextSession = { ...practiceSession, questions: nextQuestions }
-        setPracticeSession(nextSession)
-        await setActivePracticeSession(nextSession)
-        setAnsweredIds(new Set(nextQuestions.filter((q) => q.alreadyAttempted).map((q) => q.id)))
-      })
-      .catch(() => {})
-    return () => {
-      cancelled = true
-    }
-  }, [session, practiceSession?.attemptId, practiceSession?.questions.length])
 
   useEffect(() => {
     if (practiceSession) {
@@ -198,6 +216,12 @@ export function PracticeQuizScreen() {
     }
   }, [hydrating, practiceSession, router])
 
+  useEffect(() => {
+    if (currentQuestion && !questionStartRef.current[currentQuestion.id]) {
+      questionStartRef.current[currentQuestion.id] = Date.now()
+    }
+  }, [currentQuestion])
+
   const progressPct = useMemo(() => {
     if (!unlockedQuestions.length) return 0
     const answeredUnlocked = unlockedQuestions.filter((q) => answeredIds.has(q.id)).length
@@ -209,55 +233,144 @@ export function PracticeQuizScreen() {
     return unlockedQuestions.every((q) => answeredIds.has(q.id))
   }, [answeredIds, unlockedQuestions])
 
-  const resetSelection = useCallback((question: PracticeQuestion | undefined) => {
-    setSelectedLetter("")
-    setSelectedLetters([])
-    setTextAnswer("")
-    setCircuitAnswerJson(emptyCircuitSubmissionAnswer())
-    setMultiPartAnswerJson(
-      serializeMultiPartAnswer(emptyMultiPartAnswer(question?.subquestions ?? [])),
-    )
-    setShowHint(false)
-    setShowFeedback(false)
-    if (question) {
-      questionStartRef.current[question.id] = Date.now()
-    }
-  }, [])
+  const restoreQuestionState = useCallback(
+    (question: PracticeQuestion | undefined) => {
+      if (!question) return
 
-  const applyPriorAnswer = useCallback((question: PracticeQuestion | undefined) => {
-    if (!question) return
-    const prior = question.priorAnswer
-    if (Array.isArray(prior)) {
-      setSelectedLetters(prior.map(String))
-      setSelectedLetter("")
-    } else if (typeof prior === "string" && prior.trim()) {
-      const raw = prior.trim()
-      if (["A", "B", "C", "D", "E"].includes(raw.toUpperCase())) {
-        setSelectedLetter(raw.toUpperCase())
+      const saved = answersByQuestion[question.id]
+      const review = answerReviews[question.id]
+      const qType = question.question_type.toLowerCase()
+      const isMulti = isMultiSelectType(qType)
+
+      if (isCircuitQuestion(question) && typeof saved === "string") {
+        setCircuitAnswerJson(saved)
+        setSelectedLetter("")
         setSelectedLetters([])
+        setTextAnswer("")
+      } else if (isMultiPartQuestion(question) && typeof saved === "string") {
+        setMultiPartAnswerJson(saved)
+        setSelectedLetter("")
+        setSelectedLetters([])
+        setTextAnswer("")
+      } else if (Array.isArray(saved)) {
+        setSelectedLetters(saved)
+        setSelectedLetter("")
+        setTextAnswer("")
+      } else if (typeof saved === "string") {
+        if (isMulti) {
+          const sel = restoreSelectionFromSavedAnswer(asAssessmentQuestion(question), saved)
+          setSelectedLetters(sel.letters)
+          setSelectedLetter("")
+          setTextAnswer("")
+        } else if (isTextInputQuestion(question) || isCodeQuestion(question)) {
+          setTextAnswer(saved)
+          setSelectedLetter("")
+          setSelectedLetters([])
+        } else {
+          const sel = restoreSelectionFromSavedAnswer(asAssessmentQuestion(question), saved)
+          setSelectedLetter(sel.letter)
+          setSelectedLetters([])
+          setTextAnswer(sel.text)
+        }
       } else {
-        setTextAnswer(raw)
+        setSelectedLetter("")
+        setSelectedLetters([])
+        setTextAnswer("")
       }
-    }
-    if (question.alreadyAttempted || question.answerReview) {
-      setShowFeedback(true)
-      setIsCorrect(question.answerReview?.isCorrect ?? question.priorIsCorrect === true)
-      setFeedbackText(reviewFeedback(question))
-    }
-  }, [])
+
+      setShowHint(false)
+      if (answeredIds.has(question.id)) {
+        setShowFeedback(true)
+        setIsCorrect(review?.isCorrect ?? false)
+        setFeedbackText(
+          practiceHubFeedbackSummary(
+            review,
+            review?.isCorrect ? "Correct!" : "Not quite — keep learning!",
+          ),
+        )
+      } else {
+        setShowFeedback(false)
+        setIsCorrect(false)
+        setFeedbackText("")
+      }
+    },
+    [answersByQuestion, answerReviews, answeredIds],
+  )
 
   useEffect(() => {
-    if (currentQuestion && !questionStartRef.current[currentQuestion.id]) {
-      questionStartRef.current[currentQuestion.id] = Date.now()
+    if (questions.some((q) => q.locked) && currentQuestion?.locked) {
+      const target = questions[firstUnlockedIndex]
+      setCurrentIndex(firstUnlockedIndex)
+      if (target) restoreQuestionState(target)
     }
-    if (currentQuestion?.alreadyAttempted || currentQuestion?.answerReview) {
-      applyPriorAnswer(currentQuestion)
+  }, [questions, currentQuestion?.locked, firstUnlockedIndex, restoreQuestionState])
+
+  useEffect(() => {
+    if (questions.length > 0 && currentIndex >= 0 && currentIndex < questions.length) {
+      restoreQuestionState(questions[currentIndex])
     }
-  }, [currentQuestion, applyPriorAnswer])
+  }, [currentIndex, questions, restoreQuestionState])
+
+  useEffect(() => {
+    if (!session || !attemptId || !questions.length || hydrating) return
+    let cancelled = false
+    void practiceApi.getAttemptState(session, attemptId).then((state) => {
+      if (cancelled) return
+      if (state.completedAt) {
+        void clearActivePracticeSession()
+        router.replace("/module/practice" as never)
+        return
+      }
+      if (!Array.isArray(state.answers) || state.answers.length === 0) return
+
+      const restoredAnswers: Record<number, string | string[]> = {}
+      const restoredAnswered = new Set<number>()
+      const restoredReviews: Record<number, PracticeAnswerReview> = {}
+
+      for (const row of state.answers) {
+        restoredAnswers[row.questionId] = row.studentAnswer
+        restoredAnswered.add(row.questionId)
+        const question = questions.find((q) => q.id === row.questionId)
+        if (!question) continue
+
+        const savedText = Array.isArray(row.studentAnswer)
+          ? JSON.stringify(row.studentAnswer)
+          : String(row.studentAnswer ?? "")
+        const sel = restoreSelectionFromSavedAnswer(asAssessmentQuestion(question), savedText)
+        const letters =
+          sel.letters.length > 0
+            ? sel.letters
+            : Array.isArray(row.studentAnswer)
+              ? row.studentAnswer.map(String)
+              : []
+
+        const review = resolveObjectiveAnswerReview({
+          question,
+          selectedLetters: letters,
+          selectedLetter: sel.letter,
+          serverReview: null,
+          evalResult: { isCorrect: row.isCorrect },
+        })
+        if (review) restoredReviews[row.questionId] = review
+      }
+
+      setAnswersByQuestion((prev) => ({ ...prev, ...restoredAnswers }))
+      setAnsweredIds((prev) => new Set([...prev, ...restoredAnswered]))
+      setAnswerReviews((prev) => ({ ...prev, ...restoredReviews }))
+    }).catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [session, attemptId, questions, hydrating, router])
 
   const goToIndex = (index: number) => {
+    if (advanceTimeoutRef.current != null) {
+      clearTimeout(advanceTimeoutRef.current)
+      advanceTimeoutRef.current = null
+      setSubmittingAnswer(false)
+    }
     const target = questions[index]
-    if (target?.locked && !target.alreadyAttempted) {
+    if (target?.locked) {
       AppAlert.alert(
         "Question locked",
         "Upgrade to Trailblazer to practice the rest of this topic.",
@@ -269,8 +382,7 @@ export function PracticeQuizScreen() {
       return
     }
     setCurrentIndex(index)
-    resetSelection(questions[index])
-    applyPriorAnswer(questions[index])
+    restoreQuestionState(questions[index])
   }
 
   const nextUnlockedIndex = (fromIndex: number): number | null => {
@@ -284,8 +396,6 @@ export function PracticeQuizScreen() {
     if (
       !session ||
       !currentQuestion ||
-      reviewOnly ||
-      currentQuestion.alreadyAttempted ||
       currentQuestion.locked ||
       submittingAnswer ||
       answeredIds.has(currentQuestion.id)
@@ -352,41 +462,106 @@ export function PracticeQuizScreen() {
         )
       }
 
-      let evalResult: EvaluateResult
-      try {
-        evalResult = await practiceApi.evaluate(session, {
-          questionId: currentQuestion.id,
-          answer: answerToSubmit,
-          questionType: currentQuestion.question_type,
-          attemptId,
-          responseTimeMs,
-          xpEarned,
-          difficulty: currentQuestion.difficulty,
-        })
-      } catch (err) {
-        const prior = alreadyAttemptedResult(err)
-        if (!prior) throw err
-        evalResult = prior
-      }
+      const mcqEarnedFraction = resolvePracticeQuestionMcqEarnedFraction(
+        currentQuestion,
+        selectedLetter,
+        selectedLetters,
+      )
+
+      const evalResult = await practiceApi.evaluate(session, {
+        questionId: currentQuestion.id,
+        answer: answerToSubmit,
+        questionType: currentQuestion.question_type,
+        attemptId,
+        responseTimeMs,
+        xpEarned,
+        difficulty: currentQuestion.difficulty,
+        ...(mcqEarnedFraction != null ? { mcqEarnedFraction } : {}),
+      })
+      invalidateByAction(getQueryClient(), studentQueryScope(session), "student.practice.evaluate")
 
       setAttemptCounts((prev) => ({ ...prev, [currentQuestion.id]: attemptNum }))
       setAnsweredIds((prev) => new Set(prev).add(currentQuestion.id))
-      setIsCorrect(evalResult.isCorrect)
+
+      const evalMeta = {
+        isCorrect: evalResult.isCorrect,
+        score: evalResult.score,
+        pointsEarned: evalResult.pointsEarned,
+        maxPoints: evalResult.maxPoints ?? 1,
+      }
+
+      let review = resolveObjectiveAnswerReview({
+        question: currentQuestion,
+        selectedLetters,
+        selectedLetter,
+        serverReview: evalResult.answerReview ?? null,
+        evalResult: evalMeta,
+      })
+      if (!review) {
+        review = buildPartialCreditFallbackReview({
+          question: currentQuestion,
+          selectedLetters,
+          evalResult: evalMeta,
+        })
+      }
+      if (review) {
+        setAnswerReviews((prev) => ({ ...prev, [currentQuestion.id]: review }))
+        const programmedKey = programmedAnswerKeyFromReview(review, currentQuestion.question_type)
+        if (programmedKey && !currentQuestion.correct_answer?.trim()) {
+          setPracticeSession((prev) => {
+            if (!prev) return prev
+            const next: PracticeSessionData = {
+              ...prev,
+              questions: prev.questions.map((question) =>
+                question.id === currentQuestion.id
+                  ? { ...question, correct_answer: programmedKey }
+                  : question,
+              ),
+            }
+            void setActivePracticeSession(next)
+            return next
+          })
+        }
+      }
+
+      setAnswersByQuestion((prev) => ({
+        ...prev,
+        [currentQuestion.id]:
+          isCircuit || isMultiPart
+            ? typeof answerToSubmit === "string"
+              ? answerToSubmit
+              : JSON.stringify(answerToSubmit)
+            : isMulti
+              ? [...selectedLetters]
+              : selectedLetter || textAnswer || String(answerToSubmit),
+      }))
+
+      const verdictCorrect = review?.isCorrect ?? evalResult.isCorrect
+      const partial = isEvalPartialCredit(
+        { ...evalMeta, isCorrect: verdictCorrect },
+        review,
+      )
+      setIsCorrect(verdictCorrect)
       setFeedbackText(
-        evalResult.alreadyAttempted
-          ? evalResult.answerReview?.summary ??
-            "Already attempted. Review your previous answer and the correct answer below."
-          : evalResult.feedback ??
-            (evalResult.requiresManualReview
-              ? "Submission recorded for review."
-              : evalResult.isCorrect
-                ? "Correct!"
-                : "Not quite — keep learning!"),
+        evalResult.feedback ??
+          (evalResult.requiresManualReview
+            ? "Submission recorded for review."
+            : practiceHubFeedbackSummary(
+                review,
+                partial
+                  ? "Partial credit — some selections were correct."
+                  : verdictCorrect
+                    ? "Correct!"
+                    : "Not quite — keep learning!",
+                { ...evalMeta, isCorrect: verdictCorrect },
+              )),
       )
       setShowFeedback(true)
 
       const delay = evalResult.aiGraded || evalResult.requiresManualReview ? 4000 : 2000
-      setTimeout(() => {
+      if (advanceTimeoutRef.current != null) clearTimeout(advanceTimeoutRef.current)
+      advanceTimeoutRef.current = setTimeout(() => {
+        advanceTimeoutRef.current = null
         setShowFeedback(false)
         setSubmittingAnswer(false)
         const nextIndex = nextUnlockedIndex(currentIndex)
@@ -412,11 +587,6 @@ export function PracticeQuizScreen() {
   }
 
   const finishPractice = async () => {
-    if (reviewOnly || !attemptId) {
-      await clearActivePracticeSession()
-      router.replace("/module/practice" as never)
-      return
-    }
     if (!session || !allAnswered) {
       AppAlert.alert("Incomplete", "Answer all unlocked questions before finishing.")
       return
@@ -424,6 +594,7 @@ export function PracticeQuizScreen() {
     setSubmittingFinal(true)
     try {
       const result = await practiceApi.submit(session, attemptId)
+      invalidateByAction(getQueryClient(), studentQueryScope(session), "student.practice.submit")
       await clearActivePracticeSession()
       setResults(result)
     } catch (err) {
@@ -462,7 +633,7 @@ export function PracticeQuizScreen() {
             {results.correctCount} of {results.totalQuestions} correct
           </Text>
           <Pressable
-            style={[styles.primaryBtn, { backgroundColor: tokens.accent }]}
+            style={[styles.primaryBtn, styles.resultsBtn, { backgroundColor: tokens.accent }]}
             onPress={() => router.replace("/module/practice" as never)}
           >
             <Text style={styles.primaryBtnText}>Back to Practice Hub</Text>
@@ -480,6 +651,8 @@ export function PracticeQuizScreen() {
         title="Preparing practice"
         subtitle="Loading questions, math, and answer choices"
         enabled={hydrating || Boolean(practiceSession?.questions.length)}
+        hideUntilReady
+        paintReady={sessionPaintReady}
       >
         <View style={[styles.center, { paddingTop: insets.top, backgroundColor: tokens.background }]}>
           <ActivityIndicator size="large" color={tokens.accent} />
@@ -497,14 +670,22 @@ export function PracticeQuizScreen() {
   const isMulti = isMultiSelectType(qType)
   const isText = isTextInputQuestion(currentQuestion)
   const submitted = answeredIds.has(currentQuestion.id)
+  const currentReview = answerReviews[currentQuestion.id] ?? null
+  const isPartial = isEvalPartialCredit(
+    {
+      isCorrect: currentReview?.isCorrect,
+      score: currentReview?.score,
+      pointsEarned: currentReview?.pointsEarned,
+      maxPoints: currentReview?.maxPoints ?? 1,
+    },
+    currentReview,
+  )
   const tierLocked = currentQuestion.locked === true
   const circuitConfig = parseCircuitSubmissionConfig(currentQuestion.solution_upload_config)
   const circuitReady = circuitSubmissionHasRequiredUpload(circuitAnswerJson, circuitConfig)
   const multiPartPayload = parseMultiPartAnswerJson(multiPartAnswerJson, currentQuestion.subquestions)
   const multiPartReady = multiPartAnswerReady(currentQuestion.subquestions, multiPartPayload)
   const submitDisabled =
-    reviewOnly ||
-    currentQuestion.alreadyAttempted === true ||
     tierLocked ||
     submitted ||
     submittingAnswer ||
@@ -518,8 +699,11 @@ export function PracticeQuizScreen() {
       title="Preparing practice"
       subtitle="Loading questions, math, and answer choices"
       enabled={Boolean(practiceSession.questions.length)}
+      hideUntilReady
+      paintReady={sessionPaintReady}
     >
     <View style={[styles.root, { paddingTop: insets.top, backgroundColor: tokens.background }]}>
+      <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <View style={styles.topBar}>
         <Pressable onPress={() => router.back()} hitSlop={12}>
           <Ionicons name="chevron-back" size={24} color={tokens.accent} />
@@ -539,24 +723,18 @@ export function PracticeQuizScreen() {
         <View style={[styles.progressFill, { width: `${progressPct}%`, backgroundColor: tokens.accent }]} />
       </View>
 
-      {reviewOnly || currentQuestion.alreadyAttempted || currentQuestion.answerReview ? (
-        <View
-          style={[
-            styles.alreadyBanner,
-            {
-              backgroundColor: hexToRgba(tokens.warning, 0.12),
-              borderColor: hexToRgba(tokens.warning, 0.4),
-            },
-          ]}
-        >
-          <Text style={[styles.alreadyTitle, { color: tokens.text }]}>Already attempted</Text>
-          <Text style={[styles.alreadyBody, { color: SN.secondaryLabel }]}>
-            This question is locked. Your previous result and the correct answer are shown below.
-          </Text>
-        </View>
-      ) : null}
-
-      <ScrollView contentContainerStyle={[styles.content, moduleContent]} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        ref={scrollRef}
+        style={styles.root}
+        contentContainerStyle={[
+          styles.content,
+          moduleContent,
+          keyboardOpen && Platform.OS === "android" && { paddingBottom: keyboardHeight + 16 },
+        ]}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        {keyboardOpen || !questionPaintReady ? null : (
         <View style={styles.questionNav}>
           {questions.map((q, i) => {
             const answered = answeredIds.has(q.id)
@@ -565,16 +743,20 @@ export function PracticeQuizScreen() {
             return (
               <Pressable
                 key={q.id}
+                testID={`practice-nav-${i + 1}`}
+                accessibilityRole="button"
+                accessibilityLabel={`Go to question ${i + 1}`}
+                hitSlop={6}
                 style={[
                   styles.navDot,
                   { backgroundColor: tokens.surface, borderColor: tokens.border },
+                  answered && !current && {
+                    backgroundColor: hexToRgba(tokens.success, 0.12),
+                    borderColor: tokens.success,
+                  },
                   current && {
                     borderColor: tokens.accent,
                     backgroundColor: hexToRgba(tokens.accent, 0.1),
-                  },
-                  answered && {
-                    backgroundColor: hexToRgba(tokens.success, 0.12),
-                    borderColor: tokens.success,
                   },
                   tierLocked && {
                     backgroundColor: hexToRgba(tokens.warning, 0.08),
@@ -600,8 +782,17 @@ export function PracticeQuizScreen() {
             )
           })}
         </View>
+        )}
 
-        <View style={[styles.card, { backgroundColor: tokens.surface, borderColor: tokens.border }]}>
+        <View style={[styles.cardHost, !questionPaintReady && styles.cardHostPending]}>
+        <View
+          style={[
+            styles.card,
+            { backgroundColor: tokens.surface, borderColor: tokens.border },
+            { opacity: questionPaintReady ? 1 : 0 },
+          ]}
+          pointerEvents={questionPaintReady ? "auto" : "none"}
+        >
           <View style={styles.cardHeader}>
             <View style={styles.badges}>
               <View style={[styles.badge, { backgroundColor: tokens.accent }]}>
@@ -626,7 +817,11 @@ export function PracticeQuizScreen() {
 
           <QuestionMediaView media={parseQuestionMedia(currentQuestion.question_media)} embedded />
 
-          <QuestionContentWebView text={currentQuestion.question_text} embedded />
+          <QuestionContentWebView
+            text={currentQuestion.question_text}
+            embedded
+            onReady={() => markQuestionPaintReady("prompt")}
+          />
 
           {showHint && currentQuestion.hint ? (
             <View
@@ -674,6 +869,7 @@ export function PracticeQuizScreen() {
               onChange={setMultiPartAnswerJson}
               disabled={submitted || submittingAnswer}
               textFieldHeight={submissionLayout.multipartTextHeight}
+              onReady={markQuestionPaintReady}
             />
           ) : isCode ? (
             <View style={styles.codeWrap}>
@@ -694,6 +890,8 @@ export function PracticeQuizScreen() {
                 ]}
                 value={textAnswer}
                 onChangeText={setTextAnswer}
+                onFocus={() => setAnswerFieldFocused(true)}
+                onBlur={() => setAnswerFieldFocused(false)}
                 placeholder="// Write your complete solution here…"
                 placeholderTextColor={SN.secondaryLabel}
                 editable={!submitted && !submittingAnswer}
@@ -729,6 +927,8 @@ export function PracticeQuizScreen() {
               ]}
               value={textAnswer}
               onChangeText={setTextAnswer}
+              onFocus={() => setAnswerFieldFocused(true)}
+              onBlur={() => setAnswerFieldFocused(false)}
               placeholder={
                 qType === "fill_code"
                   ? "// Fill in the missing code…"
@@ -744,64 +944,134 @@ export function PracticeQuizScreen() {
               spellCheck={qType !== "fill_code"}
             />
           ) : (
-            options.map(({ letter, text }) => {
-              const selected = isMulti ? selectedLetters.includes(letter) : selectedLetter === letter
-              return (
-                <Pressable
-                  key={letter}
-                  style={[
-                    styles.option,
-                    { borderColor: tokens.border, backgroundColor: tokens.background },
-                    selected && {
-                      borderColor: tokens.accent,
-                      backgroundColor: hexToRgba(tokens.accent, 0.06),
-                    },
-                    submitted && styles.optionLocked,
-                  ]}
-                  onPress={() => {
-                    if (submitted || submittingAnswer) return
-                    if (isMulti) {
-                      setSelectedLetters((prev) =>
-                        prev.includes(letter) ? prev.filter((l) => l !== letter) : [...prev, letter],
-                      )
-                    } else {
-                      setSelectedLetter(letter)
-                    }
-                  }}
-                  disabled={submitted || submittingAnswer}
-                >
-                  <View
+            <>
+              {isMulti && !submitted ? (
+                <Text style={[styles.selectAllHint, { color: SN.secondaryLabel }]}>
+                  Select all that apply, then submit.
+                </Text>
+              ) : null}
+              {options.map(({ letter, text }) => {
+                const selected = isMulti ? selectedLetters.includes(letter) : selectedLetter === letter
+                const reviewState =
+                  submitted && currentReview
+                    ? practiceAnswerReviewOptionState(currentReview, letter)
+                    : null
+                const showReview = reviewState != null
+                const markColor = reviewState?.showWrongSelection
+                  ? SYSTEM.red.color
+                  : reviewState?.showPartialCreditSelection
+                    ? SYSTEM.orange.color
+                    : reviewState?.isCorrect
+                      ? SYSTEM.green.color
+                      : selected
+                        ? tokens.accent
+                        : SN.secondaryLabel
+
+                return (
+                  <Pressable
+                    key={letter}
+                    testID={`practice-option-${letter}`}
+                    accessibilityRole={isMulti ? "checkbox" : "radio"}
+                    accessibilityState={{
+                      selected,
+                      checked: isMulti ? selected : undefined,
+                      disabled: submitted || submittingAnswer,
+                    }}
+                    accessibilityLabel={isMulti ? `Option ${letter}. ${text}` : `Option ${letter}`}
                     style={[
-                      styles.optionLetter,
-                      { backgroundColor: tokens.surface, borderColor: tokens.border },
-                      selected && { backgroundColor: tokens.accent, borderColor: tokens.accent },
+                      styles.option,
+                      { borderColor: tokens.border, backgroundColor: tokens.background },
+                      selected && !showReview && {
+                        borderColor: tokens.accent,
+                        backgroundColor: hexToRgba(tokens.accent, 0.06),
+                      },
+                      reviewState?.showPartialCreditSelection && {
+                        borderColor: SYSTEM.orange.color,
+                        backgroundColor: hexToRgba(SYSTEM.orange.color, 0.08),
+                      },
+                      reviewState?.isCorrect && {
+                        borderColor: SYSTEM.green.color,
+                        backgroundColor: hexToRgba(SYSTEM.green.color, 0.08),
+                      },
+                      reviewState?.showWrongSelection && {
+                        borderColor: SYSTEM.red.color,
+                        backgroundColor: hexToRgba(SYSTEM.red.color, 0.06),
+                      },
+                      submitted && styles.optionLocked,
                     ]}
+                    onPress={() => {
+                      if (submitted || submittingAnswer) return
+                      if (isMulti) {
+                        setSelectedLetters((prev) =>
+                          prev.includes(letter) ? prev.filter((l) => l !== letter) : [...prev, letter],
+                        )
+                      } else {
+                        setSelectedLetter(letter)
+                      }
+                    }}
+                    disabled={submitted || submittingAnswer}
                   >
-                    <Text
-                      style={[
-                        styles.optionLetterText,
-                        { color: SN.secondaryLabel },
-                        selected && styles.optionLetterTextSelected,
-                      ]}
-                    >
-                      {letter}
-                    </Text>
-                  </View>
-                  <View style={styles.optionTextWrap}>
-                    <QuestionContentWebView text={text} embedded compact />
-                  </View>
-                  {selected ? (
-                    <Ionicons
-                      name={isMulti ? "checkbox" : "checkmark-circle"}
-                      size={20}
-                      color={tokens.accent}
-                    />
-                  ) : isMulti ? (
-                    <Ionicons name="square-outline" size={20} color={SN.secondaryLabel} />
-                  ) : null}
-                </Pressable>
-              )
-            })
+                    {isMulti ? (
+                      <Ionicons
+                        name={selected ? "checkbox" : "square-outline"}
+                        size={24}
+                        color={markColor}
+                      />
+                    ) : (
+                      <View
+                        style={[
+                          styles.optionLetter,
+                          { backgroundColor: tokens.surface, borderColor: tokens.border },
+                          selected && !showReview && { backgroundColor: tokens.accent, borderColor: tokens.accent },
+                          reviewState?.showPartialCreditSelection && {
+                            backgroundColor: SYSTEM.orange.color,
+                            borderColor: SYSTEM.orange.color,
+                          },
+                          reviewState?.isCorrect && {
+                            backgroundColor: SYSTEM.green.color,
+                            borderColor: SYSTEM.green.color,
+                          },
+                          reviewState?.showWrongSelection && {
+                            backgroundColor: SYSTEM.red.color,
+                            borderColor: SYSTEM.red.color,
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.optionLetterText,
+                            { color: SN.secondaryLabel },
+                            (selected && !showReview) ||
+                            reviewState?.isCorrect ||
+                            reviewState?.showPartialCreditSelection ||
+                            reviewState?.showWrongSelection
+                              ? styles.optionLetterTextSelected
+                              : null,
+                          ]}
+                        >
+                          {letter}
+                        </Text>
+                      </View>
+                    )}
+                    <View style={styles.optionTextWrap}>
+                      <QuestionContentWebView
+                        text={text}
+                        embedded
+                        compact
+                        onReady={() => markQuestionPaintReady(`option-${letter}`)}
+                      />
+                    </View>
+                    {!isMulti && selected && !showReview ? (
+                      <Ionicons name="checkmark-circle" size={20} color={markColor} />
+                    ) : reviewState?.showWrongSelection ? (
+                      <Ionicons name="close-circle" size={20} color={markColor} />
+                    ) : reviewState?.isCorrect ? (
+                      <Ionicons name="checkmark-circle" size={20} color={markColor} />
+                    ) : null}
+                  </Pressable>
+                )
+              })}
+            </>
           )}
 
           {showFeedback ? (
@@ -810,16 +1080,16 @@ export function PracticeQuizScreen() {
                 styles.feedbackBox,
                 {
                   backgroundColor: semanticSoft(
-                    isCorrect ? tokens.success : tokens.danger,
+                    isCorrect ? tokens.success : isPartial ? tokens.warning : tokens.danger,
                     tokens.isDark,
                   ),
                 },
               ]}
             >
               <Ionicons
-                name={isCorrect ? "checkmark-circle" : "close-circle"}
+                name={isCorrect ? "checkmark-circle" : isPartial ? "alert-circle" : "close-circle"}
                 size={20}
-                color={isCorrect ? tokens.success : tokens.danger}
+                color={isCorrect ? tokens.success : isPartial ? tokens.warning : tokens.danger}
               />
               <View style={styles.feedbackCopy}>
                 <QuestionContentWebView text={feedbackText} embedded compact />
@@ -827,8 +1097,23 @@ export function PracticeQuizScreen() {
             </View>
           ) : null}
         </View>
+        {!questionPaintReady ? (
+          <View
+            style={[
+              styles.cardPaintOverlay,
+              { backgroundColor: tokens.surface, borderColor: tokens.border },
+            ]}
+          >
+            <ActivityIndicator size="large" color={tokens.accent} />
+            <Text style={[styles.cardPaintText, { color: SN.secondaryLabel }]}>
+              Loading question…
+            </Text>
+          </View>
+        ) : null}
+        </View>
       </ScrollView>
 
+      {keyboardOpen || !questionPaintReady ? null : (
       <View style={[styles.footer, { paddingBottom: insets.bottom + 12, backgroundColor: tokens.background }]}>
         {allAnswered ? (
           <Pressable
@@ -839,7 +1124,7 @@ export function PracticeQuizScreen() {
             {submittingFinal ? (
               <ActivityIndicator color="#ffffff" />
             ) : (
-              <Text style={styles.primaryBtnText}>{reviewOnly ? "Back to Practice Hub" : "Finish practice"}</Text>
+              <Text style={styles.primaryBtnText}>Finish practice</Text>
             )}
           </Pressable>
         ) : (
@@ -851,34 +1136,19 @@ export function PracticeQuizScreen() {
             {submittingAnswer ? (
               <ActivityIndicator color="#ffffff" />
             ) : (
-              <Text style={styles.primaryBtnText}>
-                {reviewOnly || currentQuestion.alreadyAttempted
-                  ? "Already attempted"
-                  : submitted
-                    ? "Answer submitted"
-                    : "Submit answer"}
-              </Text>
+              <Text style={styles.primaryBtnText}>{submitted ? "Answer submitted" : "Submit answer"}</Text>
             )}
           </Pressable>
         )}
       </View>
+      )}
+      </KeyboardAvoidingView>
     </View>
     </QuestionPrepareGate>
   )
 }
 
 const styles = StyleSheet.create({
-  alreadyBanner: {
-    marginHorizontal: 16,
-    marginTop: 10,
-    marginBottom: 4,
-    borderRadius: 12,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  alreadyTitle: { fontSize: 14, fontWeight: "700" },
-  alreadyBody: { marginTop: 3, fontSize: 13, lineHeight: 18 },
   root: { flex: 1 },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   topBar: {
@@ -893,6 +1163,17 @@ const styles = StyleSheet.create({
   progressTrack: { height: 4, marginHorizontal: 16 },
   progressFill: { height: "100%" },
   content: { padding: 16, gap: 12, paddingBottom: 24 },
+  cardHost: { position: "relative" },
+  cardHostPending: { minHeight: 280 },
+  cardPaintOverlay: {
+    ...StyleSheet.absoluteFill,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    borderRadius: 18,
+    borderWidth: 1,
+  },
+  cardPaintText: { fontSize: 14, fontWeight: "600" },
   questionNav: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   navDot: {
     width: 36,
@@ -962,6 +1243,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1.5,
   },
+  selectAllHint: { fontSize: 13, lineHeight: 18, marginBottom: 2 },
   optionLocked: { opacity: 0.7 },
   optionLetter: {
     width: 28,
@@ -986,11 +1268,20 @@ const styles = StyleSheet.create({
   footer: { paddingHorizontal: 16, paddingTop: 8 },
   primaryBtn: {
     borderRadius: 999,
-    paddingVertical: 16,
+    minHeight: 52,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
     alignItems: "center",
+    justifyContent: "center",
   },
   btnDisabled: { opacity: 0.6 },
-  primaryBtnText: { color: "#ffffff", fontSize: 16, fontWeight: "600" },
+  primaryBtnText: {
+    color: "#ffffff",
+    fontSize: 16,
+    fontWeight: "600",
+    lineHeight: 22,
+    textAlign: "center",
+  },
   resultsRoot: { flex: 1, paddingHorizontal: 20, justifyContent: "center" },
   resultsCard: {
     borderRadius: 20,
@@ -998,6 +1289,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 10,
     borderWidth: 1,
+  },
+  resultsBtn: {
+    alignSelf: "stretch",
+    marginTop: 8,
   },
   resultsTitle: { fontSize: 22, fontWeight: "600" },
   resultsScore: { fontSize: 48, fontWeight: "600" },

@@ -23,10 +23,13 @@ type Props = {
   showWorkspace?: boolean
   canDownload: boolean
   canOpenExternally: boolean
+  /** Student-only: omit the handler to hide the completion control (faculty preview). */
+  completed?: boolean
   onOpenSamplePractice: () => void
   onOpenWorkspace: () => void
   onDownloadSlides: () => void
   onOpenExternally: () => void
+  onToggleCompleted?: () => void
 }
 
 function countDetail(count: number, singular: string, plural: string, fallback: string): string {
@@ -46,10 +49,12 @@ export function StudentLectureToolsSheet({
   showWorkspace = workspaceCount > 0,
   canDownload,
   canOpenExternally,
+  completed,
   onOpenSamplePractice,
   onOpenWorkspace,
   onDownloadSlides,
   onOpenExternally,
+  onToggleCompleted,
 }: Props) {
   const insets = useSafeAreaInsets()
   const collabSheetStyles = useCollabSheetStyles()
@@ -112,6 +117,22 @@ export function StudentLectureToolsSheet({
                   onPress={() => pick(onOpenWorkspace)}
                 />
               ) : null}
+            </FacultySheetSection>
+          ) : null}
+
+          {onToggleCompleted ? (
+            <FacultySheetSection label="Progress" tone={SHEET_SECTION.workflow}>
+              <FacultySheetActionRow
+                icon={completed ? "checkmark-done-circle" : "checkmark-circle-outline"}
+                label={completed ? "Mark as not completed" : "Mark as completed"}
+                subtitle={
+                  completed
+                    ? "Reopen this lecture in your progress"
+                    : "Count this lecture as done even if you skipped slides"
+                }
+                accent={SHEET_LECTURE.samplePractice}
+                onPress={() => pick(onToggleCompleted)}
+              />
             </FacultySheetSection>
           ) : null}
 

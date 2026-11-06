@@ -1,106 +1,67 @@
 import { useMemo } from "react"
 import { useWindowDimensions, type ViewStyle } from "react-native"
+import { modulePageLayout } from "./module-page-layout"
+import {
+  AUTH_COMPACT_HEIGHT_MAX,
+  AUTH_FLOW_PHONE_MAX_WIDTH,
+  AUTH_FORM_PHONE_MAX_WIDTH,
+  authFlowContentGap,
+  authFlowContentMaxWidth,
+  authFlowHorizontalPadding,
+  authFlowIsTallPhone,
+  authFlowOnboardingContentMaxWidth,
+  authFlowOnboardingHorizontalPadding,
+  authFlowShouldCenterVertically,
+  authFlowStackGap,
+  authFlowTypeScale,
+  authFlowVerticalPadding,
+} from "./auth-flow-layout"
+import {
+  COMPACT_PHONE_MAX_WIDTH,
+  KPI_GRID_SINGLE_COLUMN_MAX_WIDTH,
+  LARGE_TABLET_MIN_WIDTH,
+  TABLET_MIN_WIDTH,
+} from "./responsive-layout-breakpoints"
 
-/** Below this logical width, two-column grids stack in a single column. */
-export const KPI_GRID_SINGLE_COLUMN_MAX_WIDTH = 340
-
-/** Logical width treated as a compact phone (e.g. iPhone SE). */
-export const COMPACT_PHONE_MAX_WIDTH = 375
+export {
+  AUTH_COMPACT_HEIGHT_MAX,
+  AUTH_FLOW_PHONE_MAX_WIDTH,
+  AUTH_FLOW_TABLET_MAX_WIDTH,
+  AUTH_FLOW_VERTICAL_PADDING,
+  AUTH_FORM_PHONE_MAX_WIDTH,
+  AUTH_MIN_CENTER_HEIGHT,
+  AUTH_TALL_PHONE_MIN_HEIGHT,
+  authFlowCenterSlack,
+  authFlowContentGap,
+  authFlowContentMaxWidth,
+  authFlowHorizontalPadding,
+  authFlowIsTallPhone,
+  authFlowOnboardingContentMaxWidth,
+  authFlowOnboardingHorizontalPadding,
+  authFlowShouldCenterVertically,
+  authFlowStackGap,
+  authFlowTypeScale,
+  authFlowVerticalPadding,
+} from "./auth-flow-layout"
+export {
+  COMPACT_PHONE_MAX_WIDTH,
+  KPI_GRID_SINGLE_COLUMN_MAX_WIDTH,
+  LARGE_TABLET_MIN_WIDTH,
+  TABLET_MIN_WIDTH,
+} from "./responsive-layout-breakpoints"
+export {
+  modulePageCardPadding,
+  modulePageHorizontalPadding,
+  modulePageLayout,
+  modulePageStackGap,
+  type ModulePageLayout,
+} from "./module-page-layout"
 
 /** Max content width for dashboard scroll areas on tablet / wide phones. */
 export const DASHBOARD_CONTENT_MAX_WIDTH = 720
 
 /** Max content width for module lists and prose on tablet. */
 export const MODULE_CONTENT_MAX_WIDTH = 840
-
-/** Logical width at which auth/onboarding flows expand for tablet. */
-export const TABLET_MIN_WIDTH = 768
-
-/** Large tablet breakpoint (e.g. iPad Pro 12.9"/13"). */
-export const LARGE_TABLET_MIN_WIDTH = 1024
-
-/** Phone max width for onboarding/legal scroll areas. */
-export const AUTH_FLOW_PHONE_MAX_WIDTH = 560
-
-/** Phone max width for login forms and compact auth steps. */
-export const AUTH_FORM_PHONE_MAX_WIDTH = 440
-
-/** Extra vertical breathing room below safe area on auth screens (welcome + sign-in). */
-export const AUTH_FLOW_VERTICAL_PADDING = 32
-
-/** Upper cap for auth flow content on large tablets (readability). */
-export const AUTH_FLOW_TABLET_MAX_WIDTH = 920
-
-/** Short-phone height — iPhone SE, landscape phones. */
-export const AUTH_COMPACT_HEIGHT_MAX = 700
-
-/** Very short viewport — prefer top-aligned scroll over vertical centering. */
-export const AUTH_MIN_CENTER_HEIGHT = 580
-
-export function authFlowHorizontalPadding(screenWidth: number): number {
-  if (screenWidth >= LARGE_TABLET_MIN_WIDTH) return 48
-  if (screenWidth >= TABLET_MIN_WIDTH) return 32
-  if (screenWidth <= COMPACT_PHONE_MAX_WIDTH) return 16
-  return 20
-}
-
-export function authFlowVerticalPadding(
-  screenHeight: number,
-  keyboardVisible = false,
-  isLandscape = false,
-): number {
-  if (keyboardVisible) return 12
-  if (isLandscape) return 16
-  if (screenHeight < 667) return 12
-  if (screenHeight < AUTH_COMPACT_HEIGHT_MAX) return 20
-  if (screenHeight < 820) return 24
-  return AUTH_FLOW_VERTICAL_PADDING
-}
-
-export function authFlowContentGap(screenWidth: number, screenHeight: number): number {
-  if (screenWidth >= TABLET_MIN_WIDTH) return 20
-  if (screenHeight < AUTH_COMPACT_HEIGHT_MAX) return 12
-  return 16
-}
-
-export function authFlowStackGap(screenWidth: number, screenHeight: number): number {
-  if (screenWidth >= TABLET_MIN_WIDTH) return 24
-  if (screenHeight < AUTH_COMPACT_HEIGHT_MAX) return 16
-  return 20
-}
-
-export function authFlowShouldCenterVertically(
-  screenHeight: number,
-  keyboardVisible: boolean,
-  isLandscape: boolean,
-): boolean {
-  if (keyboardVisible) return false
-  if (isLandscape && screenHeight < 500) return false
-  return screenHeight >= AUTH_MIN_CENTER_HEIGHT
-}
-
-/** Typography scale for auth screens — down on compact phones, slightly up on tablet. */
-export function authFlowTypeScale(screenWidth: number, screenHeight: number): number {
-  if (screenWidth >= TABLET_MIN_WIDTH) return 1.06
-  if (screenHeight < 667 || screenWidth <= 320) return 0.92
-  if (screenHeight < AUTH_COMPACT_HEIGHT_MAX) return 0.96
-  return 1
-}
-
-export function authFlowContentMaxWidth(
-  screenWidth: number,
-  phoneMax: number = AUTH_FLOW_PHONE_MAX_WIDTH,
-): number {
-  const horizontalPad = 40
-  if (screenWidth < TABLET_MIN_WIDTH) {
-    return Math.min(screenWidth - horizontalPad, phoneMax)
-  }
-  const tabletTarget = Math.min(
-    AUTH_FLOW_TABLET_MAX_WIDTH,
-    Math.round(screenWidth * 0.85),
-  )
-  return Math.max(phoneMax, tabletTarget)
-}
 
 export function useAuthFlowContentStyle(
   phoneMax: number = AUTH_FLOW_PHONE_MAX_WIDTH,
@@ -128,6 +89,7 @@ export type AuthFlowLayout = {
   minScrollHeight: number
   isCompactPhone: boolean
   isCompactHeight: boolean
+  isTallPhone: boolean
   isShortLandscape: boolean
   isTablet: boolean
   isLandscape: boolean
@@ -147,6 +109,7 @@ export function useAuthFlowLayout(options?: {
   return useMemo(() => {
     const isCompactPhone = width < COMPACT_PHONE_MAX_WIDTH
     const isCompactHeight = height < AUTH_COMPACT_HEIGHT_MAX
+    const isTallPhone = authFlowIsTallPhone(width, height)
     const isTablet = width >= TABLET_MIN_WIDTH
 
     return {
@@ -161,12 +124,52 @@ export function useAuthFlowLayout(options?: {
       minScrollHeight: height,
       isCompactPhone,
       isCompactHeight,
+      isTallPhone,
       isShortLandscape: isLandscape && height < 500,
       isTablet,
       isLandscape,
       typeScale: authFlowTypeScale(width, height),
     }
   }, [contentStyle, width, height, keyboardVisible, isLandscape])
+}
+
+export function useOnboardingFlowLayout(): AuthFlowLayout {
+  const { width, height } = useWindowDimensions()
+  const isLandscape = width > height
+  const contentStyle = useMemo(
+    () => ({
+      width: "100%" as const,
+      maxWidth: authFlowOnboardingContentMaxWidth(width),
+      alignSelf: "center" as const,
+    }),
+    [width],
+  )
+
+  return useMemo(() => {
+    const isCompactPhone = width < COMPACT_PHONE_MAX_WIDTH
+    const isCompactHeight = height < AUTH_COMPACT_HEIGHT_MAX
+    const isTallPhone = authFlowIsTallPhone(width, height)
+    const isTablet = width >= TABLET_MIN_WIDTH
+
+    return {
+      width,
+      height,
+      contentStyle,
+      horizontalPadding: authFlowOnboardingHorizontalPadding(width),
+      verticalPadding: authFlowVerticalPadding(height, false, isLandscape),
+      contentGap: authFlowContentGap(width, height),
+      stackGap: authFlowStackGap(width, height),
+      shouldCenterVertically: authFlowShouldCenterVertically(height, false, isLandscape),
+      minScrollHeight: height,
+      isCompactPhone,
+      isCompactHeight,
+      isTallPhone,
+      isShortLandscape: isLandscape && height < 500,
+      isTablet,
+      isLandscape,
+      typeScale: authFlowTypeScale(width, height),
+    }
+  }, [contentStyle, width, height, isLandscape])
 }
 
 /** Modal card width on phone vs tablet. */
@@ -208,6 +211,11 @@ export function useModuleContentStyle(): ViewStyle {
       alignSelf: "center",
     }
   }, [width])
+}
+
+export function useModulePageLayout() {
+  const { width, height } = useWindowDimensions()
+  return useMemo(() => modulePageLayout(width, height), [width, height])
 }
 
 export function chartContentWidth(screenWidth: number, horizontalPad = 64): number {

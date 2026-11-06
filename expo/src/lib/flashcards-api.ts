@@ -1,6 +1,8 @@
 import type { FlashcardDifficulty } from "./flashcard-difficulty"
+import { normalizeFlashcardCards } from "./flashcard-display"
 import type { StudentSession } from "./session"
 import { studentAuthenticatedRequest } from "./student-api"
+import { studentContentPath } from "./student-content-context"
 
 export type FlashcardDeckKind = "course" | "student"
 
@@ -100,24 +102,8 @@ export type FlashcardLeaderboardEntry = {
 export const FLASHCARD_DAILY_GOAL = 10
 export const FLASHCARD_TIMED_SECONDS = 45
 
-function flashcardContextQuery(session: StudentSession, extra?: Record<string, string>): string {
-  const params = new URLSearchParams({
-    studentDatabaseId: session.databaseId,
-    studentId: session.databaseId,
-  })
-  if (session.section) params.set("session", session.section)
-  if (session.courseId != null && Number.isFinite(session.courseId)) {
-    params.set("courseId", String(session.courseId))
-  }
-  for (const [key, value] of Object.entries(extra ?? {})) {
-    params.set(key, value)
-  }
-  return params.toString()
-}
-
 function flashcardPath(session: StudentSession, path: string, extra?: Record<string, string>): string {
-  const qs = flashcardContextQuery(session, extra)
-  return path.includes("?") ? `${path}&${qs}` : `${path}?${qs}`
+  return studentContentPath(session, path, extra)
 }
 
 export const flashcardsApi = {
@@ -127,6 +113,7 @@ export const flashcardsApi = {
       myDecks: FlashcardDeck[]
       courseId: number | null
       session: string | null
+      studySettings?: FlashcardStudySettings
     }>(
       session,
       flashcardPath(
@@ -151,12 +138,13 @@ export const flashcardsApi = {
     )
   },
 
-  getDeck(session: StudentSession, deckId: number) {
-    return studentAuthenticatedRequest<{
+  async getDeck(session: StudentSession, deckId: number) {
+    const res = await studentAuthenticatedRequest<{
       deck: FlashcardDeck
       cards: FlashcardCard[]
       studySettings?: FlashcardStudySettings
     }>(session, flashcardPath(session, `/api/student/flashcards/decks/${deckId}`))
+    return { ...res, cards: normalizeFlashcardCards(res.cards) }
   },
 
   updateDeck(
@@ -254,12 +242,20 @@ export const flashcardsApi = {
       sessionId: string
       streak?: number
       bonusType?: "timed" | "boss"
+      mcqEarnedFraction?: number
     },
   ) {
+    const body: Record<string, unknown> = { ...payload }
+    if (
+      payload.mcqEarnedFraction != null &&
+      Number.isFinite(payload.mcqEarnedFraction)
+    ) {
+      body.mcqEarnedFraction = Math.max(0, Math.min(1, payload.mcqEarnedFraction))
+    }
     return studentAuthenticatedRequest<FlashcardStudyRecordResult>(
       session,
       flashcardPath(session, `/api/student/flashcards/decks/${deckId}/study`),
-      { method: "POST", body: JSON.stringify(payload) },
+      { method: "POST", body: JSON.stringify(body) },
     )
   },
 

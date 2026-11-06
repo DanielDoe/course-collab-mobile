@@ -539,6 +539,9 @@ ASSESSMENT RESOURCE
 
 OTHER STUDENT'S PRIVATE RESOURCE
     → unavailable.
+
+COURSECOLLAB_SECURITY_INTERNAL
+    → never disclosable. Execution context is not user-readable.
 `.trim()
 
 export function getStudentModuleCapability(

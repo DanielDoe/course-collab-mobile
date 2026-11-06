@@ -3,7 +3,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-nati
 import { AppAlert } from '../../lib/app-alert'
 import { LinearGradient } from "expo-linear-gradient"
 import { Ionicons } from "@/components/icons/AppIcon"
-import { useLocalSearchParams, useRouter } from "expo-router"
+import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { ModuleScreen } from "../modules/ModuleScreen"
 import { NotetakerScreenHeader } from "../notetaker/NotetakerScreenHeader"
@@ -27,10 +27,9 @@ import {
   openAssessmentResults,
   openAssessmentTake} from "./assessment-navigation"
 import { useNotificationModuleRefresh } from "../../lib/notifications/notification-events"
-import {
-  defaultExamWideTimerSeconds,
-  isExamWideAssessmentType,
-} from "../../lib/assessment-quiz/exam-wide-timer"
+import { firstRouteParam, parseRouteNumericId } from "../../lib/route-params"
+import { assessmentPlatformBlockedMessage } from "../../lib/assessment-platform-access"
+import { useAssessmentPlatformAccess } from "../../hooks/useAssessmentPlatformAccess"
 
 function useStudentSession(): StudentSession | null {
   const { session } = useSession()
@@ -43,8 +42,8 @@ function formatAssessmentTitle(title: string): string {
     .replace(/\s+(Part\s+\d+)$/i, "\u00A0$1")
 }
 
-function resolveListKind(typeParam: string): AssessmentListKind {
-  const t = typeParam.toLowerCase().replace(/-/g, "_")
+function resolveListKind(typeParam: string | string[] | undefined): AssessmentListKind {
+  const t = (firstRouteParam(typeParam) ?? "quiz").toLowerCase().replace(/-/g, "_")
   if (t === "homework") return "homework"
   if (t === "mid_semester" || t === "midsem") return "mid_semester"
   if (t === "final") return "final"
@@ -176,15 +175,17 @@ function AssessmentDetailShell({
 }
 
 export function AssessmentDetailScreen() {
-  const { id, type: typeParam } = useLocalSearchParams<{ id: string; type?: string }>()
-  const quizId = Number(id)
+  const { id, type: typeParam } = useLocalSearchParams<{ id?: string | string[]; type?: string | string[] }>()
+  const idParam = firstRouteParam(id)
+  const quizId = parseRouteNumericId(id)
   const session = useStudentSession()
+  const { confirmMobileAccess, canTakeOnMobile } = useAssessmentPlatformAccess(session)
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const SN = useThemedStudentNative()
   const { configFor, scoreTone, tokens } = useAssessmentTheme()
 
-  const kind = resolveListKind(typeParam ?? "quiz")
+  const kind = resolveListKind(typeParam)
   const config = configFor(kind)
   const assessmentType = issuesAssessmentType(kind)
   const displayName = formatAssessmentType(kind === "quiz" ? "quiz" : kind)
@@ -198,7 +199,7 @@ export function AssessmentDetailScreen() {
   const [issuesOpen, setIssuesOpen] = useState(false)
 
   const load = useCallback(async () => {
-    if (!session || !Number.isFinite(quizId)) return
+    if (!session || quizId == null) return
     setError("")
     try {
       const found = await fetchAssessmentItem(session, kind, quizId)
@@ -215,9 +216,32 @@ export function AssessmentDetailScreen() {
   }, [session, kind, quizId])
 
   useEffect(() => {
+    if (!session) {
+      setLoading(true)
+      return
+    }
+    if (idParam == null || idParam.trim() === "") {
+      setLoading(false)
+      setError("")
+      setItem(null)
+      return
+    }
+    if (quizId == null) {
+      setLoading(false)
+      setError("Invalid assessment.")
+      setItem(null)
+      return
+    }
     setLoading(true)
     load().finally(() => setLoading(false))
-  }, [load])
+  }, [load, session, quizId, idParam])
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!session || quizId == null) return
+      void load()
+    }, [load, session, quizId]),
+  )
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true)
@@ -268,10 +292,16 @@ export function AssessmentDetailScreen() {
     }
   }, [session, item, load])
 
-  if (!loading && (!item || !actions)) {
+  if (!loading && session && (!item || !actions)) {
     return (
       <AssessmentDetailShell title={displayName} fallbackHref={moduleHref}>
-        <ModuleScreen loading={false} error={error || "Assessment unavailable."} disableTopInsetAdjustment>
+        <ModuleScreen
+          loading={false}
+          error={error || "Assessment unavailable."}
+          errorFeature={displayName}
+          onRetryError={onRefresh}
+          disableTopInsetAdjustment
+        >
           <ActionButton label="Try again" onPress={onRefresh} variant="secondary" loading={refreshing} />
         </ModuleScreen>
       </AssessmentDetailShell>
@@ -350,11 +380,7 @@ export function AssessmentDetailScreen() {
               icon="help-circle-outline"
               label="Questions"
               value={`${item.question_count} questions${
-                isExamWideAssessmentType(assessmentType)
-                  ? ` · ${Math.round(defaultExamWideTimerSeconds(assessmentType) / 60)} min total`
-                  : item.time_per_question != null
-                    ? ` · ${item.time_per_question}s each`
-                    : ""
+                item.time_per_question != null ? ` · ${item.time_per_question}s each` : ""
               }`}
             />
           ) : null}
@@ -380,26 +406,48 @@ export function AssessmentDetailScreen() {
         <View style={[styles.actionsCard, { backgroundColor: tokens.surface, borderColor: tokens.border }]}>
           <Text style={[styles.cardTitle, { color: tokens.accentDark }]}>Actions</Text>
 
-          {actions.showContinue ? (
-            <ActionButton
-              label="Continue assessment"
-              onPress={() => openAssessmentTake(router, assessmentType, item.id, "continue")}
-            />
-          ) : null}
+          {actions.showContinue || actions.showStart || actions.showRetake ? (
+            canTakeOnMobile(assessmentType, item.platform_access) ? (
+              <>
+                {actions.showContinue ? (
+                  <ActionButton
+                    label="Continue assessment"
+                    onPress={() => {
+                      if (!confirmMobileAccess(assessmentType, item.platform_access)) return
+                      openAssessmentTake(router, assessmentType, item.id, "continue")
+                    }}
+                  />
+                ) : null}
 
-          {actions.showStart ? (
-            <ActionButton
-              label={actions.startLabel ?? `Start ${displayName}`}
-              onPress={() => openAssessmentTake(router, assessmentType, item.id, "start")}
-            />
-          ) : null}
+                {actions.showStart ? (
+                  <ActionButton
+                    label={actions.startLabel ?? `Start ${displayName}`}
+                    onPress={() => {
+                      if (!confirmMobileAccess(assessmentType, item.platform_access)) return
+                      openAssessmentTake(router, assessmentType, item.id, "start")
+                    }}
+                  />
+                ) : null}
 
-          {actions.showRetake ? (
-            <ActionButton
-              label={`Retake ${displayName}`}
-              variant="secondary"
-              onPress={() => openAssessmentTake(router, assessmentType, item.id, "retake")}
-            />
+                {actions.showRetake ? (
+                  <ActionButton
+                    label={`Retake ${displayName}`}
+                    variant="secondary"
+                    onPress={() => {
+                      if (!confirmMobileAccess(assessmentType, item.platform_access)) return
+                      openAssessmentTake(router, assessmentType, item.id, "retake")
+                    }}
+                  />
+                ) : null}
+              </>
+            ) : (
+              <View style={[styles.noticeBox, { backgroundColor: SN.fill }]}>
+                <Ionicons name="desktop-outline" size={18} color={tokens.warning} />
+                <Text style={[styles.noticeText, { color: tokens.textSecondary }]}>
+                  {assessmentPlatformBlockedMessage(assessmentType, "mobile")}
+                </Text>
+              </View>
+            )
           ) : null}
 
           {actions.showReport && item.attempt_id ? (

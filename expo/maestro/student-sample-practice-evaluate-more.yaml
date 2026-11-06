@@ -1,0 +1,47 @@
+appId: com.coursecollab.app
+---
+# Continue sample practice — answer questions 2–4 after Q1 already submitted.
+- scrollUntilVisible:
+    element:
+      text: "Analyze the Problem"
+    direction: DOWN
+    timeout: 30000
+- tapOn:
+    text: ".*program development.*"
+    optional: true
+- tapOn: "A, Analyze the Problem"
+- tapOn: "Submit answer"
+- extendedWaitUntil:
+    visible: "Correct — nice work."
+    timeout: 30000
+- takeScreenshot: sample-practice-q2-correct
+
+- scrollUntilVisible:
+    element:
+      text: "Iteration"
+    direction: DOWN
+    timeout: 30000
+- tapOn:
+    text: ".*repetition.*"
+    optional: true
+- tapOn: "C, Iteration"
+- tapOn: "Submit answer"
+- extendedWaitUntil:
+    visible: "Correct — nice work."
+    timeout: 30000
+- takeScreenshot: sample-practice-q3-correct
+
+- scrollUntilVisible:
+    element:
+      text: "Maintenance"
+    direction: DOWN
+    timeout: 30000
+- tapOn:
+    text: ".*longest phase.*"
+    optional: true
+- tapOn: "C, Maintenance"
+- tapOn: "Submit answer"
+- extendedWaitUntil:
+    visible: "Correct — nice work."
+    timeout: 30000
+- takeScreenshot: sample-practice-q4-correct

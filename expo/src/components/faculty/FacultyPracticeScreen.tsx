@@ -47,6 +47,8 @@ import {
   practiceStudentScore} from "./FacultyPracticeModals"
 import { FacultyPracticeStudentReportModal } from "./FacultyPracticeStudentReportModal"
 import { FacultyPracticeTopicQuestionsModal } from "./FacultyPracticeTopicQuestionsModal"
+import { useFacultyListPager } from "../../hooks/useFacultyListPager"
+import { FacultyListPagerFooter } from "./FacultyListPagerFooter"
 
 type Tab = "topics" | "students" | "analytics" | "activity"
 
@@ -187,6 +189,14 @@ export function FacultyPracticeScreen() {
   const topicPerformance = analytics.topicPerformance ?? []
   const dailyTrends = analytics.dailyTrends ?? []
   const recentActivity = analytics.recentActivity ?? []
+
+  const topicsPager = useFacultyListPager(filteredTopics, `${search}:${topicSession}`, "topics")
+  const studentsPager = useFacultyListPager(
+    filteredStudents,
+    `${search}:${studentSession}:${studentTopic}`,
+    "students",
+  )
+  const activityPager = useFacultyListPager(recentActivity, "activity", "activities")
 
   const topicScopeLabel = sessionFilterDisplayLabel(uniqueSessions, topicSession)
 
@@ -347,7 +357,7 @@ export function FacultyPracticeScreen() {
             />
           ) : (
             <View style={localStyles.list}>
-              {filteredTopics.map((topic) => {
+              {topicsPager.items.map((topic) => {
                 const avail = topicAvailability(topic, topicSession)
                 return (
                   <FacultyPracticeListCard
@@ -367,6 +377,7 @@ export function FacultyPracticeScreen() {
                   />
                 )
               })}
+              <FacultyListPagerFooter pager={topicsPager} />
             </View>
           )
         ) : tab === "students" ? (
@@ -382,7 +393,7 @@ export function FacultyPracticeScreen() {
             />
           ) : (
             <View style={localStyles.list}>
-              {filteredStudents.map((student) => {
+              {studentsPager.items.map((student) => {
                 const name = practiceStudentName(student)
                 const thumb = facultyPracticeStudentThumb(student.student_id)
                 return (
@@ -406,12 +417,16 @@ export function FacultyPracticeScreen() {
                   />
                 )
               })}
+              <FacultyListPagerFooter pager={studentsPager} />
             </View>
           )
         ) : tab === "analytics" ? (
           <AnalyticsTab topicPerformance={topicPerformance} dailyTrends={dailyTrends} />
         ) : (
-          <ActivityTab activity={recentActivity} />
+          <>
+            <ActivityTab activity={activityPager.items} />
+            <FacultyListPagerFooter pager={activityPager} />
+          </>
         )}
       </ScrollView>
 
@@ -676,7 +691,7 @@ function ActivityTab({ activity }: { activity: PracticeActivityItem[] }) {
 
   return (
     <View style={localStyles.list}>
-      {activity.slice(0, 20).map((item, index) => {
+      {activity.map((item, index) => {
         const score = Math.round(item.score)
         const topicLine = (item.topics ?? []).join(" · ")
         return (

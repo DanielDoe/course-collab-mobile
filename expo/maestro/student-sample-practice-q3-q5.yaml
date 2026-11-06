@@ -1,0 +1,18 @@
+appId: com.coursecollab.app
+---
+- tapOn: "3, Which structure in programming allows repetition based on a condition?, Introduction to Programming"
+- tapOn: "C, Iteration"
+- tapOn: "Submit answer"
+- extendedWaitUntil:
+    visible: "Correct — nice work."
+    timeout: 30000
+- takeScreenshot: sample-practice-q3-correct
+
+- tapOn: "5, Which programming language type is closest to human language?, Introduction to Programming"
+- tapOn: "C, High-level language"
+- tapOn: "Submit answer"
+- extendedWaitUntil:
+    visible: "Correct — nice work."
+    timeout: 30000
+- takeScreenshot: sample-practice-q5-correct
+- assertNotVisible: "Could not check your answer."

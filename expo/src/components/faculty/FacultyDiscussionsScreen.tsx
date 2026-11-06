@@ -29,6 +29,8 @@ import { useFacultyModuleScrollPadding, FacultyFilterSheet, FacultySearchToolbar
 import { FacultyDiscussionNewThreadModal } from "./FacultyDiscussionNewThreadModal"
 import { FacultyDiscussionThreadModal } from "./FacultyDiscussionThreadModal"
 import { useModuleTheme } from "../../lib/themed-module-shell"
+import { useFacultyListPager } from "../../hooks/useFacultyListPager"
+import { FacultyListPagerFooter } from "./FacultyListPagerFooter"
 
 
 type Tab = "threads" | "moderation"
@@ -102,6 +104,8 @@ export function FacultyDiscussionsScreen() {
       return hay.includes(q)
     })
   }, [threads, search])
+
+  const pager = useFacultyListPager(filteredThreads, `${tab}:${search}:${sortBy}`, "threads")
 
   function handleThreadCreated(threadId: number) {
     void load()
@@ -201,16 +205,19 @@ export function FacultyDiscussionsScreen() {
                 />
               </View>
             ) : (
-              <CommGroupedList>
-                {filteredThreads.map((thread, index) => (
-                  <CommThreadRow
-                    key={thread.id}
-                    thread={thread}
-                    isLast={index === filteredThreads.length - 1}
-                    onPress={() => setSelectedThreadId(thread.id)}
-                  />
-                ))}
-              </CommGroupedList>
+              <>
+                <CommGroupedList>
+                  {pager.items.map((thread, index) => (
+                    <CommThreadRow
+                      key={thread.id}
+                      thread={thread}
+                      isLast={index === pager.items.length - 1}
+                      onPress={() => setSelectedThreadId(thread.id)}
+                    />
+                  ))}
+                </CommGroupedList>
+                <FacultyListPagerFooter pager={pager} />
+              </>
             )}
 
             <CommSectionFooter>Pull to refresh. Tap a thread to read replies.</CommSectionFooter>

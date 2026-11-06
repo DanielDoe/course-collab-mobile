@@ -9,6 +9,7 @@ import { NotetakerScreenHeader } from "../notetaker/NotetakerScreenHeader"
 import { AppearanceSettingsContent } from "../settings/AppearanceSettingsScreen"
 import { useSession } from "../../context/SessionProvider"
 import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
+import { useAppToast } from "../../context/AppToastProvider"
 import { NATIVE } from "../../constants/faculty-native-theme"
 import { ApiError } from "../../lib/api"
 import { guestApi } from "../../lib/guest-api"
@@ -44,6 +45,7 @@ export function GuestSettingsScreen() {
   const native = useThemedNative()
   const tokens = useAppThemeTokens()
   const type = useNativeType()
+  const { showSuccess } = useAppToast()
 
   const [activeSheet, setActiveSheet] = useState<SheetId>(null)
   const [fullName, setFullName] = useState("")
@@ -55,7 +57,6 @@ export function GuestSettingsScreen() {
   const [refreshing, setRefreshing] = useState(false)
   const [savingProfile, setSavingProfile] = useState(false)
   const [savingPassword, setSavingPassword] = useState(false)
-  const [message, setMessage] = useState("")
   const [error, setError] = useState("")
 
   const purposeLabel =
@@ -91,11 +92,10 @@ export function GuestSettingsScreen() {
       return
     }
     setSavingProfile(true)
-    setMessage("")
     setError("")
     try {
       await guestApi.updateProfile(guestSession, { fullName: fullName.trim(), email: email.trim() })
-      setMessage("Profile updated.")
+      showSuccess("Profile updated")
       setActiveSheet(null)
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not save profile.")
@@ -119,7 +119,6 @@ export function GuestSettingsScreen() {
       return
     }
     setSavingPassword(true)
-    setMessage("")
     setError("")
     try {
       await guestApi.changePassword(guestSession, currentPassword, newPassword)
@@ -127,7 +126,7 @@ export function GuestSettingsScreen() {
       setNewPassword("")
       setConfirmPassword("")
       setActiveSheet(null)
-      setMessage("Password updated.")
+      showSuccess("Password updated")
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not change password.")
     } finally {
@@ -172,18 +171,6 @@ export function GuestSettingsScreen() {
           load().finally(() => setRefreshing(false))
         }}
       >
-        {message ? (
-          <View
-            style={[
-              styles.bannerSuccess,
-              { backgroundColor: `${tokens.success}18`, borderColor: `${tokens.success}33` },
-            ]}
-          >
-            <Ionicons name="checkmark-circle" size={18} color={tokens.success} />
-            <Text style={[styles.bannerSuccessText, { color: tokens.success }]}>{message}</Text>
-          </View>
-        ) : null}
-
         <Pressable
           style={[
             styles.profileCard,

@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Modal,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -22,6 +21,7 @@ import { useNativeType } from "../../lib/themed-module-theme"
 import { FACULTY_COMMUNICATION_COLOR, FACULTY_COMM_BUTTON_RADIUS } from "../../lib/faculty-communication-theme"
 import { FacultySheetChrome, FacultySheetContainer } from "../faculty/faculty-collab-sheet-ui"
 import { AppErrorNotice } from "../errors/AppErrorNotice"
+import { KeyboardAwareForm } from "../ui/KeyboardAwareForm"
 import { usePresenceTracking } from "../../hooks/usePresenceTracking"
 import { MessageAvatar } from "./messages-ui"
 import { AppAlert } from "../../lib/app-alert"
@@ -147,11 +147,7 @@ export function MessagesComposeModal({
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <FacultySheetContainer style={styles.root}>
         <FacultySheetChrome topInset={insets.top} title={title} onClose={onClose} accentColor={FACULTY_COMMUNICATION_COLOR.link} />
-        <ScrollView
-          contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + 24 }]}
-          keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
-        >
+        <KeyboardAwareForm contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + 24 }]}>
           <Text style={[type.caption, styles.label, { color: native.secondaryLabel }]}>To</Text>
           {selectedRecipient ? (
             <View style={[styles.selectedRecipient, { backgroundColor: native.fill }]}>
@@ -277,7 +273,7 @@ export function MessagesComposeModal({
               </Text>
             )}
           </Pressable>
-        </ScrollView>
+        </KeyboardAwareForm>
       </FacultySheetContainer>
     </Modal>
   )

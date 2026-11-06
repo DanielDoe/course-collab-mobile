@@ -3,9 +3,11 @@ import type { CodebenchLearningMode } from "../constants/codebench-languages"
 import { assertProductionHttpsUrl, createApiAbortSignal } from "./http"
 import type { StudentSession } from "./session"
 import { persistHttpCookiesFromResponse } from "./student-http-cookies"
+import { iosInsufficientCoraCreditsNotice } from "./purchase-navigation"
 import { ApiError, studentAuthenticatedHeaders } from "./student-api"
 import type { PreparedCoraRequest } from "./cora-rbac/prepare-request"
 import { flattenRequestHeaders } from "./student-session-proof"
+import { filterOpenCodeClassroomAssignments } from "./codebench-classroom-assignments"
 
 async function request<T>(session: StudentSession, path: string, init?: RequestInit): Promise<T> {
   const url = `${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`
@@ -132,7 +134,24 @@ export type ClassroomAssignmentOption = {
   id: number
   title: string
   attempted?: boolean
+  pending?: boolean
   expires_at?: string
+  submission_kind?: string
+}
+
+function detailsFlag(details: unknown, key: string): boolean {
+  return Boolean(details && typeof details === "object" && (details as Record<string, unknown>)[key] === true)
+}
+
+/** Map 402 / creditsInsufficient from CodeBench Cora routes to the shared credit notice. */
+export function codebenchAiFailureMessage(err: unknown, fallback: string): string {
+  if (err instanceof ApiError) {
+    if (err.status === 402 || detailsFlag(err.details, "creditsInsufficient")) {
+      return iosInsufficientCoraCreditsNotice()
+    }
+    return err.message
+  }
+  return fallback
 }
 
 type AiBody = CodebenchToolPayload & { studentId: string }
@@ -255,7 +274,16 @@ export const codebenchApi = {
       prepared?: PreparedCoraRequest
     },
   ) =>
-    request<{ response?: string; accessDenied?: boolean; rbacBlocked?: boolean; blockReason?: string; error?: string }>(
+    request<{
+      response?: string
+      accessDenied?: boolean
+      rbacBlocked?: boolean
+      blockReason?: string
+      error?: string
+      /** Set when assessment integrity refused the request; `response` is the refusal text. */
+      examBlocked?: boolean
+      assessmentIntegrity?: { state?: string; coraPolicy?: string; title?: string | null; reason?: string | null }
+    }>(
       session,
       "/api/ai-tutor",
       {
@@ -349,17 +377,35 @@ export const codebenchApi = {
       }),
     }),
 
+  submitDailyChallenge: (
+    session: StudentSession,
+    payload: {
+      code: string
+      challengeId: string
+      challengeTitle: string
+      challengeDescription: string
+      score?: number
+      feedback?: string
+    },
+  ) =>
+    request<{ success?: boolean; message?: string }>(session, "/api/codebench/daily-challenge/submit", {
+      method: "POST",
+      body: JSON.stringify({
+        studentId: session.databaseId,
+        code: payload.code,
+        challengeId: payload.challengeId,
+        challengeTitle: payload.challengeTitle,
+        challengeDescription: payload.challengeDescription,
+        score: payload.score ?? 0,
+        feedback: payload.feedback,
+      }),
+    }),
+
   getClassroomAssignments: async (session: StudentSession) => {
     const data = await request<{ submissions?: ClassroomAssignmentOption[] }>(
       session,
       `/api/classroom-points/submissions?session=${encodeURIComponent(session.section)}&studentId=${encodeURIComponent(session.databaseId)}`,
     )
-    const now = Date.now()
-    return (data.submissions ?? []).filter((s) => {
-      if (s.attempted) return false
-      if (!s.expires_at) return true
-      const exp = new Date(s.expires_at).getTime()
-      return !Number.isFinite(exp) || exp > now
-    })
+    return filterOpenCodeClassroomAssignments(data.submissions ?? [])
   },
 }

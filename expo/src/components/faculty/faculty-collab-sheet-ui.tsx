@@ -13,6 +13,8 @@ import {
   type TextInputProps,
   type ViewStyle,
 } from "react-native"
+import { useSafeAreaInsets } from "react-native-safe-area-context"
+import { KeyboardAwareForm } from "../ui/KeyboardAwareForm"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { Children, cloneElement, forwardRef, Fragment, isValidElement, useCallback, useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from "react"
 import Animated, {
@@ -43,8 +45,10 @@ import type { FacultySheetTone } from "../../lib/themed-sheet-tones"
 import { useModuleTheme } from "../../lib/themed-module-shell"
 import { GlassSheetBackground, useThemedGlassSheets } from "../theme/GlassSurface"
 import { GlassSheetHandle } from "../theme/GlassActionSheetMenu"
+import { GlassBottomSheetModal } from "../theme/GlassBottomSheetModal"
 import { AppErrorNotice } from "../errors/AppErrorNotice"
 import { DismissKeyboardView } from "../ui/DismissKeyboardView"
+import { useAppReducedMotion } from "../../lib/motion"
 
 /** Sheet filter/type chips — subtle corners (12px), not stadium pills. */
 export const FACULTY_SHEET_CHIP_RADIUS = NATIVE.sectionRadius
@@ -120,15 +124,18 @@ export function FacultySheetContainer({
   )
 }
 
-/** Page-sheet host that hides the module search dock so sheet fields receive IME. */
+/** Page-sheet or glass-bottom host — hides the module search dock so sheet fields receive IME. */
 export function FacultySheetModal({
   visible,
   onRequestClose,
   children,
-  animationType = "slide",
+  animationType,
   presentationStyle = "pageSheet",
   containerStyle,
   menuSheet,
+  layout = "pageSheet",
+  keyboardAvoiding = false,
+  maxHeight = "92%",
 }: {
   visible: boolean
   onRequestClose: () => void
@@ -137,16 +144,41 @@ export function FacultySheetModal({
   presentationStyle?: ModalProps["presentationStyle"]
   containerStyle?: StyleProp<ViewStyle>
   menuSheet?: boolean
+  /** `glassBottom` uses the shared GlassBottomSheetModal motion (filters, action sheets). */
+  layout?: "pageSheet" | "glassBottom"
+  keyboardAvoiding?: boolean
+  maxHeight?: `${number}%` | number
 }) {
   useSuppressModuleSearchDock(visible)
+  const reduceMotion = useAppReducedMotion()
+
   useEffect(() => {
     if (visible) Keyboard.dismiss()
   }, [visible])
 
+  if (layout === "glassBottom") {
+    return (
+      <GlassBottomSheetModal
+        visible={visible}
+        onClose={onRequestClose}
+        keyboardAvoiding={keyboardAvoiding}
+        maxHeight={maxHeight}
+        scrollable={false}
+        accessibilityLabel="Close sheet"
+      >
+        <FacultySheetContainer style={containerStyle} menuSheet={menuSheet}>
+          <DismissKeyboardView style={sheetContainerStyles.flex}>{children}</DismissKeyboardView>
+        </FacultySheetContainer>
+      </GlassBottomSheetModal>
+    )
+  }
+
+  const resolvedAnimation = animationType ?? (reduceMotion ? "none" : "slide")
+
   return (
     <Modal
       visible={visible}
-      animationType={animationType}
+      animationType={resolvedAnimation}
       presentationStyle={presentationStyle}
       onRequestClose={onRequestClose}
     >
@@ -161,6 +193,64 @@ export function FacultySheetModal({
 
 const sheetContainerStyles = StyleSheet.create({
   flex: { flex: 1, position: "relative" },
+})
+
+/** Header + scrollable body + sticky safe-area footer for faculty sheets. */
+export function FacultySheetFormLayout({
+  header,
+  footer,
+  children,
+  contentContainerStyle,
+}: {
+  header?: ReactNode
+  footer?: ReactNode
+  children: ReactNode
+  contentContainerStyle?: StyleProp<ViewStyle>
+}) {
+  return (
+    <View style={sheetContainerStyles.flex}>
+      {header}
+      <KeyboardAwareForm
+        footer={footer}
+        contentContainerStyle={contentContainerStyle}
+        footerStyle={sheetFooterStyles.embedded}
+      >
+        {children}
+      </KeyboardAwareForm>
+    </View>
+  )
+}
+
+export function FacultySheetStickyFooter({ children }: { children: ReactNode }) {
+  const insets = useSafeAreaInsets()
+  const surfaces = useFacultySheetSurfaces()
+  return (
+    <View
+      style={[
+        sheetFooterStyles.bar,
+        {
+          paddingBottom: Math.max(insets.bottom, 12),
+          borderTopColor: surfaces.cardBorder,
+          backgroundColor: surfaces.isGlass ? "transparent" : surfaces.rootBg,
+        },
+      ]}
+    >
+      {children}
+    </View>
+  )
+}
+
+const sheetFooterStyles = StyleSheet.create({
+  embedded: {
+    paddingHorizontal: 0,
+    borderTopColor: "transparent",
+  },
+  bar: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    gap: 10,
+  },
 })
 
 /** @deprecated Use useFacultySheetTones() — static map is light-mode only. */
@@ -1157,30 +1247,40 @@ export function FacultySheetConfirm({
   const type = useNativeType()
 
   return (
-    <View style={[confirmStyles.overlay, { backgroundColor: tokens.isDark ? "rgba(0,0,0,0.55)" : "rgba(15,23,42,0.35)" }]}>
-      <View style={[confirmStyles.card, tokens.cardShadow, { backgroundColor: native.secondaryGrouped }]}>
-        <Text style={[type.sheetTitle, confirmStyles.title]}>{title}</Text>
-        <Text style={[type.secondary, confirmStyles.body]}>{body}</Text>
-        <View style={confirmStyles.actions}>
-          <Pressable
-            style={[confirmStyles.cancel, { backgroundColor: native.fill }]}
-            onPress={onCancel}
-            accessibilityRole="button"
-            accessibilityLabel="Cancel"
-          >
-            <Text style={[type.bodyEmphasis, { color: native.secondaryLabel }]}>Cancel</Text>
-          </Pressable>
-          <Pressable
-            style={[confirmStyles.confirm, { backgroundColor: danger ? FACULTY_SHEET_COLOR.danger : FACULTY_SHEET_COLOR.action }]}
-            onPress={onConfirm}
-            accessibilityRole="button"
-            accessibilityLabel={confirmLabel}
-          >
-            <Text style={confirmStyles.confirmText}>{confirmLabel}</Text>
-          </Pressable>
-        </View>
-      </View>
-    </View>
+    <Modal visible transparent animationType="fade" onRequestClose={onCancel}>
+      <Pressable
+        style={[confirmStyles.overlay, { backgroundColor: tokens.isDark ? "rgba(0,0,0,0.55)" : "rgba(15,23,42,0.35)" }]}
+        onPress={onCancel}
+        accessibilityRole="button"
+        accessibilityLabel="Cancel"
+      >
+        <Pressable
+          style={[confirmStyles.card, tokens.cardShadow, { backgroundColor: native.secondaryGrouped }]}
+          onPress={() => {}}
+        >
+          <Text style={[type.sheetTitle, confirmStyles.title]}>{title}</Text>
+          <Text style={[type.secondary, confirmStyles.body]}>{body}</Text>
+          <View style={confirmStyles.actions}>
+            <Pressable
+              style={[confirmStyles.cancel, { backgroundColor: native.fill }]}
+              onPress={onCancel}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel"
+            >
+              <Text style={[type.bodyEmphasis, { color: native.secondaryLabel }]}>Cancel</Text>
+            </Pressable>
+            <Pressable
+              style={[confirmStyles.confirm, { backgroundColor: danger ? FACULTY_SHEET_COLOR.danger : FACULTY_SHEET_COLOR.action }]}
+              onPress={onConfirm}
+              accessibilityRole="button"
+              accessibilityLabel={confirmLabel}
+            >
+              <Text style={confirmStyles.confirmText}>{confirmLabel}</Text>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
   )
 }
 

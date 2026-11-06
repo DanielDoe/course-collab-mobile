@@ -41,7 +41,7 @@ export function CoraPrivacySettingsScreen({ session }: { session: CoraPrivacySes
   return (
     <View style={[styles.screenRoot, { backgroundColor: native.groupedBackground }]}>
       <NotetakerScreenHeader title="Cora privacy" fallbackHref="/settings/privacy-security" />
-      <ModuleScreen disableTopInsetAdjustment contentStyle={{ paddingTop: NATIVE.pagePadding }}>
+      <ModuleScreen disableTopInsetAdjustment stackedHeader contentStyle={{ paddingTop: NATIVE.pagePadding }}>
         <View style={[styles.hero, { backgroundColor: native.secondaryGrouped, borderColor: native.separator }]}>
           <Text style={[type.sheetTitle, styles.heroTitle]}>{hero.title}</Text>
           <Text style={[type.caption, { color: SN.secondaryLabel, lineHeight: 20 }]}>{hero.body}</Text>

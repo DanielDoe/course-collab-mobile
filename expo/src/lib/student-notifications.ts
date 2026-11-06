@@ -1,5 +1,8 @@
-import { studentAuthenticatedRequest } from "./student-api"
+import { studentAuthenticatedRequest, ApiError } from "./student-api"
 import type { StudentAuthSession } from "./student-session-proof"
+import { isStudentVisibleNotification } from "./student-notification-visibility"
+
+export { isStudentVisibleNotification }
 
 export type StudentNotification = {
   id: number
@@ -29,7 +32,7 @@ export async function fetchStudentNotifications(session: StudentAuthSession): Pr
       session,
       `/api/student/notifications?studentId=${encodeURIComponent(session.databaseId)}&limit=50`,
     )
-    const notifications = payload.notifications ?? []
+    const notifications = (payload.notifications ?? []).filter(isStudentVisibleNotification)
     const apiUnread = Number(payload.unread_count ?? payload.unreadCount ?? 0)
     const derivedUnread = notifications.filter((n) => !n.is_read).length
     return {
@@ -37,8 +40,9 @@ export async function fetchStudentNotifications(session: StudentAuthSession): Pr
       unreadCount: Math.max(apiUnread, derivedUnread),
       throttled: payload.throttled,
     }
-  } catch {
-    return { notifications: [], unreadCount: 0 }
+  } catch (err) {
+    if (err instanceof ApiError) throw err
+    throw new ApiError("Could not load notifications.", 0)
   }
 }
 

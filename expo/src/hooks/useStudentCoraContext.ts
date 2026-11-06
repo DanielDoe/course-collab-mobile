@@ -6,8 +6,8 @@ import {
   saveStudentCoraContext,
 } from "../lib/student-cora-context-store"
 import {
-  runStudentCoraContextSetup,
   buildStudentCoraContext,
+  runStudentCoraContextSetup,
   type StudentCoraContext,
   type StudentCoraSetupStepId,
 } from "../lib/student-cora-context"
@@ -17,6 +17,19 @@ export type StudentCoraSetupStatus = "loading" | "running" | "ready" | "error"
 
 /** Re-fetch platform data when Cora hub opens after this interval. */
 export const STUDENT_CORA_CONTEXT_STALE_MS = 20 * 60 * 1000
+
+async function persistStudentCoraContext(context: StudentCoraContext): Promise<void> {
+  try {
+    await saveStudentCoraContext(context)
+  } catch {
+    /* SecureStore can fail on some simulators — in-memory cache still works. */
+  }
+}
+
+async function buildFallbackStudentCoraContext(session: StudentSession): Promise<StudentCoraContext> {
+  const payload = await loadCoraStudentContext(session)
+  return buildStudentCoraContext(session, payload)
+}
 
 export function useStudentCoraContext(options: { session: StudentSession | null; enabled?: boolean }) {
   const { session, enabled = true } = options
@@ -33,10 +46,20 @@ export function useStudentCoraContext(options: { session: StudentSession | null;
     setSetupStep("preparing")
     try {
       const built = await runStudentCoraContextSetup(session, { onStep: setSetupStep })
-      await saveStudentCoraContext(built)
+      await persistStudentCoraContext(built)
       setContext(built)
       setStatus("ready")
     } catch (err) {
+      try {
+        const built = await buildFallbackStudentCoraContext(session)
+        await persistStudentCoraContext(built)
+        setContext(built)
+        setStatus("ready")
+        setError(null)
+        return
+      } catch {
+        /* fall through */
+      }
       setError(err instanceof Error ? err.message : "Could not prepare Cora for your course.")
       setStatus("error")
     }
@@ -50,17 +73,25 @@ export function useStudentCoraContext(options: { session: StudentSession | null;
     }
 
     const studentId = session.databaseId
-    setContext((current) => (current?.studentId === studentId ? current : null))
+    const courseId = session.courseId
+    setContext((current) =>
+      current?.studentId === studentId && current.courseId === courseId ? current : null,
+    )
     setStatus("loading")
     setError(null)
 
     let cancelled = false
 
     void (async () => {
-      const stored = await loadStudentCoraContext(studentId)
+      const stored = await loadStudentCoraContext(studentId, courseId)
       if (cancelled) return
 
-      if (stored?.setupComplete && stored.studentId === studentId && setupToken === 0) {
+      if (
+        stored?.setupComplete &&
+        stored.studentId === studentId &&
+        stored.courseId === courseId &&
+        setupToken === 0
+      ) {
         setContext(stored)
         setStatus("ready")
         return
@@ -74,12 +105,23 @@ export function useStudentCoraContext(options: { session: StudentSession | null;
             if (!cancelled) setSetupStep(step)
           },
         })
-        if (cancelled || built.studentId !== studentId) return
-        await saveStudentCoraContext(built)
+        if (cancelled || built.studentId !== studentId || built.courseId !== courseId) return
+        await persistStudentCoraContext(built)
         setContext(built)
         setStatus("ready")
       } catch (err) {
         if (cancelled) return
+        try {
+          const built = await buildFallbackStudentCoraContext(session)
+          if (cancelled || built.studentId !== studentId || built.courseId !== courseId) return
+          await persistStudentCoraContext(built)
+          setContext(built)
+          setStatus("ready")
+          setError(null)
+          return
+        } catch {
+          /* fall through */
+        }
         setError(err instanceof Error ? err.message : "Could not prepare Cora for your course.")
         setStatus("error")
       }
@@ -88,7 +130,7 @@ export function useStudentCoraContext(options: { session: StudentSession | null;
     return () => {
       cancelled = true
     }
-  }, [enabled, session?.databaseId, setupToken])
+  }, [enabled, session?.databaseId, session?.courseId, session?.section, setupToken])
 
   const retrySetup = useCallback(() => {
     setSetupToken((value) => value + 1)
@@ -105,15 +147,24 @@ export function useStudentCoraContext(options: { session: StudentSession | null;
       try {
         const payload = await loadCoraStudentContext(session)
         const built = await buildStudentCoraContext(session, payload)
-        await saveStudentCoraContext(built)
+        await persistStudentCoraContext(built)
         setContext(built)
         setStatus("ready")
         setError(null)
         return built
       } catch (err) {
         if (!current) {
-          setError(err instanceof Error ? err.message : "Could not refresh Cora context.")
-          setStatus("error")
+          try {
+            const built = await buildFallbackStudentCoraContext(session)
+            await persistStudentCoraContext(built)
+            setContext(built)
+            setStatus("ready")
+            setError(null)
+            return built
+          } catch {
+            setError(err instanceof Error ? err.message : "Could not refresh Cora context.")
+            setStatus("error")
+          }
         }
         return current
       }

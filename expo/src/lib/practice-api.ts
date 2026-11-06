@@ -8,32 +8,17 @@ import {
   type PracticeLeaderboardDisplay,
   type PracticeLeaderboardPrivacy,
 } from "./practice-leaderboard-normalize"
+import type { PracticeAnswerReview } from "./lecture-types"
 import type { StudentSession } from "./session"
 import { studentAuthenticatedRequest } from "./student-api"
+import { studentContentFields, studentContentPath } from "./student-content-context"
 import type { PracticeQuestion } from "./practice-session"
+import { programmedAnswerKeyFromRecord } from "./lecture-sample-practice-grading"
 
 const PRACTICE_LEADERBOARD_LIMIT = 100
 
-function practiceContextQuery(
-  session: StudentSession,
-  extra?: Record<string, string | number | undefined>,
-): string {
-  const params = new URLSearchParams({
-    studentId: session.databaseId,
-  })
-  if (session.section) params.set("session", session.section)
-  if (session.courseId != null && Number.isFinite(session.courseId)) {
-    params.set("courseId", String(session.courseId))
-  }
-  for (const [key, value] of Object.entries(extra ?? {})) {
-    if (value != null && value !== "") params.set(key, String(value))
-  }
-  return params.toString()
-}
-
 function practicePath(session: StudentSession, path: string, extra?: Record<string, string | number | undefined>): string {
-  const qs = practiceContextQuery(session, extra)
-  return path.includes("?") ? `${path}&${qs}` : `${path}?${qs}`
+  return studentContentPath(session, path, extra)
 }
 
 export type PracticeAccess = {
@@ -78,10 +63,29 @@ export type EvaluateResult = {
   aiGraded?: boolean
   requiresManualReview?: boolean
   pointsEarned?: number
+  maxPoints?: number
+  score?: number
+  answerReview?: PracticeAnswerReview | null
   autoApproved?: boolean
-  alreadyAttempted?: boolean
-  priorAnswer?: string | string[]
-  answerReview?: PracticeQuestion["answerReview"]
+  xpEarned?: number
+  locallyVerified?: boolean
+  attemptFinalized?: boolean
+  attemptProgress?: { answered?: number; total?: number }
+}
+
+export type PracticeAttemptStateAnswer = {
+  questionId: number
+  studentAnswer: string | string[]
+  isCorrect: boolean
+  questionType?: string
+  topic?: string
+}
+
+export type PracticeAttemptState = {
+  attemptId: number
+  totalQuestions: number
+  completedAt?: string | null
+  answers: PracticeAttemptStateAnswer[]
 }
 
 export type SubmitPracticeResult = {
@@ -107,12 +111,42 @@ export type PracticeConfigResponse = {
 }
 
 export type PracticeGenerateResponse = {
-  attemptId: number | null
-  reviewOnly?: boolean
+  attemptId: number
   questions: PracticeQuestion[]
   access?: PracticeAccess
   unlockedCount?: number
   totalCount?: number
+}
+
+/** Accept camelCase or snake_case evaluate payloads. Never treat a missing flag as correct. */
+export function normalizePracticeEvaluateResult(raw: EvaluateResult | Record<string, unknown>): EvaluateResult {
+  const rec = (raw ?? {}) as Record<string, unknown>
+  const nested =
+    rec.data && typeof rec.data === "object" && !Array.isArray(rec.data)
+      ? (rec.data as Record<string, unknown>)
+      : rec
+  const review = (nested.answerReview ?? nested.answer_review ?? rec.answerReview) as
+    | EvaluateResult["answerReview"]
+    | undefined
+  return {
+    ...(rec as EvaluateResult),
+    isCorrect: nested.isCorrect === true || nested.is_correct === true,
+    score: typeof nested.score === "number" ? nested.score : rec.score,
+    pointsEarned:
+      typeof nested.pointsEarned === "number"
+        ? nested.pointsEarned
+        : typeof nested.points_earned === "number"
+          ? nested.points_earned
+          : rec.pointsEarned,
+    maxPoints:
+      typeof nested.maxPoints === "number"
+        ? nested.maxPoints
+        : typeof nested.max_points === "number"
+          ? nested.max_points
+          : rec.maxPoints,
+    answerReview: review ?? rec.answerReview ?? null,
+    feedback: typeof nested.feedback === "string" ? nested.feedback : rec.feedback,
+  }
 }
 
 export const practiceApi = {
@@ -166,22 +200,6 @@ export const practiceApi = {
     } satisfies PracticeLeaderboardResponse
   },
 
-  getPriorAnswers: (session: StudentSession, questionIds: number[]) =>
-    studentAuthenticatedRequest<{
-      answers: Array<{
-        questionId: number
-        alreadyAttempted: boolean
-        priorAnswer: string | string[] | null
-        priorIsCorrect: boolean
-        answerReview: PracticeQuestion["answerReview"]
-      }>
-    }>(
-      session,
-      practicePath(session, "/api/practice/prior-answers", {
-        questionIds: questionIds.filter((id) => Number.isFinite(id)).join(","),
-      }),
-    ),
-
   generate: (
     session: StudentSession,
     payload: {
@@ -192,17 +210,27 @@ export const practiceApi = {
       fullTopic?: boolean
     },
   ) =>
-    studentAuthenticatedRequest<PracticeGenerateResponse>(session, "/api/practice/generate", {
-      method: "POST",
-      body: JSON.stringify({
-        studentId: Number(session.databaseId),
-        topics: payload.topics,
-        count: payload.count,
-        difficulty: payload.difficulty,
-        courseId: payload.courseId ?? session.courseId,
-        fullTopic: payload.fullTopic === true,
+    studentAuthenticatedRequest<PracticeGenerateResponse>(
+      session,
+      studentContentPath(session, "/api/practice/generate"),
+      {
+        method: "POST",
+        body: JSON.stringify({
+          ...studentContentFields(session),
+          topics: payload.topics,
+          count: payload.count,
+          difficulty: payload.difficulty,
+          courseId: payload.courseId ?? session.courseId,
+          fullTopic: payload.fullTopic === true,
+        }),
+      },
+    ).then((data) => ({
+      ...data,
+      questions: (data.questions ?? []).map((question) => {
+        const key = programmedAnswerKeyFromRecord(question as unknown as Record<string, unknown>)
+        return key ? { ...question, correct_answer: key } : question
       }),
-    }),
+    })),
 
   evaluate: (
     session: StudentSession,
@@ -214,12 +242,34 @@ export const practiceApi = {
       responseTimeMs: number
       xpEarned: number
       difficulty: string
+      mcqEarnedFraction?: number
     },
-  ) =>
-    studentAuthenticatedRequest<EvaluateResult>(session, "/api/practice/evaluate", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    }),
+  ) => {
+    const body: Record<string, unknown> = {
+      ...studentContentFields(session),
+      ...payload,
+    }
+    if (
+      payload.mcqEarnedFraction != null &&
+      Number.isFinite(payload.mcqEarnedFraction)
+    ) {
+      body.mcqEarnedFraction = Math.max(0, Math.min(1, payload.mcqEarnedFraction))
+    }
+    return studentAuthenticatedRequest<EvaluateResult>(
+      session,
+      studentContentPath(session, "/api/practice/evaluate"),
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+      },
+    ).then(normalizePracticeEvaluateResult)
+  },
+
+  getAttemptState: (session: StudentSession, attemptId: number) =>
+    studentAuthenticatedRequest<PracticeAttemptState>(
+      session,
+      practicePath(session, `/api/practice/attempt/${attemptId}/state`),
+    ),
 
   submit: (session: StudentSession, attemptId: number) =>
     studentAuthenticatedRequest<SubmitPracticeResult>(session, "/api/student/practice/submit", {

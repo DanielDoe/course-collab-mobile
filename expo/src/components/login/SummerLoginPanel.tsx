@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { Pressable, StyleSheet, Text, View } from "react-native"
 import { ApiError, api } from "../../lib/api"
 import { parseAccessLifecyclePayload } from "../../lib/access-governance"
@@ -9,16 +9,17 @@ import { MfaLoginStep } from "../auth/MfaLoginStep"
 import { AccessRequestStatusScreen } from "../auth/AccessRequestStatusScreen"
 import { ErrorBanner, InfoBanner, LoginFieldGroup } from "./LoginCard"
 import { LoginButton, LoginField, LoginPasswordToggle } from "./LoginButton"
-import { LoginBackLink, LoginPortalHeader, LoginPortalStack } from "./login-chrome"
+import { LoginAltActions, LoginPortalHeader, LoginPortalStack, type RegisterAuthPanelBack } from "./login-chrome"
 import { useLoginTheme } from "./login-theme"
 
 type Props = {
   onBack?: () => void
+  registerPanelBack?: RegisterAuthPanelBack
 }
 
 type AuthTab = "login" | "register"
 
-export function SummerLoginPanel({ onBack }: Props) {
+export function SummerLoginPanel({ onBack, registerPanelBack }: Props) {
   const { signIn } = useSession()
   const { LOGIN, loginType } = useLoginTheme()
 
@@ -34,6 +35,29 @@ export function SummerLoginPanel({ onBack }: Props) {
   const [success, setSuccess] = useState("")
   const [mfaState, setMfaState] = useState<MfaLoginState | null>(null)
   const [accessStatus, setAccessStatus] = useState<ReturnType<typeof parseAccessLifecyclePayload>>(null)
+
+  const handlePanelBack = useCallback((): boolean => {
+    if (accessStatus) {
+      setAccessStatus(null)
+      return true
+    }
+    if (mfaState) {
+      setMfaState(null)
+      return true
+    }
+    if (tab === "register") {
+      setTab("login")
+      setError("")
+      setSuccess("")
+      return true
+    }
+    return false
+  }, [accessStatus, mfaState, tab])
+
+  useEffect(() => {
+    registerPanelBack?.(handlePanelBack)
+    return () => registerPanelBack?.(null)
+  }, [handlePanelBack, registerPanelBack])
 
   async function finishSummerLogin(data: Record<string, unknown>) {
     const normalized = parseMfaCompletePayload(data) ?? data
@@ -295,7 +319,9 @@ export function SummerLoginPanel({ onBack }: Props) {
         loading={submitting}
       />
 
-      {onBack ? <LoginBackLink label="Other sign-in options" onPress={onBack} /> : null}
+      <LoginAltActions
+        actions={[onBack ? { label: "Other sign-in options", onPress: onBack } : null]}
+      />
     </LoginPortalStack>
   )
 }

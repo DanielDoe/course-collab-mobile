@@ -21,8 +21,13 @@ import {
 } from "../../lib/practice-session-count"
 import { setActivePracticeSession } from "../../lib/practice-session"
 import type { StudentSession } from "../../lib/session"
+import type { MembershipTier } from "../../types/dashboard"
 import { NotetakerScreenHeader } from "../notetaker/NotetakerScreenHeader"
+import { shouldShowPurchaseCta, tierLockedAlertButtons } from "../../lib/purchase-navigation"
 import { ModuleSection, ModuleSectionHeader } from "../modules/ModuleScreen"
+import { StudentThemedLocked } from "../student/student-themed-hero"
+import { canAccessPracticeHub, PRACTICE_HUB_MIN_TIER, resolvePracticeAccess } from "../../lib/practice-hub-access"
+import { QuestionPrepareGate } from "../questions/QuestionPrepareGate"
 
 type Difficulty = "easy" | "medium" | "hard" | "mixed"
 
@@ -38,8 +43,8 @@ function useStudentSession(): StudentSession | null {
   return session?.portal === "student" ? session : null
 }
 
-function topicProgressPct(topic: TopicProgress): number {
-  const total = practiceTopicUnlockedCount(topic)
+function topicProgressPct(topic: TopicProgress, tier?: MembershipTier): number {
+  const total = practiceTopicUnlockedCount(topic, tier)
   if (total <= 0) return 0
   return Math.min(100, Math.round((topic.completed / total) * 100))
 }
@@ -107,7 +112,13 @@ function PracticeSummaryCard({
   return (
     <View style={[summaryStyles.card, tokens.cardShadow, { backgroundColor: native.secondaryGrouped }]}>
       <View style={summaryStyles.ringWrap}>
-        <Svg width={CARD_RING} height={CARD_RING} viewBox={`0 0 ${CARD_RING} ${CARD_RING}`}>
+        <Svg
+          width={CARD_RING}
+          height={CARD_RING}
+          viewBox={`0 0 ${CARD_RING} ${CARD_RING}`}
+          style={StyleSheet.absoluteFill}
+          pointerEvents="none"
+        >
           <Circle cx={CARD_RING / 2} cy={CARD_RING / 2} r={34} fill={hexToRgba(SN.accent, 0.06)} />
           <G transform={`rotate(-90 ${CARD_RING / 2} ${CARD_RING / 2})`}>
             <Circle
@@ -130,9 +141,11 @@ function PracticeSummaryCard({
             />
           </G>
         </Svg>
-        <View style={summaryStyles.ringCenter}>
+        <View style={summaryStyles.ringCenter} pointerEvents="none">
           <Text style={[summaryStyles.ringPct, { color: arcColor }]}>{pct}%</Text>
-          <Text style={[summaryStyles.ringComplete, { color: native.secondaryLabel }]}>Complete</Text>
+          {pct >= 100 ? (
+            <Text style={[summaryStyles.ringComplete, { color: native.secondaryLabel }]}>Complete</Text>
+          ) : null}
         </View>
       </View>
 
@@ -187,18 +200,20 @@ const summaryStyles = StyleSheet.create({
     alignSelf: "center",
     width: CARD_RING,
     height: CARD_RING,
+    position: "relative",
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 4,
   },
   ringCenter: {
-    ...StyleSheet.absoluteFillObject,
+    width: CARD_RING,
+    height: CARD_RING,
     alignItems: "center",
     justifyContent: "center",
-    gap: 4,
+    gap: 1,
   },
-  ringPct: { fontSize: 28, fontWeight: "700", letterSpacing: -0.5 },
-  ringComplete: { fontSize: 13, fontWeight: "500" },
+  ringPct: { fontSize: 26, fontWeight: "700", letterSpacing: -0.5, lineHeight: 30 },
+  ringComplete: { fontSize: 11, fontWeight: "600", lineHeight: 13 },
   statRows: { gap: 12 },
   statRow: {
     flexDirection: "row",
@@ -227,6 +242,7 @@ export function PracticeTopicScreen() {
   const SN = useThemedStudentNative()
   const type = useNativeType()
   const insets = useSafeAreaInsets()
+  const showPurchaseActions = shouldShowPurchaseCta()
 
   const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
@@ -286,21 +302,23 @@ export function PracticeTopicScreen() {
     load().finally(() => setLoading(false))
   }, [session, topicName, load])
 
-  const canStartPractice = practiceAccess?.canStartPractice !== false
-  const topicLocked = topic ? isPracticeTopicLocked(topic, canStartPractice) : true
-  const unlockedCount = topic ? practiceTopicUnlockedCount(topic) : 0
+  const resolvedPracticeAccess = resolvePracticeAccess(
+    membershipTier,
+    membershipTierLoaded,
+    practiceAccess,
+  )
+  const canStartPractice = resolvedPracticeAccess.canStartPractice
+  const topicLocked = topic ? isPracticeTopicLocked(topic, canStartPractice, membershipTier) : true
+  const unlockedCount = topic ? practiceTopicUnlockedCount(topic, membershipTier) : 0
 
   const startPractice = async () => {
     if (!session || !topic || topicLocked) {
       AppAlert.alert(
         "Practice locked",
-        practiceAccess?.level === "none"
+        resolvedPracticeAccess.level === "none"
           ? "Upgrade to Explorer to start practicing."
           : "Upgrade to Trailblazer for full topic access.",
-        [
-          { text: "Not now", style: "cancel" },
-          { text: "View plans", onPress: () => router.push("/membership" as never) },
-        ],
+        tierLockedAlertButtons(() => router.push("/membership" as never)),
       )
       return
     }
@@ -309,10 +327,7 @@ export function PracticeTopicScreen() {
       AppAlert.alert(
         "No questions available",
         "You've completed all unlocked questions in this topic. Upgrade to Trailblazer for the full bank.",
-        [
-          { text: "Not now", style: "cancel" },
-          { text: "View plans", onPress: () => router.push("/membership" as never) },
-        ],
+        tierLockedAlertButtons(() => router.push("/membership" as never)),
       )
       return
     }
@@ -364,10 +379,14 @@ export function PracticeTopicScreen() {
         AppAlert.alert(
           "Practice locked",
           err.message,
-          [
-            { text: "Not now", style: "cancel" },
-            { text: "View plans", onPress: () => router.push("/membership" as never) },
-          ],
+          tierLockedAlertButtons(() => router.push("/membership" as never)),
+        )
+        return
+      }
+      if (err instanceof ApiError && err.status === 404) {
+        AppAlert.alert(
+          "No questions available",
+          err.message || "No questions found for this topic in your Fall 2026 course.",
         )
         return
       }
@@ -388,6 +407,20 @@ export function PracticeTopicScreen() {
     )
   }
 
+  if (membershipTierLoaded && !canAccessPracticeHub(membershipTier)) {
+    return (
+      <View style={[styles.root, { backgroundColor: native.groupedBackground }]}>
+        <NotetakerScreenHeader title="Practice" fallbackHref="/module/practice" />
+        <StudentThemedLocked
+          icon="fitness-outline"
+          subtitle={`Practice Hub requires ${PRACTICE_HUB_MIN_TIER} membership or higher.`}
+          paddingTop={insets.top + 24}
+          onUpgrade={() => router.push("/membership" as never)}
+        />
+      </View>
+    )
+  }
+
   if (!topicName) {
     return (
       <View style={[styles.root, { backgroundColor: native.groupedBackground }]}>
@@ -399,11 +432,19 @@ export function PracticeTopicScreen() {
     )
   }
 
-  const pct = topic ? topicProgressPct(topic) : 0
+  const pct = topic ? topicProgressPct(topic, membershipTier) : 0
   const newCount = topic ? Math.max(0, unlockedCount - topic.completed) : 0
   const lockedInTopic = topic ? Math.max(0, topic.questionCount - unlockedCount) : 0
 
   return (
+    <QuestionPrepareGate
+      fetching={generating}
+      texts={null}
+      title="Preparing practice"
+      subtitle="Loading questions, math, and answer choices"
+      enabled={generating}
+      hideUntilReady
+    >
     <View style={[styles.root, { backgroundColor: native.groupedBackground }]}>
       <NotetakerScreenHeader title="Practice Summary" fallbackHref="/module/practice" />
 
@@ -442,12 +483,14 @@ export function PracticeTopicScreen() {
                   Explorer unlocks half of each topic. Trailblazer unlocks the full bank.
                 </Text>
               </View>
-              <Pressable
-                style={[styles.upgradeChip, { backgroundColor: SN.accent }]}
-                onPress={() => router.push("/membership" as never)}
-              >
-                <Text style={styles.upgradeChipText}>View plans</Text>
-              </Pressable>
+              {showPurchaseActions ? (
+                <Pressable
+                  style={[styles.upgradeChip, { backgroundColor: SN.accent }]}
+                  onPress={() => router.push("/membership" as never)}
+                >
+                  <Text style={styles.upgradeChipText}>View plans</Text>
+                </Pressable>
+              ) : null}
             </View>
           ) : null}
 
@@ -508,7 +551,7 @@ export function PracticeTopicScreen() {
                 )}
               </Pressable>
             </>
-          ) : (
+          ) : showPurchaseActions ? (
             <Pressable
               style={[styles.startBtn, { backgroundColor: SN.accent }]}
               onPress={() => router.push("/membership" as never)}
@@ -516,10 +559,16 @@ export function PracticeTopicScreen() {
               <Ionicons name="lock-closed-outline" size={18} color="#ffffff" />
               <Text style={styles.startBtnText}>Upgrade to practice</Text>
             </Pressable>
+          ) : (
+            <View style={[styles.startBtn, styles.startBtnDisabled, { backgroundColor: native.fill }]}>
+              <Ionicons name="lock-closed-outline" size={18} color={native.secondaryLabel} />
+              <Text style={[styles.startBtnText, { color: native.secondaryLabel }]}>Practice locked</Text>
+            </View>
           )}
         </ScrollView>
       )}
     </View>
+    </QuestionPrepareGate>
   )
 }
 

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useKpiGridCardStyle } from "../../lib/responsive-layout"
-import { ActivityIndicator, FlatList, InteractionManager, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, FlatList, InteractionManager, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { AppAlert } from '../../lib/app-alert'
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import * as DocumentPicker from "expo-document-picker"
@@ -12,6 +12,12 @@ import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProv
 import { useStudentCoraContextValue } from "../../context/StudentCoraContextProvider"
 import { useNativeType, useThemedStudentNative } from "../../lib/themed-module-theme"
 import { hexToRgba } from "../../constants/app-themes"
+import {
+  iosCoraLiteNotice,
+  iosInsufficientCoraCreditsNotice,
+  iosLowCoraCreditsNotice,
+  shouldShowPurchaseCta,
+} from "../../lib/purchase-navigation"
 import { getCoraChatCanvasColor, getThemedCoraChatBubblePalette, CORA_CHAT_EDGE_PADDING } from "./cora-chat-bubble-theme"
 import {
   CORA_LEARNING_GOALS,
@@ -20,6 +26,7 @@ import {
 import { exportWorkspaceToNotes } from "../../lib/cora-api"
 import type { CoraMessageMenuActionId } from "../../lib/cora-message-actions"
 import { useChatListScrollToEnd } from "../../hooks/useChatListScrollToEnd"
+import { ChatKeyboardShell } from "../motion/ChatKeyboardShell"
 import { useCoraVoiceDictation } from "../../hooks/use-cora-voice-dictation"
 import { CoraComposerAttachMenu } from "./CoraComposerAttachMenu"
 import {
@@ -44,15 +51,17 @@ import { CoraChatBubble } from "./CoraChatBubble"
 import { CoraScopeFeedbackBar } from "../cora/CoraScopeFeedbackBar"
 import { CoraWorkspaceComposer } from "./CoraWorkspaceComposer"
 import { CoraBrand } from "../cora/CoraBrand"
-import { CoraTranscriptGutter } from "./CoraTranscriptGutter"
 import { CoraActionCard } from "../cora/CoraActionCard"
-import { resolveCoraOpenRoute, openCoraNativeRoute } from "../../lib/cora/resolve-open-route"
+import { CoraUiPayloadCard, isRedundantCoraUiPayload } from "../cora/CoraUiPayloadCard"
+import { CoraConvertToToolChipRow } from "../cora/CoraConvertToToolChip"
+import { convertToToolSuggestions } from "../../lib/cora/convert-to-tool-suggestion"
 import { CoraChatDayDivider } from "../cora/CoraChatDayDivider"
 import { shouldShowChatDayDivider } from "../../lib/cora/chat-day-divider"
 import { CoraEdgeBackSwipe } from "../cora/CoraEdgeBackSwipe"
 import { resolveStudentCoraCapability } from "../../lib/student-cora-context-store"
 import type { ChatMessage, CoraImportedProblem, AiTutorCredits } from "../../lib/ai-tutor-api"
 import type { CoraActionProposal } from "../../lib/cora/types"
+import { openCoraNativeRoute } from "../../lib/cora/resolve-open-route"
 import {
   buildWorkspaceSendText,
   isLikelyTextFile,
@@ -82,6 +91,7 @@ function ChatCreditNotice({
 }) {
   const type = useNativeType()
   const isLite = mode === "lite"
+  const showPurchaseActions = shouldShowPurchaseCta()
   const iconColor = isLite ? "#F59E0B" : "#F97316"
   const bg = hexToRgba(iconColor, 0.12)
 
@@ -94,13 +104,19 @@ function ChatCreditNotice({
         </Text>
         <Text style={[type.caption, { color: iconColor, opacity: 0.9, marginTop: 2 }]}>
           {isLite
-            ? "Navigation & simple lookups only — packs restore premium generation."
-            : "Buy a pack or wait for your monthly refresh."}
+            ? showPurchaseActions
+              ? "Navigation & simple lookups only — packs restore premium generation."
+              : iosCoraLiteNotice()
+            : showPurchaseActions
+              ? "Buy a pack or wait for your monthly refresh."
+              : iosLowCoraCreditsNotice()}
         </Text>
       </View>
-      <Pressable onPress={onOpenPacks} hitSlop={8}>
-        <Text style={[noticeStyles.btn, { color: iconColor }]}>Packs</Text>
-      </Pressable>
+      {showPurchaseActions ? (
+        <Pressable onPress={onOpenPacks} hitSlop={8}>
+          <Text style={[noticeStyles.btn, { color: iconColor }]}>Packs</Text>
+        </Pressable>
+      ) : null}
     </View>
   )
 }
@@ -227,6 +243,8 @@ type Props = {
   onArchiveThread: (threadId: string) => void
   onRestoreThread: (threadId: string) => void
   onDeleteThread: (threadId: string) => void
+  seedImportedQuestion?: CoraImportedProblem | null
+  seedImportedQuestionLabel?: string | null
 }
 
 export function CoraImmersiveChat({
@@ -270,6 +288,8 @@ export function CoraImmersiveChat({
   onArchiveThread,
   onRestoreThread,
   onDeleteThread,
+  seedImportedQuestion = null,
+  seedImportedQuestionLabel = null,
 }: Props) {
   const router = useRouter()
   const insets = useSafeAreaInsets()
@@ -298,6 +318,17 @@ export function CoraImmersiveChat({
   const [attachments, setAttachments] = useState<CoraComposerAttachment[]>([])
   const [importedQuestion, setImportedQuestion] = useState<CoraImportedProblem | null>(null)
   const [importedQuestionLabel, setImportedQuestionLabel] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!seedImportedQuestion) return
+    setImportedQuestion(seedImportedQuestion)
+    setImportedQuestionLabel(
+      seedImportedQuestionLabel ??
+        seedImportedQuestion.title ??
+        seedImportedQuestion.topic ??
+        null,
+    )
+  }, [seedImportedQuestion, seedImportedQuestionLabel])
   const [menuMessage, setMenuMessage] = useState<ChatMessage | null>(null)
   const [sideNavOpen, setSideNavOpen] = useState(false)
   const [composerHeight, setComposerHeight] = useState(128)
@@ -360,6 +391,8 @@ export function CoraImmersiveChat({
       }
     }
   }, [messages.length, scrollToEnd, threadPaintReady])
+
+  const scrollOnKeyboardShow = useCallback(() => scrollToEnd(true), [scrollToEnd])
 
   const handleBubbleFeedback = useCallback((msg: ChatMessage, vote: "up" | "down") => {
     setFeedbackById((prev) => ({ ...prev, [msg.id]: vote }))
@@ -440,6 +473,20 @@ export function CoraImmersiveChat({
     () => [...messages].reverse().find((entry) => entry.role === "user"),
     [messages],
   )
+
+  const convertSuggestions = useMemo(() => {
+    const last = messages[messages.length - 1]
+    if (!last || last.role !== "assistant") return []
+    if (streamingMessageId === last.id) return []
+    const prior = [...messages.slice(0, -1)].reverse().find((entry) => entry.role === "user")
+    return convertToToolSuggestions({
+      role: "student",
+      studentContext: selectedGoalId,
+      userText: prior?.content ?? "",
+      assistantText: last.content,
+      hasProposals: Boolean(last.proposals?.length),
+    })
+  }, [messages, selectedGoalId, streamingMessageId])
 
   const appendToInput = (text: string) => {
     setInput(input.trim() ? `${input.trim()}\n\n${text}` : text)
@@ -577,18 +624,9 @@ export function CoraImmersiveChat({
                       AppAlert.alert("Could not create", result.message)
                       return
                     }
-                    const deckRoute = resolveCoraOpenRoute(
-                      result.entity?.route,
-                      result.entity?.type ?? "flashcard_deck",
-                    )
                     AppAlert.alert("Flashcards created", result.message, [
-                      ...(deckRoute
-                        ? [
-                            {
-                              text: "Open deck",
-                              onPress: () => openCoraNativeRoute(router, deckRoute, "flashcard_deck"),
-                            },
-                          ]
+                      ...(result.entity?.route
+                        ? [{ text: "Open deck", onPress: () => router.push(result.entity!.route as never) }]
                         : []),
                       { text: "OK", style: "cancel" as const },
                     ])
@@ -759,9 +797,57 @@ export function CoraImmersiveChat({
         </View>
       </View>
 
-      <KeyboardAvoidingView
+      <ChatKeyboardShell
         style={styles.keyboardShell}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        onKeyboardShow={scrollOnKeyboardShow}
+        composer={
+          <View
+            style={[styles.composerArea, { backgroundColor: canvas }]}
+            onLayout={(e) => {
+              const next = Math.ceil(e.nativeEvent.layout.height)
+              setComposerHeight((prev) => (Math.abs(prev - next) > 1 ? next : prev))
+            }}
+          >
+            {credits?.coraMode === "lite" || (credits && credits.credits <= 0) ? (
+              <ChatCreditNotice mode="lite" onOpenPacks={() => router.push("/membership" as never)} />
+            ) : credits?.isLow ? (
+              <ChatCreditNotice mode="low" onOpenPacks={() => router.push("/membership" as never)} />
+            ) : null}
+            {atExchangeLimit ? (
+              <ChatDepthNotice tone="limit" onNewChat={onNewFromChat} />
+            ) : nearExchangeLimit ? (
+              <ChatDepthNotice tone="warning" remaining={remainingExchanges} onNewChat={onNewFromChat} />
+            ) : null}
+            <CoraWorkspaceComposer
+              value={input}
+              onChangeText={setInput}
+              onSend={handleComposerSend}
+              onStop={onStop}
+              canSend={
+                !!(input.trim() || attachments.length > 0 || importedQuestion) && !streaming && !atExchangeLimit
+              }
+              streaming={streaming}
+              disabled={atExchangeLimit}
+              listening={listening}
+              hasMessages={messages.length > 0}
+              selectedGoalId={selectedGoalId}
+              onSelectGoal={(goal) => {
+                setSelectedGoalId(goal.id)
+                if (!input.trim()) setInput(goal.starterPrompt)
+              }}
+              onOpenAttachMenu={() => setAttachMenuOpen(true)}
+              onToggleVoice={() => void toggleListening(input)}
+              attachments={attachments}
+              onRemoveAttachment={(id) => setAttachments((prev) => prev.filter((item) => item.id !== id))}
+              importedQuestion={importedQuestion}
+              importedQuestionLabel={importedQuestionLabel}
+              onClearImportedQuestion={() => {
+                setImportedQuestion(null)
+                setImportedQuestionLabel(null)
+              }}
+            />
+          </View>
+        }
       >
       <View style={styles.messagesPane}>
       <FlatList
@@ -848,23 +934,35 @@ export function CoraImmersiveChat({
             ) : null}
             {item.role === "assistant" && item.proposals?.length
               ? item.proposals.map((proposal: CoraActionProposal) => (
-                  <CoraTranscriptGutter key={proposal.actionId} side="assistant">
-                    <View style={styles.proposalWrap}>
-                      <CoraActionCard
-                        proposal={proposal}
-                        status={item.proposalStatusById?.[proposal.actionId] ?? "idle"}
-                        result={item.proposalResultById?.[proposal.actionId] ?? null}
-                        resultMessage={item.proposalResultById?.[proposal.actionId]?.message}
-                        onConfirm={() => onConfirmProposal?.(item.id, proposal)}
-                        onCancel={() => onCancelProposal?.(item.id, proposal.actionId)}
-                        onOpen={(route) => {
-                          openCoraNativeRoute(router, route)
-                        }}
-                      />
-                    </View>
-                  </CoraTranscriptGutter>
+                  <View key={proposal.actionId} style={styles.proposalWrap}>
+                    <CoraActionCard
+                      proposal={proposal}
+                      status={item.proposalStatusById?.[proposal.actionId] ?? "idle"}
+                      result={item.proposalResultById?.[proposal.actionId] ?? null}
+                      resultMessage={item.proposalResultById?.[proposal.actionId]?.message}
+                      onConfirm={() => onConfirmProposal?.(item.id, proposal)}
+                      onCancel={() => onCancelProposal?.(item.id, proposal.actionId)}
+                      onOpen={(route) => openCoraNativeRoute(router, route)}
+                    />
+                  </View>
                 ))
               : null}
+            {item.role === "assistant" &&
+            item.ui &&
+            !isRedundantCoraUiPayload(item.ui, Boolean(item.proposals?.length)) ? (
+              <View style={styles.proposalWrap}>
+                <CoraUiPayloadCard
+                  ui={item.ui}
+                  onOpenRoute={(route) => openCoraNativeRoute(router, route)}
+                />
+              </View>
+            ) : null}
+            {item.role === "assistant" && index === messages.length - 1 && convertSuggestions.length ? (
+              <CoraConvertToToolChipRow
+                suggestions={convertSuggestions}
+                onPress={(suggestion) => sendPromptNow(suggestion.prompt)}
+              />
+            ) : null}
           </View>
           )
         }}
@@ -875,57 +973,7 @@ export function CoraImmersiveChat({
       ) : null}
 
       </View>
-
-        <View
-          style={[
-            styles.composerArea,
-            { paddingBottom: Math.max(insets.bottom, 12), backgroundColor: canvas },
-          ]}
-          onLayout={(e) => {
-            const next = Math.ceil(e.nativeEvent.layout.height)
-            setComposerHeight((prev) => (Math.abs(prev - next) > 1 ? next : prev))
-          }}
-        >
-          {credits?.coraMode === "lite" || (credits && credits.credits <= 0) ? (
-            <ChatCreditNotice mode="lite" onOpenPacks={() => router.push("/membership" as never)} />
-          ) : credits?.isLow ? (
-            <ChatCreditNotice mode="low" onOpenPacks={() => router.push("/membership" as never)} />
-          ) : null}
-          {atExchangeLimit ? (
-            <ChatDepthNotice tone="limit" onNewChat={onNewFromChat} />
-          ) : nearExchangeLimit ? (
-            <ChatDepthNotice tone="warning" remaining={remainingExchanges} onNewChat={onNewFromChat} />
-          ) : null}
-          <CoraWorkspaceComposer
-            value={input}
-            onChangeText={setInput}
-            onSend={handleComposerSend}
-            onStop={onStop}
-            canSend={
-              !!(input.trim() || attachments.length > 0 || importedQuestion) && !streaming && !atExchangeLimit
-            }
-            streaming={streaming}
-            disabled={atExchangeLimit}
-            listening={listening}
-            hasMessages={messages.length > 0}
-            selectedGoalId={selectedGoalId}
-            onSelectGoal={(goal) => {
-              setSelectedGoalId(goal.id)
-              if (!input.trim()) setInput(goal.starterPrompt)
-            }}
-            onOpenAttachMenu={() => setAttachMenuOpen(true)}
-            onToggleVoice={() => void toggleListening(input)}
-            attachments={attachments}
-            onRemoveAttachment={(id) => setAttachments((prev) => prev.filter((item) => item.id !== id))}
-            importedQuestion={importedQuestion}
-            importedQuestionLabel={importedQuestionLabel}
-            onClearImportedQuestion={() => {
-              setImportedQuestion(null)
-              setImportedQuestionLabel(null)
-            }}
-          />
-        </View>
-      </KeyboardAvoidingView>
+      </ChatKeyboardShell>
 
       <CoraComposerAttachMenu
         visible={attachMenuOpen}
@@ -1131,9 +1179,8 @@ const styles = StyleSheet.create({
     paddingBottom: 4,
   },
   proposalWrap: {
-    marginTop: 8,
-    marginBottom: 4,
-    width: "100%",
+    marginTop: 6,
+    marginBottom: 8,
   },
   welcomeWrap: {
     alignItems: "center",

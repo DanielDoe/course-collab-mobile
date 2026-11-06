@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { AppAlert } from '../../lib/app-alert'
 import { Ionicons } from "@/components/icons/AppIcon"
 import * as DocumentPicker from "expo-document-picker"
@@ -34,6 +34,7 @@ import {
 import { validateQuizEditorDraft } from "../../lib/faculty-quiz-editor-validation"
 import { instructorApi, type InstructorQuiz, type InstructorSession } from "../../lib/instructor-api"
 import { FacultyAssessmentAccessPanel } from "./FacultyAssessmentAccessPanel"
+import { FacultyAssessmentPlatformAccessSection } from "./FacultyAssessmentPlatformAccessSection"
 import { FacultyAssessmentQuestionPreview } from "./FacultyAssessmentQuestionPreview"
 import { FacultyAssessmentSectionsPanel } from "./FacultyAssessmentSectionsPanel"
 import { FacultyAssessmentStudentGrantsPanel } from "./FacultyAssessmentStudentGrantsPanel"
@@ -74,6 +75,7 @@ import { FacultyModuleTabBar } from "./faculty-module-shell"
 import { FACULTY_SHEET_CHIP_RADIUS } from "./faculty-collab-sheet-ui"
 import { semanticSoft } from "../../lib/themed-module-theme"
 import { useModuleTheme } from "../../lib/themed-module-shell"
+import { KeyboardAwareForm } from "../ui/KeyboardAwareForm"
 
 type Scope = { instructorId: number; courseId: number }
 
@@ -1125,10 +1127,7 @@ export function FacultyAssessmentEditorModal({quiz,
 
   return (
     <Modal visible={Boolean(quiz)} animationType="slide" presentationStyle="fullScreen" onRequestClose={handleClose}>
-      <KeyboardAvoidingView
-        style={[moduleStyles.root, { paddingTop: insets.top }]}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-      >
+      <View style={[moduleStyles.root, { paddingTop: insets.top }]}>
         <View style={styles.topBar}>
           <Pressable
             onPress={handleClose}
@@ -1207,12 +1206,7 @@ export function FacultyAssessmentEditorModal({quiz,
             </Pressable>
           </View>
         ) : draft ? (
-          <ScrollView
-            contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}
-            keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
-            showsVerticalScrollIndicator={false}
-          >
+          <KeyboardAwareForm extraBottomPadding={24} contentContainerStyle={styles.content}>
             {tab === "details" && (
               <View style={styles.panel}>
                 <EditorHeroCard
@@ -1314,6 +1308,15 @@ export function FacultyAssessmentEditorModal({quiz,
                   />
                 </EditorSectionCard>
 
+                {scope ? (
+                  <FacultyAssessmentPlatformAccessSection
+                    scope={scope}
+                    draft={draft}
+                    assessmentType={assessmentType}
+                    onChange={patchDraft}
+                  />
+                ) : null}
+
                 <EditorSectionCard
                   icon="school-outline"
                   title="Grading"
@@ -1365,6 +1368,7 @@ export function FacultyAssessmentEditorModal({quiz,
                   sessions={sessions}
                   draft={draft}
                   assessmentLabel={config.shortLabel}
+                  assessmentType={assessmentType}
                   onChange={patchDraft}
                 />
                 <FacultyAssessmentStudentGrantsPanel
@@ -1803,7 +1807,7 @@ export function FacultyAssessmentEditorModal({quiz,
                 </EditorSectionCard>
               </View>
             )}
-          </ScrollView>
+          </KeyboardAwareForm>
         ) : null}
 
         {deleteConfirmIndex != null ? (
@@ -1824,7 +1828,7 @@ export function FacultyAssessmentEditorModal({quiz,
             </View>
           </View>
         ) : null}
-      </KeyboardAvoidingView>
+      </View>
     </Modal>
   )
 }

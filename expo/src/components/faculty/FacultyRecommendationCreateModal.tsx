@@ -41,6 +41,15 @@ type Props = {
   onCreated: () => void
 }
 
+/** Letters need lead time, so open the picker on a realistic upcoming deadline. */
+function defaultRecommendationDeadline(): string {
+  const date = new Date()
+  date.setDate(date.getDate() + 30)
+  const month = String(date.getMonth() + 1).padStart(2, "0")
+  const day = String(date.getDate()).padStart(2, "0")
+  return `${date.getFullYear()}-${month}-${day}`
+}
+
 function studentInitials(name: string): string {
   return name
     .split(/\s+/)
@@ -92,14 +101,16 @@ export function FacultyRecommendationCreateModal({
   }, [visible, scope, sessions])
 
   useEffect(() => {
-    if (!visible) {
-      setStudentSearch("")
-      setSelectedStudentId(null)
-      setPurpose("scholarship")
-      setDeadline("")
-      setDescription("")
-      setError("")
+    if (visible) {
+      setDeadline(defaultRecommendationDeadline())
+      return
     }
+    setStudentSearch("")
+    setSelectedStudentId(null)
+    setPurpose("scholarship")
+    setDeadline("")
+    setDescription("")
+    setError("")
   }, [visible])
 
   const filtered = useMemo(() => {
@@ -118,7 +129,8 @@ export function FacultyRecommendationCreateModal({
       return
     }
     if (!deadline.trim()) {
-      setError("Deadline is required.")
+      // The picker only produces a value once all three wheels are set, so name them.
+      setError("Pick a deadline year, month, and day.")
       return
     }
     setSubmitting(true)
@@ -304,6 +316,7 @@ export function FacultyRecommendationCreateModal({
                 value={deadline}
                 onChange={setDeadline}
                 accessibilityLabel="Deadline"
+                yearPolicy="upcoming"
               />
             </FacultySheetField>
 

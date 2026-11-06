@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react"
 import { KeyboardAvoidingView, Platform, StyleSheet, Text, View } from "react-native"
+import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { useRouter } from "expo-router"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { ModuleScreen } from "../../modules/ModuleScreen"
@@ -32,6 +33,7 @@ export function GuestResumeOptimizeScreen() {
   const guestSession = session?.portal === "guest" ? (session as GuestSession) : null
   const native = useThemedNative()
   const type = useNativeType()
+  const insets = useSafeAreaInsets()
 
   const { masterResume, loadingResume, uploading, resumeError, refreshResume, pickAndUpload } =
     useMasterResume(guestSession)
@@ -73,8 +75,8 @@ export function GuestResumeOptimizeScreen() {
     <View style={[styles.screenRoot, { backgroundColor: native.groupedBackground }]}>
       <KeyboardAvoidingView
         style={styles.body}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 64 : 0}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? insets.top + 56 : 0}
       >
         <ModuleScreen refreshing={refreshing} onRefresh={handleRefresh} disableTopInsetAdjustment stackedHeader>
           <MasterResumeCard

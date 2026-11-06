@@ -362,7 +362,7 @@ function FacultyClassroomPointsRulesContent() {
           />
           <FacultyAdminToggleRow
             label="Blur Leaderboard Peer Names"
-            subtitle="Hide peer names and points on student leaderboards for privacy."
+            subtitle="Off by default. When on, hide classmate names on the student ranks view."
             value={form?.blur_leaderboard_peer_names ?? false}
             onChange={(next) => patchForm({ blur_leaderboard_peer_names: next })}
           />

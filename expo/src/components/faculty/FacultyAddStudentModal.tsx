@@ -21,6 +21,7 @@ import {
   FacultySheetSection,
 } from "./faculty-collab-sheet-ui"
 import { SHEET_SECTION } from "./faculty-sheet-semantics"
+import { useAppToast } from "../../context/AppToastProvider"
 
 type Scope = { instructorId: number; courseId: number }
 type AddMode = "roster" | "invitation"
@@ -48,6 +49,7 @@ export function FacultyAddStudentModal({
 }: Props) {
   const collabSheetStyles = useCollabSheetStyles()
   const insets = useSafeAreaInsets()
+  const { showSuccess, showInfo } = useAppToast()
   const [mode, setMode] = useState<AddMode>("roster")
   const [sessionId, setSessionId] = useState<number | null>(null)
   const [sessionSheetOpen, setSessionSheetOpen] = useState(false)
@@ -122,15 +124,16 @@ export function FacultyAddStudentModal({
         ],
       })
       const { added, updated, skipped } = res.summary
-      setSuccessMessage(
+      const detail =
         added > 0
           ? `${fullName.trim()} was added to ${selectedSession?.code ?? "the section"}. They can sign in with the course default password shown above.`
           : updated > 0
             ? `${fullName.trim()} was updated in the roster.`
             : skipped > 0
               ? "This student could not be imported. Check the ID and try again."
-              : "Import completed.",
-      )
+              : "Import completed."
+      setSuccessMessage(detail)
+      if (added > 0 || updated > 0) showSuccess(added > 0 ? "Student added" : "Roster updated")
       onAdded()
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not add student.")
@@ -170,11 +173,12 @@ export function FacultyAddStudentModal({
       const link = `${base}/student/login?invite=${encodeURIComponent(res.token)}`
       setInvitationToken(res.token)
       setInvitationLink(link)
-      setSuccessMessage(
+      const detail =
         approvalBehavior === "auto_approve_verified_invite"
           ? "Invitation created. Students who verify email through this link can join without a separate faculty approval step."
-          : "Invitation created. Students must verify email, then you approve their access request.",
-      )
+          : "Invitation created. Students must verify email, then you approve their access request."
+      setSuccessMessage(detail)
+      showSuccess("Invitation created")
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not create invitation.")
     } finally {
@@ -185,7 +189,7 @@ export function FacultyAddStudentModal({
   async function copyInvitationLink() {
     if (!invitationLink) return
     await Clipboard.setStringAsync(invitationLink)
-    setSuccessMessage("Invitation link copied to clipboard.")
+    showInfo("Invitation link copied")
   }
 
   return (

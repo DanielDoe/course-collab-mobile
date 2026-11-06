@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Modal, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { AppAlert } from '../../lib/app-alert'
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
@@ -17,6 +17,7 @@ import { useModuleTheme } from "../../lib/themed-module-shell"
 import { FacultyStatusPill } from "./faculty-shared"
 import {
   FacultySheetContainer,
+  FacultySheetFormLayout,
   useCollabSheetStyles,
   FacultySheetChrome,
   FacultySheetHero,
@@ -260,15 +261,72 @@ export function FacultyIssueDetailModal({
 
   return (
     <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <FacultySheetContainer><KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={insets.top}>
-        <FacultySheetChrome topInset={insets.top} title="Issue details" onClose={onClose} />
-
-        <ScrollView
-          contentContainerStyle={[collabSheetStyles.scroll, { paddingBottom: insets.bottom + (isOpen ? 120 : 24) }]}
-          keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
-          showsVerticalScrollIndicator={false}
-        >
+      <FacultySheetContainer>
+      <FacultySheetFormLayout
+        header={<FacultySheetChrome topInset={insets.top} title="Issue details" onClose={onClose} />}
+        contentContainerStyle={collabSheetStyles.scroll}
+        footer={
+          <View>
+          {isOpen ? (
+            <>
+              <FacultySheetTextInput
+                style={styles.input}
+                value={commentText}
+                onChangeText={setCommentText}
+                placeholder="Write a reply to the student…"
+                multiline
+                textAlignVertical="top"
+              />
+              <View style={styles.footerActions}>
+                <Pressable
+                  style={[styles.footerBtn, styles.footerBtnPrimary, (sending || !commentText.trim()) && styles.btnDisabled]}
+                  onPress={() => void handleSendComment()}
+                  disabled={sending || !commentText.trim()}
+                >
+                  {sending ? (
+                    <ActivityIndicator color="#ffffff" size="small" />
+                  ) : (
+                    <>
+                      <Ionicons name="send-outline" size={16} color="#ffffff" />
+                      <Text style={styles.footerBtnPrimaryText}>Send reply</Text>
+                    </>
+                  )}
+                </Pressable>
+                <Pressable
+                  style={[styles.footerBtn, styles.footerBtnSecondary, updatingStatus && styles.btnDisabled]}
+                  onPress={handleCloseIssue}
+                  disabled={updatingStatus}
+                >
+                  {updatingStatus ? (
+                    <ActivityIndicator color={tokens.danger} size="small" />
+                  ) : (
+                    <>
+                      <Ionicons name="checkmark-circle-outline" size={16} color={tokens.danger} />
+                      <Text style={styles.footerBtnSecondaryText}>Close issue</Text>
+                    </>
+                  )}
+                </Pressable>
+              </View>
+            </>
+          ) : (
+            <Pressable
+              style={[styles.footerBtn, styles.footerBtnPrimary, updatingStatus && styles.btnDisabled]}
+              onPress={handleReopenIssue}
+              disabled={updatingStatus}
+            >
+              {updatingStatus ? (
+                <ActivityIndicator color="#ffffff" size="small" />
+              ) : (
+                <>
+                  <Ionicons name="refresh-outline" size={16} color="#ffffff" />
+                  <Text style={styles.footerBtnPrimaryText}>Reopen issue</Text>
+                </>
+              )}
+            </Pressable>
+          )}
+          </View>
+        }
+      >
           <FacultySheetHero
             title={issue.student_name ?? "Student"}
             subtitle={issue.quiz_title ?? "Assessment issue"}
@@ -378,68 +436,7 @@ export function FacultyIssueDetailModal({
               </View>
             )}
           </FacultySheetSection>
-        </ScrollView>
-
-        <View style={[styles.footer, { paddingBottom: insets.bottom + 12 }]}>
-          {isOpen ? (
-            <>
-              <FacultySheetTextInput
-                style={styles.input}
-                value={commentText}
-                onChangeText={setCommentText}
-                placeholder="Write a reply to the student…"
-                multiline
-                textAlignVertical="top"
-              />
-              <View style={styles.footerActions}>
-                <Pressable
-                  style={[styles.footerBtn, styles.footerBtnPrimary, (sending || !commentText.trim()) && styles.btnDisabled]}
-                  onPress={() => void handleSendComment()}
-                  disabled={sending || !commentText.trim()}
-                >
-                  {sending ? (
-                    <ActivityIndicator color="#ffffff" size="small" />
-                  ) : (
-                    <>
-                      <Ionicons name="send-outline" size={16} color="#ffffff" />
-                      <Text style={styles.footerBtnPrimaryText}>Send reply</Text>
-                    </>
-                  )}
-                </Pressable>
-                <Pressable
-                  style={[styles.footerBtn, styles.footerBtnSecondary, updatingStatus && styles.btnDisabled]}
-                  onPress={handleCloseIssue}
-                  disabled={updatingStatus}
-                >
-                  {updatingStatus ? (
-                    <ActivityIndicator color={tokens.danger} size="small" />
-                  ) : (
-                    <>
-                      <Ionicons name="checkmark-circle-outline" size={16} color={tokens.danger} />
-                      <Text style={styles.footerBtnSecondaryText}>Close issue</Text>
-                    </>
-                  )}
-                </Pressable>
-              </View>
-            </>
-          ) : (
-            <Pressable
-              style={[styles.footerBtn, styles.footerBtnPrimary, updatingStatus && styles.btnDisabled]}
-              onPress={handleReopenIssue}
-              disabled={updatingStatus}
-            >
-              {updatingStatus ? (
-                <ActivityIndicator color="#ffffff" size="small" />
-              ) : (
-                <>
-                  <Ionicons name="refresh-outline" size={16} color="#ffffff" />
-                  <Text style={styles.footerBtnPrimaryText}>Reopen issue</Text>
-                </>
-              )}
-            </Pressable>
-          )}
-        </View>
-      </KeyboardAvoidingView>
+      </FacultySheetFormLayout>
       </FacultySheetContainer>
     </Modal>
   )

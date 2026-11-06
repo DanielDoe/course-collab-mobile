@@ -1,4 +1,5 @@
 import type { AssessmentResultQuestion } from "../../lib/assessment-results-api"
+import { parseCodeWriteSavedAnswer } from "../../lib/assessment-quiz/assessment-answer-mapper"
 import { stripHtml } from "../../lib/practice-session"
 
 export const OPTION_KEYS = ["option_a", "option_b", "option_c", "option_d", "option_e"] as const
@@ -109,7 +110,12 @@ export function extractStudentAnswer(q: AssessmentResultQuestion): string | null
   const type = (q.question_type ?? "").toLowerCase()
   const qExt = q as AssessmentResultQuestion & { code?: string }
 
-  if (type !== "circuit_submission" && qExt.code && String(qExt.code).trim()) {
+  if (isCodeQuestionType(type)) {
+    const fromCode = parseCodeWriteSavedAnswer(qExt.code ?? null)
+    if (fromCode.code) return fromCode.code
+    const fromSelected = parseCodeWriteSavedAnswer(q.selected_answer ?? null)
+    if (fromSelected.code) return fromSelected.code
+  } else if (type !== "circuit_submission" && qExt.code && String(qExt.code).trim()) {
     return String(qExt.code)
   }
 
@@ -139,6 +145,32 @@ export function extractStudentAnswer(q: AssessmentResultQuestion): string | null
     }
   }
 
+  return null
+}
+
+export function extractPlotImage(q: AssessmentResultQuestion): string | null {
+  if (typeof q.plotImage === "string" && q.plotImage.trim()) return q.plotImage.trim()
+  const fromSelected = parseCodeWriteSavedAnswer(q.selected_answer ?? null).plotImage
+  if (fromSelected) return fromSelected
+  const fromCode = parseCodeWriteSavedAnswer((q as AssessmentResultQuestion & { code?: string }).code ?? null)
+  if (fromCode.plotImage) return fromCode.plotImage
+  if (!q.answer_data) return null
+  const raw = typeof q.answer_data === "string" ? q.answer_data : JSON.stringify(q.answer_data)
+  const nested = parseCodeWriteSavedAnswer(raw)
+  if (nested.plotImage) return nested.plotImage
+  try {
+    const ad = typeof q.answer_data === "string" ? JSON.parse(q.answer_data) : q.answer_data
+    if (ad && typeof ad === "object") {
+      const inner = parseCodeWriteSavedAnswer(typeof (ad as { code?: unknown }).code === "string" ? String((ad as { code: string }).code) : null)
+      if (inner.plotImage) return inner.plotImage
+      if (typeof (ad as { plotImage?: unknown }).plotImage === "string") {
+        const plot = String((ad as { plotImage: string }).plotImage).trim()
+        return plot || null
+      }
+    }
+  } catch {
+    /* ignore */
+  }
   return null
 }
 

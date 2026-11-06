@@ -1,8 +1,7 @@
 import Constants from "expo-constants"
 import { getAppEnvironment, isProductionEnvironment } from "./environment"
 
-/** Mobile/API traffic stays on the Vercel deployment host. */
-export const PRODUCTION_API_BASE_URL = "https://coursecollab.vercel.app"
+export const PRODUCTION_API_BASE_URL = "https://course-collab.com"
 
 const LOCAL_HOST_PATTERNS =
   /^(localhost|127\.0\.0\.1|0\.0\.0\.0|.*\.local|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+)$/
@@ -21,23 +20,53 @@ export function normalizeApiBaseUrl(url: string): string {
   return url.replace(/\/$/, "")
 }
 
+function readExtraAppUrl(): string | undefined {
+  const fromExtra = Constants.expoConfig?.extra?.appUrl
+  if (typeof fromExtra === "string" && fromExtra.trim()) return fromExtra.trim()
+  return undefined
+}
+
+function readConfiguredAppUrl(): string | undefined {
+  const fromEnv = process.env.EXPO_PUBLIC_APP_URL
+  if (typeof fromEnv === "string" && fromEnv.trim()) return fromEnv.trim()
+  return readExtraAppUrl()
+}
+
+function productionSafeApiBase(fallbackConfigured?: string): string {
+  const extra = readExtraAppUrl()
+  if (extra && !isLocalOrLanHost(extra)) return normalizeApiBaseUrl(extra)
+  if (fallbackConfigured && !isLocalOrLanHost(fallbackConfigured)) {
+    return normalizeApiBaseUrl(fallbackConfigured)
+  }
+  return PRODUCTION_API_BASE_URL
+}
+
 /** Resolve API base URL from Expo config with production-safe fallbacks. */
 export function resolveApiBaseUrl(): string {
-  const configured = Constants.expoConfig?.extra?.appUrl
-  if (typeof configured === "string" && configured.trim()) {
-    const normalized = normalizeApiBaseUrl(configured.trim())
-    if (isProductionEnvironment() && isLocalOrLanHost(normalized)) {
-      return PRODUCTION_API_BASE_URL
+  const configured = readConfiguredAppUrl()
+  if (configured) {
+    const normalized = normalizeApiBaseUrl(configured)
+    const blockLocalInDev =
+      typeof __DEV__ !== "undefined" &&
+      __DEV__ &&
+      process.env.EXPO_PUBLIC_USE_LOCAL_API !== "true"
+    // Never ship a local/LAN API URL in production builds; dev simulators default to hosted API
+    // unless EXPO_PUBLIC_USE_LOCAL_API=true (see EXPO_PUBLIC_APP_URL=http://localhost:3000).
+    if (isLocalOrLanHost(normalized) && (isProductionEnvironment() || blockLocalInDev)) {
+      return productionSafeApiBase()
     }
-    if (!isLocalOrLanHost(normalized)) {
-      return normalized
-    }
+    return normalized
   }
 
-  if (isProductionEnvironment()) {
-    return PRODUCTION_API_BASE_URL
-  }
+  return PRODUCTION_API_BASE_URL
+}
 
+/** Public web origin for membership/credit checkout links opened in Safari. */
+export function resolvePurchaseBaseUrl(): string {
+  const configured = resolveApiBaseUrl()
+  if (isLocalOrLanHost(configured)) {
+    return configured
+  }
   return PRODUCTION_API_BASE_URL
 }
 

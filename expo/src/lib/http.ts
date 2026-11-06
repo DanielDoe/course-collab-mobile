@@ -28,8 +28,8 @@ export function createApiAbortSignal(timeoutMs = DEFAULT_API_TIMEOUT_MS, existin
   return controller.signal
 }
 
-export function noteApiFailure(path: string, status: number): void {
-  notifySessionExpired(path, status)
+export function noteApiFailure(path: string, status: number, message?: string): void {
+  notifySessionExpired(path, status, message)
 }
 
 export function sanitizeLogValue(value: unknown, depth = 0): unknown {

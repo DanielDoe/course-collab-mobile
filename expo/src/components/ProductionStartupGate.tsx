@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react"
-import * as SplashScreen from "expo-splash-screen"
 import { runProductionGuard } from "../config/production-guard"
 import { bootLog } from "../lib/boot-diagnostics"
+import { hideAppSplashFireAndForget } from "../lib/app-splash"
 import { installEarlyStartupErrorCapture, peekStartupError } from "../lib/startup-error-capture"
 import { StartupFatalScreen } from "./StartupFatalScreen"
 
@@ -34,15 +34,7 @@ export function ProductionStartupGate({ children }: Props) {
   }, [])
 
   useEffect(() => {
-    void SplashScreen.hideAsync().catch(() => {})
-    const failsafe = setTimeout(() => {
-      void SplashScreen.hideAsync().catch(() => {})
-    }, 2_000)
-    return () => clearTimeout(failsafe)
-  }, [])
-
-  useEffect(() => {
-    if (fatalError) void SplashScreen.hideAsync().catch(() => {})
+    if (fatalError) hideAppSplashFireAndForget()
   }, [fatalError])
 
   useEffect(() => {

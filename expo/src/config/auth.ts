@@ -1,7 +1,8 @@
 import { getAppEnvironment } from "./environment"
 
 export const AUTH_CONFIG = {
-  sessionDurationMs: 24 * 60 * 60 * 1000,
+  sessionDurationMs: 7 * 24 * 60 * 60 * 1000,
+  rememberMeDurationMs: 30 * 24 * 60 * 60 * 1000,
   minimumPasswordLength: 8,
   accountDeletionConfirmPhrase: "DELETE",
 } as const

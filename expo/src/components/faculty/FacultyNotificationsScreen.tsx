@@ -8,7 +8,6 @@ import {
   View,
 } from "react-native"
 import { useRouter } from "expo-router"
-import { useModuleScrollContentPadding } from "../../context/ChromeInsetContext"
 import { facultyNativeRouteFromLink } from "../../constants/faculty-nav"
 import { useFacultyScope } from "../../hooks/useFacultyScope"
 import { useFacultyShell } from "../../context/FacultyShellContext"
@@ -33,12 +32,17 @@ import {
 } from "./faculty-communication-ui"
 import { FacultyNotificationDetailSheet } from "./FacultyNotificationDetailSheet"
 import { FACULTY_COMMUNICATION_COLOR } from "../../lib/faculty-communication-theme"
+import { useFacultyListPager } from "../../hooks/useFacultyListPager"
 import {
-  NOTIFICATION_PAGE_SIZE,
   NotificationCenterList,
   NotificationInboxFooter,
 } from "./faculty-notifications-ui"
 import { useModuleTheme } from "../../lib/themed-module-shell"
+import {
+  FacultyModuleStickyHeader,
+  FacultySearchToolbar,
+  useFacultyStickyHeaderScrollLayout,
+} from "./faculty-module-shell"
 
 type Filter = "all" | "unread" | "pinned" | "archived"
 
@@ -51,7 +55,7 @@ const EMPTY_PREFS: NotificationInboxPrefs = {
 export function FacultyNotificationsScreen() {
   const { styles: moduleStyles } = useModuleTheme()
   const comm = useFacultyCommunicationTheme()
-  const scrollPad = useModuleScrollContentPadding(32)
+  const { listScrollPad } = useFacultyStickyHeaderScrollLayout()
   const router = useRouter()
   const { session } = useFacultyScope()
   const { setNotificationCount, refreshFacultyData } = useFacultyShell()
@@ -59,7 +63,7 @@ export function FacultyNotificationsScreen() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [filter, setFilter] = useState<Filter>("all")
-  const [page, setPage] = useState(0)
+  const [search, setSearch] = useState("")
   const [notifications, setNotifications] = useState<InstructorNotification[]>([])
   const [selected, setSelected] = useState<InstructorNotification | null>(null)
   const [detailOpen, setDetailOpen] = useState(false)
@@ -117,31 +121,21 @@ export function FacultyNotificationsScreen() {
       if (filter === "unread") items = items.filter((n) => !n.is_read)
       if (filter === "pinned") items = items.filter((n) => pinnedSet.has(n.id))
     }
+    const q = search.trim().toLowerCase()
+    if (q) {
+      items = items.filter((n) =>
+        [n.title, n.message, n.type, n.source_name, n.ai_summary]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase()
+          .includes(q),
+      )
+    }
     return sortNotificationsWithPins(items, prefs.pinnedIds)
-  }, [archivedSet, filter, notifications, pinnedSet, prefs.pinnedIds])
+  }, [archivedSet, filter, notifications, pinnedSet, prefs.pinnedIds, search])
 
-  const pageCount = Math.max(1, Math.ceil(visible.length / NOTIFICATION_PAGE_SIZE))
-  const safePage = Math.min(page, pageCount - 1)
-  const paged = useMemo(
-    () =>
-      visible.slice(
-        safePage * NOTIFICATION_PAGE_SIZE,
-        safePage * NOTIFICATION_PAGE_SIZE + NOTIFICATION_PAGE_SIZE,
-      ),
-    [visible, safePage],
-  )
-  const rangeLabel =
-    visible.length === 0
-      ? undefined
-      : `${safePage * NOTIFICATION_PAGE_SIZE + 1}–${Math.min((safePage + 1) * NOTIFICATION_PAGE_SIZE, visible.length)} of ${visible.length}`
-
-  useEffect(() => {
-    setPage(0)
-  }, [filter])
-
-  useEffect(() => {
-    if (page > pageCount - 1) setPage(pageCount - 1)
-  }, [page, pageCount])
+  const pager = useFacultyListPager(visible, `${filter}:${search}`, "alerts")
+  const rangeLabel = pager.total > 0 ? pager.label.replace(/^Showing /, "") : undefined
 
   async function handleRefresh() {
     setRefreshing(true)
@@ -233,19 +227,8 @@ export function FacultyNotificationsScreen() {
   }
 
   return (
-    <>
-      <ScrollView
-        style={[moduleStyles.root, styles.root]}
-        contentContainerStyle={[styles.content, scrollPad]}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={() => void handleRefresh()}
-            tintColor={FACULTY_COMMUNICATION_COLOR.link}
-          />
-        }
-        showsVerticalScrollIndicator={false}
-      >
+    <View style={[moduleStyles.root, styles.root]}>
+      <FacultyModuleStickyHeader>
         <CommSegmentedControl
           value={filter}
           onChange={setFilter}
@@ -256,7 +239,25 @@ export function FacultyNotificationsScreen() {
             { id: "archived", label: "Archived" },
           ]}
         />
-
+        <FacultySearchToolbar
+          value={search}
+          onChange={setSearch}
+          placeholder="Search alerts, messages, office hours…"
+          showFilter={false}
+        />
+      </FacultyModuleStickyHeader>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[styles.content, listScrollPad]}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => void handleRefresh()}
+            tintColor={FACULTY_COMMUNICATION_COLOR.link}
+          />
+        }
+        showsVerticalScrollIndicator={false}
+      >
         <CommSectionHeader
           title="Recent Alerts"
           trailing={
@@ -282,37 +283,43 @@ export function FacultyNotificationsScreen() {
           >
             <CommEmptyState
               icon={
-                filter === "unread"
-                  ? "checkmark-circle-outline"
-                  : filter === "pinned"
-                    ? "pin-outline"
-                    : filter === "archived"
-                      ? "archive-outline"
-                      : "notifications-off-outline"
+                search.trim()
+                  ? "search-outline"
+                  : filter === "unread"
+                    ? "checkmark-circle-outline"
+                    : filter === "pinned"
+                      ? "pin-outline"
+                      : filter === "archived"
+                        ? "archive-outline"
+                        : "notifications-off-outline"
               }
               title={
-                filter === "unread"
-                  ? "You're All Caught Up"
-                  : filter === "pinned"
-                    ? "No Pinned Notifications"
-                    : filter === "archived"
-                      ? "No Archived Notifications"
-                      : "No Notifications"
+                search.trim()
+                  ? "No Matching Alerts"
+                  : filter === "unread"
+                    ? "You're All Caught Up"
+                    : filter === "pinned"
+                      ? "No Pinned Notifications"
+                      : filter === "archived"
+                        ? "No Archived Notifications"
+                        : "No Notifications"
               }
               body={
-                filter === "unread"
-                  ? "New student activity and course updates will show here."
-                  : filter === "pinned"
-                    ? "Pin important alerts from a notification to keep them on top."
-                    : filter === "archived"
-                      ? "Archived notifications will appear here."
-                      : "Course alerts appear here as students engage with your modules."
+                search.trim()
+                  ? "Try a different title, message, or type."
+                  : filter === "unread"
+                    ? "New student activity and course updates will show here."
+                    : filter === "pinned"
+                      ? "Pin important alerts from a notification to keep them on top."
+                      : filter === "archived"
+                        ? "Archived notifications will appear here."
+                        : "Course alerts appear here as students engage with your modules."
               }
             />
           </View>
         ) : (
           <NotificationCenterList
-            items={paged}
+            items={pager.items}
             pinnedIds={prefs.pinnedIds}
             onOpen={(item) => void handleOpen(item)}
           />
@@ -320,9 +327,9 @@ export function FacultyNotificationsScreen() {
 
         {visible.length > 0 ? (
           <NotificationInboxFooter
-            page={safePage}
-            pageCount={pageCount}
-            onPageChange={setPage}
+            page={pager.page}
+            pageCount={pager.pageCount}
+            onPageChange={pager.setPage}
             showMarkAllRead={unread > 0}
             onMarkAllRead={() => void handleMarkAllRead()}
           />
@@ -345,12 +352,13 @@ export function FacultyNotificationsScreen() {
         onToggleArchive={(item) => void handleToggleArchive(item)}
         onDelete={handleDelete}
       />
-    </>
+    </View>
   )
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  content: { paddingHorizontal: 16, paddingTop: 12, gap: 12 },
+  scroll: { flex: 1 },
+  content: { paddingHorizontal: 16, gap: 12 },
   emptyWrap: {},
 })

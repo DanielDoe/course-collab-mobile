@@ -25,12 +25,16 @@ function store(): BootDiagnosticsGlobal {
 }
 
 function emitChange(): void {
-  store().__CC_BOOT_LISTENERS__?.forEach((listener) => {
-    try {
-      listener()
-    } catch {
-      /* ignore */
-    }
+  const listeners = store().__CC_BOOT_LISTENERS__
+  if (!listeners || listeners.size === 0) return
+  queueMicrotask(() => {
+    listeners.forEach((listener) => {
+      try {
+        listener()
+      } catch {
+        /* ignore */
+      }
+    })
   })
 }
 

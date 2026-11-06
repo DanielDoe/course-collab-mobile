@@ -3,7 +3,11 @@
  */
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
-import { prepareSyllabusForDisplay, prepareStudentSyllabusSections } from "./section-prepare"
+import {
+  isUnpublishedSyllabusMessage,
+  prepareSyllabusForDisplay,
+  prepareStudentSyllabusSections,
+} from "./section-prepare"
 import type { SyllabusSection } from "./types"
 
 function section(
@@ -66,6 +70,16 @@ describe("prepareStudentSyllabusSections", () => {
     const tables = prepared[0]!.content!.tables ?? []
     assert.equal(tables.length, 2)
     assert.match(tables[1]?.title ?? "", /exam|quiz/i)
+  })
+})
+
+describe("isUnpublishedSyllabusMessage", () => {
+  it("treats instructor unpublished copy as empty, not a crash", () => {
+    assert.equal(
+      isUnpublishedSyllabusMessage(new Error("Syllabus is not yet published for this course.")),
+      true,
+    )
+    assert.equal(isUnpublishedSyllabusMessage(new Error("Failed to load syllabus.")), false)
   })
 })
 

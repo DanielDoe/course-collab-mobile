@@ -21,6 +21,8 @@ import type {
 } from "./guest-types"
 import type { GuestSession } from "./session"
 import { parseCoraChatMeta } from "./cora/models"
+import { applyCoraOutputGate, evaluateCoraSecurityTurn } from "./cora-security"
+import { studentAuthenticatedHeaders } from "./student-api"
 import {
   studentApi,
   type StudentRecommendationDetail,
@@ -36,9 +38,9 @@ async function guestRequest<T>(
   const url = `${API_BASE_URL}${path}${separator}studentDatabaseId=${encodeURIComponent(session.databaseId)}`
   const response = await fetch(url, {
     ...init,
+    credentials: "include",
     headers: {
-      Accept: "application/json",
-      "x-student-id": session.databaseId,
+      ...(await studentAuthenticatedHeaders(session)),
       ...(init.headers ?? {}),
     },
   })
@@ -342,24 +344,38 @@ export const guestApi = {
       requestId?: number
     },
   ) =>
-    guestRequest<GuestCoraChatResponse>(session, "/api/guest/cora/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        studentDatabaseId: session.databaseId,
+    Promise.resolve().then(() => {
+      const security = evaluateCoraSecurityTurn({
+        actor: "career",
         message: payload.message,
-        conversationHistory: payload.conversationHistory,
-        requestId: payload.requestId,
-      }),
-    }).then((raw) => {
-      const meta = parseCoraChatMeta(raw as unknown as Record<string, unknown>)
-      return {
-        ...raw,
-        profile: meta.profile,
-        publicMode: meta.publicMode,
-        routing: meta.routing,
-        ...(meta.ui ? { ui: meta.ui } : {}),
+        history: payload.conversationHistory,
+      })
+      if (security.action !== "allow" && security.reply) {
+        return {
+          content: applyCoraOutputGate(security.reply, "career"),
+        } satisfies GuestCoraChatResponse
       }
+      return guestRequest<GuestCoraChatResponse>(session, "/api/guest/cora/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          studentDatabaseId: session.databaseId,
+          message: payload.message,
+          conversationHistory: payload.conversationHistory,
+          requestId: payload.requestId,
+        }),
+      }).then((raw) => {
+        const meta = parseCoraChatMeta(raw as unknown as Record<string, unknown>)
+        return {
+          ...raw,
+          content: applyCoraOutputGate(raw.content ?? "", "career"),
+          toolCalls: undefined,
+          profile: meta.profile,
+          publicMode: meta.publicMode,
+          routing: meta.routing,
+          ...(meta.ui ? { ui: meta.ui } : {}),
+        }
+      })
     }),
 
   getProfile: async (session: GuestSession) => {

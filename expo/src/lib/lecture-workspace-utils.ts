@@ -255,6 +255,8 @@ export function normalizeLectureWorkspaceQuestion(
     question_media: parseQuestionMedia(o.question_media ?? o),
     step_by_step_solution: normalizeSolution(o.step_by_step_solution ?? o.solution),
     instructor_solution_workspace: parseInstructorSolutionWorkspace(o),
+    solution_unlocked: o.solution_unlocked === true,
+    solution_available: o.solution_available === true,
   }
 }
 
@@ -281,6 +283,19 @@ export function parseLectureWorkspaceStudentApiResponse(raw: unknown): LectureWo
   const labelSource = record.button_label ?? configRecord?.button_label
   const enabledSource = record.enabled ?? configRecord?.enabled
 
+  const drafts: Record<string, string> = {}
+  const rawDrafts = Array.isArray(record.drafts) ? record.drafts : []
+  for (const row of rawDrafts) {
+    if (!row || typeof row !== "object") continue
+    const draft = row as { question_id?: unknown; student_answer?: unknown }
+    const questionId = String(draft.question_id ?? "").trim()
+    if (!questionId) continue
+    drafts[questionId] =
+      typeof draft.student_answer === "string"
+        ? draft.student_answer
+        : JSON.stringify(draft.student_answer ?? {})
+  }
+
   return {
     enabled: enabledSource !== false,
     title:
@@ -290,6 +305,7 @@ export function parseLectureWorkspaceStudentApiResponse(raw: unknown): LectureWo
         ? labelSource.trim()
         : DEFAULT_BUTTON_LABEL,
     questions,
+    drafts,
   }
 }
 
@@ -320,6 +336,8 @@ function normalizeLectureWorkspaceQuestionLenient(
     question_media: parseQuestionMedia(o.question_media),
     step_by_step_solution: normalizeSolution(o.step_by_step_solution ?? o.solution),
     instructor_solution_workspace: parseInstructorSolutionWorkspace(o),
+    solution_unlocked: o.solution_unlocked === true,
+    solution_available: o.solution_available === true,
   }
 }
 
@@ -355,7 +373,16 @@ export function parseLectureWorkspace(raw: unknown): LectureWorkspaceConfig {
   }
 }
 
+export function workspaceQuestionHasAuthoredSolution(question: LectureWorkspaceQuestion): boolean {
+  return question.step_by_step_solution.content.some((line) => line.trim().length > 0)
+}
+
+export function isWorkspaceSolutionUnlocked(question: LectureWorkspaceQuestion): boolean {
+  return question.solution_unlocked === true
+}
+
 export function solutionMarkdownFromQuestion(question: LectureWorkspaceQuestion): string {
+  if (!isWorkspaceSolutionUnlocked(question) && question.solution_available) return ""
   return question.step_by_step_solution.content.join("\n\n")
 }
 

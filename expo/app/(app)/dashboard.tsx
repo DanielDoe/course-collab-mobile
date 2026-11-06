@@ -1,6 +1,5 @@
-import { useCallback, useEffect, useState } from "react"
+import { useCallback } from "react"
 import {
-  ActivityIndicator,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -12,16 +11,6 @@ import { Ionicons } from "@/components/icons/AppIcon"
 import { useRouter } from "expo-router"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { ApiError, type Announcement } from "../../src/lib/api"
-import { studentApi } from "../../src/lib/student-api"
-import {
-  fetchStudentDashboardBundle,
-} from "../../src/lib/student-dashboard-stats"
-import type {
-  GradeTrendPoint,
-  PerformanceComparison,
-  PerformanceInsight,
-  StudentDashboardStats,
-} from "../../src/types/dashboard"
 import { EngagementStats } from "../../src/components/dashboard/EngagementStats"
 import { GradeTrendChart } from "../../src/components/dashboard/GradeTrendChart"
 import { DashboardWelcomeCard } from "../../src/components/dashboard/DashboardWelcomeCard"
@@ -44,10 +33,12 @@ import { useAppThemeTokens, useThemedNative } from "../../src/context/Appearance
 import { useChromeTopInset, CHROME_CONTENT_TOP_GAP } from "../../src/context/ChromeInsetContext"
 import { useNativeType, semanticSoft } from "../../src/lib/themed-module-theme"
 import { useDashboardContentStyle } from "../../src/lib/responsive-layout"
-import { consumeStudentDashboardBootstrap } from "../../src/lib/app-bootstrap-cache"
-import { ensureAppBootstrap } from "../../src/lib/post-login-bootstrap"
 import { dashboardAnnouncementAccent } from "../../src/lib/dashboard-theme"
 import { useNotificationModuleRefresh } from "../../src/lib/notifications/notification-events"
+import { useStudentDashboard } from "../../src/hooks/query/useStudentDashboard"
+import { useStudentAnnouncements } from "../../src/hooks/query/useStudentAnnouncements"
+import { QueryRefreshBanner } from "../../src/components/query/QueryRefreshBanner"
+import { QuerySkeleton } from "../../src/components/query/QuerySkeleton"
 
 export default function DashboardScreen() {
   const { session } = useSession()
@@ -72,70 +63,22 @@ function StudentDashboard({ session }: { session: import("../../src/lib/session"
   const type = useNativeType()
   const dashboardContentStyle = useDashboardContentStyle()
 
-  const [stats, setStats] = useState<StudentDashboardStats | null>(null)
-  const [trend, setTrend] = useState<GradeTrendPoint[]>([])
-  const [comparison, setComparison] = useState<PerformanceComparison[]>([])
-  const [insights, setInsights] = useState<PerformanceInsight[]>([])
-  const [announcements, setAnnouncements] = useState<Announcement[]>([])
-  const [loading, setLoading] = useState(true)
-  const [chartsLoading, setChartsLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
-  const [error, setError] = useState("")
-
-  const loadDashboard = useCallback(async () => {
-    setError("")
-
-    await ensureAppBootstrap(session)
-
-    const cached = consumeStudentDashboardBootstrap()
-    if (cached) {
-      setStats(cached.stats)
-      setTrend(cached.trend)
-      setComparison(cached.comparison)
-      setInsights(cached.insights)
-      setAnnouncements(cached.announcements)
-      setChartsLoading(false)
-      return
-    }
-
-    try {
-      const [dashboardResult, announcementResult] = await Promise.allSettled([
-        fetchStudentDashboardBundle(session),
-        studentApi.getAnnouncements(session),
-      ])
-
-      if (dashboardResult.status === "fulfilled") {
-        setStats(dashboardResult.value.stats)
-        setTrend(dashboardResult.value.trend)
-        setComparison(dashboardResult.value.comparison)
-        setInsights(dashboardResult.value.insights)
-        if (dashboardResult.value.stats.partialError) {
-          setError(dashboardResult.value.stats.partialError)
-        }
-      } else {
-        const err = dashboardResult.reason
-        setError(err instanceof ApiError ? err.message : "Could not load dashboard data.")
-      }
-
-      if (announcementResult.status === "fulfilled") {
-        setAnnouncements(announcementResult.value.announcements ?? [])
-      }
-    } finally {
-      setChartsLoading(false)
-    }
-  }, [session])
-
-  useEffect(() => {
-    setChartsLoading(true)
-    loadDashboard().finally(() => setLoading(false))
-  }, [loadDashboard])
+  const dash = useStudentDashboard(session)
+  const listQuery = useStudentAnnouncements(session)
+  const stats = dash.stats
+  const trend = dash.trend
+  const comparison = dash.comparison
+  const insights = dash.insights
+  const announcements = listQuery.announcements
+  const chartsLoading = dash.isInitialLoading
+  const refreshing = (dash.isRefreshing || listQuery.isRefreshing) && !dash.isInitialLoading
+  const error =
+    dash.partialError ||
+    (dash.error instanceof ApiError ? dash.error.message : dash.error ? "Could not load dashboard data." : "")
 
   const handleRefresh = useCallback(async () => {
-    setRefreshing(true)
-    setChartsLoading(true)
-    await Promise.all([loadDashboard(), refreshStudentData?.({ force: true })])
-    setRefreshing(false)
-  }, [loadDashboard, refreshStudentData])
+    await Promise.all([dash.refetch(), listQuery.refetch(), refreshStudentData?.({ force: true })])
+  }, [dash.refetch, listQuery.refetch, refreshStudentData])
 
   useNotificationModuleRefresh("dashboard", handleRefresh)
 
@@ -168,6 +111,11 @@ function StudentDashboard({ session }: { session: import("../../src/lib/session"
           badge={session.courseCode ?? undefined}
         />
 
+        <QueryRefreshBanner
+          visible={dash.refreshFailed || listQuery.refreshFailed}
+          onRetry={() => void handleRefresh()}
+        />
+
         {error ? (
           <View
             style={[
@@ -180,21 +128,11 @@ function StudentDashboard({ session }: { session: import("../../src/lib/session"
           </View>
         ) : null}
 
-        {!stats && !error ? (
-          <View style={styles.loadingBox}>
-            <ActivityIndicator size="large" color={native.tint} />
-            <Text style={[type.caption, { color: native.secondaryLabel }]}>Loading your dashboard…</Text>
-          </View>
-        ) : null}
+        {!stats && !error ? <QuerySkeleton rows={6} /> : null}
 
         {stats ? (
           <>
             <KpiGrid stats={stats} />
-
-            <GradeTrendChart data={trend} loading={chartsLoading} />
-            <PerformanceComparisonChart data={comparison} loading={chartsLoading} />
-            <PerformanceInsightsCard insights={insights} loading={chartsLoading} />
-            <EngagementStats stats={stats} />
             <QuickActionsPanel />
           </>
         ) : null}
@@ -210,6 +148,15 @@ function StudentDashboard({ session }: { session: import("../../src/lib/session"
               } as never)
             }
           />
+        ) : null}
+
+        {stats ? (
+          <>
+            <GradeTrendChart data={trend} loading={chartsLoading} />
+            <PerformanceComparisonChart data={comparison} loading={chartsLoading} />
+            <PerformanceInsightsCard insights={insights} loading={chartsLoading} />
+            <EngagementStats stats={stats} />
+          </>
         ) : null}
       </ScrollView>
 

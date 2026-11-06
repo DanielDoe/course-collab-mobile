@@ -1,22 +1,54 @@
 import { Pressable, StyleSheet, Text, View } from "react-native"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useRouter } from "expo-router"
+import { pushStudentAppHref } from "../../lib/student-app-href"
 import { DashboardCard } from "./DashboardCard"
 import { useThemedNative } from "../../context/AppearanceProvider"
 import { useNativeType } from "../../lib/themed-module-theme"
 import { DASHBOARD_QUICK_ACTION_THUMBS } from "../../lib/dashboard-theme"
 import { SolidListThumbTile } from "../theme/SolidListThumbTile"
+import { useStudentShell } from "../../context/StudentShellContext"
+import { NativeCountBadge } from "../faculty/faculty-shared"
 
 export function QuickActionsPanel() {
   const router = useRouter()
   const native = useThemedNative()
   const type = useNativeType()
+  const { badges } = useStudentShell()
 
   const actions = [
-    { id: "quizzes", label: "Quizzes", route: "/module/quizzes", icon: "clipboard-outline" as const, thumb: DASHBOARD_QUICK_ACTION_THUMBS.quizzes },
-    { id: "grades", label: "Grades", route: "/module/grades", icon: "ribbon-outline" as const, thumb: DASHBOARD_QUICK_ACTION_THUMBS.grades },
-    { id: "homework", label: "Homework", route: "/module/homework", icon: "book-outline" as const, thumb: DASHBOARD_QUICK_ACTION_THUMBS.homework },
-    { id: "practice", label: "Practice Hub", route: "/module/practice", icon: "fitness-outline" as const, thumb: DASHBOARD_QUICK_ACTION_THUMBS.practice },
+    {
+      id: "quizzes",
+      label: "Quizzes",
+      route: "/module/quizzes",
+      icon: "clipboard-outline" as const,
+      thumb: DASHBOARD_QUICK_ACTION_THUMBS.quizzes,
+      count: badges.openQuizzes,
+    },
+    {
+      id: "grades",
+      label: "Grades",
+      route: "/module/grades",
+      icon: "ribbon-outline" as const,
+      thumb: DASHBOARD_QUICK_ACTION_THUMBS.grades,
+      count: 0,
+    },
+    {
+      id: "homework",
+      label: "Homework",
+      route: "/module/homework",
+      icon: "book-outline" as const,
+      thumb: DASHBOARD_QUICK_ACTION_THUMBS.homework,
+      count: badges.openHomework,
+    },
+    {
+      id: "practice",
+      label: "Practice Hub",
+      route: "/module/practice",
+      icon: "fitness-outline" as const,
+      thumb: DASHBOARD_QUICK_ACTION_THUMBS.practice,
+      count: 0,
+    },
   ]
 
   return (
@@ -30,11 +62,15 @@ export function QuickActionsPanel() {
               { backgroundColor: native.secondaryGrouped },
               index < actions.length - 1 && { borderBottomColor: native.separator, borderBottomWidth: StyleSheet.hairlineWidth },
             ]}
-            onPress={() => router.push(action.route as never)}
+            onPress={() => pushStudentAppHref(router, action.route)}
           >
             <SolidListThumbTile thumb={action.thumb} icon={action.icon} size="compact" style={styles.iconTile} />
             <Text style={[type.bodyEmphasis, styles.label]}>{action.label}</Text>
-            <Ionicons name="chevron-forward" size={16} color={native.tertiaryLabel} />
+            {action.count > 0 ? (
+              <NativeCountBadge count={action.count} variant="compact" />
+            ) : (
+              <Ionicons name="chevron-forward" size={16} color={native.tertiaryLabel} />
+            )}
           </Pressable>
         ))}
       </View>

@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react"
-import { ActivityIndicator, Platform, Pressable, StyleSheet, Switch, Text, View } from "react-native"
+import { useCallback, useEffect, useState } from "react"
+import { Platform, StyleSheet, Switch, Text, View } from "react-native"
 import { hexToRgba } from "../../constants/app-themes"
 import { ApiError, api, type UniversityRecord } from "../../lib/api"
 import { parseAccessLifecyclePayload } from "../../lib/access-governance"
@@ -7,34 +7,36 @@ import { parseMfaCompletePayload, parseMfaLoginResponse, type MfaLoginState } fr
 import { persistMfaDeviceTrustFromLogin, instructorMfaLoginKey, instructorMfaAliasKeys } from "../../lib/mfa-device-trust"
 import {
   clearRememberedFacultyCredentials,
+  clearRememberedFacultyUniversity,
   persistRememberedFacultyCredentials,
   persistRememberedFacultyUniversity,
   readRememberedFacultyCredentials,
   readRememberedFacultyUniversity,
 } from "../../lib/remembered-faculty-auth"
+import { readRememberedUniversity } from "../../lib/remembered-student-auth"
 import { stashPendingLoginPassword } from "../../lib/pending-login-password"
 import { useSession } from "../../context/SessionProvider"
 import { MfaLoginStep } from "../auth/MfaLoginStep"
 import { ErrorBanner, LoginFieldGroup } from "./LoginCard"
 import { LoginButton, LoginField, LoginPasswordToggle } from "./LoginButton"
-import { LoginBackLink, LoginPortalHeader, LoginPortalStack } from "./login-chrome"
+import { LoginBrandHeader } from "./LoginBrandHeader"
+import { LoginUniversityPicker } from "./LoginUniversityPicker"
+import { LoginAltActions, LoginPortalStack, type RegisterAuthPanelBack } from "./login-chrome"
 import { AccessRequestStatusScreen } from "../auth/AccessRequestStatusScreen"
 import { useLoginTheme } from "./login-theme"
-import { UniversityAuthLogoImage } from "./UniversityAuthLogoImage"
+
+type Step = "university" | "credentials"
 
 type Props = {
   onBack?: () => void
+  registerPanelBack?: RegisterAuthPanelBack
 }
 
-type Step = "campus" | "credentials"
-
-export function StaffLoginPanel({ onBack }: Props) {
+export function StaffLoginPanel({ onBack, registerPanelBack }: Props) {
   const { signIn } = useSession()
   const { LOGIN, loginType } = useLoginTheme()
 
-  const [step, setStep] = useState<Step>("campus")
-  const [universities, setUniversities] = useState<UniversityRecord[]>([])
-  const [loadingUniversities, setLoadingUniversities] = useState(true)
+  const [step, setStep] = useState<Step>("university")
   const [selectedUniversity, setSelectedUniversity] = useState<UniversityRecord | null>(null)
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
@@ -48,16 +50,18 @@ export function StaffLoginPanel({ onBack }: Props) {
   useEffect(() => {
     let mounted = true
     void (async () => {
-      const [remembered, rememberedUni] = await Promise.all([
-        readRememberedFacultyCredentials(),
+      const [rememberedCampus, studentCampus, remembered] = await Promise.all([
         readRememberedFacultyUniversity(),
+        readRememberedUniversity(),
+        readRememberedFacultyCredentials(),
       ])
       if (!mounted) return
-      if (remembered?.username) setUsername(remembered.username)
-      setRememberMe(Boolean(remembered?.rememberMe && remembered?.username))
-      if (rememberedUni) {
-        setSelectedUniversity(rememberedUni)
-        setStep("credentials")
+      const campus = rememberedCampus ?? studentCampus
+      if (campus) setSelectedUniversity(campus)
+      if (rememberedCampus) setStep("credentials")
+      if (remembered?.username) {
+        setUsername(remembered.username)
+        setRememberMe(Boolean(remembered.rememberMe))
       }
     })()
     return () => {
@@ -65,25 +69,35 @@ export function StaffLoginPanel({ onBack }: Props) {
     }
   }, [])
 
-  useEffect(() => {
-    let mounted = true
-    void api
-      .getUniversities()
-      .then((res) => {
-        if (!mounted) return
-        const featured = (res.universities ?? []).filter((u) => u.is_active && u.id > 0)
-        setUniversities(featured)
-      })
-      .catch(() => {
-        if (mounted) setUniversities([])
-      })
-      .finally(() => {
-        if (mounted) setLoadingUniversities(false)
-      })
-    return () => {
-      mounted = false
+  function handleChangeUniversity() {
+    void clearRememberedFacultyUniversity()
+    setStep("university")
+    setError("")
+    setMfaState(null)
+  }
+
+  const handlePanelBack = useCallback((): boolean => {
+    if (accessStatus) {
+      setAccessStatus(null)
+      return true
     }
-  }, [])
+    if (mfaState) {
+      setMfaState(null)
+      setError("")
+      return true
+    }
+    if (step === "credentials") {
+      setStep("university")
+      setError("")
+      return true
+    }
+    return false
+  }, [accessStatus, mfaState, step])
+
+  useEffect(() => {
+    registerPanelBack?.(handlePanelBack)
+    return () => registerPanelBack?.(null)
+  }, [handlePanelBack, registerPanelBack])
 
   async function finishStaffLogin(data: Record<string, unknown>, loginPassword?: string) {
     const normalized = parseMfaCompletePayload(data) ?? data
@@ -96,11 +110,10 @@ export function StaffLoginPanel({ onBack }: Props) {
           role?: string
           requiresPasswordChange?: boolean
           hasChangedPassword?: boolean
-          selectedUniversityId?: number
         }
       | undefined
     if (!instructor) throw new ApiError("Login failed", 500)
-    if (!selectedUniversity) throw new ApiError("Select your university first.", 400)
+    if (!selectedUniversity) throw new ApiError("Select your university to continue.", 400)
 
     const authId = username.trim()
     if (authId) {
@@ -112,11 +125,11 @@ export function StaffLoginPanel({ onBack }: Props) {
       })
     }
 
+    await persistRememberedFacultyUniversity(selectedUniversity)
     await persistRememberedFacultyCredentials({
       username: authId || instructor.username,
       rememberMe,
     })
-    await persistRememberedFacultyUniversity(selectedUniversity)
 
     const requiresPasswordChange = Boolean(
       instructor.requiresPasswordChange || instructor.hasChangedPassword === false,
@@ -133,18 +146,21 @@ export function StaffLoginPanel({ onBack }: Props) {
       email: instructor.email,
       role: instructor.role,
       authIdentifier: authId || instructor.username,
-      selectedUniversityId: selectedUniversity.id,
+      requiresPasswordChange,
+      universityId: selectedUniversity.id,
       universityName: selectedUniversity.name,
       universityShortName: selectedUniversity.short_name,
-      requiresPasswordChange,
+      rememberMe,
+      sessionExpiresIn:
+        typeof normalized.sessionExpiresIn === "number" ? normalized.sessionExpiresIn : undefined,
     })
   }
 
   async function handleSubmit() {
     setError("")
     if (!selectedUniversity) {
-      setError("Select your university first.")
-      setStep("campus")
+      setError("Select your university to continue.")
+      setStep("university")
       return
     }
     if (!username.trim() || !password) {
@@ -180,11 +196,28 @@ export function StaffLoginPanel({ onBack }: Props) {
     }
   }
 
+  if (step === "university") {
+    return (
+      <LoginUniversityPicker
+        selectedUniversity={selectedUniversity}
+        onSelect={setSelectedUniversity}
+        onContinue={(university) => {
+          setSelectedUniversity(university)
+          void persistRememberedFacultyUniversity(university)
+          setStep("credentials")
+        }}
+        onBack={onBack}
+        title="Choose your campus"
+        description="Pick the university you teach at. Dual appointments can switch campuses here."
+      />
+    )
+  }
+
   if (accessStatus) {
     return (
       <AccessRequestStatusScreen
         payload={accessStatus}
-        portalLabel="Faculty"
+        portalLabel={selectedUniversity?.short_name ?? "Faculty"}
         onBack={() => setAccessStatus(null)}
       />
     )
@@ -196,7 +229,8 @@ export function StaffLoginPanel({ onBack }: Props) {
         showChrome={false}
         backLabel="Back to login"
         state={mfaState}
-        portalLabel="CourseCollab Faculty"
+        university={selectedUniversity}
+        portalLabel={selectedUniversity?.short_name ?? "CourseCollab Faculty"}
         onComplete={(payload) => finishStaffLogin(payload, password)}
         onBack={() => {
           setMfaState(null)
@@ -206,69 +240,13 @@ export function StaffLoginPanel({ onBack }: Props) {
     )
   }
 
-  if (step === "campus") {
-    return (
-      <LoginPortalStack>
-        <LoginPortalHeader portal="faculty" />
-        <Text style={[loginType.body, { color: LOGIN.secondaryLabel, marginBottom: 8 }]}>
-          Choose your university — the same username can be used at each campus, but courses and data
-          stay separate.
-        </Text>
-        {error ? <ErrorBanner message={error} /> : null}
-        {loadingUniversities ? (
-          <ActivityIndicator color={LOGIN.cta} style={{ marginVertical: 24 }} />
-        ) : (
-          <View style={styles.campusList}>
-            {universities.map((uni) => {
-              const active = selectedUniversity?.id === uni.id
-              return (
-                <Pressable
-                  key={uni.id}
-                  onPress={() => {
-                    setSelectedUniversity(uni)
-                    setStep("credentials")
-                    setError("")
-                  }}
-                  style={[
-                    styles.campusRow,
-                    {
-                      borderColor: active ? LOGIN.cta : LOGIN.separator,
-                      backgroundColor: active ? hexToRgba(LOGIN.cta, 0.08) : LOGIN.fill,
-                    },
-                  ]}
-                >
-                  <UniversityAuthLogoImage university={uni} size={36} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={[loginType.body, { color: LOGIN.label, fontWeight: "600" }]}>
-                      {uni.name}
-                    </Text>
-                    <Text style={[loginType.caption, { color: LOGIN.secondaryLabel }]}>
-                      {uni.short_name}
-                    </Text>
-                  </View>
-                  <Text style={{ color: LOGIN.cta, fontSize: 18 }}>›</Text>
-                </Pressable>
-              )
-            })}
-          </View>
-        )}
-        {onBack ? <LoginBackLink label="Other sign-in options" onPress={onBack} /> : null}
-      </LoginPortalStack>
-    )
-  }
-
   return (
     <LoginPortalStack>
-      <LoginPortalHeader portal="faculty" />
-
-      {selectedUniversity ? (
-        <Pressable onPress={() => setStep("campus")} style={styles.campusBadge}>
-          <UniversityAuthLogoImage university={selectedUniversity} size={28} />
-          <Text style={[loginType.caption, { color: LOGIN.secondaryLabel, flex: 1 }]}>
-            {selectedUniversity.short_name} · Tap to change campus
-          </Text>
-        </Pressable>
-      ) : null}
+      <LoginBrandHeader
+        university={selectedUniversity}
+        title="Faculty sign in"
+        subtitle={selectedUniversity?.name ?? "Instructors, TAs, graders, and observers."}
+      />
 
       {error ? <ErrorBanner message={error} /> : null}
 
@@ -277,7 +255,7 @@ export function StaffLoginPanel({ onBack }: Props) {
           label="Username"
           value={username}
           onChangeText={setUsername}
-          placeholder="dmdoe"
+          placeholder="Enter your username"
           autoCapitalize="none"
           grouped
         />
@@ -314,7 +292,12 @@ export function StaffLoginPanel({ onBack }: Props) {
 
       <LoginButton label="Continue to dashboard" onPress={() => void handleSubmit()} loading={submitting} />
 
-      {onBack ? <LoginBackLink label="Other sign-in options" onPress={onBack} /> : null}
+      <LoginAltActions
+        actions={[
+          { label: "Not this campus? Change university", onPress: handleChangeUniversity },
+          onBack ? { label: "Other sign-in options", onPress: onBack } : null,
+        ]}
+      />
     </LoginPortalStack>
   )
 }
@@ -324,22 +307,5 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-  },
-  campusList: {
-    gap: 10,
-  },
-  campusRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    padding: 14,
-    borderRadius: 14,
-    borderWidth: 1,
-  },
-  campusBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    marginBottom: 4,
   },
 })

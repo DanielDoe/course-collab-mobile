@@ -572,6 +572,7 @@ export function FacultyRecommendationWorkspaceModal({
                             setDeadline(v)
                           }}
                           accessibilityLabel="Deadline"
+                          yearPolicy="upcoming"
                         />
                       </FacultySheetField>
                       <FacultySheetField label="Student context">

@@ -1,11 +1,11 @@
 import { type ReactNode } from "react"
-import { Pressable, StyleSheet, Text, View } from "react-native"
+import { StyleSheet, Text, View } from "react-native"
 import { Ionicons, type IoniconName } from "@/components/icons/AppIcon"
-import { NATIVE } from "../../constants/faculty-native-theme"
 import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
 import { useNativeType } from "../../lib/themed-module-theme"
 import { solidListThumb, solidListThumbFromAccent } from "../../lib/solid-list-thumb"
 import { SolidListThumbTile } from "./SolidListThumbTile"
+import { PressableScale } from "../motion/PressableScale"
 
 export type SignatureThumbPalette = {
   color: string
@@ -116,14 +116,13 @@ export function SignatureListCard({
   }
 
   return (
-    <Pressable
-      style={({ pressed }) => [
+    <PressableScale
+      style={[
         styles.card,
         tokens.cardShadow,
         {
           backgroundColor: native.secondaryGrouped,
           borderColor: tokens.border,
-          opacity: pressed && !disabled ? NATIVE.pressedOpacity : 1,
         },
       ]}
       onPress={onPress}
@@ -131,7 +130,7 @@ export function SignatureListCard({
       accessibilityRole="button"
     >
       {content}
-    </Pressable>
+    </PressableScale>
   )
 }
 

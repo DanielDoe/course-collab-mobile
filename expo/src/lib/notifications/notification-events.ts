@@ -6,9 +6,12 @@ import {
 } from "../notification-link"
 
 export type { NotificationModule } from "../notification-link"
-export type MessageRefreshPayload = {
-  threadId?: number
-}
+export type { MessageRefreshPayload } from "./message-refresh"
+export {
+  shouldRefetchInboxOnMessageRefresh,
+  shouldReloadThreadOnMessageRefresh,
+} from "./message-refresh"
+import type { MessageRefreshPayload } from "./message-refresh"
 
 type MessageRefreshListener = (payload?: MessageRefreshPayload) => void
 type VoidListener = () => void

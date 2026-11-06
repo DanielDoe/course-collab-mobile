@@ -1,4 +1,4 @@
-export type MarkdownHtmlVariant = "default" | "reading" | "chat"
+export type MarkdownHtmlVariant = "default" | "reading" | "chat" | "flashcard"
 
 export type MarkdownHtmlTheme = {
   accent: string
@@ -18,10 +18,10 @@ function resolveMarkdownTheme(theme?: MarkdownHtmlTheme) {
   const textSecondary = theme?.textSecondary ?? (isDark ? "#98A2B3" : "#475569")
   const heading = theme?.heading ?? text
   const border = theme?.border ?? (isDark ? "rgba(255,255,255,0.12)" : "rgba(226, 232, 240, 0.95)")
-  const codeBg = isDark ? "rgba(255,255,255,0.14)" : "#f1f5f9"
+  const codeBg = isDark ? "rgba(255,255,255,0.12)" : "#eef2ff"
   const codeText = isDark ? "#F2F2F7" : text
-  const preBg = isDark ? "#1c1c1e" : "#0f172a"
-  const preText = isDark ? "#f2f2f7" : "#e2e8f0"
+  const preBg = isDark ? "#0d1117" : "#0f172a"
+  const preText = isDark ? "#e6edf3" : "#e2e8f0"
   const tableHeadBg = isDark ? "rgba(255,255,255,0.06)" : accentSoft
   return { accent, accentSoft, text, textSecondary, heading, border, codeBg, codeText, preBg, preText, tableHeadBg }
 }
@@ -67,6 +67,62 @@ const BASE_MATH_AND_SCRIPT = `
     margin: 10px 0;
     display: block;
   }
+  /* Editor-like fenced code */
+  .md-content pre {
+    margin: 0 0 14px !important;
+    padding: 14px 16px !important;
+    background: __PRE_BG__ !important;
+    color: __PRE_TEXT__ !important;
+    border-radius: 12px !important;
+    border: 1px solid __BORDER__;
+    overflow-x: auto;
+    font-size: 13.5px !important;
+    line-height: 1.7 !important;
+    tab-size: 2;
+    -webkit-overflow-scrolling: touch;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+  }
+  .md-content pre code,
+  .md-content pre code.hljs {
+    display: block;
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+    color: inherit !important;
+    font-family: "SF Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace !important;
+    font-size: inherit !important;
+    line-height: inherit !important;
+    white-space: pre;
+    overflow-wrap: normal;
+    word-break: normal;
+  }
+  .md-content .hljs-keyword,
+  .md-content .hljs-selector-tag,
+  .md-content .hljs-literal,
+  .md-content .hljs-section,
+  .md-content .hljs-link { color: #ff7b72; }
+  .md-content .hljs-function .hljs-title,
+  .md-content .hljs-title.function_,
+  .md-content .hljs-title { color: #d2a8ff; }
+  .md-content .hljs-built_in,
+  .md-content .hljs-type { color: #79c0ff; }
+  .md-content .hljs-string,
+  .md-content .hljs-attr,
+  .md-content .hljs-symbol,
+  .md-content .hljs-bullet,
+  .md-content .hljs-addition { color: #a5d6ff; }
+  .md-content .hljs-comment,
+  .md-content .hljs-quote,
+  .md-content .hljs-deletion,
+  .md-content .hljs-meta { color: #8b949e; font-style: italic; }
+  .md-content .hljs-number,
+  .md-content .hljs-regexp { color: #ffa657; }
+  .md-content .hljs-variable,
+  .md-content .hljs-template-variable,
+  .md-content .hljs-params { color: #ffa198; }
+  .md-content .hljs-name,
+  .md-content .hljs-attribute { color: #7ee787; }
 `
 
 const VARIANT_STYLES: Record<MarkdownHtmlVariant, string> = {
@@ -80,7 +136,7 @@ const VARIANT_STYLES: Record<MarkdownHtmlVariant, string> = {
     color: __TEXT__;
     background: transparent;
   }
-  .md-content { word-wrap: break-word; overflow-wrap: anywhere; }
+  .md-content { word-wrap: break-word; overflow-wrap: break-word; word-spacing: normal; }
   .md-content > :first-child { margin-top: 0; }
   .md-content > :last-child { margin-bottom: 0; }
   .md-content h1 {
@@ -197,7 +253,7 @@ const VARIANT_STYLES: Record<MarkdownHtmlVariant, string> = {
     background: transparent;
     -webkit-font-smoothing: antialiased;
   }
-  .md-content { word-wrap: break-word; overflow-wrap: anywhere; }
+  .md-content { word-wrap: break-word; overflow-wrap: break-word; word-spacing: normal; }
   .md-content > :first-child { margin-top: 0; }
   .md-content > :last-child { margin-bottom: 0; }
   .md-content h1 {
@@ -324,7 +380,7 @@ const VARIANT_STYLES: Record<MarkdownHtmlVariant, string> = {
     background: transparent;
     -webkit-font-smoothing: antialiased;
   }
-  .md-content { word-wrap: break-word; overflow-wrap: anywhere; }
+  .md-content { word-wrap: break-word; overflow-wrap: break-word; word-spacing: normal; }
   .md-content > :first-child { margin-top: 0; }
   .md-content > :last-child { margin-bottom: 0; }
   .md-content h1 {
@@ -432,6 +488,103 @@ const VARIANT_STYLES: Record<MarkdownHtmlVariant, string> = {
     font-weight: 700;
   }
   .md-content td { color: __TEXT__; }`,
+  flashcard: `
+  body {
+    margin: 0;
+    padding: 4px 8px 8px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 17px;
+    line-height: 1.5;
+    color: __TEXT__;
+    background: transparent;
+    -webkit-font-smoothing: antialiased;
+    text-align: center;
+  }
+  .md-content {
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    text-align: center;
+  }
+  .md-content > :first-child { margin-top: 0; }
+  .md-content > :last-child { margin-bottom: 0; }
+  .md-content h1,
+  .md-content h2,
+  .md-content h3,
+  .md-content h4 {
+    font-size: 18px;
+    font-weight: 700;
+    color: __HEADING__;
+    margin: 0 0 10px;
+    letter-spacing: -0.2px;
+    line-height: 1.35;
+    text-align: center;
+  }
+  .md-content p {
+    margin: 0 0 10px;
+    color: __TEXT__;
+    text-align: center;
+  }
+  .md-content ul,
+  .md-content ol {
+    margin: 0 auto 10px;
+    padding-left: 20px;
+    color: __TEXT__;
+    display: inline-block;
+    text-align: left;
+  }
+  .md-content li { margin: 0 0 6px; color: __TEXT__; }
+  .md-content li > p { margin: 0 0 4px; text-align: left; }
+  .md-content strong { font-weight: 700; color: __HEADING__; }
+  .md-content em { font-style: italic; }
+  .md-content code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.9em;
+    background: __CODE_BG__;
+    padding: 0.1em 0.35em;
+    border-radius: 5px;
+    color: __CODE_TEXT__;
+  }
+  .md-content pre {
+    margin: 0 auto 10px;
+    padding: 10px 12px;
+    background: __PRE_BG__;
+    color: __PRE_TEXT__;
+    border-radius: 10px;
+    overflow-x: auto;
+    font-size: 13px;
+    line-height: 1.45;
+    text-align: left;
+    max-width: 100%;
+  }
+  .md-content pre code {
+    background: transparent;
+    padding: 0;
+    color: inherit;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    white-space: pre;
+  }
+  .md-content table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0 auto 10px;
+    font-size: 14px;
+    color: __TEXT__;
+  }
+  .md-content th,
+  .md-content td {
+    border: 1px solid __BORDER__;
+    padding: 8px;
+    text-align: center;
+    vertical-align: middle;
+  }
+  .md-content th {
+    background: __TABLE_HEAD_BG__;
+    color: __HEADING__;
+    font-weight: 700;
+  }
+  .md-content td { color: __TEXT__; }
+  .md-display { margin: 8px 0 10px; }
+  .md-inline { vertical-align: -0.12em; }`,
 }
 
 function noSelectCss(disableSelection?: boolean): string {
@@ -452,10 +605,11 @@ export function buildMarkdownHtml(
   markdown: string,
   variant: MarkdownHtmlVariant = "default",
   theme?: MarkdownHtmlTheme,
-  options?: { disableSelection?: boolean },
+  options?: { disableSelection?: boolean; compact?: boolean },
 ): string {
   const payload = JSON.stringify(markdown)
-  const css = applyMarkdownTheme(`${VARIANT_STYLES[variant]}${BASE_MATH_AND_SCRIPT}`, theme)
+  const compactCss = options?.compact ? "body{padding:0!important;}" : ""
+  const css = applyMarkdownTheme(`${VARIANT_STYLES[variant]}${BASE_MATH_AND_SCRIPT}${compactCss}`, theme)
 
   return `<!DOCTYPE html>
 <html>
@@ -464,6 +618,7 @@ export function buildMarkdownHtml(
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
 <script src="https://cdn.jsdelivr.net/npm/marked@15.0.7/marked.min.js"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css"/>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.11.1/build/highlight.min.js"></script>
 <style>${noSelectCss(options?.disableSelection)}${css}</style>
 </head>
 <body>
@@ -527,6 +682,11 @@ export function buildMarkdownHtml(
       mathStore.push(renderMath(expr.trim(), true));
       return "\\n\\nMATHBLOCK_" + id + "_\\n\\n";
     });
+    out = out.replace(/(?<!\\\\)\\$([^$\\n]+?)\\$(?!\\$)/g, function(_, expr) {
+      var id = mathStore.length;
+      mathStore.push(renderMath(expr.trim(), false));
+      return "MATHINLINE_" + id + "_";
+    });
     return out;
   }
 
@@ -548,6 +708,11 @@ export function buildMarkdownHtml(
       mathStore = [];
       var prepared = stashMath(markdown || "");
       root.innerHTML = applyInlineMath(restoreMath(marked.parse(prepared)));
+      if (typeof hljs !== "undefined") {
+        root.querySelectorAll("pre code").forEach(function(block) {
+          try { hljs.highlightElement(block); } catch (e) {}
+        });
+      }
     } else {
       root.textContent = markdown || "";
     }

@@ -7,6 +7,14 @@ import { useModuleContentTopPadding } from "../../context/ChromeInsetContext"
 import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
 import { useNativeType, useThemedStudentNative } from "../../lib/themed-module-theme"
 import { CORA_NAME } from "../../lib/cora-constants"
+import {
+  insufficientCreditsAlertButtons,
+  iosCoraLiteNotice,
+  iosInsufficientCoraCreditsNotice,
+  iosMembershipRequiredNotice,
+  isIosPurchaseUiHidden,
+  tierLockedAlertButtons,
+} from "../../lib/purchase-navigation"
 import { StudentThemedLocked } from "../student/student-themed-hero"
 import { useSession } from "../../context/SessionProvider"
 import { useStudentShell } from "../../context/StudentShellContext"
@@ -48,6 +56,7 @@ import {
   withMessageProposals,
   type CoraActionProposal,
 } from "../../lib/cora"
+import { navigateCoraRecommendationLink } from "../../lib/cora/resolve-open-route"
 import * as Haptics from "expo-haptics"
 import { hasNavAccess } from "../../constants/student-nav"
 import { formatCoraCreditsLabel, isCoraLiteEligible } from "../../lib/cora/credits/economy"
@@ -131,7 +140,6 @@ import {
   createThreadId,
   deriveThreadTitle,
   exchangesRemaining,
-  findStudentCoraThreadForCapability,
   getMaxExchangesForTier,
   isStorableChatMessage,
   isThreadAtExchangeLimit,
@@ -730,10 +738,13 @@ export function AiTutorScreen() {
 
     if (!membershipTierLoaded) return
     if (!hasNavAccess(membershipTier, "Explorer")) {
-      AppAlert.alert("Upgrade required", `${CORA_NAME} requires Explorer or Trailblazer membership.`, [
-        { text: "Cancel", style: "cancel" },
-        { text: "View plans", onPress: () => router.push("/membership" as never) },
-      ])
+      AppAlert.alert(
+        isIosPurchaseUiHidden() ? "Membership required" : "Upgrade required",
+        isIosPurchaseUiHidden()
+          ? iosMembershipRequiredNotice("Explorer or Trailblazer")
+          : `${CORA_NAME} requires Explorer or Trailblazer membership.`,
+        tierLockedAlertButtons(() => router.push("/membership" as never)),
+      )
       return
     }
 
@@ -741,22 +752,20 @@ export function AiTutorScreen() {
       if (!isCoraLiteEligible(text)) {
         AppAlert.alert(
           "Cora Lite",
-          "Premium generation needs Cora Credits. Buy a pack on Plans, or ask about grades, deadlines, and navigation.",
-          [
-            { text: "Not now", style: "cancel" },
-            { text: "View packs", onPress: () => router.push("/membership" as never) },
-          ],
+          isIosPurchaseUiHidden()
+            ? iosCoraLiteNotice()
+            : "Premium generation needs Cora Credits. Buy a pack on Plans, or ask about grades, deadlines, and navigation.",
+          insufficientCreditsAlertButtons(() => router.push("/membership" as never)),
         )
         return
       }
     } else if (credits && credits.credits <= 0) {
       AppAlert.alert(
         "No credits left",
-        `You've used your ${CORA_NAME} credits for this period. Buy a pack or wait for your monthly refresh.`,
-        [
-          { text: "Not now", style: "cancel" },
-          { text: "View packs", onPress: () => router.push("/membership" as never) },
-        ],
+        isIosPurchaseUiHidden()
+          ? iosInsufficientCoraCreditsNotice()
+          : `You've used your ${CORA_NAME} credits for this period. Buy a pack or wait for your monthly refresh.`,
+        insufficientCreditsAlertButtons(() => router.push("/membership" as never)),
       )
       return
     }
@@ -1330,25 +1339,8 @@ export function AiTutorScreen() {
   const handleCapabilityAction = useCallback(
     (capability: StudentCoraCapability, prompt?: string) => {
       if (prompt?.trim()) {
-        const existing = findStudentCoraThreadForCapability(
-          threadsRef.current,
-          archivedThreadsRef.current,
-          capability.id,
-        )
-        if (existing) {
-          setMessages(existing.messages)
-          setActiveThreadId(existing.id)
-          if (session) {
-            void saveSessionPrefs(session.databaseId, {
-              activeThreadId: existing.id,
-              activeTab: "workspace",
-            })
-          }
-          enterImmersiveChat()
-          return
-        }
         pendingCapabilityRef.current = capability.id
-        openWorkspacePrompt(prompt.trim())
+        void openWorkspaceWithNewChat(prompt.trim(), null, true)
         return
       }
 
@@ -1412,10 +1404,10 @@ export function AiTutorScreen() {
           handleNewConversation()
           return true
         default:
-          return false
+          return navigateCoraRecommendationLink(router, rec.link)
       }
     },
-    [handleCapabilityAction, handleNewConversation],
+    [handleCapabilityAction, handleNewConversation, router],
   )
 
   const persistCurrentThreadIfNeeded = useCallback(async () => {
@@ -1435,20 +1427,22 @@ export function AiTutorScreen() {
       if (streaming || !session) return
       if (!membershipTierLoaded) return
       if (!hasNavAccess(membershipTier, "Explorer")) {
-        AppAlert.alert("Upgrade required", `${CORA_NAME} requires Explorer or Trailblazer membership.`, [
-          { text: "Cancel", style: "cancel" },
-          { text: "View plans", onPress: () => router.push("/membership" as never) },
-        ])
+        AppAlert.alert(
+          isIosPurchaseUiHidden() ? "Membership required" : "Upgrade required",
+          isIosPurchaseUiHidden()
+            ? iosMembershipRequiredNotice("Explorer or Trailblazer")
+            : `${CORA_NAME} requires Explorer or Trailblazer membership.`,
+          tierLockedAlertButtons(() => router.push("/membership" as never)),
+        )
         return
       }
       if (credits?.coraMode === "lite" || (credits && credits.credits <= 0)) {
         AppAlert.alert(
           "Cora Lite",
-          `Premium tools need ${CORA_NAME} credits. Buy a pack or wait for your monthly refresh.`,
-          [
-            { text: "Not now", style: "cancel" },
-            { text: "View packs", onPress: () => router.push("/membership" as never) },
-          ],
+          isIosPurchaseUiHidden()
+            ? iosInsufficientCoraCreditsNotice()
+            : `Premium tools need ${CORA_NAME} credits. Buy a pack or wait for your monthly refresh.`,
+          insufficientCreditsAlertButtons(() => router.push("/membership" as never)),
         )
         return
       }

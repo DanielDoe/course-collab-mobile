@@ -97,7 +97,7 @@ export function DeleteAccountScreen() {
     return (
       <View style={[styles.screenRoot, { backgroundColor: native.groupedBackground }]}>
         <NotetakerScreenHeader title="Delete Account" fallbackHref="/settings/privacy-security" />
-        <ModuleScreen error="Account deletion is not available for this account type." disableTopInsetAdjustment>
+        <ModuleScreen error="Account deletion is not available for this account type." disableTopInsetAdjustment stackedHeader>
           <View />
         </ModuleScreen>
       </View>
@@ -107,7 +107,7 @@ export function DeleteAccountScreen() {
   return (
     <View style={[styles.screenRoot, { backgroundColor: native.groupedBackground }]}>
       <NotetakerScreenHeader title="Delete Account" fallbackHref="/settings/privacy-security" />
-      <ModuleScreen loading={submitting} error={error} disableTopInsetAdjustment>
+      <ModuleScreen loading={submitting} error={error} disableTopInsetAdjustment stackedHeader>
         <View style={[styles.hero, { backgroundColor: `${tokens.danger}12`, borderColor: `${tokens.danger}33` }]}>
           <Ionicons name="warning-outline" size={22} color={tokens.danger} />
           <Text style={[type.body, styles.heroText, { color: native.label }]}>

@@ -1,12 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useAppToast } from "../../context/AppToastProvider"
 import { AppAlert } from '../../lib/app-alert'
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { ApiError } from "../../lib/api"
+import { instructorApi, type InstructorAnnouncement } from "../../lib/instructor-api"
 import {
-  instructorApi,
-  type InstructorAnnouncement} from "../../lib/instructor-api"
+  useDeleteFacultyAnnouncement,
+  useFacultyAnnouncements,
+  useSaveFacultyAnnouncement,
+} from "../../hooks/query/useFacultyAnnouncements"
+import { QueryRefreshBanner } from "../query/QueryRefreshBanner"
+import { QuerySkeleton } from "../query/QuerySkeleton"
 import {
   applyFacultyAnnouncementQuery,
   countFacultyAnnouncementsByFilter,
@@ -26,6 +32,9 @@ import { FacultyAnnouncementDetailModal } from "./FacultyAnnouncementDetailModal
 import { FacultyEmptyState } from "./faculty-shared"
 import { useFacultyModuleScrollPadding, FacultyFilterSheet, FacultySearchToolbar } from "./faculty-module-shell"
 import { useModuleTheme } from "../../lib/themed-module-shell"
+import { useFacultyListPager } from "../../hooks/useFacultyListPager"
+import { FacultyListPagerFooter } from "./FacultyListPagerFooter"
+import { ModuleListItemMotion } from "../ModuleFlashList"
 
 const FILTER_OPTIONS: Array<{
   id: FacultyAnnouncementFilter
@@ -38,17 +47,22 @@ const FILTER_OPTIONS: Array<{
 
 export function FacultyAnnouncementsScreen() {
   const insets = useSafeAreaInsets()
+  const { showSuccess } = useAppToast()
   const scrollPad = useFacultyModuleScrollPadding(88)
   const tokens = useAppThemeTokens()
   const styles = useFacultyModuleStyles()
   const { styles: moduleStyles } = useModuleTheme()
   const { scope, ready, course } = useFacultyScope()
 
-  const [announcements, setAnnouncements] = useState<InstructorAnnouncement[]>([])
-  const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
-  const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState("")
+  const listQuery = useFacultyAnnouncements(ready ? scope : null)
+  const saveAnnouncement = useSaveFacultyAnnouncement(scope)
+  const deleteAnnouncement = useDeleteFacultyAnnouncement(scope)
+  const announcements = listQuery.announcements
+  const sessionOptions = listQuery.sessions
+  const loading = listQuery.isInitialLoading
+  const refreshing = listQuery.isRefreshing && !listQuery.isInitialLoading
+  const submitting = saveAnnouncement.isPending
+  const error = listQuery.error instanceof ApiError ? listQuery.error.message : listQuery.error ? "Could not load announcements." : ""
 
   const [search, setSearch] = useState("")
   const [filter, setFilter] = useState<FacultyAnnouncementFilter>("all")
@@ -58,40 +72,6 @@ export function FacultyAnnouncementsScreen() {
   const [composerInitialDraft, setComposerInitialDraft] = useState<ComposerDraft | null>(null)
   const [editing, setEditing] = useState<InstructorAnnouncement | null>(null)
   const [selected, setSelected] = useState<InstructorAnnouncement | null>(null)
-  const [sessionOptions, setSessionOptions] = useState<Array<{ value: string; label: string }>>([])
-
-  const load = useCallback(async () => {
-    if (!scope) return
-    setError("")
-    try {
-      const [items, sessionsRes] = await Promise.all([
-        instructorApi.getAnnouncements(scope),
-        instructorApi.getSessions(scope, scope.academicTermId ?? undefined).catch(() => ({ sessions: [] })),
-      ])
-      setAnnouncements(items)
-      const seen = new Set<string>()
-      setSessionOptions(
-        (sessionsRes.sessions ?? [])
-          .filter((session) => {
-            if (!session.code || seen.has(session.code)) return false
-            seen.add(session.code)
-            return true
-          })
-          .map((session) => ({ value: session.code, label: session.code })),
-      )
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not load announcements.")
-    }
-  }, [scope])
-
-  useEffect(() => {
-    if (!ready) {
-      setLoading(false)
-      return
-    }
-    setLoading(true)
-    load().finally(() => setLoading(false))
-  }, [ready, load])
 
   const filterCounts = useMemo(() => countFacultyAnnouncementsByFilter(announcements), [announcements])
 
@@ -99,19 +79,15 @@ export function FacultyAnnouncementsScreen() {
     () => applyFacultyAnnouncementQuery(announcements, { search, filter }),
     [announcements, search, filter],
   )
+  const pager = useFacultyListPager(filtered, `${search}:${filter}`, "announcements")
 
   const filtersActive = filter !== "all"
   const hasActiveQuery = Boolean(search.trim()) || filtersActive
   const activeFilterLabel = FILTER_OPTIONS.find((opt) => opt.id === filter)?.label
 
   const handleRefresh = useCallback(async () => {
-    setRefreshing(true)
-    try {
-      await load()
-    } finally {
-      setRefreshing(false)
-    }
-  }, [load])
+    await listQuery.refetch()
+  }, [listQuery.refetch])
 
   useNotificationModuleRefresh("announcements", handleRefresh)
 
@@ -128,6 +104,10 @@ export function FacultyAnnouncementsScreen() {
           target_session: "all",
           expires_at: "",
           attachments: [],
+          event_date: "",
+          event_time: "",
+          event_end: "",
+          event_location: "",
         })
         setEditing(null)
         setComposerOpen(true)
@@ -150,7 +130,6 @@ export function FacultyAnnouncementsScreen() {
 
   async function handleSubmit(draft: ComposerDraft) {
     if (!scope) return
-    setSubmitting(true)
     try {
       const originalContent = editing?.content ?? ""
       const content = announcementContentForSave(draft.content, originalContent || undefined)
@@ -163,31 +142,32 @@ export function FacultyAnnouncementsScreen() {
         target_session: draft.target_session || "all",
         expires_at: draft.expires_at || null,
         attachments: draft.attachments,
+        event_date: draft.event_date || null,
+        event_time: draft.event_time || null,
+        event_end: draft.event_end || null,
+        event_location: draft.event_location || null,
       }
-      if (editing) {
-        await instructorApi.updateAnnouncement(scope, editing.id, payload)
-      } else {
-        await instructorApi.createAnnouncement(scope, payload)
-      }
+      await saveAnnouncement.mutateAsync({
+        editingId: editing?.id,
+        payload,
+      })
       setComposerOpen(false)
       setEditing(null)
-      await load()
+      showSuccess(editing ? "Announcement updated" : "Announcement published")
     } catch (err) {
       AppAlert.alert(
         editing ? "Could not save" : "Could not publish",
         err instanceof ApiError ? err.message : "Try again.",
       )
-    } finally {
-      setSubmitting(false)
     }
   }
 
   async function handleDelete(item: InstructorAnnouncement) {
     if (!scope) return
     try {
-      await instructorApi.deleteAnnouncement(scope, item.id)
+      await deleteAnnouncement.mutateAsync(item)
       setSelected(null)
-      await load()
+      showSuccess("Announcement deleted")
     } catch (err) {
       AppAlert.alert("Could not delete", err instanceof ApiError ? err.message : "Try again.")
     }
@@ -221,6 +201,8 @@ export function FacultyAnnouncementsScreen() {
         keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
       >
+        <QueryRefreshBanner visible={listQuery.refreshFailed} onRetry={() => void handleRefresh()} />
+
         {error ? (
           <View style={styles.errorBox}>
             <Ionicons name="alert-circle-outline" size={16} color={tokens.danger} />
@@ -285,9 +267,7 @@ export function FacultyAnnouncementsScreen() {
         ) : null}
 
         {loading ? (
-          <View style={localStyles.loadingBox}>
-            <ActivityIndicator size="large" color={tokens.accent} />
-          </View>
+          <QuerySkeleton />
         ) : announcements.length === 0 ? (
           <FacultyEmptyState
             icon="megaphone-outline"
@@ -302,14 +282,19 @@ export function FacultyAnnouncementsScreen() {
           />
         ) : (
           <View style={localStyles.list}>
-            {filtered.map((item, index) => (
-              <FacultyAnnouncementCard
-                key={item.id}
-                item={item}
-                index={index}
-                onPress={() => setSelected(item)}
-              />
-            ))}
+            {pager.items.map((item, index) => {
+              const rowIndex = pager.page * pager.pageSize + index
+              return (
+                <ModuleListItemMotion key={item.id} index={rowIndex}>
+                  <FacultyAnnouncementCard
+                    item={item}
+                    index={rowIndex}
+                    onPress={() => setSelected(item)}
+                  />
+                </ModuleListItemMotion>
+              )
+            })}
+            <FacultyListPagerFooter pager={pager} />
           </View>
         )}
       </ScrollView>

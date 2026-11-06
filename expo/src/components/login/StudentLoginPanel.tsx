@@ -1,16 +1,18 @@
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import {
-  ActivityIndicator,
+  Linking,
   Platform,
-  Pressable,
   StyleSheet,
   Switch,
   Text,
-  TextInput,
   View,
 } from "react-native"
+import { useRouter } from "expo-router"
 import { hexToRgba } from "../../constants/app-themes"
 import { Ionicons } from "@/components/icons/AppIcon"
+import { AuthFlowEnterItem, AuthFlowPanelTransition } from "../motion/AuthFlowPanelTransition"
+import { PressableScale } from "../motion/PressableScale"
+import { triggerMotionHaptic } from "../../lib/motion"
 import {
   ApiError,
   api,
@@ -18,47 +20,35 @@ import {
   type UniversityRecord,
   type UniversityStudentLoginResponse,
 } from "../../lib/api"
-import { primeMembershipTierCache } from "../../lib/membership-tier-cache"
 import {
   clearRememberedStudentCredentials,
   clearRememberedUniversity,
-  persistRememberedStudentAuth,
   persistRememberedUniversity,
   readRememberedStudentAuth,
   readRememberedUniversity,
 } from "../../lib/remembered-student-auth"
-import { persistMfaDeviceTrustFromLogin, studentMfaLoginKey, studentMfaAliasKeys } from "../../lib/mfa-device-trust"
-import { stashPendingLoginPassword } from "../../lib/pending-login-password"
 import { useSession } from "../../context/SessionProvider"
 import { MfaLoginStep } from "../auth/MfaLoginStep"
 import { ErrorBanner, LoginFieldGroup } from "./LoginCard"
 import { LoginButton, LoginField, LoginPasswordToggle } from "./LoginButton"
 import { LoginBrandHeader } from "./LoginBrandHeader"
-import { UniversityAuthLogoImage } from "./UniversityAuthLogoImage"
-import { LoginBackLink, LoginPortalStack } from "./login-chrome"
+import { LoginUniversityPicker } from "./LoginUniversityPicker"
+import { LoginPortalStack, type RegisterAuthPanelBack } from "./login-chrome"
 import { useLoginTheme } from "./login-theme"
 import { parseAccessLifecyclePayload } from "../../lib/access-governance"
 import { formatStudentLoginApiError } from "../../lib/student-login-errors"
 import { normalizeLoginIdentifier, normalizeLoginPassword } from "../../lib/login-credentials"
+import { completeStudentUniversityLogin } from "../../lib/student-login-completion"
+import { stashPendingStudentCourseLogin } from "../../lib/student-login-pending"
 import { AccessRequestStatusScreen } from "../auth/AccessRequestStatusScreen"
 import { parseMfaCompletePayload, parseMfaLoginResponse, type MfaLoginState } from "../../lib/mfa-types"
 
-type Step = "university" | "credentials" | "course" | "mfa"
-
-/** Mirrors web lib/universities-shared.ts — the catch-all "Other" picker row. */
-function isOtherUniversity(uni: Pick<UniversityRecord, "short_name"> | null | undefined): boolean {
-  return String(uni?.short_name ?? "").trim().toUpperCase() === "OTHER"
-}
-
-function sameUniversity(a: UniversityRecord | null, b: UniversityRecord): boolean {
-  if (!a) return false
-  if (a.id > 0 || b.id > 0) return a.id === b.id
-  return a.name === b.name && (a.domain ?? "") === (b.domain ?? "")
-}
+type Step = "university" | "credentials" | "mfa"
 type AuthMode = "login" | "activate"
 
 type Props = {
   onBack?: () => void
+  registerPanelBack?: RegisterAuthPanelBack
 }
 
 function isCourseSelectionResponse(
@@ -67,20 +57,15 @@ function isCourseSelectionResponse(
   return "requiresCourseSelection" in data && data.requiresCourseSelection === true
 }
 
-export function StudentLoginPanel({ onBack }: Props) {
+export function StudentLoginPanel({ onBack, registerPanelBack }: Props) {
   const { signIn } = useSession()
+  const router = useRouter()
   const { LOGIN, loginType } = useLoginTheme()
 
   const [step, setStep] = useState<Step>("university")
   const [mode, setMode] = useState<AuthMode>("login")
 
-  const [universities, setUniversities] = useState<UniversityRecord[]>([])
-  const [loadingUniversities, setLoadingUniversities] = useState(true)
   const [selectedUniversity, setSelectedUniversity] = useState<UniversityRecord | null>(null)
-  const [uniQuery, setUniQuery] = useState("")
-  const [uniResults, setUniResults] = useState<UniversityRecord[]>([])
-  const [searchingUniversities, setSearchingUniversities] = useState(false)
-  const [savingUniversity, setSavingUniversity] = useState(false)
 
   const [identifier, setIdentifier] = useState("")
   const [password, setPassword] = useState("")
@@ -89,7 +74,6 @@ export function StudentLoginPanel({ onBack }: Props) {
   const [rememberMe, setRememberMe] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
 
-  const [enrollments, setEnrollments] = useState<EnrollmentOption[]>([])
   const [pendingCredentials, setPendingCredentials] = useState<{
     identifier: string
     password: string
@@ -110,7 +94,6 @@ export function StudentLoginPanel({ onBack }: Props) {
         ])
         if (!mounted) return
         const list = uniData.universities ?? []
-        setUniversities(list)
 
         if (remembered?.university) {
           const fresh =
@@ -133,8 +116,6 @@ export function StudentLoginPanel({ onBack }: Props) {
       } catch (err) {
         if (!mounted) return
         setError(err instanceof ApiError ? err.message : "Failed to load universities.")
-      } finally {
-        if (mounted) setLoadingUniversities(false)
       }
     })()
     return () => {
@@ -142,102 +123,35 @@ export function StudentLoginPanel({ onBack }: Props) {
     }
   }, [])
 
-  useEffect(() => {
-    const q = uniQuery.trim()
-    if (q.length < 2) {
-      setUniResults([])
-      setSearchingUniversities(false)
-      return
-    }
-    const handle = setTimeout(() => {
-      void (async () => {
-        setSearchingUniversities(true)
-        try {
-          const data = await api.searchUniversities(q)
-          setUniResults(data.universities ?? [])
-        } catch {
-          setUniResults([])
-        } finally {
-          setSearchingUniversities(false)
-        }
-      })()
-    }, 280)
-    return () => clearTimeout(handle)
-  }, [uniQuery])
-
-  const featuredUniversities = useMemo(
-    () => universities.filter((u) => !isOtherUniversity(u)),
-    [universities],
-  )
-  const otherUniversity = useMemo(
-    () => universities.find((u) => isOtherUniversity(u)) ?? null,
-    [universities],
-  )
-  const showingUniversitySearch = uniQuery.trim().length >= 2
-
   /** Color Hunt link accent; school color only for university row identity. */
   const linkAccent = LOGIN.purple
   const schoolAccent = selectedUniversity?.primary_color ?? linkAccent
 
   async function finishLogin(data: Extract<UniversityStudentLoginResponse, { student: unknown }>) {
-    const student = data.student
-    const enrollment = data.enrollment
-    const university = data.university ?? selectedUniversity
-
-    const loginIdentifier = pendingCredentials?.identifier ?? identifier
-    const universityId = university?.id ?? selectedUniversity?.id
-    if (universityId && loginIdentifier.trim()) {
-      const loginKey = studentMfaLoginKey(universityId, loginIdentifier)
-      await persistMfaDeviceTrustFromLogin({
-        userType: "student",
-        loginKey,
-        payload: data as Record<string, unknown>,
-        aliasKeys: studentMfaAliasKeys(universityId, loginIdentifier, {
-          student_id: student.student_id,
-          email: student.email,
-        }),
-      })
-    }
-
-    await primeMembershipTierCache(String(student.id), data.effectiveMembershipTier)
-
-    if (university) {
-      await persistRememberedUniversity(university)
-    }
-    if (rememberMe) {
-      await persistRememberedStudentAuth({
-        university: university ?? selectedUniversity!,
-        identifier: identifier.trim() || String(student.student_id ?? ""),
-        rememberMe: true,
-      })
-    } else {
-      await clearRememberedStudentCredentials()
-    }
-
-    const requiresPasswordChange = student.has_changed_password === false
-    const loginPassword = pendingCredentials?.password ?? password
-    if (requiresPasswordChange && loginPassword) {
-      stashPendingLoginPassword(loginPassword)
-    }
-
-    await signIn({
-      portal: "student",
-      id: student.student_id,
-      authIdentifier: loginIdentifier.trim() || String(student.student_id ?? ""),
-      email: student.email,
-      name: student.full_name,
-      section: student.section ?? enrollment?.section ?? "",
-      databaseId: String(student.id),
-      courseId: enrollment?.courseId ?? (student.course_id != null ? Number(student.course_id) : undefined),
-      courseCode: enrollment?.courseCode,
-      courseTitle: enrollment?.courseTitle,
-      universityId: university?.id,
-      universityName: university?.name,
-      universityShortName: university?.short_name,
-      requiresPasswordChange,
+    await completeStudentUniversityLogin({
+      data,
+      selectedUniversity,
+      identifier: pendingCredentials?.identifier ?? identifier,
+      password: pendingCredentials?.password ?? password,
+      rememberMe,
+      signIn,
     })
+  }
 
-    // Parent login screen redirects to signing-in when session is set.
+  function navigateToCourseSelection(
+    id: string,
+    pw: string,
+    enrollmentList: EnrollmentOption[],
+  ) {
+    if (!selectedUniversity) return
+    stashPendingStudentCourseLogin({
+      university: selectedUniversity,
+      identifier: id,
+      password: pw,
+      rememberMe,
+      enrollments: enrollmentList,
+    })
+    router.push("/(auth)/student-select-course")
   }
 
   async function submitLogin(courseId?: number) {
@@ -263,9 +177,7 @@ export function StudentLoginPanel({ onBack }: Props) {
       })
 
       if (isCourseSelectionResponse(data)) {
-        setEnrollments(data.enrollments ?? [])
-        setPendingCredentials({ identifier: id, password: pw })
-        setStep("course")
+        navigateToCourseSelection(id, pw, data.enrollments ?? [])
         return
       }
 
@@ -303,9 +215,31 @@ export function StudentLoginPanel({ onBack }: Props) {
 
   function handleMfaBack() {
     setMfaState(null)
-    setStep(pendingCredentials ? "course" : "credentials")
+    setStep("credentials")
     setError("")
   }
+
+  const handlePanelBack = useCallback((): boolean => {
+    if (accessStatus) {
+      setAccessStatus(null)
+      return true
+    }
+    if (step === "mfa" && mfaState) {
+      handleMfaBack()
+      return true
+    }
+    if (step === "credentials") {
+      setStep("university")
+      setError("")
+      return true
+    }
+    return false
+  }, [accessStatus, mfaState, step])
+
+  useEffect(() => {
+    registerPanelBack?.(handlePanelBack)
+    return () => registerPanelBack?.(null)
+  }, [handlePanelBack, registerPanelBack])
 
   async function handleLogin() {
     const id = normalizeLoginIdentifier(identifier)
@@ -359,8 +293,7 @@ export function StudentLoginPanel({ onBack }: Props) {
       })
 
       if (isCourseSelectionResponse(data)) {
-        setEnrollments(data.enrollments ?? [])
-        setStep("course")
+        navigateToCourseSelection(identifier, activatePassword, data.enrollments ?? [])
         return
       }
 
@@ -376,189 +309,47 @@ export function StudentLoginPanel({ onBack }: Props) {
     }
   }
 
-  async function handleContinueUniversity() {
-    if (!selectedUniversity) {
-      setError("Select your university to continue.")
-      return
-    }
-    setError("")
-    let university = selectedUniversity
-    if (!university.id) {
-      setSavingUniversity(true)
-      try {
-        const data = await api.ensureUniversity({
-          name: university.name,
-          domain: university.domain,
-          shortName: university.short_name,
-        })
-        university = data.university
-        setSelectedUniversity(university)
-      } catch (err) {
-        setError(err instanceof ApiError ? err.message : "Could not save your school. Try again.")
-        setSavingUniversity(false)
-        return
-      }
-      setSavingUniversity(false)
-    }
-    void persistRememberedUniversity(university)
-    setStep("credentials")
-  }
-
   function handleChangeUniversity() {
     void clearRememberedUniversity()
     setSelectedUniversity(null)
     setStep("university")
     setError("")
     setMode("login")
-    setEnrollments([])
     setPendingCredentials(null)
+  }
+
+  function handleRequestAccess() {
+    if (!selectedUniversity) {
+      setError("Select your university first.")
+      setStep("university")
+      return
+    }
+    router.push({
+      pathname: "/(auth)/student-signup",
+      params: {
+        universityId: String(selectedUniversity.id),
+        universityName: selectedUniversity.name,
+        universityShortName: selectedUniversity.short_name,
+        universityDomain: selectedUniversity.domain ?? "",
+        universityColor: selectedUniversity.primary_color ?? "",
+      },
+    })
   }
 
   if (step === "university") {
     return (
-      <LoginPortalStack>
-        <View style={styles.stepHeader}>
-          <Text style={loginType.panelTitle}>Choose Your University</Text>
-          <Text style={loginType.panelDescription}>
-            Search thousands of schools, or pick Other if yours is not listed.
-          </Text>
-        </View>
-
-        {loadingUniversities ? (
-          <View style={styles.loadingBox}>
-            <ActivityIndicator color={linkAccent} />
-          </View>
-        ) : (
-          <>
-            <View
-              style={[
-                styles.searchBox,
-                { borderColor: LOGIN.separator, backgroundColor: LOGIN.grouped },
-              ]}
-            >
-              <Ionicons name="search" size={17} color={LOGIN.secondaryLabel} />
-              <TextInput
-                value={uniQuery}
-                onChangeText={setUniQuery}
-                placeholder="Search universities…"
-                placeholderTextColor={LOGIN.secondaryLabel}
-                autoCapitalize="none"
-                autoCorrect={false}
-                style={[styles.searchInput, { color: LOGIN.label }]}
-              />
-              {searchingUniversities ? (
-                <ActivityIndicator size="small" color={linkAccent} />
-              ) : uniQuery ? (
-                <Pressable onPress={() => setUniQuery("")} hitSlop={8} accessibilityLabel="Clear search">
-                  <Ionicons name="close-circle" size={17} color={LOGIN.secondaryLabel} />
-                </Pressable>
-              ) : null}
-            </View>
-
-            <View style={styles.uniList}>
-              {showingUniversitySearch && uniResults.length === 0 && !searchingUniversities ? (
-                <Text style={[loginType.info, { color: LOGIN.secondaryLabel, textAlign: "center", paddingVertical: 10 }]}>
-                  No matches. Choose Other below.
-                </Text>
-              ) : null}
-              {(showingUniversitySearch ? uniResults : featuredUniversities).map((uni) => {
-                const active = sameUniversity(selectedUniversity, uni)
-                return (
-                  <Pressable
-                    key={`${uni.id}-${uni.domain ?? uni.name}`}
-                    onPress={() => {
-                      setSelectedUniversity(uni)
-                      if (uni.id > 0) void persistRememberedUniversity(uni)
-                      setError("")
-                    }}
-                    style={({ pressed }) => [
-                      styles.uniRow,
-                      {
-                        borderColor: active ? uni.primary_color : LOGIN.separator,
-                        backgroundColor: active
-                          ? hexToRgba(uni.primary_color, 0.1)
-                          : LOGIN.grouped,
-                      },
-                      pressed && styles.pressed,
-                    ]}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: active }}
-                  >
-                    <UniversityAuthLogoImage university={uni} variant="list" />
-                    <View style={styles.uniText}>
-                      <Text style={[loginType.stepLabel, { color: LOGIN.label }]} numberOfLines={1}>
-                        {uni.name}
-                      </Text>
-                      <Text style={[loginType.info, { color: LOGIN.secondaryLabel }]}>
-                        {uni.short_name}
-                        {uni.domain ? ` · ${uni.domain}` : ""}
-                      </Text>
-                    </View>
-                    {active ? (
-                      <Ionicons name="checkmark-circle" size={22} color={uni.primary_color} />
-                    ) : (
-                      <Ionicons name="chevron-forward" size={18} color={LOGIN.secondaryLabel} />
-                    )}
-                  </Pressable>
-                )
-              })}
-              {otherUniversity ? (
-                (() => {
-                  const active = Boolean(selectedUniversity && isOtherUniversity(selectedUniversity))
-                  return (
-                    <Pressable
-                      key="other-university"
-                      onPress={() => {
-                        setSelectedUniversity(otherUniversity)
-                        void persistRememberedUniversity(otherUniversity)
-                        setError("")
-                      }}
-                      style={({ pressed }) => [
-                        styles.uniRow,
-                        {
-                          borderColor: active ? otherUniversity.primary_color : LOGIN.separator,
-                          backgroundColor: active
-                            ? hexToRgba(otherUniversity.primary_color, 0.1)
-                            : LOGIN.grouped,
-                        },
-                        pressed && styles.pressed,
-                      ]}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected: active }}
-                    >
-                      <UniversityAuthLogoImage university={otherUniversity} variant="list" />
-                      <View style={styles.uniText}>
-                        <Text style={[loginType.stepLabel, { color: LOGIN.label }]} numberOfLines={1}>
-                          {otherUniversity.name}
-                        </Text>
-                        <Text style={[loginType.info, { color: LOGIN.secondaryLabel }]}>
-                          Independent, company, or school not listed
-                        </Text>
-                      </View>
-                      {active ? (
-                        <Ionicons name="checkmark-circle" size={22} color={otherUniversity.primary_color} />
-                      ) : (
-                        <Ionicons name="chevron-forward" size={18} color={LOGIN.secondaryLabel} />
-                      )}
-                    </Pressable>
-                  )
-                })()
-              ) : null}
-            </View>
-          </>
-        )}
-
-        {error ? <ErrorBanner message={error} /> : null}
-
-        <LoginButton
-          label={savingUniversity ? "Saving…" : "Continue"}
-          icon="arrow-forward"
-          onPress={() => void handleContinueUniversity()}
-          disabled={!selectedUniversity || loadingUniversities || savingUniversity}
+      <AuthFlowPanelTransition panelKey="student-university">
+        <LoginUniversityPicker
+          selectedUniversity={selectedUniversity}
+          onSelect={setSelectedUniversity}
+          onContinue={(university) => {
+            setSelectedUniversity(university)
+            void persistRememberedUniversity(university)
+            setStep("credentials")
+          }}
+          onBack={onBack}
         />
-
-        {onBack ? <LoginBackLink label="Other sign-in options" onPress={onBack} /> : null}
-      </LoginPortalStack>
+      </AuthFlowPanelTransition>
     )
   }
 
@@ -586,69 +377,27 @@ export function StudentLoginPanel({ onBack }: Props) {
     )
   }
 
-  if (step === "course") {
-    return (
-      <LoginPortalStack>
-        <View style={styles.stepHeader}>
-          <Text style={loginType.panelTitle}>Select a Course</Text>
-          <Text style={loginType.panelDescription}>
-            You are enrolled in multiple courses. Choose one to continue.
-          </Text>
-        </View>
-
-        <View style={styles.uniList}>
-          {enrollments.map((course) => (
-            <Pressable
-              key={course.courseId}
-              disabled={submitting}
-              onPress={() => void submitLogin(course.courseId)}
-              style={({ pressed }) => [
-                styles.uniRow,
-                {
-                  borderColor: LOGIN.separator,
-                  backgroundColor: LOGIN.fill,
-                },
-                pressed && styles.pressed,
-              ]}
-              accessibilityRole="button"
-            >
-              <View style={styles.uniText}>
-                <Text style={[loginType.stepLabel, { color: LOGIN.label }]}>{course.courseTitle}</Text>
-                <Text style={[loginType.info, { color: LOGIN.secondaryLabel }]}>{course.courseCode}</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={linkAccent} />
-            </Pressable>
-          ))}
-        </View>
-
-        {error ? <ErrorBanner message={error} /> : null}
-        {submitting ? <ActivityIndicator color={linkAccent} /> : null}
-
-        <LoginBackLink
-          label="Back to login"
-          onPress={() => {
-            setStep("credentials")
-            setPendingCredentials(null)
-            setError("")
-          }}
-        />
-      </LoginPortalStack>
-    )
-  }
-
   return (
+    <AuthFlowPanelTransition panelKey="student-credentials">
     <LoginPortalStack>
+      <AuthFlowEnterItem index={0}>
       <LoginBrandHeader
         university={selectedUniversity}
         title={mode === "login" ? "Student Login" : "Activate Account"}
         subtitle={selectedUniversity?.name}
         accent={schoolAccent}
       />
+      </AuthFlowEnterItem>
 
-      {error ? <ErrorBanner message={error} /> : null}
+      {error ? (
+        <AuthFlowEnterItem index={1}>
+          <ErrorBanner message={error} />
+        </AuthFlowEnterItem>
+      ) : null}
 
       {mode === "login" ? (
         <>
+          <AuthFlowEnterItem index={2}>
           <LoginFieldGroup>
             <LoginField
               label="Student ID or Email"
@@ -672,11 +421,14 @@ export function StudentLoginPanel({ onBack }: Props) {
               }
             />
           </LoginFieldGroup>
+          </AuthFlowEnterItem>
 
+          <AuthFlowEnterItem index={3}>
           <View style={styles.rememberRow}>
             <Switch
               value={rememberMe}
               onValueChange={(next) => {
+                triggerMotionHaptic("selection")
                 setRememberMe(next)
                 if (!next) void clearRememberedStudentCredentials()
               }}
@@ -695,27 +447,33 @@ export function StudentLoginPanel({ onBack }: Props) {
             />
             <Text style={[loginType.body, { color: LOGIN.secondaryLabel }]}>Remember me</Text>
           </View>
+          </AuthFlowEnterItem>
 
+          <AuthFlowEnterItem index={4}>
           <LoginButton
             label="Login"
             onPress={() => void handleLogin()}
             loading={submitting}
           />
+          </AuthFlowEnterItem>
 
-          <Pressable
+          <AuthFlowEnterItem index={5}>
+          <PressableScale
             onPress={() =>
               setError("Forgot your password? Ask your instructor to approve a reset, then sign in and set a new password.")
             }
+            haptic="selection"
             accessibilityRole="button"
-            style={({ pressed }) => [pressed && styles.pressed]}
           >
             <Text style={[loginType.link, { color: linkAccent, textAlign: "center" }]}>
               Forgot password?
             </Text>
-          </Pressable>
+          </PressableScale>
+          </AuthFlowEnterItem>
         </>
       ) : (
         <>
+          <AuthFlowEnterItem index={2}>
           <LoginFieldGroup>
             <LoginField
               label="Student ID or University Email"
@@ -740,95 +498,112 @@ export function StudentLoginPanel({ onBack }: Props) {
               secureTextEntry
             />
           </LoginFieldGroup>
+          </AuthFlowEnterItem>
 
+          <AuthFlowEnterItem index={3}>
           <LoginButton
             label="Activate & Sign In"
             onPress={() => void handleActivate()}
             loading={submitting}
           />
+          </AuthFlowEnterItem>
         </>
       )}
 
       <View style={styles.actionsGroup}>
-        <Pressable
+        <AuthFlowEnterItem index={6}>
+        <PressableScale
           onPress={() => {
             setMode(mode === "login" ? "activate" : "login")
             setError("")
           }}
-          style={({ pressed }) => [
+          haptic="selection"
+          style={[
             styles.secondaryCta,
             {
               borderColor: LOGIN.softBorder,
               backgroundColor: LOGIN.soft,
             },
-            pressed && styles.pressed,
           ]}
           accessibilityRole="button"
         >
           <Text style={[loginType.link, { color: linkAccent, textAlign: "center" }]}>
             {mode === "login" ? "First time? Activate your account" : "Already activated? Sign in"}
           </Text>
-        </Pressable>
+        </PressableScale>
+        </AuthFlowEnterItem>
 
-        <Pressable
+        <AuthFlowEnterItem index={7}>
+        <PressableScale
+          onPress={handleRequestAccess}
+          haptic="selection"
+          style={[
+            styles.secondaryCta,
+            {
+              borderColor: LOGIN.softBorder,
+              backgroundColor: LOGIN.fill,
+            },
+          ]}
+          accessibilityRole="button"
+        >
+          <Text style={[loginType.link, { color: linkAccent, textAlign: "center" }]}>
+            New student? Request course access
+          </Text>
+        </PressableScale>
+        </AuthFlowEnterItem>
+
+        <AuthFlowEnterItem index={8}>
+        <PressableScale
           onPress={handleChangeUniversity}
-          style={({ pressed }) => [styles.navRow, pressed && styles.pressed]}
+          haptic="selection"
+          style={styles.navRow}
           accessibilityRole="button"
         >
           <Text style={[loginType.body, { color: LOGIN.label, flex: 1 }]}>
             Not your school? Change university
           </Text>
           <Ionicons name="chevron-forward" size={18} color={linkAccent} />
-        </Pressable>
+        </PressableScale>
+        </AuthFlowEnterItem>
 
         {onBack ? (
-          <Pressable
+          <AuthFlowEnterItem index={9}>
+          <PressableScale
             onPress={onBack}
-            style={({ pressed }) => [
-              styles.navRow,
-              styles.navRowBorder,
-              { borderTopColor: LOGIN.separator },
-              pressed && styles.pressed,
-            ]}
+            haptic="selection"
+            style={[styles.navRow, styles.navRowBorder, { borderTopColor: LOGIN.separator }]}
             accessibilityRole="button"
           >
             <Text style={[loginType.body, { color: LOGIN.label, flex: 1 }]}>Other sign-in options</Text>
             <Ionicons name="chevron-forward" size={18} color={linkAccent} />
-          </Pressable>
+          </PressableScale>
+          </AuthFlowEnterItem>
         ) : null}
       </View>
 
-      <Text style={[loginType.info, styles.helpText]}>Need help? Contact your instructor.</Text>
+      <AuthFlowEnterItem index={10}>
+      <PressableScale
+        onPress={() => {
+          void Linking.openURL(
+            "mailto:support@course-collab.com?subject=Student%20login%20help&body=I%20need%20help%20signing%20in%20to%20CourseCollab.",
+          )
+        }}
+        haptic="selection"
+        style={styles.helpBtn}
+        accessibilityRole="link"
+        accessibilityLabel="Need help? Contact support"
+      >
+        <Text style={[loginType.info, styles.helpText, { color: linkAccent }]}>
+          Need help? Contact support
+        </Text>
+      </PressableScale>
+      </AuthFlowEnterItem>
     </LoginPortalStack>
+    </AuthFlowPanelTransition>
   )
 }
 
 const styles = StyleSheet.create({
-  stepHeader: { gap: 6, marginBottom: 2 },
-  searchBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    borderRadius: 14,
-    borderWidth: StyleSheet.hairlineWidth * 2,
-    paddingHorizontal: 12,
-    height: 44,
-    marginBottom: 10,
-  },
-  searchInput: { flex: 1, fontSize: 15, paddingVertical: 0 },
-  loadingBox: { paddingVertical: 36, alignItems: "center" },
-  uniList: { gap: 10 },
-  uniRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    borderRadius: 16,
-    borderWidth: StyleSheet.hairlineWidth * 2,
-  },
-  uniText: { flex: 1, gap: 2, minWidth: 0 },
-  pressed: { opacity: 0.85 },
   actionsGroup: { gap: 0, alignSelf: "stretch" },
   secondaryCta: {
     borderRadius: 14,
@@ -851,5 +626,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 10,
   },
-  helpText: { textAlign: "center" },
+  helpBtn: {
+    alignSelf: "center",
+    minHeight: 44,
+    paddingHorizontal: 12,
+    justifyContent: "center",
+  },
+  helpText: { textAlign: "center", fontWeight: "600" },
 })

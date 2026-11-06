@@ -18,7 +18,6 @@ import {
   letterGradeFromScore,
   presentationStatusLabel,
   PROJECT_LECTURE_DAYS,
-  projectModuleSessionCodes,
   filterRowsToCourseSessions,
   buildProjectScores,
   type ProjectScoreRow,
@@ -41,6 +40,7 @@ import {
   useCollabSheetStyles,
 } from "./faculty-collab-sheet-ui"
 import { SHEET_PROJECT, SHEET_SECTION } from "./faculty-sheet-semantics"
+import { FacultySummerCampDatePicker } from "./FacultySummerCampDatePicker"
 import { useModuleTheme } from "../../lib/themed-module-shell"
 
 type Scope = NonNullable<ReturnType<typeof useFacultyScope>["scope"]>
@@ -306,7 +306,7 @@ export function FacultyProjectPresentationConfigPanel({
   const [editing, setEditing] = useState<PresentationConfig | "new" | null>(null)
   const [saving, setSaving] = useState(false)
   const [draft, setDraft] = useState({
-    session: sessionCodes[0] ?? projectModuleSessionCodes()[0] ?? "",
+    session: scope?.sessionCode ?? sessionCodes[0] ?? "",
     presentationStartDate: "",
     presentationEndDate: "",
     lectureDays: [] as string[],
@@ -343,7 +343,12 @@ export function FacultyProjectPresentationConfigPanel({
   }
 
   function startNew() {
-    const available = sessionCodes.length > 0 ? sessionCodes : projectModuleSessionCodes()
+    const available =
+      sessionCodes.length > 0
+        ? sessionCodes
+        : scope.sessionCode
+          ? [scope.sessionCode]
+          : []
     const unused = available.find((code) => !configs.some((c) => c.session === code))
     if (!unused) {
       AppAlert.alert("All sessions configured", "Every available section already has a presentation window.")
@@ -450,18 +455,20 @@ export function FacultyProjectPresentationConfigPanel({
               <Text style={[type.bodyEmphasis, { color: native.label }]}>{draft.session}</Text>
             </FacultySheetSection>
             <FacultySheetField label="Start date">
-              <FacultySheetTextInput
+              <FacultySummerCampDatePicker
                 value={draft.presentationStartDate}
-                onChangeText={(v) => setDraft((d) => ({ ...d, presentationStartDate: v }))}
-                placeholder="YYYY-MM-DD"
+                onChange={(presentationStartDate) =>
+                  setDraft((d) => ({ ...d, presentationStartDate }))
+                }
                 accessibilityLabel="Start date"
               />
             </FacultySheetField>
             <FacultySheetField label="End date">
-              <FacultySheetTextInput
+              <FacultySummerCampDatePicker
                 value={draft.presentationEndDate}
-                onChangeText={(v) => setDraft((d) => ({ ...d, presentationEndDate: v }))}
-                placeholder="YYYY-MM-DD"
+                onChange={(presentationEndDate) =>
+                  setDraft((d) => ({ ...d, presentationEndDate }))
+                }
                 accessibilityLabel="End date"
               />
             </FacultySheetField>

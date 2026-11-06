@@ -4,6 +4,7 @@ import { FacultyShellProvider } from "../../context/FacultyShellContext"
 import { FacultyModuleHeaderProvider } from "../../context/FacultyModuleHeaderContext"
 import { useThemedNative } from "../../context/AppearanceProvider"
 import { useFacultyShellRefresh } from "../../hooks/useFacultyShellRefresh"
+import { usePurchaseReturnRefresh } from "../../hooks/usePurchaseReturnRefresh"
 import { useFacultyShell } from "../../context/FacultyShellContext"
 import type { FacultySession } from "../../lib/session"
 import { NotificationShellSync } from "./NotificationShellSync"
@@ -13,7 +14,9 @@ import { FacultyDrawer } from "./FacultyDrawer"
 import { FacultyNotificationsSheet } from "./FacultyNotificationsSheet"
 import { FacultyProfileMenu } from "./FacultyProfileMenu"
 import { FacultyTopBar } from "./FacultyTopBar"
+import { FacultyClassReminderSync } from "../faculty/FacultyClassReminderSync"
 import { FACULTY_CORA_ROUTE } from "../../constants/faculty-nav"
+import { ShellDrawerMotionProvider } from "../navigation/ShellDrawerMotionProvider"
 
 type Props = {
   session: FacultySession
@@ -32,7 +35,7 @@ export function FacultyShellScope({ children }: { children: ReactNode }) {
 /** Drawer, top bar, course picker, and data refresh — not shown on post-login setup screens. */
 export function FacultyAppShellChrome({ session, children }: Props) {
   const pathname = usePathname()
-  const { refreshFacultyData } = useFacultyShell()
+  const { refreshFacultyData, drawerOpen, openDrawer, closeDrawer } = useFacultyShell()
   const immersive =
     pathname === FACULTY_CORA_ROUTE ||
     pathname.startsWith(`${FACULTY_CORA_ROUTE}/`) ||
@@ -43,26 +46,35 @@ export function FacultyAppShellChrome({ session, children }: Props) {
     pathname.startsWith("/settings/")
   const native = useThemedNative()
   useFacultyShellRefresh(session)
+  usePurchaseReturnRefresh()
 
   return (
-    <AppShellFrame
-      backgroundColor={native.groupedBackground}
-      immersive={immersive}
-      topBar={<FacultyTopBar session={session} />}
-      overlays={
-        <>
-          <FacultyDrawer session={session} />
-          <FacultyProfileMenu session={session} />
-          <FacultyNotificationsSheet session={session} />
-          <FacultyCoursePicker session={session} />
-          <NotificationShellSync
-            onRefresh={() => refreshFacultyData?.(undefined, { force: true }) ?? Promise.resolve()}
-          />
-        </>
-      }
+    <ShellDrawerMotionProvider
+      drawerOpen={drawerOpen}
+      openDrawer={openDrawer}
+      closeDrawer={closeDrawer}
     >
-      {children}
-    </AppShellFrame>
+      <AppShellFrame
+        backgroundColor={native.groupedBackground}
+        immersive={immersive}
+        topBar={<FacultyTopBar session={session} />}
+        drawerEdge={{ portal: "faculty", immersive, drawerOpen }}
+        overlays={
+          <>
+            <FacultyDrawer session={session} />
+            <FacultyProfileMenu session={session} />
+            <FacultyNotificationsSheet session={session} />
+            <FacultyCoursePicker session={session} />
+            <FacultyClassReminderSync />
+            <NotificationShellSync
+              onRefresh={() => refreshFacultyData?.(undefined, { force: true }) ?? Promise.resolve()}
+            />
+          </>
+        }
+      >
+        {children}
+      </AppShellFrame>
+    </ShellDrawerMotionProvider>
   )
 }
 

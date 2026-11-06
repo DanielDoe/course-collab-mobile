@@ -20,3 +20,11 @@ export async function readRememberedLoginPortal(): Promise<MobileLoginPortal | n
 export async function persistRememberedLoginPortal(portal: MobileLoginPortal): Promise<void> {
   await SecureStore.setItemAsync(KEY, portal)
 }
+
+export async function clearRememberedLoginPortal(): Promise<void> {
+  try {
+    await SecureStore.deleteItemAsync(KEY)
+  } catch {
+    /* ignore */
+  }
+}

@@ -94,7 +94,7 @@ export const FACULTY_CORA_CAPABILITIES: FacultyCoraCapability[] = [
       "Find duplicate questions in my bank",
       "Summarize quiz 2 item analysis",
     ],
-    relatedModuleIds: ["results", "student-progress", "reports", "attendance", "practice", "question-bank", "discussions"],
+    relatedModuleIds: ["results", "student-progress", "cora-insights", "reports", "attendance", "practice", "question-bank", "discussions"],
   },
   {
     id: "explain",
@@ -110,7 +110,7 @@ export const FACULTY_CORA_CAPABILITIES: FacultyCoraCapability[] = [
       "Explain this grading trend from Results",
       "Explain why the AI flagged this submission",
     ],
-    relatedModuleIds: ["results", "student-progress", "office-hours", "messages", "student-support"],
+    relatedModuleIds: ["results", "student-progress", "cora-insights", "office-hours", "messages", "student-support"],
   },
   {
     id: "automate",
@@ -173,7 +173,7 @@ export const FACULTY_CORA_CAPABILITIES: FacultyCoraCapability[] = [
       "Summarize student Cora usage trends",
       "What content gaps should I fill?",
     ],
-    relatedModuleIds: ["dashboard", "recent-activity", "results", "student-progress", "reports"],
+    relatedModuleIds: ["dashboard", "recent-activity", "results", "student-progress", "cora-insights", "reports"],
   },
 ]
 

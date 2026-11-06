@@ -6,6 +6,7 @@
 import type { InstructorScope } from "../instructor-content-api"
 import type { StudentSession } from "../session"
 import { instructorApi } from "../instructor-api"
+import { instructorFlashcardsApi } from "../instructor-content-api"
 import { flashcardsApi } from "../flashcards-api"
 import { digitalNotesApi } from "../digital-notes-api"
 import type { DraftQuestionBankItem } from "../question-bank-ai-types"
@@ -100,6 +101,46 @@ export function buildLocalQuestionBankProposal(input: {
   }
 }
 
+/** Local proposal — confirm runs question-bank → flashcard deck generation. */
+export function buildLocalFlashcardDeckProposal(input: {
+  instructorId: number
+  courseId: number
+  courseLabel: string
+  topicName: string
+  maxCards?: number
+}): CoraActionProposal {
+  const now = Date.now()
+  const topicName = input.topicName.trim() || "Course topic"
+  const preview: CoraProposalPreview = {
+    title: "Generate flashcard deck",
+    summary: topicName,
+    fields: [
+      { label: "Topic", value: topicName },
+      { label: "Course", value: input.courseLabel },
+      { label: "Source", value: "Question bank" },
+    ],
+    confirmLabel: "Generate flashcards",
+    entityType: "flashcard_deck",
+  }
+  return {
+    actionId: localProposalId(),
+    userId: input.instructorId,
+    role: "faculty",
+    institutionId: null,
+    courseId: input.courseId,
+    tool: "flashcard.generateFromBank",
+    arguments: {
+      topicName,
+      maxCards: input.maxCards ?? 20,
+      __local: true,
+    },
+    createdAt: new Date(now).toISOString(),
+    expiresAt: new Date(now + 15 * 60 * 1000).toISOString(),
+    preview,
+    hash: "local",
+  }
+}
+
 export function isLocalCoraProposal(proposal: CoraActionProposal): boolean {
   return proposal.hash === "local" || proposal.arguments?.__local === true
 }
@@ -162,6 +203,32 @@ export async function executeLocalCoraProposal(
           id: res.questionIds[0] ?? 0,
           title: `${res.createdCount} questions`,
           route: "/module/question-bank",
+        },
+      }
+      await recordActivityFromConfirmResult(result, "faculty", ctx.scope.courseId)
+      return result
+    }
+    case "flashcard.generateFromBank": {
+      if (ctx.role !== "faculty") {
+        return { success: false, tool: proposal.tool, message: "Faculty required.", error: "role" }
+      }
+      const topicName = String(proposal.arguments.topicName ?? "").trim()
+      if (!topicName) {
+        return { success: false, tool: proposal.tool, message: "Topic is required.", error: "invalid" }
+      }
+      const res = await instructorFlashcardsApi.generateFromBank(ctx.scope, {
+        topicName,
+        maxCards: Number(proposal.arguments.maxCards ?? 20),
+      })
+      const result: CoraConfirmActionResult = {
+        success: true,
+        tool: proposal.tool,
+        message: `Created flashcard deck (${res.cardsAdded} card${res.cardsAdded === 1 ? "" : "s"}).`,
+        entity: {
+          type: "flashcard_deck",
+          id: res.deckId,
+          title: res.deck?.title ?? topicName,
+          route: "/module/flashcards",
         },
       }
       await recordActivityFromConfirmResult(result, "faculty", ctx.scope.courseId)

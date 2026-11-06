@@ -1,0 +1,23 @@
+appId: com.coursecollab.app
+---
+# Scroll back toward top, answer Q2 correctly.
+- repeat:
+    times: 10
+    commands:
+      - swipe:
+          direction: DOWN
+          duration: 350
+- scrollUntilVisible:
+    element:
+      text: "2, Which step in program development involves deciding input and output items?, Introduction to Programming"
+    direction: DOWN
+    timeout: 30000
+    speed: 40
+- tapOn: "2, Which step in program development involves deciding input and output items?, Introduction to Programming"
+- tapOn: "A, Analyze the Problem"
+- tapOn: "Submit answer"
+- extendedWaitUntil:
+    visible: "Correct — nice work."
+    timeout: 30000
+- takeScreenshot: sample-practice-q2-correct
+- assertNotVisible: "Could not check your answer."

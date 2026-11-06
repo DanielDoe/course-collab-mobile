@@ -1,21 +1,57 @@
-import { useMemo, useState } from "react"
+import { useMemo, useState, type ComponentType } from "react"
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native"
-import Pdf from "react-native-pdf"
 import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
 import { useNativeType } from "../../lib/themed-module-theme"
 import { ensurePdfFileUri } from "../../lib/lecture-deck-loader"
+import { isNativePdfAvailable } from "../../lib/native-pdf"
 import { useResolvedLectureDeckSource } from "../../lib/use-lecture-deck-source"
 import { FacultyEmptyState } from "../faculty/faculty-shared"
+import { LectureDeckPdfFallback } from "./LectureDeckPdfFallback"
+
+type NativePdfProps = {
+  source: { uri: string; headers?: Record<string, string>; cache?: boolean }
+  page?: number
+  style?: object
+  fitPolicy?: number
+  spacing?: number
+  enablePaging?: boolean
+  trustAllCerts?: boolean
+  onLoadComplete?: (numberOfPages: number) => void
+  onPageChanged?: (page: number, numberOfPages: number) => void
+  onError?: (error: unknown) => void
+}
+
+function loadNativePdf(): ComponentType<NativePdfProps> | null {
+  if (!isNativePdfAvailable()) return null
+  try {
+    return require("react-native-pdf").default as ComponentType<NativePdfProps>
+  } catch {
+    return null
+  }
+}
+
+const Pdf = loadNativePdf()
 
 type Props = {
   deckUrl: string | null | undefined
   headers?: Record<string, string>
   cacheKey: string
   enabled?: boolean
+  initialPage?: number
+  onDocumentLoaded?: (totalPages: number) => void
+  onPageChange?: (page: number, totalPages: number) => void
 }
 
 /** Native lecture slide deck — authenticated prefetch + in-app PDF rendering. */
-export function LectureDeckPdfViewer({ deckUrl, headers, cacheKey, enabled = true }: Props) {
+export function LectureDeckPdfViewer({
+  deckUrl,
+  headers,
+  cacheKey,
+  enabled = true,
+  initialPage = 1,
+  onDocumentLoaded,
+  onPageChange,
+}: Props) {
   const tokens = useAppThemeTokens()
   const native = useThemedNative()
   const type = useNativeType()
@@ -101,25 +137,41 @@ export function LectureDeckPdfViewer({ deckUrl, headers, cacheKey, enabled = tru
           </Pressable>
         </View>
       ) : null}
-      <Pdf
-        key={`${pdfSource.uri}-${cacheKey}`}
-        source={pdfSource}
-        style={[styles.pdf, { backgroundColor: native.secondaryGrouped }]}
-        fitPolicy={0}
-        spacing={0}
-        enablePaging={false}
-        trustAllCerts={false}
-        onLoadComplete={() => setRenderError("")}
-        onError={(err) => {
-          const message =
-            typeof err === "string"
-              ? err
-              : err instanceof Error
-                ? err.message
-                : "Could not render slide deck."
-          setRenderError(message)
-        }}
-      />
+      {Pdf ? (
+        <Pdf
+          key={`${pdfSource.uri}-${cacheKey}`}
+          source={pdfSource}
+          page={initialPage}
+          style={[styles.pdf, { backgroundColor: native.secondaryGrouped }]}
+          fitPolicy={0}
+          spacing={0}
+          enablePaging={false}
+          trustAllCerts={false}
+          onLoadComplete={(numberOfPages) => {
+            setRenderError("")
+            onDocumentLoaded?.(numberOfPages)
+          }}
+          onPageChanged={(page, numberOfPages) => {
+            onPageChange?.(page, numberOfPages)
+          }}
+          onError={(err) => {
+            const message =
+              typeof err === "string"
+                ? err
+                : err instanceof Error
+                  ? err.message
+                  : "Could not render slide deck."
+            setRenderError(message)
+          }}
+        />
+      ) : (
+        <LectureDeckPdfFallback
+          source={pdfSource}
+          backgroundColor={native.secondaryGrouped}
+          onDocumentLoaded={onDocumentLoaded}
+          onError={setRenderError}
+        />
+      )}
     </View>
   )
 }

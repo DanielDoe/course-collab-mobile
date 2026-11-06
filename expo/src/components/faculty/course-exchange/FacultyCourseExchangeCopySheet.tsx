@@ -62,12 +62,13 @@ export function FacultyCourseExchangeCopySheet({
   const thumb = facultyCourseExchangeThumb(id || title)
 
   return (
-    <FacultySheetModal visible={visible} onRequestClose={onClose}>
+    <FacultySheetModal visible={visible} onRequestClose={onClose} layout="glassBottom">
       <FacultySheetChrome
         topInset={insets.top}
         title={variant === "shared-with-me" ? "Imported copy" : "Outbound share"}
         onClose={onClose}
         accentColor={FACULTY_COURSE_EXCHANGE_COLOR.action}
+        pageSheet
       />
       <ScrollView
         contentContainerStyle={[collabSheetStyles.scroll, { paddingBottom: insets.bottom + 24 }]}

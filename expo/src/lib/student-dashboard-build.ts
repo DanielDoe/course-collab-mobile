@@ -6,6 +6,7 @@ import type {
   StudentDashboardStats,
 } from "../types/dashboard"
 import { clampGradebookEngagementCredits } from "./engagement-credits"
+import { attendanceDisplayPercent } from "./attendance-leaderboard-scope"
 import type { QuizListRolloverPolicy } from "./student-api"
 import {
   buildGradeTrendSeries,
@@ -91,7 +92,7 @@ function partialErrorFromUnavailable(
   unavailable: Partial<Record<DashboardStatSource, true>>,
 ): string | undefined {
   const labels = (Object.keys(unavailable) as DashboardStatSource[])
-    .filter((key) => unavailable[key])
+    .filter((key) => unavailable[key] && key !== "streaks")
     .map((key) => SOURCE_LABEL[key])
   if (labels.length === 0) return undefined
   return `Some widgets could not load (${labels.join(", ")}). Other metrics are still shown.`
@@ -146,11 +147,15 @@ export function buildStudentDashboardFromRaw(raw: DashboardRawData): {
     missingAssignments = (raw.homeworkStats?.overdue ?? 0) + (raw.homeworkStats?.pending ?? 0)
   }
 
-  if (raw.attendance) {
-    attendancePct = Math.round(Number(raw.attendance.attendance_percentage ?? 0) * 10) / 10
+  let attendanceHasScoredSessions = false
+  if (raw.attendance && Object.keys(raw.attendance).length > 0) {
     const scored = Number(raw.attendance.sessions_scored_so_far ?? raw.attendance.total_classes ?? 0)
     const attended = Number(raw.attendance.classes_attended ?? 0)
-    classesMissed = Math.max(0, scored - attended)
+    if (scored > 0) {
+      attendanceHasScoredSessions = true
+      attendancePct = attendanceDisplayPercent(raw.attendance.attendance_percentage)
+      classesMissed = Math.max(0, scored - attended)
+    }
   }
 
   const now = new Date()
@@ -165,8 +170,12 @@ export function buildStudentDashboardFromRaw(raw: DashboardRawData): {
 
   let riskLevel: StudentDashboardStats["riskLevel"] = "low"
   let riskReason = "Grades and attendance on track."
-  const gradeKnown = !unavailable.grade
-  const attendanceKnown = !unavailable.attendance
+  const gradeHasSignal =
+    raw.gradePayload != null &&
+    (overallGrade > 0 ||
+      Boolean(raw.gradePayload.grade?.letter_grade || raw.gradePayload.provisional?.letterGrade))
+  const gradeKnown = !unavailable.grade && gradeHasSignal
+  const attendanceKnown = !unavailable.attendance && attendanceHasScoredSessions
 
   if (gradeKnown && attendanceKnown && overallGrade >= 85 && attendancePct >= 90 && missingAssignments === 0) {
     riskLevel = "low"

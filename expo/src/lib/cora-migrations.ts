@@ -286,11 +286,21 @@ async function runGithubFix(
   ctx: CoraMigrationContext,
   payload: CoraCreationPayloadByKind["github_fix_pr"],
 ): Promise<CoraMigrationResult> {
+  // Opening a pull request against the product repo is a platform-admin action.
+  // The server enforces this; refusing here keeps Cora from promising a student
+  // a fix it cannot submit.
+  if (ctx.role === "student") {
+    return {
+      kind: "github_fix_pr",
+      success: false,
+      message: "Submitting code fixes is not available from a student account.",
+    }
+  }
+
   const scope = facultyScope(ctx)
   const res = await submitCoraGithubFix({
     scope: scope ?? undefined,
     session: ctx.role === "faculty" ? ctx.session : undefined,
-    studentSession: ctx.role === "student" ? ctx.session : undefined,
     prepared: ctx.prepared,
     payload,
   })

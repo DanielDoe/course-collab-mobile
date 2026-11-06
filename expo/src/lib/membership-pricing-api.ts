@@ -7,6 +7,8 @@ export type MembershipPlanPricing = {
   displayName?: string
   description?: string
   semesterPriceCents: number
+  listPriceCents?: number
+  saveCents?: number
   monthlyPriceCents?: number
   priceSource?: "stripe" | "constants"
 }
@@ -22,9 +24,9 @@ export type MembershipPlansResponse = {
 }
 
 const FALLBACK_PLANS: MembershipPlanPricing[] = [
-  { id: "Scholar", semesterPriceCents: 0, monthlyPriceCents: 0 },
-  { id: "Explorer", semesterPriceCents: 2499, monthlyPriceCents: 599 },
-  { id: "Trailblazer", semesterPriceCents: 3999, monthlyPriceCents: 999 },
+  { id: "Scholar", semesterPriceCents: 0, monthlyPriceCents: 0, listPriceCents: 0, saveCents: 0 },
+  { id: "Explorer", semesterPriceCents: 1999, monthlyPriceCents: 599, listPriceCents: 2999, saveCents: 1000 },
+  { id: "Trailblazer", semesterPriceCents: 3999, monthlyPriceCents: 999, listPriceCents: 4999, saveCents: 1000 },
 ]
 
 export async function fetchMembershipPlanPricing(
@@ -55,4 +57,13 @@ export function semesterPriceCentsForTier(
   const fromApi = pricing?.plans.find((plan) => plan.id === tier)?.semesterPriceCents
   if (typeof fromApi === "number") return fromApi
   return FALLBACK_PLANS.find((plan) => plan.id === tier)?.semesterPriceCents ?? 0
+}
+
+export function listPriceCentsForTier(
+  pricing: MembershipPlansResponse | null | undefined,
+  tier: MembershipTier,
+): number {
+  const fromApi = pricing?.plans.find((plan) => plan.id === tier)?.listPriceCents
+  if (typeof fromApi === "number" && fromApi > 0) return fromApi
+  return FALLBACK_PLANS.find((plan) => plan.id === tier)?.listPriceCents ?? 0
 }

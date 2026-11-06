@@ -1,36 +1,20 @@
 import { useCallback, useEffect, useState } from "react"
 import { Redirect } from "expo-router"
-import Constants from "expo-constants"
-import * as SplashScreen from "expo-splash-screen"
-import { StyleSheet, Text, View } from "react-native"
+import { StyleSheet, View } from "react-native"
+import { BrandLoadingMark } from "../src/components/login/BrandLoadingMark"
+import { BRAND } from "../src/constants"
 import { useSession } from "../src/context/SessionProvider"
 import { bootLog, markBootComplete } from "../src/lib/boot-diagnostics"
+import { hideAppSplashFireAndForget } from "../src/lib/app-splash"
 import { resolvePostLoginRoute } from "../src/lib/onboarding"
 import { toAppHref, toAuthHref } from "../src/lib/navigation-reset"
 import type { AppSession } from "../src/lib/session"
 
-const STARTUP_ROUTE_TIMEOUT_MS = 6_000
-const BOOT_BG = "#582c83"
-const BUILD_LABEL = `Build ${Constants.expoConfig?.ios?.buildNumber ?? Constants.nativeBuildVersion ?? "?"}`
-
-try {
-  void SplashScreen.preventAutoHideAsync()
-} catch {
-  /* ignore */
-}
+const STARTUP_ROUTE_TIMEOUT_MS = 2_500
 
 function fallbackHrefForSession(session: AppSession): string {
   if (session.portal === "faculty") return toAppHref("/faculty-select-course")
   return toAppHref("/dashboard")
-}
-
-function hideSplash() {
-  try {
-    SplashScreen.hide()
-  } catch {
-    /* ignore */
-  }
-  void SplashScreen.hideAsync().catch(() => {})
 }
 
 export default function Index() {
@@ -39,6 +23,7 @@ export default function Index() {
 
   useEffect(() => {
     bootLog("Index route mounted")
+    hideAppSplashFireAndForget()
   }, [])
 
   useEffect(() => {
@@ -46,7 +31,7 @@ export default function Index() {
   }, [isLoading, session])
 
   const onLayout = useCallback(() => {
-    hideSplash()
+    hideAppSplashFireAndForget()
   }, [])
 
   useEffect(() => {
@@ -100,14 +85,13 @@ export default function Index() {
     if (!resolvedHref) return
     bootLog(`Redirecting to ${resolvedHref}`)
     markBootComplete(`redirect ${resolvedHref}`)
+    hideAppSplashFireAndForget()
   }, [resolvedHref])
 
   if (isLoading || (session && !resolvedHref)) {
     return (
-      <View style={styles.loading} onLayout={onLayout}>
-        <Text style={styles.brand}>CourseCollab</Text>
-        <Text style={styles.hint}>Loading…</Text>
-        <Text style={styles.build}>{BUILD_LABEL}</Text>
+      <View style={styles.loading} onLayout={onLayout} accessibilityLabel="Loading CourseCollab">
+        <BrandLoadingMark color={BRAND.white} />
       </View>
     )
   }
@@ -124,22 +108,6 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: BOOT_BG,
-    gap: 10,
-  },
-  brand: {
-    color: "#FFFFFF",
-    fontSize: 24,
-    fontWeight: "700",
-  },
-  hint: {
-    color: "#E9D5FF",
-    fontSize: 15,
-  },
-  build: {
-    marginTop: 8,
-    color: "#C4B5FD",
-    fontSize: 13,
-    fontWeight: "600",
+    backgroundColor: BRAND.purple,
   },
 })

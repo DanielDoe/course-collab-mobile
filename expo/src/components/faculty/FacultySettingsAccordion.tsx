@@ -3,10 +3,14 @@ import { useEffect, useMemo } from "react"
 import { Pressable, StyleSheet, Text, View } from "react-native"
 import { Ionicons } from "@/components/icons/AppIcon"
 import Animated, {
-  Easing,
+  FadeIn,
+  FadeOut,
+  LinearTransition,
   useAnimatedStyle,
   useSharedValue,
-  withTiming} from "react-native-reanimated"
+  withTiming,
+} from "react-native-reanimated"
+import { motion, timing, useAppReducedMotion } from "../../lib/motion"
 import { NATIVE } from "../../constants/faculty-native-theme"
 import { facultySettingsRowThumb } from "../../lib/faculty-settings-theme"
 import { useModuleTheme } from "../../lib/themed-module-shell"
@@ -73,12 +77,16 @@ export function FacultySettingsAccordion({
   children}: Props) {
   const { native } = useModuleTheme()
   const styles = useSettingsAccordionStyles()
+  const reduceMotion = useAppReducedMotion()
   const thumb = facultySettingsRowThumb(icon)
   const chevron = useSharedValue(expanded ? 1 : 0)
 
   useEffect(() => {
-    chevron.value = withTiming(expanded ? 1 : 0, { duration: 200, easing: Easing.out(Easing.quad) })
-  }, [expanded, chevron])
+    chevron.value = withTiming(expanded ? 1 : 0, {
+      duration: reduceMotion ? 0 : motion.normal,
+      easing: timing.fadeIn.easing,
+    })
+  }, [expanded, chevron, reduceMotion])
 
   const chevronStyle = useAnimatedStyle(() => ({
     transform: [{ rotate: `${chevron.value * 90}deg` }]}))
@@ -102,7 +110,16 @@ export function FacultySettingsAccordion({
           <Ionicons name="chevron-forward" size={18} color={native.tertiaryLabel} />
         </Animated.View>
       </Pressable>
-      {expanded ? <View style={styles.body}>{children}</View> : null}
+      {expanded ? (
+        <Animated.View
+          style={styles.body}
+          entering={reduceMotion ? undefined : FadeIn.duration(motion.fast)}
+          exiting={reduceMotion ? undefined : FadeOut.duration(motion.fast)}
+          layout={reduceMotion ? undefined : LinearTransition.duration(motion.fast)}
+        >
+          {children}
+        </Animated.View>
+      ) : null}
     </View>
   )
 }

@@ -273,6 +273,15 @@ export function FacultyAcademicTermActionSheet({
                     <Pressable
                       hitSlop={8}
                       style={localStyles.sectionDeleteBtn}
+                      onPress={() => term && onEditSection(term, session)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Edit section ${label}`}
+                    >
+                      <Ionicons name="create-outline" size={18} color={native.label} />
+                    </Pressable>
+                    <Pressable
+                      hitSlop={8}
+                      style={localStyles.sectionDeleteBtn}
                       onPress={() => {
                         setPendingSection(session)
                         setConfirm("delete-section")

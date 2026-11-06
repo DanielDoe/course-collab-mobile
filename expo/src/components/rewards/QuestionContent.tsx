@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useState } from "react"
+import { memo, useEffect, useMemo, useRef, useState } from "react"
 import { ActivityIndicator, Image, Modal, Platform, Pressable, StyleSheet, Text, View } from "react-native"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { WebView } from "react-native-webview"
@@ -8,6 +8,7 @@ import {
   buildQuestionHtml,
   hasActiveQuestionMedia,
   needsQuestionRichRender,
+  normalizeQuestionContentForRender,
   questionPlainText,
   resolveQuestionMediaUrl,
   type McqReportOptionHtmlItem,
@@ -41,6 +42,7 @@ export const QuestionContentWebView = memo(function QuestionContentWebView({
   chatBubble,
   textColor,
   secure,
+  onReady,
 }: {
   text: string
   embedded?: boolean
@@ -51,15 +53,18 @@ export const QuestionContentWebView = memo(function QuestionContentWebView({
   textColor?: string
   /** Live quiz / exam — disable copy/select in the question WebView. */
   secure?: boolean
+  /** Fires once the prompt or option can be shown without an empty-then-fill flash. */
+  onReady?: () => void
 }) {
   const tokens = useAppThemeTokens()
   const native = useThemedNative()
-  const rich = useMemo(() => needsQuestionRichRender(text), [text])
-  const plain = useMemo(() => questionPlainText(text), [text])
+  const prepared = useMemo(() => normalizeQuestionContentForRender(text), [text])
+  const rich = useMemo(() => needsQuestionRichRender(prepared), [prepared])
+  const plain = useMemo(() => questionPlainText(prepared), [prepared])
   const fg = textColor ?? native.label
   const html = useMemo(
     () =>
-      buildQuestionHtml(text, {
+      buildQuestionHtml(prepared, {
         compact,
         disableSelection: secure,
         theme: {
@@ -69,14 +74,34 @@ export const QuestionContentWebView = memo(function QuestionContentWebView({
           heading: fg,
         },
       }),
-    [text, compact, secure, tokens.isDark, fg, textColor, native.secondaryLabel],
+    [prepared, compact, secure, tokens.isDark, fg, textColor, native.secondaryLabel],
   )
   const maxHeight = chatBubble ? 560 : compact ? 240 : 1200
   const [height, setHeight] = useState(chatBubble ? 72 : compact ? 36 : 80)
+  const [painted, setPainted] = useState(!rich || !text.trim())
+  const onReadyRef = useRef(onReady)
+  const reportedRef = useRef(false)
+  onReadyRef.current = onReady
+
+  const reportReady = () => {
+    if (reportedRef.current) return
+    reportedRef.current = true
+    setPainted(true)
+    onReadyRef.current?.()
+  }
 
   useEffect(() => {
-    if (!rich) return
+    reportedRef.current = false
+    if (!text.trim() || !rich) {
+      setPainted(true)
+      reportedRef.current = true
+      onReadyRef.current?.()
+      return
+    }
+    setPainted(false)
     setHeight(chatBubble ? 72 : compact ? 36 : 80)
+    const fallback = setTimeout(reportReady, 800)
+    return () => clearTimeout(fallback)
   }, [text, compact, chatBubble, tokens.isDark, rich])
 
   if (!text.trim()) return null
@@ -102,7 +127,7 @@ export const QuestionContentWebView = memo(function QuestionContentWebView({
         styles.webWrap,
         embedded && styles.webWrapEmbedded,
         !embedded && { backgroundColor: native.fill, borderColor: native.separator },
-        { height },
+        { height, opacity: painted ? 1 : 0 },
       ]}
     >
       <WebView
@@ -114,6 +139,7 @@ export const QuestionContentWebView = memo(function QuestionContentWebView({
           const next = Number(event.nativeEvent.data)
           if (Number.isFinite(next) && next > 0) {
             setHeight(Math.min(Math.max(next + (compact || chatBubble ? 2 : 6), chatBubble ? 48 : compact ? 28 : 40), maxHeight))
+            reportReady()
           }
         }}
       />

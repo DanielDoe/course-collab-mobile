@@ -2,6 +2,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native"
 import { LinearGradient } from "expo-linear-gradient"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useRouter } from "expo-router"
+import { navigateCoraRecommendationLink } from "../../lib/cora/resolve-open-route"
 import { ModuleListRow, ModuleScreen, ModuleSection } from "../modules/ModuleScreen"
 import { CommSectionFooter } from "../faculty/faculty-communication-ui"
 import { NATIVE } from "../../constants/faculty-native-theme"
@@ -244,8 +245,8 @@ export function CoraHomeTab({
               solidThumb={solidListThumb(index + 2)}
               last={index === recommendations.length - 1}
               onPress={() => {
-                if (rec.link.startsWith("/")) router.push(rec.link as never)
-                else onNavigateSection("workspace")
+                if (navigateCoraRecommendationLink(router, rec.link)) return
+                onNavigateSection("workspace")
               }}
             />
           ))

@@ -1,22 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
-import { AppAlert } from '../../lib/app-alert'
+import { View } from "react-native"
 import { useRouter } from "expo-router"
-import { Ionicons } from "@/components/icons/AppIcon"
 import { useSession } from "../../context/SessionProvider"
 import { ApiError } from "../../lib/student-api"
 import type { StudentSession } from "../../lib/session"
-import { COMM_SYSTEM } from "../../constants/faculty-communication-theme"
-import { NATIVE } from "../../constants/faculty-native-theme"
-import { useThemedNative } from "../../context/AppearanceProvider"
-import { useNativeType, useThemedStudentNative } from "../../lib/themed-module-theme"
+import { useThemedStudentNative } from "../../lib/themed-module-theme"
 import {
   collaborationApi,
   formatRelativeTime,
-  stripHtml,
   type ForumLeaderboardEntry,
   type ForumThread,
-  type TutoringOffer,
 } from "../../lib/collaboration-api"
 import {
   CommEmptyState,
@@ -27,6 +20,7 @@ import { SignatureListCard } from "../theme/SignatureListCard"
 import { TabbedModuleLayout, signatureListStyles } from "../theme/TabbedModuleLayout"
 import { StudentFilterSheet, StudentSearchToolbar } from "../student/student-search-toolbar"
 import { useNotificationModuleRefresh } from "../../lib/notifications/notification-events"
+import { useModuleListPageSize } from "../../hooks/useModuleListPageSize"
 
 function useStudentSession(): StudentSession | null {
   const { session } = useSession()
@@ -66,21 +60,6 @@ function ThreadListCard({ thread, index, onPress }: { thread: ForumThread; index
   )
 }
 
-function TutoringListCard({ offer, index }: { offer: TutoringOffer; index: number }) {
-  return (
-    <SignatureListCard
-      index={index}
-      title={offer.subject}
-      subtitle={offer.tutor_name ?? "Student"}
-      meta={formatRelativeTime(offer.created_at)}
-      statusLabel="Tutoring offer"
-      icon="school-outline"
-      accent={COMM_SYSTEM.blue.color}
-      showChevron={false}
-    />
-  )
-}
-
 function LeaderboardListCard({ entry, rank, index }: { entry: ForumLeaderboardEntry; rank: number; index: number }) {
   const SN = useThemedStudentNative()
   const name = entry.full_name ?? entry.student_name ?? "Student"
@@ -101,16 +80,12 @@ function LeaderboardListCard({ entry, rank, index }: { entry: ForumLeaderboardEn
 }
 
 /** TabbedModuleLayout pages are plain ScrollViews — page long lists instead of mounting every row. */
-const LIST_PAGE_SIZE = 20
 
 export function ForumScreen() {
   const session = useStudentSession()
   const router = useRouter()
-  const SN = useThemedStudentNative()
-  const native = useThemedNative()
   const [tab, setTab] = useState<ForumTab>("discussions")
   const [threads, setThreads] = useState<ForumThread[]>([])
-  const [tutoring, setTutoring] = useState<TutoringOffer[]>([])
   const [weeklyLb, setWeeklyLb] = useState<ForumLeaderboardEntry[]>([])
   const [allTimeLb, setAllTimeLb] = useState<ForumLeaderboardEntry[]>([])
   const [lbView, setLbView] = useState<"weekly" | "alltime">("weekly")
@@ -119,28 +94,25 @@ export function ForumScreen() {
   const [error, setError] = useState("")
   const [search, setSearch] = useState("")
   const [sortBy, setSortBy] = useState<"recent" | "popular">("recent")
-  const [showTutorForm, setShowTutorForm] = useState(false)
-  const [tutorSubject, setTutorSubject] = useState("")
   const [filterSheetOpen, setFilterSheetOpen] = useState(false)
-  const [threadCount, setThreadCount] = useState(LIST_PAGE_SIZE)
-  const [tutoringCount, setTutoringCount] = useState(LIST_PAGE_SIZE)
-  const [leaderboardCount, setLeaderboardCount] = useState(LIST_PAGE_SIZE)
+  const listPageSize = useModuleListPageSize({ preset: "standard" })
+  const leaderboardPageSize = useModuleListPageSize({ preset: "compact" })
+  const [threadCount, setThreadCount] = useState(listPageSize)
+  const [leaderboardCount, setLeaderboardCount] = useState(leaderboardPageSize)
 
   const load = useCallback(async () => {
     if (!session) return
     setError("")
     try {
-      const [threadRes, , tutoringRes, lbRes] = await Promise.all([
+      const [threadRes, , lbRes] = await Promise.all([
         collaborationApi.getForumThreads(session, {
           search: tab === "discussions" ? search.trim() || undefined : undefined,
           sortBy,
         }),
         collaborationApi.getForumReputation(session),
-        collaborationApi.getTutoringOffers(session),
         collaborationApi.getForumLeaderboard(session),
       ])
       setThreads(threadRes.threads ?? [])
-      setTutoring(tutoringRes.offers ?? [])
       setWeeklyLb(lbRes.weekly ?? [])
       setAllTimeLb(lbRes.allTime ?? [])
     } catch (err) {
@@ -171,23 +143,11 @@ export function ForumScreen() {
   useNotificationModuleRefresh("forum", onRefresh)
 
   useEffect(() => {
-    setThreadCount(LIST_PAGE_SIZE)
-    setTutoringCount(LIST_PAGE_SIZE)
-    setLeaderboardCount(LIST_PAGE_SIZE)
-  }, [search, sortBy, lbView])
+    setThreadCount(listPageSize)
+    setLeaderboardCount(leaderboardPageSize)
+  }, [search, sortBy, lbView, listPageSize, leaderboardPageSize])
 
   const leaderboard = lbView === "weekly" ? weeklyLb : allTimeLb
-
-  const filteredTutoring = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    if (!q) return tutoring
-    return tutoring.filter(
-      (offer) =>
-        offer.subject.toLowerCase().includes(q) ||
-        (offer.tutor_name ?? "").toLowerCase().includes(q) ||
-        stripHtml(offer.description ?? "").toLowerCase().includes(q),
-    )
-  }, [tutoring, search])
 
   const filteredLeaderboard = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -206,27 +166,8 @@ export function ForumScreen() {
     [],
   )
 
-  const submitTutoringOffer = async () => {
-    if (!session || !tutorSubject.trim()) return
-    try {
-      await collaborationApi.createTutoringOffer(session, {
-        offerType: "can_tutor",
-        subject: tutorSubject.trim(),
-      })
-      setTutorSubject("")
-      setShowTutorForm(false)
-      await load()
-    } catch (err) {
-      AppAlert.alert("Failed", err instanceof ApiError ? err.message : "Could not post offer.")
-    }
-  }
-
   const searchPlaceholder =
-    tab === "discussions"
-      ? "Search discussions…"
-      : tab === "tutoring"
-        ? "Search tutoring offers…"
-        : "Search rankings…"
+    tab === "discussions" ? "Search discussions…" : "Search rankings…"
 
   const trailingAction =
     tab === "discussions"
@@ -235,13 +176,7 @@ export function ForumScreen() {
           accessibilityLabel: "Start a thread",
           icon: "add" as const,
         }
-      : tab === "tutoring"
-        ? {
-            onPress: () => setShowTutorForm(true),
-            accessibilityLabel: "Offer tutoring",
-            icon: "add" as const,
-          }
-        : undefined
+      : undefined
 
   const showSortFilter = tab === "discussions" || tab === "leaderboard"
   const sortFilterActive =
@@ -264,78 +199,34 @@ export function ForumScreen() {
       : "Switch between weekly and all-time standings."
 
   function renderDiscussionsPage() {
-    return (
-      <>
-        {threads.length === 0 ? (
-          <CommEmptyState
-            icon="chatbubbles-outline"
-            title="No threads yet"
-            body="Discussions from your class will show up here."
-          />
-        ) : (
-          <View style={signatureListStyles.list}>
-            {threads.slice(0, threadCount).map((thread, index) => (
-              <ThreadListCard
-                key={thread.id}
-                index={index}
-                thread={thread}
-                onPress={() => router.push(`/collaboration/forum/thread/${thread.id}` as never)}
-              />
-            ))}
-            <ModuleShowMoreRow
-              variant="card"
-              remaining={threads.length - threadCount}
-              onPress={() => setThreadCount((prev) => prev + LIST_PAGE_SIZE)}
-            />
-          </View>
-        )}
-        <CommSectionFooter>Tap a thread to read replies or vote on posts.</CommSectionFooter>
-      </>
-    )
-  }
+    if (threads.length === 0) {
+      return (
+        <CommEmptyState
+          icon="chatbubbles-outline"
+          title="No threads yet"
+          body="Discussions from your class will show up here. Tap + to ask a question."
+        />
+      )
+    }
 
-  function renderTutoringPage() {
     return (
       <>
-        {filteredTutoring.length === 0 && !showTutorForm ? (
-          <CommEmptyState
-            icon="school-outline"
-            title="No offers yet"
-            body="Share a subject you can help with."
+        <View style={signatureListStyles.list}>
+          {threads.slice(0, threadCount).map((thread, index) => (
+            <ThreadListCard
+              key={thread.id}
+              index={index}
+              thread={thread}
+              onPress={() => router.push(`/collaboration/forum/thread/${thread.id}` as never)}
+            />
+          ))}
+          <ModuleShowMoreRow
+            variant="card"
+            remaining={threads.length - threadCount}
+            onPress={() => setThreadCount((prev) => prev + listPageSize)}
           />
-        ) : (
-          <View style={signatureListStyles.list}>
-            {filteredTutoring.slice(0, tutoringCount).map((offer, index) => (
-              <TutoringListCard key={offer.id} offer={offer} index={index} />
-            ))}
-            <ModuleShowMoreRow
-              variant="card"
-              remaining={filteredTutoring.length - tutoringCount}
-              onPress={() => setTutoringCount((prev) => prev + LIST_PAGE_SIZE)}
-            />
-          </View>
-        )}
-        {showTutorForm ? (
-          <View style={styles.tutorForm}>
-            <TextInput
-              style={[styles.tutorInput, { backgroundColor: native.secondaryGrouped, color: native.label }]}
-              value={tutorSubject}
-              onChangeText={setTutorSubject}
-              placeholder="Subject you can tutor"
-              placeholderTextColor={native.tertiaryLabel}
-            />
-            <Pressable
-              style={({ pressed }) => [
-                styles.primaryBtn,
-                { backgroundColor: SN.accent },
-                pressed && { opacity: NATIVE.pressedOpacity },
-              ]}
-              onPress={() => void submitTutoringOffer()}
-            >
-              <Text style={styles.primaryBtnText}>Post offer</Text>
-            </Pressable>
-          </View>
-        ) : null}
+        </View>
+        <CommSectionFooter>Tap a thread to read replies or vote on posts.</CommSectionFooter>
       </>
     )
   }
@@ -355,7 +246,7 @@ export function ForumScreen() {
         <ModuleShowMoreRow
           variant="card"
           remaining={filteredLeaderboard.length - leaderboardCount}
-          onPress={() => setLeaderboardCount((prev) => prev + LIST_PAGE_SIZE)}
+          onPress={() => setLeaderboardCount((prev) => prev + leaderboardPageSize)}
         />
       </View>
     )
@@ -366,7 +257,13 @@ export function ForumScreen() {
       <TabbedModuleLayout
         tabs={navTabs}
         tab={tab}
-        onTabChange={setTab}
+        onTabChange={(next) => {
+          if (next === "tutoring") {
+            router.push("/collaboration/forum/tutoring" as never)
+            return
+          }
+          setTab(next)
+        }}
         loading={loading}
         refreshing={refreshing}
         onRefresh={() => void onRefresh()}
@@ -402,63 +299,8 @@ export function ForumScreen() {
             ) : null}
           </>
         }
-        pages={[renderDiscussionsPage(), renderTutoringPage(), renderLeaderboardPage()]}
+        pages={[renderDiscussionsPage(), <View />, renderLeaderboardPage()]}
       />
     </>
   )
 }
-
-const styles = StyleSheet.create({
-  rowBorder: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  iconTile: {
-    width: NATIVE.iconTileSize,
-    height: NATIVE.iconTileSize,
-    borderRadius: NATIVE.iconTileRadius,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  tutorRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    minHeight: NATIVE.rowMinHeight,
-  },
-  lbRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    minHeight: NATIVE.rowMinHeight,
-  },
-  lbRank: {
-    width: 36,
-    height: 36,
-    borderRadius: NATIVE.iconTileRadius,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  lbRankText: { fontSize: 13, fontWeight: "600" },
-  rowCopy: { flex: 1, gap: 4, minWidth: 0 },
-  rowSubtitle: { lineHeight: 18 },
-  lbPoints: { alignItems: "flex-end" },
-  lbPointsValue: { fontSize: 16, fontWeight: "600" },
-  tutorForm: { gap: 10 },
-  tutorInput: {
-    borderRadius: NATIVE.sectionRadius,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 16,
-  },
-  primaryBtn: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 14,
-    borderRadius: NATIVE.sectionRadius,
-  },
-  primaryBtnText: { color: "#ffffff", fontSize: 15, fontWeight: "600" },
-})

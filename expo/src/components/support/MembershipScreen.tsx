@@ -24,6 +24,7 @@ import { fetchEffectiveMembershipTier } from "../../lib/student-shell-refresh"
 import type { StudentSession } from "../../lib/session"
 import type { MembershipTier } from "../../types/dashboard"
 import {
+  formatPriceFromCents,
   formatSemesterPrice,
   isTierAtLeast,
   MEMBERSHIP_FEATURE_MATRIX,
@@ -34,6 +35,7 @@ import {
 } from "../../lib/membership-plans"
 import {
   fetchMembershipPlanPricing,
+  listPriceCentsForTier,
   semesterPriceCentsForTier,
   type MembershipPlansResponse,
 } from "../../lib/membership-pricing-api"
@@ -60,6 +62,7 @@ import { useCoraBalance } from "../../hooks/useCoraBalance"
 import { CoraUsagePanel } from "../cora/CoraUsagePanel"
 import { CoraCreditPacksPanel } from "../cora/CoraCreditPacksPanel"
 import { CoraCreditBalanceBadge } from "../cora/CoraCreditBalanceBadge"
+import { shouldShowPurchaseCta } from "../../lib/purchase-navigation"
 
 const TIER_ORDER: MembershipTier[] = ["Trailblazer", "Explorer", "Scholar"]
 const CARD_RADIUS = 20
@@ -170,6 +173,7 @@ function CurrentMembershipSummary({
   onExplore,
   onBilling,
   tokens,
+  showPurchaseActions,
 }: {
   plan: MembershipPlan
   semesterCents: number
@@ -178,6 +182,7 @@ function CurrentMembershipSummary({
   onExplore: () => void
   onBilling: () => void
   tokens: AppThemeTokens
+  showPurchaseActions: boolean
 }) {
   const hero = useMemo(
     () => membershipTierHeroCardStyle(plan.id, tokens),
@@ -241,7 +246,7 @@ function CurrentMembershipSummary({
                     ? `Valid through ${formatMembershipDate(expiresAt)}`
                     : "Active this semester"}
               </Text>
-              {!isFreeTier && semesterCents > 0 ? (
+              {showPurchaseActions && !isFreeTier && semesterCents > 0 ? (
                 <Text style={[styles.currentPrice, { color: hero.subtitle }]}>
                   {formatSemesterPrice(semesterCents)} · semester access
                 </Text>
@@ -269,7 +274,7 @@ function CurrentMembershipSummary({
             >
               <Text style={[styles.currentActionText, { color: hero.exploreBtnText }]}>Explore plan</Text>
             </Pressable>
-            {!isFreeTier ? (
+            {!isFreeTier && showPurchaseActions ? (
               <Pressable
                 style={[styles.currentActionBtn, { backgroundColor: hero.billingBtnBg, borderWidth: 0 }]}
                 onPress={onBilling}
@@ -287,21 +292,25 @@ function CurrentMembershipSummary({
 function SubtlePlanCard({
   plan,
   semesterCents,
+  listCents,
   currentTier,
   expiresAt,
   onExplore,
   onUpgrade,
   tokens,
   index,
+  showPurchaseActions,
 }: {
   plan: MembershipPlan
   semesterCents: number
+  listCents: number
   currentTier: MembershipTier
   expiresAt: string | null
   onExplore: (plan: MembershipPlan) => void
   onUpgrade: (plan: MembershipPlan) => void
   tokens: AppThemeTokens
   index: number
+  showPurchaseActions: boolean
 }) {
   const native = useThemedNative()
   const isCurrent = plan.id === currentTier
@@ -328,11 +337,22 @@ function SubtlePlanCard({
             </Text>
           </View>
           <View style={styles.planPriceBlock}>
-            <Text style={[styles.planPrice, { color: native.secondaryLabel }]}>
-              {planPriceLabel(semesterCents)}
-            </Text>
-            {semesterCents > 0 ? (
-              <Text style={[styles.planPriceCadence, { color: native.tertiaryLabel }]}>/ semester</Text>
+            {showPurchaseActions && listCents > semesterCents && semesterCents > 0 ? (
+              <Text style={[styles.planListPrice, { color: native.tertiaryLabel }]}>
+                {formatPriceFromCents(listCents)}
+              </Text>
+            ) : null}
+            {showPurchaseActions ? (
+              <>
+                <Text style={[styles.planPrice, { color: native.secondaryLabel }]}>
+                  {planPriceLabel(semesterCents)}
+                </Text>
+                {semesterCents > 0 ? (
+                  <Text style={[styles.planPriceCadence, { color: native.tertiaryLabel }]}>
+                    {listCents > semesterCents ? "save $10 / semester" : "/ semester"}
+                  </Text>
+                ) : null}
+              </>
             ) : null}
           </View>
         </View>
@@ -360,10 +380,10 @@ function SubtlePlanCard({
           </Text>
         </Pressable>
 
-        {canUpgrade ? (
+        {canUpgrade && showPurchaseActions ? (
           <Pressable style={styles.upgradeLink} onPress={() => onUpgrade(plan)}>
             <Text style={[styles.upgradeLinkText, { color: plan.accent }]}>
-              Upgrade to {plan.name}
+              Get {plan.name} for {formatPriceFromCents(semesterCents)}
             </Text>
           </Pressable>
         ) : null}
@@ -526,15 +546,12 @@ export function MembershipScreen() {
     if (!session) return
     setError("")
     try {
-      const tierPromise = membershipTierLoaded
-        ? Promise.resolve(membershipTier)
-        : fetchEffectiveMembershipTier(session)
       const [tier, planPricing, membershipPayload] = await Promise.all([
-        tierPromise,
+        fetchEffectiveMembershipTier(session, { syncStripe: true }),
         fetchMembershipPlanPricing(session.databaseId),
         studentApi.getMembership(session).catch(() => null),
       ])
-      if (tier && !membershipTierLoaded) {
+      if (tier) {
         setMembershipTier(tier)
         setMembershipTierLoaded(true)
       }
@@ -549,7 +566,7 @@ export function MembershipScreen() {
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Failed to load membership.")
     }
-  }, [membershipTier, membershipTierLoaded, session, setMembershipTier, setMembershipTierLoaded])
+  }, [membershipTier, session, setMembershipTier, setMembershipTierLoaded])
 
   useNotificationModuleRefresh("membership", load)
 
@@ -607,6 +624,7 @@ export function MembershipScreen() {
     error: coraError,
     refresh: refreshCora,
   } = useCoraBalance({ role: "student", session, enabled: Boolean(session) })
+  const showPurchaseActions = shouldShowPurchaseCta()
 
   return (
     <View style={[styles.screenRoot, { backgroundColor: native.groupedBackground }]}>
@@ -642,6 +660,7 @@ export function MembershipScreen() {
           onExplore={() => openPlanExplorer(currentPlan)}
           onBilling={() => router.push("/membership/manage" as never)}
           tokens={tokens}
+          showPurchaseActions={showPurchaseActions}
         />
 
         <Animated.View entering={FadeInDown.delay(120).duration(340)} style={{ marginBottom: 16 }}>
@@ -657,19 +676,30 @@ export function MembershipScreen() {
             activityLoadingPage={coraActivityLoadingPage}
             onActivityPageChange={(page) => void goToCoraActivityPage(page)}
           />
-          <CoraCreditPacksPanel
-            audience="student"
-            session={session}
-            onPurchased={() => void refreshCora({ force: true, includeActivity: true })}
-          />
+          {showPurchaseActions ? (
+            <CoraCreditPacksPanel
+              audience="student"
+              session={session}
+              onPurchased={() => void refreshCora({ force: true, includeActivity: true })}
+            />
+          ) : null}
         </Animated.View>
 
-        <Animated.Text
-          entering={FadeInDown.delay(180).duration(340)}
-          style={[styles.allPlansLabel, { color: native.secondaryLabel }]}
-        >
-          All plans
-        </Animated.Text>
+        {showPurchaseActions ? (
+          <Animated.Text
+            entering={FadeInDown.delay(180).duration(340)}
+            style={[styles.allPlansLabel, { color: native.secondaryLabel }]}
+          >
+            All plans · $10 student discount this semester
+          </Animated.Text>
+        ) : (
+          <Animated.Text
+            entering={FadeInDown.delay(180).duration(340)}
+            style={[styles.allPlansLabel, { color: native.secondaryLabel }]}
+          >
+            All plans
+          </Animated.Text>
+        )}
 
         <View style={styles.planStack}>
         {themedSortedPlans.map((plan, index) => (
@@ -677,17 +707,19 @@ export function MembershipScreen() {
             key={plan.id}
             plan={plan}
             semesterCents={semesterPriceCentsForTier(pricing, plan.id)}
+            listCents={listPriceCentsForTier(pricing, plan.id)}
             currentTier={membershipTier}
             expiresAt={expiresAt}
             onExplore={openPlanExplorer}
             onUpgrade={handlePlanSelect}
             tokens={tokens}
             index={index}
+            showPurchaseActions={showPurchaseActions}
           />
         ))}
       </View>
 
-      {hasPaidMembership ? (
+      {hasPaidMembership && showPurchaseActions ? (
         <Animated.View entering={FadeInDown.delay(300).duration(340).springify()}>
           <Pressable
             style={[styles.manageRow, { borderColor: tokens.border }]}
@@ -851,6 +883,12 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   planPriceBlock: { alignItems: "flex-end", gap: 1 },
+  planListPrice: {
+    fontSize: 12,
+    fontWeight: "500",
+    textAlign: "right",
+    textDecorationLine: "line-through",
+  },
   planPrice: {
     fontSize: 14,
     fontWeight: "600",

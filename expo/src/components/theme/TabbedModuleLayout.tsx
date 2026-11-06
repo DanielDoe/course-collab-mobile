@@ -1,8 +1,9 @@
 import { type ReactNode } from "react"
 import { ActivityIndicator, KeyboardAvoidingView, Platform, RefreshControl, StyleSheet, Text, View } from "react-native"
+import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { ScrollView } from "react-native-gesture-handler"
 import { useThemedNative } from "../../context/AppearanceProvider"
-import { useModuleScrollContentPadding } from "../../context/ChromeInsetContext"
+import { useModuleScrollContentPadding, useModuleHeaderContentTop } from "../../context/ChromeInsetContext"
 import { useModuleContentStyle } from "../../lib/responsive-layout"
 import { NATIVE } from "../../constants/faculty-native-theme"
 import { useAppThemeTokens } from "../../context/AppearanceProvider"
@@ -25,6 +26,8 @@ type Props<T extends string> = {
   onRefresh?: () => void
   error?: string
   pagePaddingHorizontal?: number
+  /** Horizontally scroll the tab bar when there are many tabs. */
+  scrollableTabs?: boolean
 }
 
 export function TabbedModuleLayout<T extends string>({
@@ -38,12 +41,16 @@ export function TabbedModuleLayout<T extends string>({
   onRefresh,
   error,
   pagePaddingHorizontal = NATIVE.pagePadding,
+  scrollableTabs = false,
 }: Props<T>) {
   const native = useThemedNative()
   const tokens = useAppThemeTokens()
   const type = useNativeType()
   const scrollPad = useModuleScrollContentPadding()
+  const chromePaddingTop = useModuleHeaderContentTop()
   const moduleContentStyle = useModuleContentStyle()
+  const insets = useSafeAreaInsets()
+  const hasChromeContent = Boolean(error) || Boolean(chrome)
 
   const pageScrollStyle = {
     paddingBottom: scrollPad.paddingBottom,
@@ -84,13 +91,15 @@ export function TabbedModuleLayout<T extends string>({
   return (
     <KeyboardAvoidingView
       style={[styles.root, { backgroundColor: native.groupedBackground }]}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? insets.top + 56 : 0}
     >
       <View
         style={[
           styles.chrome,
+          hasChromeContent ? styles.chromeWithContent : styles.chromeTabsOnly,
           {
-            paddingTop: scrollPad.paddingTop ?? NATIVE.pagePadding,
+            paddingTop: chromePaddingTop,
             paddingHorizontal: NATIVE.pagePadding,
           },
         ]}
@@ -108,6 +117,8 @@ export function TabbedModuleLayout<T extends string>({
         value={tab}
         onChange={onTabChange}
         pagePaddingHorizontal={pagePaddingHorizontal}
+        scrollable={scrollableTabs}
+        visibleSegmentCount={scrollableTabs ? 3 : tabs.length}
         pages={pages.map((page) => wrapPage(page))}
       />
     </KeyboardAvoidingView>
@@ -128,7 +139,9 @@ export const signatureListStyles = StyleSheet.create({
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  chrome: { gap: 12, paddingBottom: 4 },
+  chrome: {},
+  chromeWithContent: { gap: 12, paddingBottom: 4 },
+  chromeTabsOnly: { gap: 0, paddingBottom: 0 },
   pageScroll: { flex: 1 },
   pageCenter: {
     flex: 1,

@@ -20,6 +20,7 @@ import {
 import { NATIVE, SYSTEM } from "../../constants/faculty-native-theme"
 import { evaluationRowBelongsToCourse } from "../../lib/course-sections"
 import { computeFacultyCourseEvaluationAnalytics } from "../../lib/faculty-course-evaluations-utils"
+import { isEvaluationsEmptySuccess } from "../../lib/faculty-evaluations-load"
 import { useFacultyScope } from "../../hooks/useFacultyScope"
 import { useNotificationModuleRefresh } from "../../lib/notifications/notification-events"
 import { semanticSoft, useNativeType } from "../../lib/themed-module-theme"
@@ -46,7 +47,9 @@ import {
   FacultySheetTextInput,
   FacultySheetWorkflow,
 } from "./faculty-collab-sheet-ui"
+import { useFacultyListPager } from "../../hooks/useFacultyListPager"
 import { useModuleTheme } from "../../lib/themed-module-shell"
+import { FacultyListPagerFooter } from "./FacultyListPagerFooter"
 import { GlassBottomSheetModal } from "../theme/GlassBottomSheetModal"
 import { GlassSheetBackground } from "../theme/GlassSurface"
 import { useSuppressModuleSearchDock } from "../../context/ModuleSearchDockContext"
@@ -473,9 +476,16 @@ export function FacultyCourseEvaluationsScreen() {
     }
     setLoading(true)
     load()
-      .catch((err) =>
-        setError(err instanceof ApiError ? err.message : "Could not load course evaluations."),
-      )
+      .catch((err) => {
+        if (isEvaluationsEmptySuccess(err)) {
+          setPending([])
+          setEvaluations([])
+          setAnalytics(computeFacultyCourseEvaluationAnalytics([]))
+          setError("")
+          return
+        }
+        setError(err instanceof ApiError ? err.message : "Unable to load evaluations.")
+      })
       .finally(() => setLoading(false))
   }, [ready, load])
 
@@ -484,6 +494,13 @@ export function FacultyCourseEvaluationsScreen() {
     try {
       await load()
     } catch (err) {
+      if (isEvaluationsEmptySuccess(err)) {
+        setPending([])
+        setEvaluations([])
+        setAnalytics(computeFacultyCourseEvaluationAnalytics([]))
+        setError("")
+        return
+      }
       setError(err instanceof ApiError ? err.message : "Could not refresh.")
     } finally {
       setRefreshing(false)
@@ -618,6 +635,8 @@ export function FacultyCourseEvaluationsScreen() {
 
   const pendingFiltered = useMemo(() => filterRows(pending), [filterRows, pending])
   const evaluationsFiltered = useMemo(() => filterRows(evaluations), [filterRows, evaluations])
+  const pendingPager = useFacultyListPager(pendingFiltered, `${search}:pending`, "evaluations")
+  const evaluationsPager = useFacultyListPager(evaluationsFiltered, `${search}:${statusFilter}`, "evaluations")
 
   if (!ready) {
     return (
@@ -812,22 +831,36 @@ export function FacultyCourseEvaluationsScreen() {
               </Pressable>
             ) : null}
 
-            {pendingFiltered.length === 0 ? (
+            {error ? (
+              <FacultyEmptyState
+                icon="alert-circle-outline"
+                title="Unable to load evaluations."
+                body="Check your connection and try again."
+                action={
+                  <Pressable onPress={() => void handleRefresh()} accessibilityRole="button">
+                    <Text style={[type.bodyEmphasis, { color: FACULTY_EVALUATIONS_COLOR.link }]}>Retry</Text>
+                  </Pressable>
+                }
+              />
+            ) : pendingFiltered.length === 0 ? (
               <FacultyEmptyState
                 icon="checkmark-circle-outline"
-                title="No pending evaluations"
-                body="New Canvas proof submissions will show up here for review."
+                title="No evaluations yet"
+                body="Course evaluations will appear here when students submit them."
               />
             ) : (
-              pendingFiltered.map((row) => (
-                <EvaluationRowCard
-                  key={row.id}
-                  row={row}
-                  busy={actingId === row.id}
-                  onPress={() => void openDetail(row.id)}
-                  onQuickApprove={() => void approveOne(row.id)}
-                />
-              ))
+              <>
+                {pendingPager.items.map((row) => (
+                  <EvaluationRowCard
+                    key={row.id}
+                    row={row}
+                    busy={actingId === row.id}
+                    onPress={() => void openDetail(row.id)}
+                    onQuickApprove={() => void approveOne(row.id)}
+                  />
+                ))}
+                <FacultyListPagerFooter pager={pendingPager} />
+              </>
             )}
           </View>
         ) : null}
@@ -862,26 +895,40 @@ export function FacultyCourseEvaluationsScreen() {
               })}
             </ScrollView>
 
-            {evaluationsFiltered.length === 0 ? (
+            {error ? (
+              <FacultyEmptyState
+                icon="alert-circle-outline"
+                title="Unable to load evaluations."
+                body="Check your connection and try again."
+                action={
+                  <Pressable onPress={() => void handleRefresh()} accessibilityRole="button">
+                    <Text style={[type.bodyEmphasis, { color: FACULTY_EVALUATIONS_COLOR.link }]}>Retry</Text>
+                  </Pressable>
+                }
+              />
+            ) : evaluationsFiltered.length === 0 ? (
               <FacultyEmptyState
                 icon="clipboard-outline"
-                title="No evaluations"
-                body="Try another status filter or wait for student submissions."
+                title="No evaluations yet"
+                body="Course evaluations will appear here when students submit them."
               />
             ) : (
-              evaluationsFiltered.map((row) => (
-                <EvaluationRowCard
-                  key={row.id}
-                  row={row}
-                  busy={actingId === row.id}
-                  onPress={() => void openDetail(row.id)}
-                  onQuickApprove={
-                    row.status?.toLowerCase() === "pending"
-                      ? () => void approveOne(row.id)
-                      : undefined
-                  }
-                />
-              ))
+              <>
+                {evaluationsPager.items.map((row) => (
+                  <EvaluationRowCard
+                    key={row.id}
+                    row={row}
+                    busy={actingId === row.id}
+                    onPress={() => void openDetail(row.id)}
+                    onQuickApprove={
+                      row.status?.toLowerCase() === "pending"
+                        ? () => void approveOne(row.id)
+                        : undefined
+                    }
+                  />
+                ))}
+                <FacultyListPagerFooter pager={evaluationsPager} />
+              </>
             )}
           </View>
         ) : null}

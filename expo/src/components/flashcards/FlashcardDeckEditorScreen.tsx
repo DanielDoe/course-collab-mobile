@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { AppAlert } from '../../lib/app-alert'
 import { Ionicons } from "@/components/icons/AppIcon"
@@ -8,7 +8,16 @@ import { useSession } from "../../context/SessionProvider"
 import { ApiError } from "../../lib/student-api"
 import type { StudentSession } from "../../lib/session"
 import { flashcardsApi, type FlashcardCard, type FlashcardDeck } from "../../lib/flashcards-api"
+import {
+  prepareTempCardId,
+  useAddStudentFlashcardCard,
+  useDeleteStudentFlashcardCard,
+  useDeleteStudentFlashcardDeck,
+  useStudentFlashcardDeck,
+  useUpdateStudentFlashcardDeck,
+} from "../../hooks/query/useStudentFlashcards"
 import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
+import { useAppToast } from "../../context/AppToastProvider"
 import { useNativeType } from "../../lib/themed-module-theme"
 import { safeRouterBack } from "../../lib/safe-router-back"
 import { NATIVE } from "../../constants/faculty-native-theme"
@@ -17,7 +26,8 @@ import { FlashcardFlipCard } from "./FlashcardFlipCard"
 import { FlashcardDifficultyPicker } from "./FlashcardDifficultyPicker"
 import { FlashcardDifficultyBadge } from "./FlashcardDifficultyBadge"
 import type { FlashcardDifficulty } from "../../lib/flashcard-difficulty"
-
+import { useFacultyListPager } from "../../hooks/useFacultyListPager"
+import { FacultyListPagerFooter } from "../faculty/FacultyListPagerFooter"
 const FLASHCARDS_HOME = "/module/flashcards"
 
 function useStudentSession(): StudentSession | null {
@@ -34,7 +44,13 @@ export function FlashcardDeckEditorScreen() {
   const tokens = useAppThemeTokens()
   const native = useThemedNative()
   const type = useNativeType()
+  const { showSuccess } = useAppToast()
 
+  const deckQuery = useStudentFlashcardDeck(session, deckId)
+  const updateDeckMutation = useUpdateStudentFlashcardDeck(session)
+  const deleteDeckMutation = useDeleteStudentFlashcardDeck(session)
+  const addCardMutation = useAddStudentFlashcardCard(session)
+  const deleteCardMutation = useDeleteStudentFlashcardCard(session)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
@@ -49,8 +65,21 @@ export function FlashcardDeckEditorScreen() {
   const [addingCard, setAddingCard] = useState(false)
   const [previewFlipped, setPreviewFlipped] = useState(false)
 
+  const cardsPager = useFacultyListPager(cards, String(deckId), "cards")
+
   const load = useCallback(async () => {
     if (!session || !Number.isFinite(deckId)) return
+    const cached = deckQuery.data
+    if (cached?.deck) {
+      if (cached.deck.canEdit === false) throw new ApiError("You can only edit your own decks.", 403)
+      setDeck(cached.deck)
+      setCards(cached.cards ?? [])
+      setTitle(cached.deck.title)
+      setDescription(cached.deck.description)
+      setTopic(cached.deck.topic ?? "")
+      if (deckId < 0 || !deckQuery.isFetching) return
+    }
+    if (deckId < 0) return
     const res = await flashcardsApi.getDeck(session, deckId)
     if (!res.deck.canEdit) throw new ApiError("You can only edit your own decks.", 403)
     setDeck(res.deck)
@@ -58,26 +87,26 @@ export function FlashcardDeckEditorScreen() {
     setTitle(res.deck.title)
     setDescription(res.deck.description)
     setTopic(res.deck.topic ?? "")
-  }, [session, deckId])
+  }, [session, deckId, deckQuery.data, deckQuery.isFetching])
 
   useEffect(() => {
     if (!session || !Number.isFinite(deckId)) return
-    setLoading(true)
-    load()
-      .catch((err) => setError(err instanceof ApiError ? err.message : "Could not load deck."))
-      .finally(() => setLoading(false))
-  }, [session, deckId, load])
+    setLoading(deckQuery.isLoading && !deckQuery.data)
+    load().catch((err) => setError(err instanceof ApiError ? err.message : "Could not load deck."))
+  }, [session, deckId, load, deckQuery.isLoading, deckQuery.data])
 
   async function saveDeck() {
     if (!session || !deck || saving) return
     setSaving(true)
     try {
-      const res = await flashcardsApi.updateDeck(session, deck.id, {
+      const res = await updateDeckMutation.mutateAsync({
+        deckId: deck.id,
         title,
         description,
         topic: topic.trim() || undefined,
       })
       setDeck(res.deck)
+      showSuccess("Deck saved")
     } catch (err) {
       AppAlert.alert("Save failed", err instanceof ApiError ? err.message : "Try again.")
     } finally {
@@ -93,17 +122,20 @@ export function FlashcardDeckEditorScreen() {
     }
     setAddingCard(true)
     try {
-      const res = await flashcardsApi.addCard(session, deck.id, {
+      const res = await addCardMutation.mutateAsync({
+        deckId: deck.id,
+        tempId: prepareTempCardId(),
         frontText: frontText.trim(),
         backText: backText.trim(),
         sortOrder: cards.length,
         difficulty: cardDifficulty,
       })
-      setCards((prev) => [...prev, res.card])
+      setCards((prev) => [...prev.filter((row) => row.id !== res.card.id), res.card])
       setFrontText("")
       setBackText("")
       setPreviewFlipped(false)
       setDeck((prev) => (prev ? { ...prev, cardCount: prev.cardCount + 1 } : prev))
+      showSuccess("Card added")
     } catch (err) {
       AppAlert.alert("Add failed", err instanceof ApiError ? err.message : "Try again.")
     } finally {
@@ -121,7 +153,8 @@ export function FlashcardDeckEditorScreen() {
         onPress: () => {
           void (async () => {
             try {
-              await flashcardsApi.deleteCard(session, card.id)
+              if (!deck) return
+              deleteCardMutation.mutate({ deckId: deck.id, cardId: card.id })
               setCards((prev) => prev.filter((row) => row.id !== card.id))
               setDeck((prev) => (prev ? { ...prev, cardCount: Math.max(0, prev.cardCount - 1) } : prev))
             } catch (err) {
@@ -143,7 +176,7 @@ export function FlashcardDeckEditorScreen() {
         onPress: () => {
           void (async () => {
             try {
-              await flashcardsApi.deleteDeck(session, deck.id)
+              deleteDeckMutation.mutate(deck.id)
               safeRouterBack(router, FLASHCARDS_HOME)
             } catch (err) {
               AppAlert.alert("Delete failed", err instanceof ApiError ? err.message : "Try again.")
@@ -236,7 +269,7 @@ export function FlashcardDeckEditorScreen() {
 
         <Text style={[type.caption, styles.sectionLabel, { color: native.secondaryLabel }]}>Cards</Text>
         <View style={styles.cardList}>
-          {cards.map((card) => (
+          {cardsPager.items.map((card) => (
             <View
               key={card.id}
               style={[styles.cardRow, { backgroundColor: native.secondaryGrouped, borderColor: native.separator }]}
@@ -258,6 +291,7 @@ export function FlashcardDeckEditorScreen() {
             </View>
           ))}
         </View>
+        <FacultyListPagerFooter pager={cardsPager} />
 
         <Text style={[type.caption, styles.sectionLabel, { color: native.secondaryLabel }]}>Add card</Text>
         {(frontText.trim() || backText.trim()) ? (

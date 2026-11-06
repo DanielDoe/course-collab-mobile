@@ -61,7 +61,18 @@ export function CommSectionHeader({ title, trailing }: { title: string; trailing
 
 export function CommSectionFooter({ children }: { children: string }) {
   const native = useThemedNative()
-  return <Text style={[styles.sectionFooter, { color: native.secondaryLabel }]}>{children}</Text>
+  const type = useNativeType()
+  return (
+    <Text
+      style={[
+        type.footnote,
+        styles.sectionFooter,
+        { color: native.secondaryLabel },
+      ]}
+    >
+      {children}
+    </Text>
+  )
 }
 
 function threadAuthorLabel(thread: ForumThread): string {
@@ -339,11 +350,12 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
     marginTop: 4},
   sectionFooter: {
-    fontSize: 13,
-    lineHeight: 18,
     paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 4},
+    paddingTop: 12,
+    paddingBottom: 8,
+    textAlign: "center",
+    letterSpacing: 0,
+  },
   groupedList: {
     borderRadius: IOS.sectionRadius,
     overflow: "hidden",

@@ -1,0 +1,27 @@
+appId: com.coursecollab.app
+---
+- runFlow: faculty-login-real.yaml
+- openLink: coursecollab:///module/lectures
+- tapOn:
+    text: "Open"
+    optional: true
+- extendedWaitUntil:
+    visible: "Search lectures…"
+    timeout: 25000
+- tapOn: "Add lecture"
+- waitForAnimationToEnd
+- tapOn:
+    text: "Add lecture"
+    optional: true
+- extendedWaitUntil:
+    visible: "New lecture"
+    timeout: 15000
+- tapOn:
+    id: "lecture-title"
+    optional: true
+- tapOn:
+    text: "Lecture title"
+    optional: true
+- inputText: "Keyboard verify"
+- assertVisible: "Create"
+- tapOn: "Done"

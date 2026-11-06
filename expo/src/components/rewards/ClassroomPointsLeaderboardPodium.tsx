@@ -12,19 +12,19 @@ import {
   podiumRankStyle,
   type PodiumRank,
 } from "../../lib/leaderboard-podium-theme"
-
-function formatPoints(value: number | string | undefined): string {
-  const n = Number(value ?? 0)
-  if (!Number.isFinite(n)) return "0"
-  return n % 1 === 0 ? String(n) : n.toFixed(1)
-}
+import {
+  classroomLeaderboardDisplayName,
+  classroomLeaderboardPointsLabel,
+} from "./classroom-leaderboard-privacy"
 
 function PodiumBlock({
   entry,
   rank,
+  blurPeerNames,
 }: {
   entry: ClassroomLeaderboardEntry
   rank: PodiumRank
+  blurPeerNames: boolean
 }) {
   const tokens = useAppThemeTokens()
   const native = useThemedNative()
@@ -32,7 +32,8 @@ function PodiumBlock({
   const theme = useRewardsTheme()
   const config = podiumRankStyle(rank, tokens.isDark)
   const barHeight = PODIUM_BAR_HEIGHT[rank]
-  const name = entry.full_name?.trim() || "Student"
+  const name = classroomLeaderboardDisplayName(entry, blurPeerNames)
+  const place = Number(entry.rank) > 0 ? Number(entry.rank) : rank
 
   return (
     <View style={styles.podiumCol}>
@@ -42,14 +43,13 @@ function PodiumBlock({
         </View>
       ) : null}
       <View style={[styles.podiumAvatar, { backgroundColor: config.color, borderColor: config.color }]}>
-        <Text style={[styles.podiumRank, { color: config.iconInk }]}>#{rank}</Text>
+        <Text style={[styles.podiumRank, { color: config.iconInk }]}>#{place}</Text>
       </View>
       <Text style={[type.caption, styles.podiumName, { color: native.label }]} numberOfLines={2}>
         {name}
-        {entry.is_current_user ? " (you)" : ""}
       </Text>
       <Text style={[type.footnote, styles.podiumScore, { color: theme.primary }]}>
-        {formatPoints(entry.total_points)} pts
+        {classroomLeaderboardPointsLabel(entry)}
       </Text>
       <View style={[styles.podiumBar, { height: barHeight, backgroundColor: config.barWash }]}>
         <LinearGradient colors={config.barGradient} style={styles.podiumBarFill} />
@@ -60,9 +60,10 @@ function PodiumBlock({
 
 type Props = {
   entries: ClassroomLeaderboardEntry[]
+  blurPeerNames?: boolean
 }
 
-export function ClassroomPointsLeaderboardPodium({ entries }: Props) {
+export function ClassroomPointsLeaderboardPodium({ entries, blurPeerNames = false }: Props) {
   const tokens = useAppThemeTokens()
 
   const podium = useMemo(() => {
@@ -88,13 +89,13 @@ export function ClassroomPointsLeaderboardPodium({ entries }: Props) {
 
       <View style={styles.podiumRow}>
         {podium.second ? (
-          <PodiumBlock entry={podium.second} rank={2} />
+          <PodiumBlock entry={podium.second} rank={2} blurPeerNames={blurPeerNames} />
         ) : (
           <View style={styles.podiumSpacer} />
         )}
-        <PodiumBlock entry={podium.first} rank={1} />
+        <PodiumBlock entry={podium.first} rank={1} blurPeerNames={blurPeerNames} />
         {podium.third ? (
-          <PodiumBlock entry={podium.third} rank={3} />
+          <PodiumBlock entry={podium.third} rank={3} blurPeerNames={blurPeerNames} />
         ) : (
           <View style={styles.podiumSpacer} />
         )}

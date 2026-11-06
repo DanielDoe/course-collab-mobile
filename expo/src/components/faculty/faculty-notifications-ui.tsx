@@ -72,10 +72,13 @@ export function NotificationListPager({
   page,
   pageCount,
   onPageChange,
+  stepPage,
 }: {
   page: number
   pageCount: number
   onPageChange: (next: number) => void
+  /** Prefer stepping from clamped internal page (avoids multi-tap when page state desyncs). */
+  stepPage?: (delta: number) => void
 }) {
   const native = useThemedNative()
   const type = useNativeType()
@@ -89,15 +92,23 @@ export function NotificationListPager({
     <View style={styles.pager}>
       <View style={styles.pagerSide}>
         <Pressable
-          onPress={() => onPageChange(page - 1)}
+          onPress={() => (stepPage ? stepPage(-1) : onPageChange(page - 1))}
           disabled={!canPrev}
           hitSlop={8}
           style={[styles.pagerBtn, !canPrev && styles.pagerBtnDisabled]}
           accessibilityRole="button"
           accessibilityLabel="Previous page"
         >
-          <Ionicons name="chevron-back" size={16} color={tokens.accent} />
-          <Text style={[type.caption, styles.pagerLabel, { color: tokens.accent }]}>Prev</Text>
+          <Ionicons name="chevron-back" size={16} color={canPrev ? tokens.accent : native.tertiaryLabel} />
+          <Text
+            style={[
+              type.caption,
+              styles.pagerLabel,
+              { color: canPrev ? tokens.accent : native.tertiaryLabel },
+            ]}
+          >
+            Previous
+          </Text>
         </Pressable>
       </View>
       <Text
@@ -108,15 +119,23 @@ export function NotificationListPager({
       </Text>
       <View style={[styles.pagerSide, styles.pagerSideEnd]}>
         <Pressable
-          onPress={() => onPageChange(page + 1)}
+          onPress={() => (stepPage ? stepPage(1) : onPageChange(page + 1))}
           disabled={!canNext}
           hitSlop={8}
           style={[styles.pagerBtn, styles.pagerBtnEnd, !canNext && styles.pagerBtnDisabled]}
           accessibilityRole="button"
           accessibilityLabel="Next page"
         >
-          <Text style={[type.caption, styles.pagerLabel, { color: tokens.accent }]}>Next</Text>
-          <Ionicons name="chevron-forward" size={16} color={tokens.accent} />
+          <Text
+            style={[
+              type.caption,
+              styles.pagerLabel,
+              { color: canNext ? tokens.accent : native.tertiaryLabel },
+            ]}
+          >
+            Next
+          </Text>
+          <Ionicons name="chevron-forward" size={16} color={canNext ? tokens.accent : native.tertiaryLabel} />
         </Pressable>
       </View>
     </View>
@@ -197,7 +216,7 @@ const styles = StyleSheet.create({
   },
   pagerSide: {
     flex: 1,
-    minWidth: 72,
+    minWidth: 88,
   },
   pagerSideEnd: {
     alignItems: "flex-end",

@@ -6,6 +6,13 @@ export function sanitizeApiErrorText(text: string, status: number): string {
       ? `Server error (${status}). Please try again later.`
       : `Request failed (${status}).`
   }
+  if (
+    /postgresql|psql|sqlite|mongodb|traceback \(most recent|at \S+\.(ts|js|py):\d+|\/api\/(admin|internal)\//i.test(
+      trimmed,
+    )
+  ) {
+    return "I couldn't complete that action. Please try again or contact support."
+  }
   if (trimmed.includes("<!DOCTYPE") || trimmed.includes("<html")) {
     if (status === 404) {
       return "This feature is not available on the server yet. Try again after the next app update."

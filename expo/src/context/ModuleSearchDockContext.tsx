@@ -1,11 +1,12 @@
-import { createContext, useContext, useEffect, useId } from "react"
-import { useLocalSearchParams, usePathname } from "expo-router"
+import { createContext, useContext, useEffect, useId, useRef } from "react"
+import { usePathname } from "expo-router"
 import type { ModuleSearchDockEntry } from "./module-search-dock-types"
+import { moduleDockScope } from "./module-search-dock-equals"
 
 export type { ModuleSearchDockEntry } from "./module-search-dock-types"
 
 type ModuleSearchDockContextValue = {
-  register: (id: string, entry: ModuleSearchDockEntry | null) => void
+  register: (id: string, entry: ModuleSearchDockEntry | null, ownerScope?: string) => void
   bottomInset: number
   setSheetSuppress: (id: string, active: boolean) => void
 }
@@ -40,12 +41,17 @@ export function useModuleSearchDockRegistration(
   entry: ModuleSearchDockEntry | null,
 ) {
   const pathname = usePathname()
-  const params = useLocalSearchParams<{ id?: string | string[] }>()
-  const moduleId = typeof params.id === "string" ? params.id : Array.isArray(params.id) ? params.id[0] : ""
+  const currentScope = moduleDockScope(pathname)
+  // Capture the route this screen was mounted for. A kept-alive previous module
+  // must not re-register onto the next route (that leaked Projects search onto Calendar).
+  const ownerScopeRef = useRef(currentScope)
   const { register } = useContext(ModuleSearchDockContext)
 
   useEffect(() => {
-    register(id, entry)
-    return () => register(id, null)
-  }, [id, register, entry, pathname, moduleId])
+    // Always keep this screen's entry tagged with the route it was mounted for.
+    // Frozen previous modules will not re-run this effect — the provider
+    // ignores entries whose scope is not the live route.
+    register(id, entry, ownerScopeRef.current)
+    return () => register(id, null, ownerScopeRef.current)
+  }, [id, register, entry, currentScope])
 }

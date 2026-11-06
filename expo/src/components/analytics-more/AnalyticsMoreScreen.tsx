@@ -1,7 +1,6 @@
 import { useMemo, useState, type ReactNode } from "react"
 import {
   ActivityIndicator,
-  Pressable,
   RefreshControl,
   StyleSheet,
   Text,
@@ -20,16 +19,17 @@ import { StudentThemedLocked } from "../student/student-themed-hero"
 import { hasNavAccess } from "../../constants/student-nav"
 import { useSession } from "../../context/SessionProvider"
 import { useStudentShell } from "../../context/StudentShellContext"
-import { useCodebenchProgress } from "../../hooks/useCodebenchProgress"
+import { useStudentAnalytics } from "../../hooks/useStudentAnalytics"
 import {
-  type CodebenchAnalysis,
-  type CodebenchBadgeDetail,
-  type CodebenchLeaderboardEntry,
-  type CodebenchLearningPlan,
-  type CodebenchStreak,
-  type DailyChallenge,
-} from "../../lib/codebench-api"
+  formatActivityWhen,
+  type StudentActivityEvent,
+  type StudentActivityKind,
+  type StudentAnalyticsSnapshot,
+} from "../../lib/student-analytics"
+import { assessmentReportRouteParams } from "../../lib/assessment-report-href"
+import { pushStudentAppHref } from "../../lib/student-app-href"
 import type { StudentSession } from "../../lib/session"
+import type { PerformanceInsight } from "../../types/dashboard"
 import { AppErrorScreen } from "../errors/AppErrorScreen"
 import { CommSectionFooter } from "../faculty/faculty-communication-ui"
 import { FacultyEmptyState } from "../faculty/faculty-shared"
@@ -38,8 +38,6 @@ import { PillSwipeTabs } from "../theme/PillSwipeTabs"
 import { SolidListThumbTile } from "../theme/SolidListThumbTile"
 import {
   ANALYTICS_CALENDAR_ACTIVE,
-  ANALYTICS_LEVEL_ACCENT,
-  ANALYTICS_LEVEL_INK,
   ANALYTICS_LIST_THUMBS,
   ANALYTICS_SUMMARY_KPI,
   ANALYTICS_XP_FILL,
@@ -48,17 +46,41 @@ import {
 import { codebenchKpiSurface } from "../../lib/codebench-badge-theme"
 import {
   ANALYTICS_TABS,
-  BADGE_CATALOG,
-  CONCEPT_LABELS,
   normalizeAnalyticsTab,
   type AnalyticsTabId,
   type LegacyAnalyticsTabId,
-  xpLevel,
 } from "./analytics-config"
 
 function useStudentSession(): StudentSession | null {
   const { session } = useSession()
   return session?.portal === "student" ? session : null
+}
+
+function openAnalyticsHref(router: ReturnType<typeof useRouter>, href: string) {
+  const match = href.match(/^\/results\/(\d+)/)
+  if (match) {
+    const query = href.includes("?") ? new URLSearchParams(href.slice(href.indexOf("?") + 1)) : null
+    router.push(
+      assessmentReportRouteParams(
+        Number(match[1]),
+        query?.get("type") ?? undefined,
+        query?.get("from") ?? undefined,
+      ) as never,
+    )
+    return
+  }
+  pushStudentAppHref(router, href)
+}
+
+const ACTIVITY_META: Record<
+  StudentActivityKind,
+  { label: string; icon: keyof typeof Ionicons.glyphMap; thumb: keyof typeof ANALYTICS_LIST_THUMBS }
+> = {
+  quiz: { label: "Quiz", icon: "help-circle-outline", thumb: "quiz" },
+  homework: { label: "Homework", icon: "document-text-outline", thumb: "homework" },
+  exam: { label: "Exam", icon: "school-outline", thumb: "exam" },
+  practice: { label: "Practice", icon: "fitness-outline", thumb: "practice" },
+  codebench: { label: "CodeBench", icon: "code-slash-outline", thumb: "ide" },
 }
 
 type Props = { initialTab?: LegacyAnalyticsTabId }
@@ -74,36 +96,9 @@ export function AnalyticsMoreScreen({ initialTab = "overview" }: Props) {
   const SN = useThemedStudentNative()
   const type = useNativeType()
   const { membershipTier, membershipTierLoaded } = useStudentShell()
-
   const isLocked = membershipTierLoaded && !hasNavAccess(membershipTier, "Trailblazer")
-
-  const {
-    loading,
-    refreshing,
-    analysisLoading,
-    streak,
-    badges,
-    badgeDetails,
-    leaderboard,
-    dailyChallenge,
-    submissionCount,
-    totalXp,
-    analysis,
-    learningPlan,
-    hasCodeSample,
-    error,
-    onRefresh,
-  } = useCodebenchProgress(session, { enabled: !isLocked })
-
+  const { data, isInitialLoading, refreshing, error, refetch } = useStudentAnalytics(session, !isLocked)
   const [activeTab, setActiveTab] = useState<AnalyticsTabId>(() => normalizeAnalyticsTab(initialTab))
-
-  const badgeCount = useMemo(() => Object.values(badges).filter(Boolean).length, [badges])
-
-  const myRank = useMemo(() => {
-    if (!session) return null
-    const id = Number(session.databaseId)
-    return leaderboard.find((e) => e.student_id === id)?.rank ?? null
-  }, [leaderboard, session])
 
   const pageScrollStyle = useMemo(
     () => ({
@@ -113,17 +108,6 @@ export function AnalyticsMoreScreen({ initialTab = "overview" }: Props) {
     }),
     [scrollPad.paddingBottom],
   )
-
-  const xp = xpLevel(totalXp)
-  const proficiency = analysis?.proficiencyScore ?? 0
-  const levelLabel = analysis?.level ?? "Beginner"
-
-  const openIde = (tool?: string) => {
-    router.push({
-      pathname: "/codebench/ide",
-      params: tool ? { tool } : {},
-    } as never)
-  }
 
   if (!session) {
     return (
@@ -137,7 +121,7 @@ export function AnalyticsMoreScreen({ initialTab = "overview" }: Props) {
     return (
       <StudentThemedLocked
         icon="bar-chart"
-        subtitle="Deep coding insights, badges, streaks, and leaderboard — exclusive to Trailblazer members."
+        subtitle="Course analytics, practice insights, and your activity log — exclusive to Trailblazer members."
         paddingTop={lockedTopPad}
         paddingBottom={insets.bottom + 24}
         onUpgrade={() => router.push("/membership" as never)}
@@ -151,38 +135,21 @@ export function AnalyticsMoreScreen({ initialTab = "overview" }: Props) {
     icon: tab.icon,
   }))
 
-  const summarySection = !loading ? (
-    <ProgressSummarySection
-      xp={xp}
-      totalXp={totalXp}
-      streakDays={streak.streakDays ?? 0}
-      badgeCount={badgeCount}
-      submissionCount={submissionCount}
-      myRank={myRank}
-      levelLabel={levelLabel}
-      proficiency={proficiency}
-      analysisLoading={analysisLoading}
-    />
-  ) : null
-
   const pageFooter = (
     <CommSectionFooter>
-      Analytics are based on your CodeBench submissions and daily activity.
+      These figures come from your gradebook, submitted assessments, Practice Hub, and CodeBench — not a single code sample.
     </CommSectionFooter>
   )
 
-  function renderLoadingPage() {
-    if (!(loading && !refreshing)) return null
-    return (
-      <View style={styles.pageCenter}>
-        <ActivityIndicator color={native.tint} size="large" />
-        <Text style={[type.caption, { color: SN.secondaryLabel }]}>Loading your analytics…</Text>
-      </View>
-    )
-  }
-
   function renderPageScroll(content: ReactNode) {
-    if (loading && !refreshing) return renderLoadingPage()
+    if (isInitialLoading) {
+      return (
+        <View style={styles.pageCenter}>
+          <ActivityIndicator color={native.tint} size="large" />
+          <Text style={[type.caption, { color: SN.secondaryLabel }]}>Loading your course analytics…</Text>
+        </View>
+      )
+    }
 
     return (
       <ScrollView
@@ -194,10 +161,9 @@ export function AnalyticsMoreScreen({ initialTab = "overview" }: Props) {
         directionalLockEnabled
         nestedScrollEnabled
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={tokens.accent} />
+          <RefreshControl refreshing={refreshing} onRefresh={() => void refetch()} tintColor={tokens.accent} />
         }
       >
-        {summarySection}
         {content}
         {pageFooter}
       </ScrollView>
@@ -207,11 +173,11 @@ export function AnalyticsMoreScreen({ initialTab = "overview" }: Props) {
   return (
     <View style={[styles.root, { backgroundColor: native.groupedBackground }]}>
       <View style={{ paddingTop: scrollPad.paddingTop ?? NATIVE.pagePadding }} />
-      {error && !loading ? (
+      {error && !data ? (
         <AppErrorScreen
-          error={new Error(error)}
-          feature="CodeBench analytics"
-          onRetry={() => void onRefresh()}
+          error={error instanceof Error ? error : new Error("Could not load analytics.")}
+          feature="Student analytics"
+          onRetry={() => void refetch()}
           style={styles.errorPage}
         />
       ) : (
@@ -221,31 +187,9 @@ export function AnalyticsMoreScreen({ initialTab = "overview" }: Props) {
           onChange={setActiveTab}
           pagePaddingHorizontal={NATIVE.pagePadding}
           pages={[
-            renderPageScroll(
-              <ProfilePanel
-                analysis={analysis}
-                analysisLoading={analysisLoading}
-                hasCodeSample={hasCodeSample}
-                onOpenIde={() => openIde()}
-              />,
-            ),
-            renderPageScroll(
-              <AnalyticsPanel
-                analysis={analysis}
-                learningPlan={learningPlan}
-                loading={analysisLoading}
-                hasCodeSample={hasCodeSample}
-                onOpenIde={() => openIde("evaluate")}
-              />,
-            ),
-            renderPageScroll(
-              <>
-                <ChallengePanel challenge={dailyChallenge} onOpenIde={() => openIde("practice")} />
-                <BadgesPanel badges={badges} badgeDetails={badgeDetails} />
-                <LeaderboardPanel leaderboard={leaderboard} session={session} myRank={myRank} />
-                <StreakPanel streak={streak} onOpenIde={() => openIde()} />
-              </>,
-            ),
+            renderPageScroll(<OverviewPanel data={data} onOpenHref={(href) => openAnalyticsHref(router, href)} />),
+            renderPageScroll(<InsightsPanel data={data} onOpenHref={(href) => openAnalyticsHref(router, href)} />),
+            renderPageScroll(<ActivityPanel data={data} onOpenHref={(href) => openAnalyticsHref(router, href)} />),
           ]}
         />
       )}
@@ -253,73 +197,324 @@ export function AnalyticsMoreScreen({ initialTab = "overview" }: Props) {
   )
 }
 
-function ProgressSummarySection({
-  xp,
-  totalXp,
-  streakDays,
-  badgeCount,
-  submissionCount,
-  myRank,
-  levelLabel,
-  proficiency,
-  analysisLoading,
+function OverviewPanel({
+  data,
+  onOpenHref,
 }: {
-  xp: ReturnType<typeof xpLevel>
-  totalXp: number
-  streakDays: number
-  badgeCount: number
-  submissionCount: number
-  myRank: number | null
-  levelLabel: string
-  proficiency: number
-  analysisLoading: boolean
+  data: StudentAnalyticsSnapshot | null
+  onOpenHref: (href: string) => void
 }) {
-  const tokens = useAppThemeTokens()
   const native = useThemedNative()
   const SN = useThemedStudentNative()
   const type = useNativeType()
+  const tokens = useAppThemeTokens()
+  const stats = data?.stats
+  const gradeLabel = stats?.letterGrade && stats.letterGrade !== "—" ? stats.letterGrade : "In progress"
+  const overall = stats?.overallGrade ?? 0
 
   return (
-    <ModuleSection title="Overview">
-      <View style={styles.summaryHeader}>
-        <View style={styles.summaryLevelRow}>
-          <View style={[styles.levelPill, { backgroundColor: ANALYTICS_LEVEL_ACCENT, borderColor: ANALYTICS_LEVEL_ACCENT }]}>
-            <Ionicons name="sparkles-outline" size={14} color={ANALYTICS_LEVEL_INK} />
-            <Text style={[type.caption, { color: ANALYTICS_LEVEL_INK, fontWeight: "700" }]}>{levelLabel}</Text>
+    <>
+      <ModuleSection title="Course standing">
+        <View style={styles.summaryHeader}>
+          <View style={styles.summaryLevelRow}>
+            <Text style={[type.bodyEmphasis, { color: native.label }]}>{gradeLabel}</Text>
+            <Text style={[type.caption, { color: SN.secondaryLabel, fontWeight: "700" }]}>
+              {overall > 0 ? `${overall.toFixed(1)}% overall` : "No posted grade yet"}
+            </Text>
           </View>
-          <Text style={[type.bodyEmphasis, { color: native.label }]}>Level {xp.level}</Text>
+          <View style={[styles.xpTrack, { backgroundColor: native.fill }]}>
+            <View
+              style={[
+                styles.xpFill,
+                { width: `${Math.min(100, Math.max(0, overall))}%`, backgroundColor: ANALYTICS_XP_FILL },
+              ]}
+            />
+          </View>
+          {stats?.riskReason ? (
+            <Text style={[type.footnote, { color: SN.secondaryLabel }]}>{stats.riskReason}</Text>
+          ) : null}
+          {stats?.partialError ? (
+            <Text style={[type.footnote, { color: tokens.warning }]}>{stats.partialError}</Text>
+          ) : null}
         </View>
-        <Text style={[type.footnote, { color: native.secondaryLabel }]}>
-          {totalXp.toLocaleString()} XP · {100 - xp.inLevel} XP to next level
-        </Text>
-        <View style={[styles.xpTrack, { backgroundColor: native.fill }]}>
-          <View
-            style={[
-              styles.xpFill,
-              {
-                width: `${xp.progress}%`,
-                backgroundColor: ANALYTICS_XP_FILL,
-              },
-            ]}
-          />
+        <View style={styles.summaryRow}>
+          <SummaryStat id="quiz" label="Quizzes" value={formatPct(stats?.quizAverage)} />
+          <SummaryStat id="homework" label="Homework" value={formatPct(stats?.homeworkAverage)} />
+          <SummaryStat id="attendance" label="Attendance" value={formatPct(stats?.attendancePct)} />
+          <SummaryStat id="practice" label="Practice" value={String(data?.practiceSessions ?? 0)} />
         </View>
-        {!analysisLoading ? (
-          <Text style={[type.footnote, { color: native.tertiaryLabel }]}>
-            {Math.round(proficiency)}% coding proficiency
-          </Text>
-        ) : (
-          <ActivityIndicator color={native.tint} size="small" style={styles.summarySpinner} />
-        )}
-      </View>
+      </ModuleSection>
 
-      <View style={styles.summaryRow}>
-        <SummaryStat id="streak" label="Streak" value={`${streakDays}d`} />
-        <SummaryStat id="badges" label="Badges" value={String(badgeCount)} />
-        <SummaryStat id="subs" label="Submissions" value={String(submissionCount)} />
-        <SummaryStat id="rank" label="Rank" value={myRank ? `#${myRank}` : "—"} />
-      </View>
-    </ModuleSection>
+      {data?.comparison?.length ? (
+        <ModuleSection title="You vs class">
+          {data.comparison.map((row, index) => (
+            <ModuleListRow
+              key={row.label}
+              title={row.label}
+              subtitle={row.classAvg != null ? `Class average ${formatPct(row.classAvg)}` : "Class average not posted"}
+              meta={`You ${formatPct(row.you)}`}
+              icon="people-outline"
+              solidThumb={ANALYTICS_LIST_THUMBS.recommendation}
+              last={index === data.comparison.length - 1}
+            />
+          ))}
+        </ModuleSection>
+      ) : null}
+
+      <ModuleSection title="What needs attention">
+        {(data?.insights ?? []).map((item, index, arr) => (
+          <InsightActionRow
+            key={item.id}
+            item={item}
+            last={index === arr.length - 1}
+            onOpenHref={onOpenHref}
+          />
+        ))}
+      </ModuleSection>
+
+      <ModuleSection title="Shortcuts">
+        <ModuleListRow
+          title="Open gradebook"
+          subtitle="Category scores and posted letter grade"
+          icon="bar-chart-outline"
+          solidThumb={ANALYTICS_LIST_THUMBS.grades}
+          onPress={() => onOpenHref("/module/grades")}
+        />
+        <ModuleListRow
+          title="Assessment history"
+          subtitle="Attempt scores and reports"
+          icon="time-outline"
+          solidThumb={ANALYTICS_LIST_THUMBS.quiz}
+          last
+          onPress={() => onOpenHref("/module/quiz-history")}
+        />
+      </ModuleSection>
+    </>
   )
+}
+
+function InsightsPanel({
+  data,
+  onOpenHref,
+}: {
+  data: StudentAnalyticsSnapshot | null
+  onOpenHref: (href: string) => void
+}) {
+  const type = useNativeType()
+  const topics = data?.topics ?? []
+  const trend = (data?.trend ?? []).filter((row) => row.quiz > 0 || row.homework > 0).slice(-8)
+
+  return (
+    <>
+      <ModuleSection title="Learning signals">
+        <InsightRow label="Focus area" value={data?.focusTopic ?? "Not enough practice yet"} tone="weak" />
+        <InsightRow label="Strongest topic" value={data?.strongestTopic ?? "Keep practicing to unlock this"} tone="good" />
+        <InsightRow
+          label="Practice next"
+          value={data?.practiceNext ?? "Open Practice Hub to start a topic"}
+          tone="neutral"
+          last
+        />
+      </ModuleSection>
+
+      {topics.length ? (
+        <ModuleSection title="Practice mastery" footer="Accuracy from your Practice Hub attempts, not CodeBench AI.">
+          {topics.map((row, index) => (
+            <ConceptBar
+              key={row.topic}
+              label={row.topic}
+              score={row.accuracy}
+              last={index === topics.length - 1}
+            />
+          ))}
+        </ModuleSection>
+      ) : (
+        <ModuleSection title="Practice mastery">
+          <View style={styles.panelPad}>
+            <FacultyEmptyState
+              icon="bar-chart-outline"
+              title="No practice data yet"
+              body="Complete a Practice Hub topic to see real concept mastery here."
+            />
+          </View>
+          <ModuleListRow
+            title="Open Practice Hub"
+            icon="fitness-outline"
+            solidThumb={ANALYTICS_LIST_THUMBS.practice}
+            last
+            onPress={() => onOpenHref("/module/practice")}
+          />
+        </ModuleSection>
+      )}
+
+      {trend.length ? (
+        <ModuleSection title="Recent grade trend" footer="Weekly quiz and homework averages from submitted work.">
+          {trend.map((row, index) => (
+            <ModuleListRow
+              key={`${row.label}-${index}`}
+              title={row.label}
+              subtitle={`Homework ${formatPct(row.homework)}`}
+              meta={`Quiz ${formatPct(row.quiz)}`}
+              icon="trending-up-outline"
+              solidThumb={ANALYTICS_LIST_THUMBS.evaluate}
+              last={index === trend.length - 1}
+            />
+          ))}
+        </ModuleSection>
+      ) : null}
+
+      {(data?.stats.missingAssignments ?? 0) > 0 || (data?.stats.upcomingDeadlines ?? 0) > 0 ? (
+        <ModuleSection title="Deadlines">
+          <Text style={[type.footnote, styles.panelPadNote]}>
+            {data?.stats.missingAssignments
+              ? `${data.stats.missingAssignments} missing assignment${data.stats.missingAssignments === 1 ? "" : "s"}. `
+              : ""}
+            {data?.stats.upcomingDeadlines
+              ? `${data.stats.upcomingDeadlines} upcoming deadline${data.stats.upcomingDeadlines === 1 ? "" : "s"}.`
+              : ""}
+          </Text>
+        </ModuleSection>
+      ) : null}
+    </>
+  )
+}
+
+function ActivityPanel({
+  data,
+  onOpenHref,
+}: {
+  data: StudentAnalyticsSnapshot | null
+  onOpenHref: (href: string) => void
+}) {
+  const native = useThemedNative()
+  const SN = useThemedStudentNative()
+  const type = useNativeType()
+  const activity = data?.activity ?? []
+  const calendar = data?.codebenchCalendar ?? {}
+  const calendarDays = useMemo(() => {
+    const result: { key: string; active: boolean; label: string }[] = []
+    const today = new Date()
+    for (let i = 34; i >= 0; i--) {
+      const d = new Date(today)
+      d.setDate(today.getDate() - i)
+      const key = d.toISOString().split("T")[0]
+      result.push({
+        key,
+        active: !!calendar[key],
+        label: d.toLocaleDateString(undefined, { month: "short", day: "numeric" }),
+      })
+    }
+    return result
+  }, [calendar])
+
+  return (
+    <>
+      <ModuleSection title="Recent activity" footer="Quizzes, homework, practice sessions, and CodeBench submissions.">
+        {activity.length === 0 ? (
+          <View style={styles.panelPad}>
+            <FacultyEmptyState
+              icon="time-outline"
+              title="No activity logged yet"
+              body="Submit a quiz, homework, practice session, or CodeBench program and it will show up here."
+            />
+          </View>
+        ) : (
+          activity.map((event, index) => (
+            <ActivityRow
+              key={event.id}
+              event={event}
+              last={index === activity.length - 1}
+              onOpenHref={onOpenHref}
+            />
+          ))
+        )}
+      </ModuleSection>
+
+      <ModuleSection title="Streaks">
+        <View style={styles.summaryRow}>
+          <SummaryStat id="attendance" label="Class streak" value={`${data?.stats.attendanceStreak ?? 0}d`} />
+          <SummaryStat id="streak" label="Code streak" value={`${data?.codebenchStreakDays ?? 0}d`} />
+          <SummaryStat id="subs" label="Code submits" value={String(data?.codebenchSubmissions ?? 0)} />
+          <SummaryStat id="rank" label="Code XP" value={String(data?.codebenchXp ?? 0)} />
+        </View>
+      </ModuleSection>
+
+      <ModuleSection title="CodeBench days" footer="Each square is one day over the last five weeks.">
+        <View style={styles.calWrap}>
+          <View style={styles.calGrid}>
+            {calendarDays.map((day) => (
+              <View
+                key={day.key}
+                style={[
+                  styles.calCell,
+                  {
+                    backgroundColor: day.active ? ANALYTICS_CALENDAR_ACTIVE : native.fill,
+                    borderColor: day.active ? ANALYTICS_CALENDAR_ACTIVE : native.separator,
+                  },
+                ]}
+                accessibilityLabel={`${day.label}, ${day.active ? "active" : "inactive"}`}
+              />
+            ))}
+          </View>
+          <View style={styles.calLegend}>
+            <View style={[styles.calLegendSwatch, { backgroundColor: native.fill, borderColor: native.separator }]} />
+            <Text style={[type.footnote, { color: SN.secondaryLabel }]}>No code</Text>
+            <View style={[styles.calLegendSwatch, { backgroundColor: ANALYTICS_CALENDAR_ACTIVE }]} />
+            <Text style={[type.footnote, { color: SN.secondaryLabel }]}>Coded</Text>
+          </View>
+        </View>
+      </ModuleSection>
+    </>
+  )
+}
+
+function ActivityRow({
+  event,
+  last,
+  onOpenHref,
+}: {
+  event: StudentActivityEvent
+  last: boolean
+  onOpenHref: (href: string) => void
+}) {
+  const meta = ACTIVITY_META[event.kind]
+  return (
+    <ModuleListRow
+      title={event.title}
+      subtitle={`${meta.label} · ${formatActivityWhen(event.at)}`}
+      meta={event.detail}
+      icon={meta.icon}
+      solidThumb={ANALYTICS_LIST_THUMBS[meta.thumb]}
+      last={last}
+      onPress={event.href ? () => onOpenHref(event.href!) : undefined}
+    />
+  )
+}
+
+function InsightActionRow({
+  item,
+  last,
+  onOpenHref,
+}: {
+  item: PerformanceInsight
+  last: boolean
+  onOpenHref: (href: string) => void
+}) {
+  return (
+    <ModuleListRow
+      title={item.message}
+      subtitle={item.actionLabel}
+      icon={item.type === "warning" ? "warning-outline" : item.type === "tip" ? "bulb-outline" : "information-circle-outline"}
+      solidThumb={ANALYTICS_LIST_THUMBS.recommendation}
+      last={last}
+      onPress={item.actionRoute ? () => onOpenHref(item.actionRoute!) : undefined}
+    />
+  )
+}
+
+function formatPct(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value) || value <= 0) return "—"
+  return `${Math.round(value * 10) / 10}%`
 }
 
 function SummaryStat({
@@ -355,502 +550,6 @@ function SummaryStat({
   )
 }
 
-function ProfilePanel({
-  analysis,
-  analysisLoading,
-  hasCodeSample,
-  onOpenIde,
-}: {
-  analysis: CodebenchAnalysis | null
-  analysisLoading: boolean
-  hasCodeSample: boolean
-  onOpenIde: () => void
-}) {
-  const tokens = useAppThemeTokens()
-  const SN = useThemedStudentNative()
-  const type = useNativeType()
-
-  if (!hasCodeSample) {
-    return (
-    <ModuleSection title="Coding profile">
-        <View style={styles.panelPad}>
-          <FacultyEmptyState
-            icon="code-slash-outline"
-            title="No code to analyze yet"
-            body="Write and submit C++ in CodeBench to unlock AI-powered profile insights."
-          />
-        </View>
-        <ModuleListRow
-          title="Open CodeBench IDE"
-          subtitle="Compile, debug, and submit your first program"
-          icon="play-outline"
-          solidThumb={ANALYTICS_LIST_THUMBS.ide}
-          last
-          onPress={onOpenIde}
-        />
-      </ModuleSection>
-    )
-  }
-
-  return (
-    <>
-      <ModuleSection title="Learning insights">
-        {analysisLoading ? (
-          <View style={styles.panelLoading}>
-            <ActivityIndicator color={tokens.accent} />
-            <Text style={[type.caption, { color: SN.secondaryLabel }]}>Analyzing your latest submission…</Text>
-          </View>
-        ) : (
-          <>
-            <InsightRow label="Focus area" value={analysis?.mainWeakness ?? "—"} tone="weak" />
-            <InsightRow label="Most improved" value={analysis?.mostImproved ?? "—"} tone="good" last={false} />
-            <InsightRow label="Practice next" value={analysis?.recommendedPractice ?? "—"} tone="neutral" last />
-          </>
-        )}
-      </ModuleSection>
-
-      {analysis?.recommendations?.length ? (
-        <ModuleSection title="Recommendations">
-          {analysis.recommendations.slice(0, 4).map((item, index, arr) => (
-            <ModuleListRow
-              key={item}
-              title={item}
-              icon="checkmark-circle-outline"
-              solidThumb={ANALYTICS_LIST_THUMBS.recommendation}
-              last={index === arr.length - 1}
-            />
-          ))}
-        </ModuleSection>
-      ) : null}
-
-      <ModuleSection title="Workspace">
-        <ModuleListRow
-          title="Continue in IDE"
-          subtitle="Review and improve your latest submission"
-          icon="code-slash-outline"
-          solidThumb={ANALYTICS_LIST_THUMBS.ide}
-          last
-          onPress={onOpenIde}
-        />
-      </ModuleSection>
-    </>
-  )
-}
-
-function AnalyticsPanel({
-  analysis,
-  learningPlan,
-  loading,
-  hasCodeSample,
-  onOpenIde,
-}: {
-  analysis: CodebenchAnalysis | null
-  learningPlan: CodebenchLearningPlan | null
-  loading: boolean
-  hasCodeSample: boolean
-  onOpenIde: () => void
-}) {
-  const tokens = useAppThemeTokens()
-  const SN = useThemedStudentNative()
-  const type = useNativeType()
-
-  if (loading) {
-    return (
-      <View style={styles.loadingBox}>
-        <ActivityIndicator color={tokens.accent} />
-        <Text style={[type.caption, { color: SN.secondaryLabel }]}>Analyzing your coding patterns…</Text>
-      </View>
-    )
-  }
-
-  if (!hasCodeSample || !analysis) {
-    return (
-      <ModuleSection title="Concept analytics">
-        <View style={styles.panelPad}>
-          <FacultyEmptyState
-            icon="bar-chart-outline"
-            title="Analytics unlock with code"
-            body="Submit code in the IDE to unlock AI-powered concept analytics."
-          />
-        </View>
-        <ModuleListRow
-          title="Submit and evaluate code"
-          icon="checkmark-done-outline"
-          solidThumb={ANALYTICS_LIST_THUMBS.evaluate}
-          last
-          onPress={onOpenIde}
-        />
-      </ModuleSection>
-    )
-  }
-
-  const concepts = analysis.concepts ?? {}
-  const conceptEntries = Object.entries(concepts)
-
-  return (
-    <>
-      {conceptEntries.length ? (
-        <ModuleSection title="Concept mastery">
-          {conceptEntries.map(([key, score], index) => (
-            <ConceptBar
-              key={key}
-              label={CONCEPT_LABELS[key] ?? key}
-              score={Number(score)}
-              last={index === conceptEntries.length - 1}
-            />
-          ))}
-        </ModuleSection>
-      ) : null}
-
-      <ModuleSection title="Strengths & weaknesses">
-        <TagGroup title="Strengths" items={(analysis.strengths ?? []).slice(0, 4)} tone="success" bordered />
-        <TagGroup title="Weaknesses" items={(analysis.weaknesses ?? []).slice(0, 4)} tone="accent" />
-      </ModuleSection>
-
-      {learningPlan ? (
-        <ModuleSection
-          title="Weekly learning plan"
-          footer={
-            learningPlan.study_time_minutes
-              ? `${learningPlan.study_time_minutes} minutes per week suggested`
-              : undefined
-          }
-        >
-          {learningPlan.weekly_plan ? (
-            <View style={styles.panelPad}>
-              <Text style={[type.body, styles.planBody]}>{learningPlan.weekly_plan}</Text>
-            </View>
-          ) : null}
-          {(learningPlan.tasks ?? []).map((task, index, arr) => (
-            <ModuleListRow
-              key={`${task}-${index}`}
-              title={task}
-              meta={`Task ${index + 1}`}
-              icon="list-outline"
-              solidThumb={ANALYTICS_LIST_THUMBS.task}
-              last={index === arr.length - 1}
-            />
-          ))}
-        </ModuleSection>
-      ) : null}
-    </>
-  )
-}
-
-function BadgesPanel({
-  badges,
-  badgeDetails,
-}: {
-  badges: Record<string, boolean>
-  badgeDetails: Record<string, CodebenchBadgeDetail>
-}) {
-  const tokens = useAppThemeTokens()
-  const native = useThemedNative()
-  const SN = useThemedStudentNative()
-  const type = useNativeType()
-  const unlocked = BADGE_CATALOG.filter((b) => badges[b.id]).length
-  const total = BADGE_CATALOG.length
-  const pct = total ? (unlocked / total) * 100 : 0
-
-  return (
-    <>
-      <ModuleSection
-        title="Badge collection"
-        footer={unlocked === total ? "You earned every badge — impressive!" : `${total - unlocked} badges left to unlock.`}
-      >
-        <View style={styles.badgeSummary}>
-          <View style={styles.badgeSummaryCopy}>
-            <Text style={[type.caption, { color: SN.secondaryLabel }]}>Earned</Text>
-            <View style={styles.badgeCountRow}>
-              <Text style={[styles.badgeCountValue, { color: native.label }]}>{String(unlocked)}</Text>
-              <Text style={[type.body, styles.badgeCountTotal, { color: SN.secondaryLabel }]}>
-                / {total}
-              </Text>
-            </View>
-          </View>
-          <SolidListThumbTile
-            thumb={ANALYTICS_LIST_THUMBS.badgeSummary}
-            icon="ribbon"
-            size="compact"
-            style={styles.badgeSummaryIconTile}
-          />
-        </View>
-        <View
-          style={[
-            styles.badgeProgressTrack,
-            {
-              backgroundColor: native.fill,
-              borderColor: native.separator,
-            },
-          ]}
-        >
-          <View
-            style={[
-              styles.badgeProgressFill,
-              {
-                width: `${Math.max(pct, pct > 0 ? 4 : 0)}%`,
-                backgroundColor: pct > 0 ? ANALYTICS_SUMMARY_KPI.badges.accent : "transparent",
-              },
-            ]}
-          />
-        </View>
-      </ModuleSection>
-
-      <ModuleSection title="All badges">
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.badgeScroll}>
-          {BADGE_CATALOG.map((badge) => {
-            const earned = badges[badge.id]
-            const detail = badgeDetails[badge.id]
-            return (
-              <View key={badge.id} style={[styles.badgeItem, !earned && styles.badgeLocked]}>
-                <View
-                  style={[
-                    styles.badgeEmojiWrap,
-                    {
-                      backgroundColor: earned ? semanticSoft(tokens.warning, tokens.isDark) : SN.accentSoft,
-                      borderColor: earned ? semanticSoft(tokens.warning, tokens.isDark, 0.35) : SN.accentBorder,
-                    },
-                  ]}
-                >
-                  <Text style={[styles.badgeEmoji, !earned && styles.badgeEmojiLocked]}>{badge.icon}</Text>
-                </View>
-                <Text
-                  style={[type.footnote, styles.badgeName, { color: earned ? native.label : SN.secondaryLabel }]}
-                  numberOfLines={2}
-                >
-                  {badge.name}
-                </Text>
-                <Text style={[type.footnote, { color: earned ? tokens.accent : SN.secondaryLabel }]}>
-                  {earned
-                    ? detail?.earnedAt
-                      ? new Date(detail.earnedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })
-                      : "Earned"
-                    : "Locked"}
-                </Text>
-              </View>
-            )
-          })}
-        </ScrollView>
-      </ModuleSection>
-    </>
-  )
-}
-
-function ChallengePanel({
-  challenge,
-  onOpenIde,
-}: {
-  challenge: DailyChallenge | null
-  onOpenIde: () => void
-}) {
-  const tokens = useAppThemeTokens()
-  const SN = useThemedStudentNative()
-  const type = useNativeType()
-
-  if (!challenge) {
-    return (
-      <ModuleSection title="Daily challenge">
-        <View style={styles.panelPad}>
-          <FacultyEmptyState
-            icon="today-outline"
-            title="No challenge today"
-            body="Check back later or open the IDE to practice on your own."
-          />
-        </View>
-        <ModuleListRow
-          title="Open IDE"
-          icon="code-slash-outline"
-          solidThumb={ANALYTICS_LIST_THUMBS.ide}
-          last
-          onPress={onOpenIde}
-        />
-      </ModuleSection>
-    )
-  }
-
-  return (
-    <ModuleSection title="Daily challenge">
-      <View style={styles.panelPad}>
-        <View style={styles.panelHeader}>
-          <Text style={[type.bodyEmphasis, styles.panelTitle]}>{challenge.title}</Text>
-          {challenge.completed ? (
-            <View style={[styles.statusPill, { backgroundColor: semanticSoft(tokens.success, tokens.isDark) }]}>
-              <Ionicons name="checkmark-circle-outline" size={12} color={tokens.success} />
-              <Text style={[styles.statusPillText, { color: tokens.success }]}>Done</Text>
-            </View>
-          ) : null}
-        </View>
-        <Text style={[type.caption, styles.panelBody]} numberOfLines={5}>
-          {challenge.description}
-        </Text>
-        <Text style={[type.footnote, styles.panelMeta, { color: SN.secondaryLabel }]}>
-          {challenge.difficulty} · +{challenge.xpReward} XP
-        </Text>
-      </View>
-      {!challenge.completed ? (
-        <ModuleListRow
-          title="Solve in IDE"
-          subtitle="Opens practice mode with today's challenge"
-          icon="play-outline"
-          solidThumb={ANALYTICS_LIST_THUMBS.practice}
-          last
-          onPress={onOpenIde}
-        />
-      ) : null}
-    </ModuleSection>
-  )
-}
-
-function LeaderboardPanel({
-  leaderboard,
-  session,
-  myRank,
-}: {
-  leaderboard: CodebenchLeaderboardEntry[]
-  session: StudentSession
-  myRank: number | null
-}) {
-  const SN = useThemedStudentNative()
-  const type = useNativeType()
-
-  if (leaderboard.length === 0) {
-    return (
-      <ModuleSection title="Leaderboard">
-        <View style={styles.panelPad}>
-          <FacultyEmptyState
-            icon="podium-outline"
-            title="No rankings yet"
-            body="Submit code in CodeBench to appear on the class leaderboard."
-          />
-        </View>
-      </ModuleSection>
-    )
-  }
-
-  const rows = leaderboard.slice(0, 12)
-
-  return (
-    <ModuleSection
-      title="Class rankings"
-      footer={myRank ? `You are ranked #${myRank} this week.` : "Submit code to appear on the leaderboard."}
-    >
-      {rows.map((entry, index) => {
-        const isYou = session.databaseId === String(entry.student_id)
-        const rank = entry.rank ?? index + 1
-        return (
-          <ModuleListRow
-            key={String(entry.student_id ?? index)}
-            title={isYou ? "You" : entry.student_name ?? "Student"}
-            subtitle={`${entry.total_activities ?? 0} activities`}
-            meta={`${entry.xp ?? 0} XP`}
-            solidThumb={isYou ? ANALYTICS_LIST_THUMBS.recommendation : undefined}
-            thumbIndex={isYou ? undefined : index}
-            icon={rank === 1 ? "trophy-outline" : rank === 2 ? "medal-outline" : rank === 3 ? "ribbon-outline" : "person-outline"}
-            iconBg={isYou ? undefined : SN.fill}
-            iconColor={isYou ? undefined : SN.secondaryLabel}
-            badge={
-              <View style={[styles.rankChip, { backgroundColor: isYou ? SN.accentSoftStrong : SN.fill }]}>
-                <Text style={[type.footnote, { color: isYou ? SN.accentDark : SN.secondaryLabel, fontWeight: "700" }]}>
-                  #{rank}
-                </Text>
-              </View>
-            }
-            last={index === rows.length - 1}
-          />
-        )
-      })}
-    </ModuleSection>
-  )
-}
-
-function StreakPanel({ streak, onOpenIde }: { streak: CodebenchStreak; onOpenIde: () => void }) {
-  const native = useThemedNative()
-  const SN = useThemedStudentNative()
-  const type = useNativeType()
-  const days = streak.streakDays ?? 0
-  const calendar = streak.calendarData ?? {}
-  const stats = streak.activityStats ?? { totalSubmissions: 0, activeDays: 0 }
-
-  const calendarDays = useMemo(() => {
-    const result: { key: string; active: boolean; label: string }[] = []
-    const today = new Date()
-    for (let i = 34; i >= 0; i--) {
-      const d = new Date(today)
-      d.setDate(today.getDate() - i)
-      const key = d.toISOString().split("T")[0]
-      result.push({
-        key,
-        active: !!calendar[key],
-        label: d.toLocaleDateString(undefined, { month: "short", day: "numeric" }),
-      })
-    }
-    return result
-  }, [calendar])
-
-  return (
-    <>
-      <ModuleSection title="Current streak">
-        <View style={styles.streakHero}>
-          <SolidListThumbTile
-            thumb={ANALYTICS_LIST_THUMBS.streakHero}
-            icon="flame"
-            size="compact"
-            style={styles.streakIconTile}
-          />
-          <Text style={[type.bodyEmphasis, styles.streakValue, { color: native.label }]}>{days}</Text>
-          <Text style={[type.caption, { color: SN.secondaryLabel }]}>day{days === 1 ? "" : "s"} in a row</Text>
-          <Text style={[type.footnote, styles.streakSub, { color: SN.tertiaryLabel }]}>
-            Code daily to keep your streak alive.
-          </Text>
-        </View>
-        <View style={styles.summaryRow}>
-          <SummaryStat id="submissions" label="Submissions" value={String(stats.totalSubmissions)} />
-          <SummaryStat id="activeDays" label="Active days" value={String(stats.activeDays)} />
-        </View>
-      </ModuleSection>
-
-      <ModuleSection title="Activity calendar" footer="Each square is one day over the last five weeks.">
-        <View style={styles.calWrap}>
-          <View style={styles.calGrid}>
-            {calendarDays.map((day) => (
-              <View
-                key={day.key}
-                style={[
-                  styles.calCell,
-                  {
-                    backgroundColor: day.active ? ANALYTICS_CALENDAR_ACTIVE : native.fill,
-                    borderColor: day.active ? ANALYTICS_CALENDAR_ACTIVE : native.separator,
-                  },
-                ]}
-                accessibilityLabel={`${day.label}, ${day.active ? "active" : "inactive"}`}
-              />
-            ))}
-          </View>
-          <View style={styles.calLegend}>
-            <View style={[styles.calLegendSwatch, { backgroundColor: native.fill, borderColor: native.separator }]} />
-            <Text style={[type.footnote, { color: SN.secondaryLabel }]}>Inactive</Text>
-            <View style={[styles.calLegendSwatch, { backgroundColor: ANALYTICS_CALENDAR_ACTIVE }]} />
-            <Text style={[type.footnote, { color: SN.secondaryLabel }]}>Active</Text>
-          </View>
-        </View>
-      </ModuleSection>
-
-      {days === 0 ? (
-        <ModuleSection>
-          <ModuleListRow
-            title="Start your streak in IDE"
-            subtitle="Submit any program today to begin"
-            icon="play-outline"
-            solidThumb={ANALYTICS_LIST_THUMBS.ide}
-            last
-            onPress={onOpenIde}
-          />
-        </ModuleSection>
-      ) : null}
-    </>
-  )
-}
-
 function InsightRow({
   label,
   value,
@@ -865,8 +564,7 @@ function InsightRow({
   const tokens = useAppThemeTokens()
   const SN = useThemedStudentNative()
   const type = useNativeType()
-  const toneColor =
-    tone === "weak" ? tokens.danger : tone === "good" ? tokens.warning : tokens.accent
+  const toneColor = tone === "weak" ? tokens.danger : tone === "good" ? tokens.warning : tokens.accent
   const toneBg = semanticSoft(toneColor, tokens.isDark)
 
   return (
@@ -884,7 +582,6 @@ function InsightRow({
 function ConceptBar({ label, score, last }: { label: string; score: number; last?: boolean }) {
   const tokens = useAppThemeTokens()
   const native = useThemedNative()
-  const SN = useThemedStudentNative()
   const type = useNativeType()
   const pct = Math.min(100, Math.max(0, score))
 
@@ -909,47 +606,6 @@ function ConceptBar({ label, score, last }: { label: string; score: number; last
   )
 }
 
-function TagGroup({
-  title,
-  items,
-  tone,
-  bordered,
-}: {
-  title: string
-  items: string[]
-  tone: "success" | "accent"
-  bordered?: boolean
-}) {
-  const tokens = useAppThemeTokens()
-  const SN = useThemedStudentNative()
-  const type = useNativeType()
-  const color = tone === "success" ? tokens.success : tokens.accent
-
-  if (!items.length) {
-    return (
-      <View style={[styles.tagGroup, bordered && { borderBottomColor: SN.separator }]}>
-        <Text style={[type.caption, { color: SN.secondaryLabel, fontWeight: "600" }]}>{title}</Text>
-        <Text style={[type.footnote, { color: SN.tertiaryLabel }]}>Not enough data yet.</Text>
-      </View>
-    )
-  }
-
-  return (
-    <View style={[styles.tagGroup, bordered && { borderBottomColor: SN.separator }]}>
-      <Text style={[type.caption, { color: SN.secondaryLabel, fontWeight: "600" }]}>{title}</Text>
-      <View style={styles.tagRow}>
-        {items.map((item) => (
-          <View key={item} style={[styles.tagChip, { backgroundColor: semanticSoft(color, tokens.isDark) }]}>
-            <Text style={[type.footnote, { color, fontWeight: "600" }]} numberOfLines={2}>
-              {item}
-            </Text>
-          </View>
-        ))}
-      </View>
-    </View>
-  )
-}
-
 const styles = StyleSheet.create({
   root: { flex: 1 },
   pageScroll: { flex: 1 },
@@ -962,7 +618,6 @@ const styles = StyleSheet.create({
   },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   errorPage: { flex: 1, paddingHorizontal: NATIVE.pagePadding },
-  loadingBox: { alignItems: "center", gap: 10, paddingVertical: 24 },
   summaryHeader: {
     paddingHorizontal: 14,
     paddingTop: 14,
@@ -975,15 +630,6 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     gap: 8,
   },
-  levelPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 999,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
   xpTrack: {
     height: 6,
     borderRadius: 999,
@@ -993,7 +639,6 @@ const styles = StyleSheet.create({
     height: "100%",
     borderRadius: 999,
   },
-  summarySpinner: { alignSelf: "flex-start" },
   summaryRow: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -1041,130 +686,10 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 8,
   },
-  panelLoading: {
-    alignItems: "center",
-    gap: 8,
-    paddingVertical: 20,
-  },
-  panelHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 8,
-    marginBottom: 4,
-  },
-  panelTitle: { flex: 1 },
-  panelBody: { lineHeight: 18 },
-  panelMeta: { marginTop: 6 },
-  planBody: { lineHeight: 21 },
-  statusPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 999,
-  },
-  statusPillText: {
-    fontSize: 11,
-    fontWeight: "600",
-  },
-  badgeSummary: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 14,
-    paddingTop: 12,
-  },
-  badgeSummaryCopy: { gap: 4 },
-  badgeCountRow: {
-    flexDirection: "row",
-    alignItems: "baseline",
-    gap: 4,
-  },
-  badgeCountValue: {
-    fontSize: 28,
-    fontWeight: "700",
-    lineHeight: 32,
-  },
-  badgeCountTotal: {
-    fontSize: 18,
-    fontWeight: "600",
-    lineHeight: 24,
-  },
-  badgeSummaryIconTile: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-  },
-  badgeProgressTrack: {
-    height: 8,
-    borderRadius: 999,
-    overflow: "hidden",
-    marginHorizontal: 14,
-    marginTop: 10,
-    marginBottom: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  badgeProgressFill: {
-    height: "100%",
-    borderRadius: 999,
-  },
-  badgeScroll: {
+  panelPadNote: {
     paddingHorizontal: 14,
     paddingVertical: 12,
-    gap: 10,
-  },
-  badgeItem: {
-    width: 88,
-    alignItems: "center",
-    gap: 6,
-  },
-  badgeLocked: { opacity: 0.72 },
-  badgeEmojiWrap: {
-    width: 52,
-    height: 52,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  badgeEmoji: { fontSize: 26 },
-  badgeEmojiLocked: { opacity: 0.55 },
-  badgeName: {
-    fontSize: 11,
-    fontWeight: "600",
-    textAlign: "center",
-    lineHeight: 14,
-  },
-  rankChip: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 999,
-  },
-  streakHero: {
-    alignItems: "center",
-    paddingHorizontal: 14,
-    paddingTop: 16,
-    paddingBottom: 8,
-    gap: 4,
-  },
-  streakIconTile: {
-    width: 56,
-    height: 56,
-    borderRadius: 18,
-    marginBottom: 4,
-  },
-  streakValue: {
-    fontSize: 40,
-    fontWeight: "700",
-    letterSpacing: -0.6,
-    lineHeight: 44,
-  },
-  streakSub: {
-    textAlign: "center",
-    marginTop: 2,
-    paddingHorizontal: 12,
+    lineHeight: 18,
   },
   calWrap: {
     paddingHorizontal: 14,
@@ -1223,22 +748,5 @@ const styles = StyleSheet.create({
   conceptFill: {
     height: "100%",
     borderRadius: 999,
-  },
-  tagGroup: {
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    gap: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  tagRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 6,
-  },
-  tagChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 999,
-    maxWidth: "100%",
   },
 })

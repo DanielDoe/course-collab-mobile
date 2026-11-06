@@ -132,7 +132,7 @@ export const FACULTY_MEMBERSHIP_FEATURE_MATRIX: FacultyMembershipFeatureRow[] = 
     id: "analytics",
     label: "Course analytics",
     icon: "bar-chart-outline",
-    free: "Manage Results & Student Progress",
+    free: "Manage Results, Class Analytics & Cora Insights",
     pro: "Included",
     enterprise: "Included",
   },

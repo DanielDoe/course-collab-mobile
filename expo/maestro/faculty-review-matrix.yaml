@@ -1,0 +1,71 @@
+appId: com.coursecollab.app
+---
+- runFlow: faculty-login-real.yaml
+- tapOn:
+    text: "Open"
+    optional: true
+- openLink: coursecollab:///module/messages
+- tapOn:
+    text: "Open"
+    optional: true
+- extendedWaitUntil:
+    visible: "Messages"
+    timeout: 20000
+- openLink: coursecollab:///module/course-evaluations
+- extendedWaitUntil:
+    visible: "Course Evaluations"
+    timeout: 25000
+- openLink: coursecollab:///module/classroom-points
+- extendedWaitUntil:
+    visible: "Classroom Points"
+    timeout: 25000
+- openLink: coursecollab:///module/syllabus
+- extendedWaitUntil:
+    visible: "Syllabus"
+    timeout: 25000
+- openLink: coursecollab:///module/playground
+- extendedWaitUntil:
+    visible: "Manage Playground"
+    timeout: 25000
+- openLink: coursecollab:///module/question-bank
+- extendedWaitUntil:
+    visible: "Question Bank"
+    timeout: 25000
+- openLink: coursecollab:///module/academic-terms
+- extendedWaitUntil:
+    visible: "Academic Terms"
+    timeout: 25000
+- openLink: coursecollab:///module/course-notes
+- extendedWaitUntil:
+    visible: "Course Notes"
+    timeout: 25000
+- openLink: coursecollab:///module/flashcards
+- extendedWaitUntil:
+    visible: "Flashcards"
+    timeout: 20000
+- openLink: coursecollab:///module/lectures
+- extendedWaitUntil:
+    visible: "Manage Lectures"
+    timeout: 20000
+- openLink: coursecollab:///module/cora
+- extendedWaitUntil:
+    visible: "Cora"
+    timeout: 20000
+- openLink: coursecollab:///module/assessment-defaults
+- extendedWaitUntil:
+    visible: "Assessment Defaults"
+    timeout: 20000
+- tapOn: "Open navigation menu"
+- extendedWaitUntil:
+    visible: "Close menu"
+    timeout: 8000
+- assertVisible: "Submission Issues"
+- assertVisible: "Assessment Defaults"
+- assertVisible: "Attendance Policies"
+- assertVisible: "Team & Project Policies"
+- assertNotVisible: "Course Settings"
+- scrollUntilVisible:
+    element: "Messages"
+    direction: DOWN
+    timeout: 8000
+    optional: true

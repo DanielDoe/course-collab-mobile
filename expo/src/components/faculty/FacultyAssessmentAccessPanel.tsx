@@ -12,6 +12,7 @@ import {
   EditorNotice,
   EditorSectionCard,
   EditorToggleRow} from "./FacultyAssessmentEditorUi"
+import { FacultyAssessmentPlatformAccessSection } from "./FacultyAssessmentPlatformAccessSection"
 
 type Scope = { instructorId: number; courseId: number }
 
@@ -20,6 +21,7 @@ type Props = {
   sessions: InstructorSession[]
   draft: QuizEditorDraft
   assessmentLabel: string
+  assessmentType: string
   onChange: (patch: Partial<QuizEditorDraft>) => void
 }
 
@@ -59,8 +61,9 @@ export function FacultyAssessmentAccessPanel({
   sessions,
   draft,
   assessmentLabel,
+  assessmentType,
   onChange}: Props) {
-  const { styles, tokens, native } = useAccessPanelStyles()
+  const { styles, native } = useAccessPanelStyles()
   const [students, setStudents] = useState<InstructorStudent[]>([])
   const [loadingStudents, setLoadingStudents] = useState(false)
 
@@ -197,6 +200,13 @@ export function FacultyAssessmentAccessPanel({
           </>
         ) : null}
       </EditorSectionCard>
+
+      <FacultyAssessmentPlatformAccessSection
+        scope={scope}
+        draft={draft}
+        assessmentType={assessmentType}
+        onChange={onChange}
+      />
     </View>
   )
 }

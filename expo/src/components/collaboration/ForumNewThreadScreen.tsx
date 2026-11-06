@@ -10,7 +10,7 @@ import type { StudentSession } from "../../lib/session"
 import { useThemedStudentNative } from "../../lib/themed-module-theme"
 import { NativeSwitch } from "../NativeSwitch"
 import { collaborationApi } from "../../lib/collaboration-api"
-import { CollabScreenTitle } from "./collab-nav"
+import { CollabFlowHeader } from "./collab-nav"
 import { useCollabTheme } from "./collab-module-ui"
 
 function useStudentSession(): StudentSession | null {
@@ -64,12 +64,16 @@ export function ForumNewThreadScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: SN.groupedBackground }]}>
+      <CollabFlowHeader
+        title="New thread"
+        subtitle="Ask the class a question"
+        fallbackHref="/module/forum"
+      />
       <ScrollView
         contentContainerStyle={[styles.content, scrollPad]}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
       >
-        <CollabScreenTitle title="New thread" subtitle="Ask the class a question" />
         <Text style={[styles.label, { color: theme.primaryDark }]}>Title</Text>
         <TextInput
           style={[styles.input, { backgroundColor: SN.secondaryGrouped, borderColor: SN.separator, color: SN.label }]}

@@ -18,8 +18,12 @@ import {
 import {
   countPlaygroundSessionsByFilter,
   filterPlaygroundSessions,
+  playgroundSessionPageCount,
+  playgroundSessionPageLabel,
+  slicePlaygroundSessionPage,
   type PlaygroundSessionFilter,
 } from "../../lib/faculty-playground-utils"
+import { NotificationListPager } from "./faculty-notifications-ui"
 import { FACULTY_PLAYGROUND_COLOR } from "../../lib/faculty-playground-theme"
 import { useFacultyScope } from "../../hooks/useFacultyScope"
 import { consumeFacultyCoraPending } from "../../lib/faculty-cora-pending"
@@ -50,6 +54,13 @@ import { SHEET_SECTION } from "./faculty-sheet-semantics"
 import { NativeSelect } from "../NativeSelect"
 import { QUESTION_COUNT_OPTIONS, secondsSelectOptions } from "./FacultyNativePickers"
 import { useModuleTheme } from "../../lib/themed-module-shell"
+import {
+  canCreatePlaygroundSession,
+  playgroundCreateAllowedSessions,
+  playgroundCreateSourceError,
+  resolvePlaygroundCreateTopics,
+} from "../../lib/faculty-playground-create"
+import { KeyboardAwareForm } from "../ui/KeyboardAwareForm"
 
 const FILTER_SHEET_OPTIONS: FacultyFilterOption[] = [
   { value: "all", label: "All sessions" },
@@ -80,6 +91,7 @@ export function FacultyPlaygroundScreen() {
   const [error, setError] = useState("")
 
   const [search, setSearch] = useState("")
+  const [page, setPage] = useState(0)
   const [filter, setFilter] = useState<PlaygroundSessionFilter>("all")
   const [filterSheetOpen, setFilterSheetOpen] = useState(false)
   const [selected, setSelected] = useState<PlaygroundSession | null>(null)
@@ -165,6 +177,7 @@ export function FacultyPlaygroundScreen() {
 
   function selectFilter(next: string) {
     setFilter(next as PlaygroundSessionFilter)
+    setPage(0)
     setFilterSheetOpen(false)
   }
 
@@ -182,14 +195,24 @@ export function FacultyPlaygroundScreen() {
       setCreateError("Question count must be at least 1.")
       return
     }
+    const resolvedTopics = resolvePlaygroundCreateTopics(
+      selectedTopics,
+      topics.map((t) => t.topic),
+    )
+    const sourceError = playgroundCreateSourceError(resolvedTopics)
+    if (sourceError) {
+      setCreateError(sourceError)
+      return
+    }
     setCreating(true)
     setCreateError("")
     try {
       await instructorApi.createPlaygroundSession(scope, {
-        topics: selectedTopics,
+        topics: resolvedTopics,
         questionCount: count,
         durationSec: Number.isFinite(duration) ? duration : 10,
-        allowedSessions: null})
+        allowedSessions: playgroundCreateAllowedSessions(scope.sessionId),
+      })
       setCreateOpen(false)
       setSelectedTopics([])
       await load()
@@ -205,6 +228,20 @@ export function FacultyPlaygroundScreen() {
     () => filterPlaygroundSessions(sessions, filter, search),
     [sessions, filter, search],
   )
+  const pageCount = playgroundSessionPageCount(filtered.length)
+  const safePage = Math.min(page, pageCount - 1)
+  const paged = useMemo(
+    () => slicePlaygroundSessionPage(filtered, safePage),
+    [filtered, safePage],
+  )
+
+  useEffect(() => {
+    setPage(0)
+  }, [search, filter])
+
+  useEffect(() => {
+    if (page > pageCount - 1) setPage(pageCount - 1)
+  }, [page, pageCount])
 
   const filtersActive = filter !== "all"
 
@@ -303,13 +340,23 @@ export function FacultyPlaygroundScreen() {
               />
             ) : (
               <View style={localStyles.list}>
-                {filtered.map((session) => (
+                {paged.map((session) => (
                   <FacultyPlaygroundSessionCard
                     key={session.id}
                     session={session}
                     onPress={() => setSelected(session)}
                   />
                 ))}
+                <View style={localStyles.pagerWrap}>
+                  <Text style={[type.caption, { color: native.secondaryLabel, fontWeight: "600" }]}>
+                    {playgroundSessionPageLabel(filtered.length, safePage)}
+                  </Text>
+                  <NotificationListPager
+                    page={safePage}
+                    pageCount={pageCount}
+                    onPageChange={setPage}
+                  />
+                </View>
               </View>
             )}
           </ScrollView>
@@ -318,12 +365,8 @@ export function FacultyPlaygroundScreen() {
 
       <FacultySheetModal visible={createOpen} onRequestClose={() => setCreateOpen(false)}>
           <FacultySheetChrome topInset={insets.top} title="Quick random session" onClose={() => setCreateOpen(false)} />
-          <ScrollView
-            contentContainerStyle={[collabSheetStyles.scroll, scrollPad]}
-            keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
-          >
-            <FacultySheetNotice message="Pulls random questions from selected topics. For hand-picked questions, use the Question bank tab." />
+          <KeyboardAwareForm contentContainerStyle={[collabSheetStyles.scroll, scrollPad]}>
+            <FacultySheetNotice message="Pulls random questions from selected topics. For hand-picked questions, use the Question bank tab. If no topic is selected, every eligible course topic is used." />
             {createError ? <FacultySheetErrorBanner message={createError} /> : null}
             <FacultySheetSection label="Session setup" tone={SHEET_SECTION.edit}>
               <FacultySheetField label="Questions">
@@ -346,7 +389,7 @@ export function FacultyPlaygroundScreen() {
                 <View style={localStyles.topicRow}>
                   {topics.length === 0 ? (
                     <Text style={[type.caption, localStyles.topicEmpty, { color: native.secondaryLabel }]}>
-                      All topics will be used if none selected.
+                      No topics in this course yet. Add Question Bank questions first, or pick questions on the Question bank tab.
                     </Text>
                   ) : (
                     topics.map((t) => {
@@ -381,13 +424,26 @@ export function FacultyPlaygroundScreen() {
                 </View>
               </FacultySheetField>
             </FacultySheetSection>
+            {topics.length > 0 && selectedTopics.length === 0 ? (
+              <Text style={[type.caption, { color: native.secondaryLabel }]}>
+                All topics will be used if none selected.
+              </Text>
+            ) : null}
             <FacultySheetSubmitButton
               label={creating ? "Creating…" : "Create & open lobby"}
               onPress={() => void createSession()}
-              disabled={creating}
+              disabled={
+                creating ||
+                !canCreatePlaygroundSession(
+                  resolvePlaygroundCreateTopics(
+                    selectedTopics,
+                    topics.map((t) => t.topic),
+                  ),
+                )
+              }
               loading={creating}
             />
-          </ScrollView>
+          </KeyboardAwareForm>
       </FacultySheetModal>
 
       <FacultyPlaygroundSessionDetailModal
@@ -403,6 +459,7 @@ export function FacultyPlaygroundScreen() {
 const localStyles = StyleSheet.create({
   loadingBox: { paddingVertical: 32, alignItems: "center" },
   list: { gap: 12 },
+  pagerWrap: { gap: 8, paddingTop: 4, alignItems: "center" },
   topicRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   topicEmpty: { fontStyle: "italic" },
 })

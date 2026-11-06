@@ -1,5 +1,16 @@
 import { API_BASE_URL } from "../constants"
 import { ApiError } from "./api"
+import { getStoredSession } from "./session"
+import { studentAuthenticatedHeaders } from "./student-api"
+
+async function summerAuthHeaders(studentId: string): Promise<Record<string, string>> {
+  const stored = await getStoredSession()
+  const session =
+    stored && (stored.portal === "student" || stored.portal === "guest" || stored.portal === "summer")
+      ? stored
+      : { databaseId: studentId }
+  return studentAuthenticatedHeaders(session)
+}
 
 export type SummerModuleProgress = {
   id: number
@@ -901,11 +912,8 @@ async function summerPostRequest<T>(
   const url = `${API_BASE_URL}${path}${path.includes("?") ? "&" : "?"}studentId=${encodeURIComponent(studentId)}`
   const response = await fetch(url, {
     method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      "x-student-id": studentId,
-    },
+    credentials: "include",
+    headers: await summerAuthHeaders(studentId),
     body: JSON.stringify(body),
   })
   const text = await response.text()
@@ -977,10 +985,8 @@ async function summerAuthRequest<T>(
   }
   const url = `${API_BASE_URL}${path}?${params.toString()}`
   const response = await fetch(url, {
-    headers: {
-      Accept: "application/json",
-      "x-student-id": studentId,
-    },
+    credentials: "include",
+    headers: await summerAuthHeaders(studentId),
   })
   const text = await response.text()
   let body: unknown = null
@@ -1596,11 +1602,8 @@ export const summerCampApi = {
     const url = `${API_BASE_URL}/api/summer-camp/progress?studentId=${encodeURIComponent(studentId)}`
     const response = await fetch(url, {
       method: "POST",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-        "x-student-id": studentId,
-      },
+      credentials: "include",
+      headers: await summerAuthHeaders(studentId),
       body: JSON.stringify(body),
     })
     const text = await response.text()
@@ -1643,12 +1646,12 @@ export const summerCampApi = {
     form.append("blockId", String(payload.blockId))
 
     const url = `${API_BASE_URL}/api/summer-camp/submissions?studentId=${encodeURIComponent(studentId)}`
+    const headers = await summerAuthHeaders(studentId)
+    delete headers["Content-Type"]
     const response = await fetch(url, {
       method: "POST",
-      headers: {
-        Accept: "application/json",
-        "x-student-id": studentId,
-      },
+      credentials: "include",
+      headers,
       body: form,
     })
     const text = await response.text()
@@ -1683,11 +1686,8 @@ export const summerCampApi = {
     const url = `${API_BASE_URL}/api/summer-camp/gallery/vote`
     const response = await fetch(url, {
       method: "POST",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-        "x-student-id": studentId,
-      },
+      credentials: "include",
+      headers: await summerAuthHeaders(studentId),
       body: JSON.stringify({ entryId, studentDatabaseId: studentId }),
     })
     const text = await response.text()

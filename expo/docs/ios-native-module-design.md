@@ -18,6 +18,7 @@ Apply this whenever building a new module screen or remodeling an existing one.
 - Tokens (iOS + Android): `expo/src/constants/faculty-native-theme.ts` (`NATIVE`, `SYSTEM`)
 - Communication accents: `expo/src/constants/faculty-communication-theme.ts`
 - Shared UI: `expo/src/components/faculty/faculty-communication-ui.tsx`, `faculty-shared.tsx`, `faculty-module-shell.tsx`
+- **Module Action Bar:** `ModuleSearchDockProvider` + `StudentSearchToolbar` / `FacultySearchToolbar` + `ModuleAddActionSheet`. Intentional Search / Add / Filter dock. Do not remove it solely because it sits at the bottom of a page.
 - Shell chrome: `expo/src/components/shell/shell-shared.tsx` (`nativeChrome`), `FacultyDrawer.tsx`, `FacultyTopBar.tsx`
 - Reference modules: Notifications, Discussions, Student Support; Dashboard uses the same canvas
 - Modern accents: `MODERN` in `faculty-native-theme.ts` (drawer, KPIs, brand stripe)

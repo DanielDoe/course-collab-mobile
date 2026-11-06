@@ -33,6 +33,11 @@ export function universityAuthLogo(
   }
 
   if (sn === "PVAMU") {
+    if (isDark) {
+      const uri = universityLogoUri("/universities/pvamu-pvm-mark.png")
+      if (!uri) return null
+      return { uri, width: 64, height: 64 }
+    }
     const uri = universityLogoUri(university.logo ?? "/summer-camp/pvamu-logo.png")
     if (!uri) return null
     return { uri, width: 160, height: 44 }

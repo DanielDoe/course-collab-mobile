@@ -17,7 +17,7 @@ import { GlassBottomSheetModal } from "../theme/GlassBottomSheetModal"
 import type { FacultySession } from "../../lib/session"
 import { FacultyProfileSummaryCard } from "../faculty/FacultyProfileSummaryCard"
 import { facultyMembershipTierLongLabel } from "../../lib/faculty-membership-tier"
-import { getCourseDisplayLine } from "./shell-shared"
+import { facultyScopeLabel } from "../../lib/faculty-scope-label"
 import { ProfileDropdownPresenceBlock } from "../presence/ProfilePresenceChrome"
 
 type Props = {
@@ -42,10 +42,7 @@ export function FacultyProfileMenu({ session }: Props) {
   const { prefs } = useAppearance()
   const themeLabel = getThemeLabel(prefs.themeId)
   const tierLabel = membershipTierLoaded ? facultyMembershipTierLongLabel(membershipTier) : null
-  const courseDetail =
-    getCourseDisplayLine(selectedCourse?.course_code, selectedCourse?.course_title) ??
-    selectedCourse?.course_code ??
-    "Select course"
+  const courseDetail = facultyScopeLabel(selectedCourse)
 
   async function handleSignOut() {
     closeProfile()
@@ -73,8 +70,7 @@ export function FacultyProfileMenu({ session }: Props) {
             name={session.name}
             email={session.email}
             role={session.role}
-            courseCode={selectedCourse?.course_code}
-            courseTitle={selectedCourse?.course_title}
+            course={selectedCourse}
             avatarSize={48}
             variant="glass"
             showPresenceBadge
@@ -105,10 +101,7 @@ export function FacultyProfileMenu({ session }: Props) {
             icon="book-outline"
             label="Switch course"
             detail={courseDetail}
-            onPress={() => {
-              closeProfile()
-              openCoursePicker()
-            }}
+            onPress={() => openCoursePicker()}
             showSeparator
           />
           <GlassMenuRow

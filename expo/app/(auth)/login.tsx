@@ -1,17 +1,11 @@
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import {
   ActivityIndicator,
-  Keyboard,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
 } from "react-native"
 import { Redirect, useLocalSearchParams, useRouter } from "expo-router"
-import * as SplashScreen from "expo-splash-screen"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { type LoginPortal } from "../../src/components/login/PortalSwitcher"
@@ -19,10 +13,16 @@ import { StudentLoginPanel } from "../../src/components/login/StudentLoginPanel"
 import { GuestLoginPanel } from "../../src/components/login/GuestLoginPanel"
 import { SummerLoginPanel } from "../../src/components/login/SummerLoginPanel"
 import { StaffLoginPanel } from "../../src/components/login/StaffLoginPanel"
+import { AuthFlowScroll } from "../../src/components/login/AuthFlowScroll"
 import { LoginButton } from "../../src/components/login/LoginButton"
 import { LoginTypewriter } from "../../src/components/login/LoginTypewriter"
-import { DismissKeyboardView } from "../../src/components/login/login-chrome"
+import { type RegisterAuthPanelBack } from "../../src/components/login/login-chrome"
+import { useAuthNestedBack } from "../../src/components/navigation/useAuthNestedBack"
 import { BrandLogoMark } from "../../src/components/brand/BrandLogoMark"
+import { AuthFlowEnterItem, AuthFlowPanelTransition } from "../../src/components/motion/AuthFlowPanelTransition"
+import { AuthKeyboardShell } from "../../src/components/motion/AuthKeyboardShell"
+import { PressableScale } from "../../src/components/motion/PressableScale"
+import { triggerMotionHaptic } from "../../src/lib/motion"
 import { ConnectivityOverlay } from "../../src/components/ConnectivityOverlay"
 import { useSession } from "../../src/context/SessionProvider"
 import { useNetworkStatus } from "../../src/hooks/useNetworkStatus"
@@ -30,6 +30,7 @@ import { useLoginTheme } from "../../src/components/login/login-theme"
 import { LOGIN_PORTAL_THUMBS } from "../../src/lib/login-color-theme"
 import { readRememberedUniversity } from "../../src/lib/remembered-student-auth"
 import {
+  clearRememberedLoginPortal,
   persistRememberedLoginPortal,
   readRememberedLoginPortal,
 } from "../../src/lib/remembered-login-portal"
@@ -39,7 +40,8 @@ import {
   AUTH_FORM_PHONE_MAX_WIDTH,
   useAuthFlowLayout,
 } from "../../src/lib/responsive-layout"
-import { bootLog, markBootComplete } from "../../src/lib/boot-diagnostics"
+import { bootLog } from "../../src/lib/boot-diagnostics"
+import { hideAppSplashFireAndForget } from "../../src/lib/app-splash"
 
 function normalizeInviteParam(value: string | string[] | undefined): string {
   if (Array.isArray(value)) return value[0]?.trim() ?? ""
@@ -55,39 +57,24 @@ export default function LoginScreen() {
   const router = useRouter()
   const [focusedPortal, setFocusedPortal] = useState<FocusedPortal | null>(null)
   const [bootstrappingUniversity, setBootstrappingUniversity] = useState(true)
-  const [keyboardVisible, setKeyboardVisible] = useState(false)
-  const authLayout = useAuthFlowLayout({
-    keyboardVisible,
-    phoneMax: AUTH_FORM_PHONE_MAX_WIDTH,
-  })
+  const authLayout = useAuthFlowLayout({ phoneMax: AUTH_FORM_PHONE_MAX_WIDTH })
   const { invite } = useLocalSearchParams<{ invite?: string | string[] }>()
   const inviteToken = normalizeInviteParam(invite)
   const { session, isLoading: sessionLoading } = useSession()
   const { offline } = useNetworkStatus()
   const { LOGIN: themeLogin, loginType: themeType } = useLoginTheme()
 
-  useEffect(() => {
-    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow"
-    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide"
-    const showSub = Keyboard.addListener(showEvent, () => setKeyboardVisible(true))
-    const hideSub = Keyboard.addListener(hideEvent, () => setKeyboardVisible(false))
-    return () => {
-      showSub.remove()
-      hideSub.remove()
-    }
-  }, [])
+  const bootLoggedRef = useRef(false)
 
   useEffect(() => {
-    if (!focusedPortal) setKeyboardVisible(false)
-  }, [focusedPortal])
-
-  useEffect(() => {
+    if (bootLoggedRef.current) return
+    bootLoggedRef.current = true
     bootLog("Login screen mounted")
-    markBootComplete("login screen mounted")
+    hideAppSplashFireAndForget()
   }, [])
 
   const onLoginLayout = () => {
-    void SplashScreen.hideAsync().catch(() => {})
+    hideAppSplashFireAndForget()
   }
 
   useEffect(() => {
@@ -122,19 +109,36 @@ export default function LoginScreen() {
   }, [inviteToken])
 
   function focusPortal(id: FocusedPortal) {
+    triggerMotionHaptic("selection")
     setFocusedPortal(id)
     if (id !== "summer") void persistRememberedLoginPortal(id)
   }
 
-  if (!sessionLoading && session) {
-    return <Redirect href="/(auth)/signing-in" />
-  }
+  const panelBackRef = useRef<(() => boolean) | null>(null)
+  const registerPanelBack = useCallback<RegisterAuthPanelBack>((handler) => {
+    panelBackRef.current = handler
+  }, [])
 
-  function goWelcome() {
+  const goWelcome = useCallback(() => {
+    triggerMotionHaptic("selection")
     setFocusedPortal(null)
+    void clearRememberedLoginPortal()
     if (inviteToken) {
       router.replace("/login")
     }
+  }, [inviteToken, router])
+
+  const nestedBackActive = Boolean(inviteToken || focusedPortal)
+
+  const handleNestedBack = useCallback(() => {
+    if (panelBackRef.current?.()) return
+    goWelcome()
+  }, [goWelcome])
+
+  const nestedBackSwipe = useAuthNestedBack(nestedBackActive, handleNestedBack, insets.top)
+
+  if (!sessionLoading && session) {
+    return <Redirect href="/(auth)/signing-in" />
   }
 
   if (bootstrappingUniversity) {
@@ -146,98 +150,90 @@ export default function LoginScreen() {
     )
   }
 
+  const panelKey = inviteToken ? "invite" : !focusedPortal ? "welcome" : focusedPortal
+
   return (
     <View style={[styles.root, { backgroundColor: themeLogin.canvas }]} onLayout={onLoginLayout}>
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={Platform.OS === "ios" ? insets.top : 0}
-      >
-        <ScrollView
-          style={styles.flex}
-          contentContainerStyle={[
-            styles.scrollOuter,
-            {
-              minHeight: authLayout.minScrollHeight,
-              paddingHorizontal: authLayout.horizontalPadding,
-              paddingTop: insets.top + authLayout.verticalPadding,
-              paddingBottom: insets.bottom + (keyboardVisible ? 16 : authLayout.verticalPadding),
-            },
-          ]}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="on-drag"
-          automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
-          showsVerticalScrollIndicator={false}
-          bounces={!keyboardVisible}
-        >
-          {/*
-            Inner flexGrow + justifyContent is the reliable ScrollView centering pattern.
-            contentContainerStyle.justifyContent alone is ignored on many iOS builds.
-          */}
-          <View
-            style={[
-              styles.scrollInner,
-              authLayout.shouldCenterVertically && !keyboardVisible
-                ? styles.scrollInnerCentered
-                : styles.scrollInnerTop,
-            ]}
-          >
-            <DismissKeyboardView
-              style={[
-                styles.shellWrap,
-                authLayout.shouldCenterVertically && !keyboardVisible && styles.shellWrapCentered,
-              ]}
-            >
-              <View style={[styles.shell, authLayout.contentStyle]}>
+      {nestedBackSwipe}
+      <AuthKeyboardShell>
+        <AuthFlowScroll phoneMax={AUTH_FORM_PHONE_MAX_WIDTH}>
+            <View style={styles.shell}>
+              <AuthFlowPanelTransition panelKey={panelKey}>
                 {inviteToken ? (
-                  <View key="invite-signup" style={styles.portalBleed}>
-                    <StudentInviteSignupPanel token={inviteToken} onBack={goWelcome} />
+                  <View style={styles.portalBleed}>
+                    <StudentInviteSignupPanel
+                      token={inviteToken}
+                      onBack={goWelcome}
+                      registerPanelBack={registerPanelBack}
+                    />
                   </View>
                 ) : !focusedPortal ? (
-                  <View key="welcome" style={[styles.welcome, { gap: authLayout.contentGap }]}>
-                    <BrandLogoMark
-                      size={authLayout.isCompactHeight ? "compact" : "login"}
-                      style={styles.logoTile}
-                    />
+                  <View style={[styles.welcome, { gap: authLayout.contentGap }]}>
+                    <AuthFlowEnterItem index={0}>
+                      <BrandLogoMark
+                        size={authLayout.isCompactHeight ? "compact" : "login"}
+                        style={styles.logoTile}
+                      />
+                    </AuthFlowEnterItem>
 
-                    <Text style={[styles.eyebrow, { color: themeLogin.purpleLight }]}>
-                      The Modern AI Learning Platform
-                    </Text>
-                    <LoginTypewriter color={themeLogin.purple} />
-                    <Text style={[themeType.heroSubtitle, styles.subtitle]}>
-                      Sign in through your university to access courses, assignments, and AI-powered
-                      learning tools.
-                    </Text>
+                    <AuthFlowEnterItem index={1}>
+                      <Text style={[styles.eyebrow, { color: themeLogin.purpleLight }]}>
+                        The Modern AI Learning Platform
+                      </Text>
+                    </AuthFlowEnterItem>
 
-                    <LoginButton
-                      label="Continue with University"
-                      icon="arrow-forward"
-                      onPress={() => focusPortal("student")}
-                    />
+                    <AuthFlowEnterItem index={2}>
+                      <LoginTypewriter color={themeLogin.purple} />
+                    </AuthFlowEnterItem>
 
-                    <View style={[styles.divider, { backgroundColor: themeLogin.separator }]} />
+                    <AuthFlowEnterItem index={3}>
+                      <Text style={[themeType.heroSubtitle, styles.subtitle]}>
+                        Sign in through your university to access courses, assignments, and AI-powered
+                        learning tools.
+                      </Text>
+                    </AuthFlowEnterItem>
 
-                    <Text style={[themeType.info, styles.secondaryHeading]}>Other sign-in options</Text>
+                    <AuthFlowEnterItem index={4}>
+                      <LoginButton
+                        label="Continue with University"
+                        icon="arrow-forward"
+                        onPress={() => focusPortal("student")}
+                      />
+                    </AuthFlowEnterItem>
+
+                    <AuthFlowEnterItem index={5}>
+                      <View style={[styles.divider, { backgroundColor: themeLogin.separator }]} />
+                    </AuthFlowEnterItem>
+
+                    <AuthFlowEnterItem index={6}>
+                      <Text style={[themeType.info, styles.secondaryHeading]}>Other sign-in options</Text>
+                    </AuthFlowEnterItem>
 
                     <View style={styles.secondaryList}>
-                      {SECONDARY_PORTALS.map((id) => {
+                      {SECONDARY_PORTALS.map((id, portalIndex) => {
                         const meta = portalMeta(id)
                         const thumb = LOGIN_PORTAL_THUMBS[id]
                         return (
-                          <Pressable
-                            key={id}
-                            onPress={() => focusPortal(id)}
-                            style={({ pressed }) => [
+                          <AuthFlowEnterItem key={id} index={7 + portalIndex}>
+                            <PressableScale
+                              onPress={() => focusPortal(id)}
+                              haptic="selection"
+                              style={[
                               styles.secondaryRow,
                               {
                                 backgroundColor: themeLogin.grouped,
                                 borderColor: themeLogin.separator,
                                 borderRadius: themeLogin.sectionRadius,
-                                paddingVertical: authLayout.isCompactHeight ? 11 : 13,
+                                paddingVertical: authLayout.isCompactHeight
+                                  ? 11
+                                  : authLayout.isTallPhone
+                                    ? 15
+                                    : 13,
                               },
-                              pressed && styles.pressed,
                             ]}
                             accessibilityRole="button"
+                            accessibilityLabel={meta.label}
+                            testID={`login-portal-${id}`}
                           >
                             <View style={[styles.secondaryIcon, { backgroundColor: thumb.fill }]}>
                               <Ionicons name={meta.icon} size={18} color={thumb.icon} />
@@ -254,31 +250,31 @@ export default function LoginScreen() {
                               </Text>
                             </View>
                             <Ionicons name="chevron-forward" size={18} color={themeLogin.purple} />
-                          </Pressable>
+                          </PressableScale>
+                          </AuthFlowEnterItem>
                         )
                       })}
                     </View>
                   </View>
                 ) : (
-                  <View key={`panel-${focusedPortal}`} style={styles.portalBleed}>
+                  <View style={styles.portalBleed}>
                     {focusedPortal === "student" ? (
-                      <StudentLoginPanel onBack={goWelcome} />
+                      <StudentLoginPanel onBack={goWelcome} registerPanelBack={registerPanelBack} />
                     ) : focusedPortal === "guest" ? (
-                      <GuestLoginPanel onBack={goWelcome} />
+                      <GuestLoginPanel onBack={goWelcome} registerPanelBack={registerPanelBack} />
                     ) : focusedPortal === "summer" ? (
-                      <SummerLoginPanel onBack={goWelcome} />
+                      <SummerLoginPanel onBack={goWelcome} registerPanelBack={registerPanelBack} />
                     ) : (
-                      <StaffLoginPanel onBack={goWelcome} />
+                      <StaffLoginPanel onBack={goWelcome} registerPanelBack={registerPanelBack} />
                     )}
                   </View>
                 )}
-              </View>
-            </DismissKeyboardView>
-          </View>
-        </ScrollView>
+              </AuthFlowPanelTransition>
+            </View>
+        </AuthFlowScroll>
 
         {offline ? <ConnectivityOverlay mode="offline" /> : null}
-      </KeyboardAvoidingView>
+      </AuthKeyboardShell>
     </View>
   )
 }
@@ -288,28 +284,6 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   boot: { alignItems: "center", justifyContent: "center", gap: 14 },
   bootBrand: { color: "#FFFFFF", fontSize: 24, fontWeight: "700" },
-  scrollOuter: {
-    flexGrow: 1,
-  },
-  scrollInner: {
-    width: "100%",
-  },
-  scrollInnerCentered: {
-    flexGrow: 1,
-    justifyContent: "center",
-  },
-  scrollInnerTop: {
-    flexGrow: 0,
-    justifyContent: "flex-start",
-  },
-  shellWrap: {
-    width: "100%",
-    alignItems: "center",
-  },
-  shellWrapCentered: {
-    flexGrow: 1,
-    justifyContent: "center",
-  },
   shell: { width: "100%" },
   portalBleed: { alignSelf: "stretch", paddingHorizontal: 4 },
   welcome: { alignItems: "stretch" },
@@ -351,5 +325,4 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   secondaryText: { flex: 1, gap: 2, minWidth: 0 },
-  pressed: { opacity: 0.86 },
 })

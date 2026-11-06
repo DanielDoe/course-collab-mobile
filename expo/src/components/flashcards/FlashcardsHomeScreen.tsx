@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useMemo, useState } from "react"
 import { ActivityIndicator, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
 import { AppAlert } from '../../lib/app-alert'
 import { ScrollView } from "react-native-gesture-handler"
@@ -9,12 +9,17 @@ import { useSession } from "../../context/SessionProvider"
 import { ApiError, formatStudentModuleError } from "../../lib/student-api"
 import type { StudentSession } from "../../lib/session"
 import {
-  flashcardsApi,
   FLASHCARD_DAILY_GOAL,
   type FlashcardDeck,
   type FlashcardGamificationProfile,
-  type FlashcardTierAccess,
 } from "../../lib/flashcards-api"
+import {
+  prepareTempDeckId,
+  useCreateStudentFlashcardDeck,
+  useStudentFlashcardDecks,
+} from "../../hooks/query/useStudentFlashcards"
+import { QueryRefreshBanner } from "../query/QueryRefreshBanner"
+import { QuerySkeleton } from "../query/QuerySkeleton"
 import { COMM_SYSTEM } from "../../constants/faculty-communication-theme"
 import { NATIVE } from "../../constants/faculty-native-theme"
 import { PillSwipeTabs } from "../theme/PillSwipeTabs"
@@ -33,13 +38,13 @@ import { useModuleScrollContentPadding } from "../../context/ChromeInsetContext"
 import { useModuleContentStyle } from "../../lib/responsive-layout"
 import { useStudentShell } from "../../context/StudentShellContext"
 import { useNotificationModuleRefresh } from "../../lib/notifications/notification-events"
+import { useFacultyListPager } from "../../hooks/useFacultyListPager"
+import { FacultyListPagerFooter } from "../faculty/FacultyListPagerFooter"
 import {
-  flashcardDeckAccessMeta,
   flashcardDeckAccessMetaForAccess,
-  flashcardUpgradeMessage,
   flashcardUpgradeMessageForAccess,
-  isFlashcardDeckStudyLocked,
   isFlashcardDeckStudyLockedForAccess,
+  resolveFlashcardTierAccess,
 } from "../../lib/flashcard-access"
 
 type Tab = "all" | "course" | "mine" | "stats"
@@ -109,84 +114,73 @@ export function FlashcardsHomeScreen() {
 
   const [tab, setTab] = useState<Tab>("all")
   const [search, setSearch] = useState("")
-  const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
-  const [creating, setCreating] = useState(false)
-  const [error, setError] = useState("")
-  const [courseDecks, setCourseDecks] = useState<FlashcardDeck[]>([])
-  const [myDecks, setMyDecks] = useState<FlashcardDeck[]>([])
-  const [profile, setProfile] = useState<FlashcardGamificationProfile | null>(null)
-  const [deckMastery, setDeckMastery] = useState<Record<string, { pct: number }>>({})
-  const [leaderboard, setLeaderboard] = useState<
-    Array<{ rank: number; displayName: string; cardsMastered: number; isCurrentUser: boolean }>
-  >([])
-  const [courseTierAccess, setCourseTierAccess] = useState<FlashcardTierAccess | null>(null)
+  const decksQuery = useStudentFlashcardDecks(session)
+  const createDeckMutation = useCreateStudentFlashcardDeck(session)
+  const courseDecks = decksQuery.courseDecks
+  const myDecks = decksQuery.myDecks
+  const courseTierAccess = decksQuery.studySettings?.tierAccess ?? null
+  const profile = decksQuery.profile
+  const deckMastery = decksQuery.deckMastery
+  const leaderboard = decksQuery.leaderboard
+  const loading = decksQuery.isInitialLoading
+  const refreshing = decksQuery.isRefreshing && !decksQuery.isInitialLoading
+  const creating = createDeckMutation.isPending
+  const error = decksQuery.error ? formatStudentModuleError(decksQuery.error, "Could not load flashcards.") : ""
 
-  const load = useCallback(async () => {
-    if (!session) return
-    setError("")
-    const [decksRes, gamRes] = await Promise.all([
-      flashcardsApi.listDecks(session),
-      flashcardsApi.getGamification(session).catch(() => null),
-    ])
-    setCourseDecks(decksRes.courseDecks ?? [])
-    setMyDecks(decksRes.myDecks ?? [])
-    if (gamRes) {
-      setProfile(gamRes.profile)
-      setDeckMastery(gamRes.deckMastery ?? {})
-      setLeaderboard(gamRes.leaderboard ?? [])
-    }
-
-    const sampleDeck = (decksRes.courseDecks ?? []).find((deck) => deck.cardCount > 0)
-    if (sampleDeck) {
-      try {
-        const deckRes = await flashcardsApi.getDeck(session, sampleDeck.id)
-        setCourseTierAccess(deckRes.studySettings?.tierAccess ?? null)
-      } catch {
-        setCourseTierAccess(null)
-      }
-    } else {
-      setCourseTierAccess(null)
-    }
-  }, [session])
-
-  useNotificationModuleRefresh("flashcards", load)
-
-  useEffect(() => {
-    if (!session) return
-    setLoading(true)
-    load()
-      .catch((err) => {
-        if (__DEV__) console.error("[Flashcards] load failed", err)
-        setError(formatStudentModuleError(err, "Could not load flashcards."))
-      })
-      .finally(() => setLoading(false))
-  }, [session, load])
+  useNotificationModuleRefresh("flashcards", () => {
+    void decksQuery.refetch()
+  })
 
   const onRefresh = useCallback(async () => {
-    setRefreshing(true)
-    try {
-      await load()
-    } catch (err) {
-      if (__DEV__) console.error("[Flashcards] refresh failed", err)
-      setError(formatStudentModuleError(err, "Refresh failed."))
-    } finally {
-      setRefreshing(false)
-    }
-  }, [load])
+    await decksQuery.refetch()
+  }, [decksQuery])
 
   const allDecks = useMemo(() => [...courseDecks, ...myDecks], [courseDecks, myDecks])
 
-  function filterDecks(source: DeckSource): FlashcardDeck[] {
-    const decks = source === "course" ? courseDecks : source === "mine" ? myDecks : allDecks
+  const allDecksFiltered = useMemo(() => {
     const q = search.trim().toLowerCase()
-    if (!q) return decks
-    return decks.filter(
+    if (!q) return allDecks
+    return allDecks.filter(
       (deck) =>
         deck.title.toLowerCase().includes(q) ||
         deck.description.toLowerCase().includes(q) ||
         (deck.topic?.toLowerCase().includes(q) ?? false),
     )
+  }, [allDecks, search])
+
+  const courseDecksFiltered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return courseDecks
+    return courseDecks.filter(
+      (deck) =>
+        deck.title.toLowerCase().includes(q) ||
+        deck.description.toLowerCase().includes(q) ||
+        (deck.topic?.toLowerCase().includes(q) ?? false),
+    )
+  }, [courseDecks, search])
+
+  const mineDecksFiltered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return myDecks
+    return myDecks.filter(
+      (deck) =>
+        deck.title.toLowerCase().includes(q) ||
+        deck.description.toLowerCase().includes(q) ||
+        (deck.topic?.toLowerCase().includes(q) ?? false),
+    )
+  }, [myDecks, search])
+
+  const allDecksPager = useFacultyListPager(allDecksFiltered, `all|${search}`, "decks")
+  const courseDecksPager = useFacultyListPager(courseDecksFiltered, `course|${search}`, "decks")
+  const mineDecksPager = useFacultyListPager(mineDecksFiltered, `mine|${search}`, "decks")
+  const leaderboardPager = useFacultyListPager(leaderboard, "leaderboard", "students")
+
+  function filterDecks(source: DeckSource): FlashcardDeck[] {
+    return source === "course" ? courseDecksFiltered : source === "mine" ? mineDecksFiltered : allDecksFiltered
+  }
+
+  function deckPager(source: DeckSource) {
+    return source === "course" ? courseDecksPager : source === "mine" ? mineDecksPager : allDecksPager
   }
 
   function deckSourceCount(source: DeckSource): number {
@@ -195,29 +189,34 @@ export function FlashcardsHomeScreen() {
 
   async function createDeck() {
     if (!session || creating) return
-    setCreating(true)
+    const tempId = prepareTempDeckId()
+    router.push(`/flashcards/${tempId}/edit`)
     try {
-      const res = await flashcardsApi.createDeck(session, { title: "Untitled deck" })
-      router.push(`/flashcards/${res.deck.id}/edit`)
+      const res = await createDeckMutation.mutateAsync({ tempId, title: "Untitled deck" })
+      if (res.deck?.id && res.deck.id !== tempId) {
+        router.replace(`/flashcards/${res.deck.id}/edit`)
+      }
     } catch (err) {
       AppAlert.alert("Create failed", err instanceof ApiError ? err.message : "Try again.")
-    } finally {
-      setCreating(false)
     }
   }
+
+  const resolvedTierAccess = resolveFlashcardTierAccess(
+    membershipTier,
+    membershipTierLoaded,
+    courseTierAccess,
+  )
 
   function deckStudyLocked(deck: FlashcardDeck): boolean {
     if (!membershipTierLoaded || deck.cardCount <= 0) return false
     if (deck.deckKind === "student") return false
-    if (courseTierAccess) return isFlashcardDeckStudyLockedForAccess(deck.cardCount, courseTierAccess)
-    return isFlashcardDeckStudyLocked(membershipTier, deck.cardCount)
+    return isFlashcardDeckStudyLockedForAccess(deck.cardCount, resolvedTierAccess)
   }
 
   function deckAccessMeta(deck: FlashcardDeck): string | null {
     if (!membershipTierLoaded || deck.cardCount <= 0) return null
     if (deck.deckKind === "student") return null
-    if (courseTierAccess) return flashcardDeckAccessMetaForAccess(deck.cardCount, courseTierAccess)
-    return flashcardDeckAccessMeta(membershipTier, deck.cardCount)
+    return flashcardDeckAccessMetaForAccess(deck.cardCount, resolvedTierAccess)
   }
 
   function openDeck(deck: FlashcardDeck) {
@@ -233,9 +232,7 @@ export function FlashcardsHomeScreen() {
     if (deckStudyLocked(deck)) {
       AppAlert.alert(
         "Flashcards locked",
-        courseTierAccess
-          ? flashcardUpgradeMessageForAccess(courseTierAccess)
-          : flashcardUpgradeMessage(membershipTier),
+        flashcardUpgradeMessageForAccess(resolvedTierAccess),
         [
           { text: "Not now", style: "cancel" },
           { text: "View plans", onPress: () => router.push("/membership" as never) },
@@ -283,6 +280,7 @@ export function FlashcardsHomeScreen() {
 
   function renderDeckList(source: DeckSource) {
     const visibleDecks = filterDecks(source)
+    const pager = deckPager(source)
     const total = deckSourceCount(source)
 
     if (visibleDecks.length === 0) {
@@ -302,7 +300,7 @@ export function FlashcardsHomeScreen() {
     return (
       <>
         <View style={styles.deckList}>
-          {visibleDecks.map((deck) => {
+          {pager.items.map((deck) => {
             const mastery = deckMastery[String(deck.id)]
             const studyLocked = deckStudyLocked(deck)
             const accessMeta = deckAccessMeta(deck)
@@ -321,17 +319,17 @@ export function FlashcardsHomeScreen() {
             )
           })}
         </View>
+        <FacultyListPagerFooter pager={pager} />
         <CommSectionFooter>Tap a deck to study. Use + to create your own deck.</CommSectionFooter>
       </>
     )
   }
 
   function renderDeckPage(source: DeckSource) {
-    if (loading && !refreshing) {
+    if (loading) {
       return (
         <View style={styles.pageCenter}>
-          <ActivityIndicator size="large" color={tokens.accent} />
-          <Text style={[type.caption, { color: SN.secondaryLabel }]}>Loading flashcards…</Text>
+          <QuerySkeleton />
         </View>
       )
     }
@@ -405,7 +403,7 @@ export function FlashcardsHomeScreen() {
         ) : (
           <>
             <CommGroupedList>
-              {leaderboard.map((row, index) => (
+              {leaderboardPager.items.map((row, index) => (
                 <CommListRow
                   key={row.rank}
                   title={row.isCurrentUser ? "You" : row.displayName}
@@ -415,10 +413,14 @@ export function FlashcardsHomeScreen() {
                   iconColor={row.isCurrentUser ? SN.accent : COMM_SYSTEM.gray.color}
                   iconSoft={row.isCurrentUser ? SN.accentSoft : COMM_SYSTEM.gray.soft}
                   showChevron={false}
-                  isLast={index === leaderboard.length - 1}
+                  isLast={
+                    index === leaderboardPager.items.length - 1 &&
+                    leaderboardPager.page >= leaderboardPager.pageCount - 1
+                  }
                 />
               ))}
             </CommGroupedList>
+            <FacultyListPagerFooter pager={leaderboardPager} />
             <CommSectionFooter>Rankings refresh weekly based on cards mastered.</CommSectionFooter>
           </>
         )}

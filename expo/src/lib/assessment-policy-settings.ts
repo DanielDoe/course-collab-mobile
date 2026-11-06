@@ -3,6 +3,12 @@
  * Individual assessments inherit these when their own field is unset.
  */
 
+import {
+  DEFAULT_ASSESSMENT_PLATFORM_ACCESS,
+  parseAssessmentPlatformAccess,
+  type AssessmentPlatformAccess,
+} from "./assessment-platform-access"
+
 const DEFAULT_OPUS_CONFIDENCE_THRESHOLD = 0.85
 
 const OBJECTIVE_QUESTION_TIMER_SECONDS = {
@@ -80,6 +86,8 @@ export type AssessmentAccessPolicy = {
   restrict_access_default: boolean
   geo_required_default: boolean
   geo_radius_meters_default: number
+  /** Which clients may start each assessment type. */
+  platform_access: AssessmentPlatformAccess
 }
 
 export type AssessmentSuperpowerPolicy = {
@@ -149,6 +157,12 @@ export const DEFAULT_ASSESSMENT_ACCESS_POLICY: AssessmentAccessPolicy = {
   restrict_access_default: false,
   geo_required_default: false,
   geo_radius_meters_default: 100,
+  platform_access: {
+    quiz: { ...DEFAULT_ASSESSMENT_PLATFORM_ACCESS.quiz },
+    homework: { ...DEFAULT_ASSESSMENT_PLATFORM_ACCESS.homework },
+    mid_semester: { ...DEFAULT_ASSESSMENT_PLATFORM_ACCESS.mid_semester },
+    final: { ...DEFAULT_ASSESSMENT_PLATFORM_ACCESS.final },
+  },
 }
 
 export const DEFAULT_ASSESSMENT_SUPERPOWER_POLICY: AssessmentSuperpowerPolicy = {
@@ -320,6 +334,7 @@ function parseAccess(raw: unknown): AssessmentAccessPolicy {
     restrict_access_default: parseBool(o.restrict_access_default, d.restrict_access_default),
     geo_required_default: parseBool(o.geo_required_default, d.geo_required_default),
     geo_radius_meters_default: parseNum(o.geo_radius_meters_default, d.geo_radius_meters_default, 10, 5000),
+    platform_access: parseAssessmentPlatformAccess(o.platform_access ?? o.platforms),
   }
 }
 

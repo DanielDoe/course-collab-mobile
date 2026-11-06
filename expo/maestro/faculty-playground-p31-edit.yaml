@@ -2,6 +2,8 @@ appId: com.coursecollab.app
 ---
 - tapOn: "Decrease question timer"
 - tapOn: "Increase question timer"
+- tapOn: "Edit session question 1"
+- tapOn: "Cancel session question edit"
 - tapOn: "Move question 1 down"
 - tapOn: "Remove question 2"
 - takeScreenshot: playground-p31-dirty

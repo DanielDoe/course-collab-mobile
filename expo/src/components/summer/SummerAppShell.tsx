@@ -11,6 +11,8 @@ import { PortalNotificationShellSync } from "../shell/PortalNotificationShellSyn
 import { PortalNotificationsSheet } from "../shell/NotificationsSheetHost"
 import { SummerDrawer } from "./SummerDrawer"
 import { SummerTopBar } from "./SummerTopBar"
+import { ShellDrawerMotionProvider } from "../navigation/ShellDrawerMotionProvider"
+import { useSummerShell } from "../../context/SummerShellContext"
 
 type Props = {
   session: SummerSession
@@ -20,24 +22,32 @@ type Props = {
 function SummerAppShellInner({ session, children }: Props) {
   const pathname = usePathname()
   const native = useThemedNative()
+  const { drawerOpen, openDrawer, closeDrawer } = useSummerShell()
   const immersive = isSummerImmersiveRoute(pathname)
 
   return (
-    <AppShellFrame
-      backgroundColor={native.groupedBackground}
-      immersive={immersive}
-      topBar={<SummerTopBar session={session} />}
-      overlays={
-        <>
-          <SummerDrawer session={session} />
-          <PortalProfileMenu session={session} />
-          <PortalNotificationsSheet session={session} />
-          <PortalNotificationShellSync session={session} />
-        </>
-      }
+    <ShellDrawerMotionProvider
+      drawerOpen={drawerOpen}
+      openDrawer={openDrawer}
+      closeDrawer={closeDrawer}
     >
-      {children}
-    </AppShellFrame>
+      <AppShellFrame
+        backgroundColor={native.groupedBackground}
+        immersive={immersive}
+        topBar={<SummerTopBar session={session} />}
+        drawerEdge={{ portal: "summer", immersive, drawerOpen }}
+        overlays={
+          <>
+            <SummerDrawer session={session} />
+            <PortalProfileMenu session={session} />
+            <PortalNotificationsSheet session={session} />
+            <PortalNotificationShellSync session={session} />
+          </>
+        }
+      >
+        {children}
+      </AppShellFrame>
+    </ShellDrawerMotionProvider>
   )
 }
 

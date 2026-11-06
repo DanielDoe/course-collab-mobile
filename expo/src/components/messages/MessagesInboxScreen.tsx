@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
-  ActivityIndicator,
   RefreshControl,
   StyleSheet,
   Text,
@@ -9,17 +8,23 @@ import {
 import { useFocusEffect, useRouter } from "expo-router"
 import { useSession } from "../../context/SessionProvider"
 import {
-  messagesApi,
   messagesAuthFromSession,
   type ThreadSummary,
 } from "../../lib/messages-api"
 import { presentApiError, type ApiErrorPresentation } from "../../lib/present-api-error"
 import { applyLocalThreadStateToThreads, reconcileLocalThreadReadState } from "../../lib/messages-local-state"
-import { onMessagesRefresh } from "../../lib/notifications/notification-events"
+import {
+  onMessagesRefresh,
+  shouldRefetchInboxOnMessageRefresh,
+} from "../../lib/notifications/notification-events"
 import { usePresenceTracking } from "../../hooks/usePresenceTracking"
+import { useOptionalFacultyShell } from "../../context/FacultyShellContext"
+import { useOptionalStudentShell } from "../../context/StudentShellContext"
 import { useModuleTheme } from "../../lib/themed-module-shell"
 import { FACULTY_COMMUNICATION_COLOR } from "../../lib/faculty-communication-theme"
-import { useChromeTopInset, useModuleScrollContentPadding } from "../../context/ChromeInsetContext"
+import { useChromeTopInset, useModuleHeaderContentTop } from "../../context/ChromeInsetContext"
+import { useSearchDockBottomInset } from "../../context/ModuleSearchDockContext"
+import { MODULE_LIST_DUAL_PAGER_HEIGHT, moduleListPagerChromeHeight } from "../../lib/module-list-pager"
 import { CommEmptyState } from "../faculty/faculty-communication-ui"
 import { AppErrorNotice } from "../errors/AppErrorNotice"
 import {
@@ -31,14 +36,17 @@ import { messagePreviewText } from "../../lib/messages-html"
 import { MessageThreadRow } from "./messages-ui"
 import { MessagesComposeModal } from "./MessagesComposeModal"
 import { ModuleFlashList } from "../ModuleFlashList"
+import type { FlashListRef } from "@shopify/flash-list"
+import { useFacultyListPager } from "../../hooks/useFacultyListPager"
+import { useMessagesInbox } from "../../hooks/query/useMessagesInbox"
+import { FacultyListPagerFooter } from "../faculty/FacultyListPagerFooter"
+import { QueryRefreshBanner } from "../query/QueryRefreshBanner"
+import { QuerySkeleton } from "../query/QuerySkeleton"
+import { useMessagesLayout } from "../../hooks/useMessagesLayout"
+import { MessagesErrorBoundary } from "./MessagesErrorBoundary"
 
 type StatusFilter = "all" | "unread"
 type RoleFilter = "all" | "faculty" | "students"
-
-/** Intentional space between the Messages header divider and the first conversation card. */
-const MESSAGES_HEADER_TO_LIST_GAP = 28
-/** Bottom clearance for the floating search dock + home indicator. */
-const MESSAGES_LIST_BOTTOM_EXTRA = 88
 
 export function MessagesInboxScreen() {
   const { session } = useSession()
@@ -52,12 +60,22 @@ export function MessagesInboxScreen() {
   )
   const router = useRouter()
   const { styles: moduleStyles, type } = useModuleTheme()
+  const layout = useMessagesLayout()
   const chromeTop = useChromeTopInset()
-  const scrollPad = useModuleScrollContentPadding(MESSAGES_LIST_BOTTOM_EXTRA, MESSAGES_HEADER_TO_LIST_GAP)
-  const [threads, setThreads] = useState<ThreadSummary[]>([])
-  const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
-  const [error, setError] = useState<ApiErrorPresentation | null>(null)
+  const searchDockInset = useSearchDockBottomInset()
+  const headerContentTop = useModuleHeaderContentTop()
+  const inboxQuery = useMessagesInbox(auth)
+  const threads = inboxQuery.threads
+  const setThreads = inboxQuery.setThreads
+  const loading = inboxQuery.isInitialLoading
+  const [pullRefreshing, setPullRefreshing] = useState(false)
+  const listRef = useRef<FlashListRef<ThreadSummary>>(null)
+  const error = inboxQuery.error
+    ? presentApiError(inboxQuery.error, {
+        feature: "Messages",
+        fallbackMessage: "Could not load your conversations.",
+      })
+    : null
   const [search, setSearch] = useState("")
   const [composeOpen, setComposeOpen] = useState(false)
   const [filterSheetOpen, setFilterSheetOpen] = useState(false)
@@ -66,55 +84,29 @@ export function MessagesInboxScreen() {
   const skipNextFocusRefresh = useRef(true)
 
   const presenceParticipants = useMemo(
-    () => threads.map((thread) => ({ kind: thread.otherParticipant.kind, id: thread.otherParticipant.id })),
+    () =>
+      threads
+        .filter((thread) => thread.otherParticipant?.id)
+        .map((thread) => ({ kind: thread.otherParticipant.kind, id: thread.otherParticipant.id })),
     [threads],
   )
   const { getStatus } = usePresenceTracking(presenceParticipants)
 
   const load = useCallback(async () => {
-    if (!auth) return
-    setError(null)
-    const data = await messagesApi.listThreads(auth)
-    const nextThreads = data.threads ?? []
-    reconcileLocalThreadReadState(nextThreads)
-    setThreads(applyLocalThreadStateToThreads(nextThreads))
-  }, [auth])
+    await inboxQuery.refetch()
+  }, [inboxQuery.refetch])
 
   useFocusEffect(
     useCallback(() => {
+      listRef.current?.scrollToOffset({ offset: 0, animated: false })
       if (!auth) return
       if (skipNextFocusRefresh.current) {
         skipNextFocusRefresh.current = false
         return
       }
-      void load().catch((err) => {
-        setError(
-          presentApiError(err, {
-            feature: "Messages",
-            fallbackMessage: "Could not load your conversations.",
-          }),
-        )
-      })
+      void load()
     }, [auth, load]),
   )
-
-  useEffect(() => {
-    if (!auth) {
-      setLoading(false)
-      return
-    }
-    setLoading(true)
-    load()
-      .catch((err) => {
-        setError(
-          presentApiError(err, {
-            feature: "Messages",
-            fallbackMessage: "Could not load your conversations.",
-          }),
-        )
-      })
-      .finally(() => setLoading(false))
-  }, [auth, load])
 
   useEffect(() => {
     return onMessagesRefresh((payload) => {
@@ -127,32 +119,29 @@ export function MessagesInboxScreen() {
           ),
         )
       }
-      void load().catch((err) => {
-        setError(
-          presentApiError(err, {
-            feature: "Messages",
-            fallbackMessage: "Could not load your conversations.",
-          }),
-        )
-      })
+      if (shouldRefetchInboxOnMessageRefresh(payload)) void load()
     })
-  }, [load])
+  }, [load, setThreads])
 
-  async function handleRefresh() {
-    setRefreshing(true)
+  const openCompose = useCallback(() => setComposeOpen(true), [])
+  const openFilter = useCallback(() => setFilterSheetOpen(true), [])
+  const trailingAction = useMemo(
+    () => ({
+      onPress: openCompose,
+      accessibilityLabel: "New message",
+      icon: "add" as const,
+    }),
+    [openCompose],
+  )
+
+  const handleRefresh = useCallback(async () => {
+    setPullRefreshing(true)
     try {
       await load()
-    } catch (err) {
-      setError(
-        presentApiError(err, {
-          feature: "Messages",
-          fallbackMessage: "Could not refresh your inbox.",
-        }),
-      )
     } finally {
-      setRefreshing(false)
+      setPullRefreshing(false)
     }
-  }
+  }, [load])
 
   const filterGroups = useMemo<StudentFilterGroup[]>(
     () => [
@@ -207,11 +196,38 @@ export function MessagesInboxScreen() {
       return haystack.includes(q)
     })
   }, [roleFilter, search, statusFilter, threads])
+  const pager = useFacultyListPager(filtered, `${statusFilter}:${roleFilter}:${search}`, "conversations", {
+    rowHeight: layout.threadRowMinHeight,
+    pagerHeight: MODULE_LIST_DUAL_PAGER_HEIGHT,
+    viewportBuffer: searchDockInset + 8,
+  })
+
+  const pagerChromeHeight = moduleListPagerChromeHeight(pager.total, pager.pageCount)
+  const listContentPad = useMemo(
+    () => ({
+      paddingBottom: searchDockInset + pagerChromeHeight + 8,
+      paddingTop: headerContentTop,
+    }),
+    [headerContentTop, pagerChromeHeight, searchDockInset],
+  )
+
+  useEffect(() => {
+    listRef.current?.scrollToOffset({ offset: 0, animated: false })
+  }, [pager.page])
 
   const unreadTotal = useMemo(
     () => threads.reduce((sum, thread) => sum + (thread.unreadCount ?? 0), 0),
     [threads],
   )
+
+  const setFacultyUnreadBadge = useOptionalFacultyShell()?.setBadges
+  const setStudentUnreadCount = useOptionalStudentShell()?.setUnreadMessagesCount
+  const setStudentNavBadges = useOptionalStudentShell()?.setBadges
+  useEffect(() => {
+    setFacultyUnreadBadge?.({ unreadMessages: unreadTotal })
+    setStudentUnreadCount?.(unreadTotal)
+    setStudentNavBadges?.({ unreadMessages: unreadTotal })
+  }, [unreadTotal, setFacultyUnreadBadge, setStudentUnreadCount, setStudentNavBadges])
 
   const showBlockingError = Boolean(error && !loading && threads.length === 0)
 
@@ -228,7 +244,6 @@ export function MessagesInboxScreen() {
             presentation={error}
             variant="compact"
             onRetry={() => void handleRefresh()}
-            onDismiss={() => setError(null)}
             style={styles.inlineError}
           />
         ) : null}
@@ -242,12 +257,12 @@ export function MessagesInboxScreen() {
       <MessageThreadRow
         thread={item}
         isFirst={index === 0}
-        isLast={index === filtered.length - 1}
+        isLast={index === pager.items.length - 1}
         presenceStatus={getStatus(item.otherParticipant.kind, item.otherParticipant.id)}
         onPress={() => router.push(`/messages/${item.id}` as never)}
       />
     ),
-    [filtered.length, getStatus, router],
+    [getStatus, pager.items.length, router],
   )
 
   if (!auth) {
@@ -263,6 +278,7 @@ export function MessagesInboxScreen() {
   }
 
   return (
+    <MessagesErrorBoundary feature="Messages">
     <View style={moduleStyles.root}>
       <StudentSearchToolbar
         value={search}
@@ -270,13 +286,10 @@ export function MessagesInboxScreen() {
         placeholder="Search conversations…"
         showFilter
         filterActive={filterActive}
-        onOpenFilter={() => setFilterSheetOpen(true)}
-        trailingAction={{
-          onPress: () => setComposeOpen(true),
-          accessibilityLabel: "New message",
-          icon: "add",
-        }}
+        onOpenFilter={openFilter}
+        trailingAction={trailingAction}
       />
+      <QueryRefreshBanner visible={inboxQuery.refreshFailed} onRetry={() => void handleRefresh()} />
 
       <StudentGroupedFilterSheet
         visible={filterSheetOpen}
@@ -291,13 +304,18 @@ export function MessagesInboxScreen() {
       />
 
       <ModuleFlashList
-        data={loading || showBlockingError ? [] : filtered}
+        ref={listRef}
+        animateItems
+        refreshContentGrow={filtered.length === 0 || loading || showBlockingError}
+        data={loading || showBlockingError ? [] : pager.items}
         keyExtractor={(item) => String(item.id)}
         renderItem={renderThreadRow}
-        extraData={{ filteredLength: filtered.length, unreadTotal }}
+        extraData={{ filteredLength: pager.items.length, unreadTotal, page: pager.page }}
         contentContainerStyle={[
           styles.content,
-          scrollPad,
+          layout.contentStyle,
+          listContentPad,
+          { paddingHorizontal: layout.horizontalPadding },
           // Only grow when empty/loading — otherwise FlashList paints a tall empty card.
           (loading || showBlockingError || filtered.length === 0) && styles.contentGrow,
           showBlockingError && styles.contentBlockingError,
@@ -307,17 +325,15 @@ export function MessagesInboxScreen() {
         automaticallyAdjustContentInsets={false}
         automaticallyAdjustsScrollIndicatorInsets={false}
         ListHeaderComponent={listHeader}
+        ListFooterComponent={null}
         ListEmptyComponent={
           loading ? (
-            <View style={styles.loadingBox}>
-              <ActivityIndicator size="large" color={FACULTY_COMMUNICATION_COLOR.link} />
-            </View>
+            <QuerySkeleton />
           ) : showBlockingError && error ? (
             <View style={styles.blockingErrorWrap}>
               <AppErrorNotice
                 presentation={error}
                 onRetry={() => void handleRefresh()}
-                onDismiss={() => setError(null)}
               />
             </View>
           ) : (
@@ -326,7 +342,7 @@ export function MessagesInboxScreen() {
               title={threads.length === 0 ? "No conversations yet" : "No matches"}
               body={
                 threads.length === 0
-                  ? "Tap + in the search bar to start a new message."
+                  ? "Messages with students and course participants will appear here."
                   : "Try a different search or filter."
               }
             />
@@ -334,13 +350,22 @@ export function MessagesInboxScreen() {
         }
         refreshControl={
           <RefreshControl
-            refreshing={refreshing}
+            refreshing={pullRefreshing}
             onRefresh={() => void handleRefresh()}
             tintColor={FACULTY_COMMUNICATION_COLOR.link}
             {...(chromeTop > 0 ? { progressViewOffset: chromeTop } : {})}
           />
         }
       />
+
+      {!loading && !showBlockingError ? (
+        <View
+          pointerEvents="box-none"
+          style={[styles.pagerDock, { bottom: searchDockInset, paddingHorizontal: layout.horizontalPadding }]}
+        >
+          <FacultyListPagerFooter pager={pager} variant="dock" />
+        </View>
+      ) : null}
 
       <MessagesComposeModal
         visible={composeOpen}
@@ -353,6 +378,7 @@ export function MessagesInboxScreen() {
         }}
       />
     </View>
+    </MessagesErrorBoundary>
   )
 }
 
@@ -361,8 +387,14 @@ const styles = StyleSheet.create({
   content: {},
   contentGrow: { flexGrow: 1 },
   contentBlockingError: { justifyContent: "center" },
-  unreadNote: { paddingHorizontal: 16, fontWeight: "600", marginBottom: 8 },
-  inlineError: { marginHorizontal: 16, marginBottom: 8 },
+  unreadNote: { fontWeight: "600", marginBottom: 8 },
+  inlineError: { marginBottom: 8 },
   blockingErrorWrap: { paddingVertical: 12 },
   loadingBox: { paddingVertical: 48, alignItems: "center" },
+  pagerDock: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    zIndex: 2,
+  },
 })

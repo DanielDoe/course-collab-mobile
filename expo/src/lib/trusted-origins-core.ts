@@ -1,9 +1,9 @@
-const PRODUCTION_API_HOST = "coursecollab.vercel.app"
+const PRODUCTION_API_HOST = "course-collab.com"
 
 export const EXTRA_PRODUCTION_HOSTS = new Set([
   PRODUCTION_API_HOST,
-  "course-collab.com",
   "www.course-collab.com",
+  "coursecollab.vercel.app",
 ])
 
 export const STRIPE_HOSTS = new Set(["checkout.stripe.com", "js.stripe.com", "hooks.stripe.com"])

@@ -8,7 +8,14 @@ export type FacultyNavItem = {
   label: string
   route: string
   icon: keyof typeof Ionicons.glyphMap
-  badgeKey?: "pendingPoints" | "pendingIssues" | "officeHours" | "notifications" | "courseExchange"
+  badgeKey?:
+    | "pendingPoints"
+    | "pendingIssues"
+    | "officeHours"
+    | "notifications"
+    | "courseExchange"
+    | "unreadMessages"
+    | "pendingAccessRequests"
   requiresManageCourseSettings?: boolean
   locked?: boolean
   minTier?: FacultyMembershipTier
@@ -74,6 +81,7 @@ export const FACULTY_NAV_GROUPS: FacultyNavGroup[] = [
     icon: "book-outline",
     items: [
       { id: "academic-terms", label: "Academic Terms", route: "/module/academic-terms", icon: "calendar-outline" },
+      { id: "calendar", label: "Calendar", route: "/module/calendar", icon: "calendar-number-outline" },
       { id: "announcements", label: "Announcements", route: "/module/announcements", icon: "megaphone-outline" },
       { id: "syllabus", label: "Syllabus", route: "/module/syllabus", icon: "document-text-outline" },
       { id: "lectures", label: "Manage Lectures", route: "/module/lectures", icon: "easel-outline" },
@@ -92,11 +100,11 @@ export const FACULTY_NAV_GROUPS: FacultyNavGroup[] = [
     label: "Assessments",
     icon: "clipboard-outline",
     items: [
-      { id: "quizzes", label: "Manage Quizzes", route: "/module/quizzes", icon: "clipboard-outline" },
+      { id: "quizzes", label: "Manage Quizzes", route: "/module/quizzes", icon: "clipboard-outline", badgeKey: "pendingIssues" },
       { id: "question-bank", label: "Question Bank", route: "/module/question-bank", icon: "library-outline" },
-      { id: "homework", label: "Manage Homework", route: "/module/homework", icon: "pencil-outline" },
-      { id: "mid-semester-exams", label: "Mid-Semester Exams", route: "/module/mid-semester-exams", icon: "school-outline" },
-      { id: "final-exams", label: "Final Exams", route: "/module/final-exams", icon: "ribbon-outline" },
+      { id: "homework", label: "Manage Homework", route: "/module/homework", icon: "pencil-outline", badgeKey: "pendingIssues" },
+      { id: "mid-semester-exams", label: "Mid-Semester Exams", route: "/module/mid-semester-exams", icon: "school-outline", badgeKey: "pendingIssues" },
+      { id: "final-exams", label: "Final Exams", route: "/module/final-exams", icon: "ribbon-outline", badgeKey: "pendingIssues" },
       { id: "classroom-points", label: "Classroom Points", route: "/module/classroom-points", icon: "star-outline", badgeKey: "pendingPoints" },
       { id: "course-evaluations", label: "Course Evaluations", route: "/module/course-evaluations", icon: "thumbs-up-outline" },
       { id: "attendance", label: "Attendance", route: "/module/attendance", icon: "checkmark-circle-outline" },
@@ -108,7 +116,7 @@ export const FACULTY_NAV_GROUPS: FacultyNavGroup[] = [
     icon: "people-outline",
     items: [
       { id: "students", label: "Student Directory", route: "/module/students", icon: "people-outline" },
-      { id: "access-requests", label: "Access Requests", route: "/module/access-requests", icon: "shield-checkmark-outline" },
+      { id: "access-requests", label: "Access Requests", route: "/module/access-requests", icon: "shield-checkmark-outline", badgeKey: "pendingAccessRequests" },
       { id: "campers", label: "Campers", route: "/module/campers", icon: "walk-outline" },
       { id: "office-hours", label: "Office Hours", route: "/module/office-hours", icon: "time-outline", badgeKey: "officeHours" },
       { id: "recommendations", label: "Recommendation Letters", route: "/module/recommendations", icon: "bookmark-outline" },
@@ -121,7 +129,7 @@ export const FACULTY_NAV_GROUPS: FacultyNavGroup[] = [
     icon: "bar-chart-outline",
     items: [
       { id: "results", label: "Manage Results", route: "/module/results", icon: "bar-chart-outline" },
-      { id: "student-progress", label: "Student Progress", route: "/module/student-progress", icon: "analytics-outline" },
+      { id: "student-progress", label: "Class Analytics", route: "/module/student-progress", icon: "analytics-outline" },
       { id: "reports", label: "Manage Reports", route: "/module/reports", icon: "document-attach-outline", locked: true, minTier: "Pro" },
       { id: "progress-reviews", label: "Progress Reviews", route: "/module/progress-reviews", icon: "trending-up-outline", locked: true, minTier: "Pro" },
       { id: "cora-insights", label: "Cora Insights", route: "/module/cora-insights", icon: "sparkles-outline" },
@@ -134,7 +142,7 @@ export const FACULTY_NAV_GROUPS: FacultyNavGroup[] = [
     icon: "chatbubbles-outline",
     items: [
       { id: "notifications", label: "Notifications", route: "/module/notifications", icon: "notifications-outline", badgeKey: "notifications" },
-      { id: "messages", label: "Messages", route: "/module/messages", icon: "mail-outline" },
+      { id: "messages", label: "Messages", route: "/module/messages", icon: "mail-outline", badgeKey: "unreadMessages" },
       { id: "discussions", label: "Course Discussions", route: "/module/discussions", icon: "chatbubbles-outline" },
       { id: "student-support", label: "Student Support", route: "/module/student-support", icon: "help-buoy-outline" },
     ],
@@ -144,7 +152,6 @@ export const FACULTY_NAV_GROUPS: FacultyNavGroup[] = [
     label: "Administration",
     icon: "shield-outline",
     items: [
-      { id: "course-settings", label: "Course Settings", route: "/module/course-settings", icon: "options-outline" },
       { id: "schedule-adjustment", label: "Schedule Adjustment", route: "/module/schedule-adjustment", icon: "swap-horizontal-outline" },
       { id: "assessment-governance", label: "Assessment Governance", route: "/module/assessment-governance", icon: "lock-closed-outline" },
       { id: "assessment-defaults", label: "Assessment Defaults", route: "/module/assessment-defaults", icon: "list-outline" },
@@ -194,6 +201,7 @@ export const FACULTY_LABEL_BY_ROUTE: Record<string, string> = {
   "/membership/success": "Membership activated",
   "/membership/manage": "Billing & subscription",
   "/membership/cancel": "Payment cancelled",
+  "/module/course-settings": "Course Settings",
 }
 
 for (const group of [...FACULTY_NAV_GROUPS, FACULTY_SUPPORT_GROUP]) {
@@ -271,6 +279,7 @@ export function facultyNativeRouteFromLink(link: string | undefined): string {
   const path = link.toLowerCase()
 
   if (path.includes("management/sessions") || path.includes("academic-terms")) return "/module/academic-terms"
+  if (path.includes("/calendar") && !path.includes("schedule-adjustment")) return "/module/calendar"
   if (path.includes("communication/announcements") || path.includes("announcements")) return "/module/announcements"
   if (path.includes("content/syllabus") || path.includes("/syllabus")) return "/module/syllabus"
   if (path.includes("content/lectures") || path.includes("/lectures")) return "/module/lectures"
@@ -328,6 +337,9 @@ export function facultyNativeRouteFromLink(link: string | undefined): string {
   if (path.includes("trade-center")) return "/module/trade-center"
 
   if (path.includes("/results")) return "/module/results"
+  if (path.includes("cora-insights") || path.includes("ai-monitoring") || path.includes("ai-insights")) {
+    return "/module/cora-insights"
+  }
   if (path.includes("analytics/advanced") || path.includes("student-progress")) return "/module/student-progress"
   if (path.includes("analytics/reports") || path.includes("/reports")) return "/module/reports"
   if (path.includes("progress-reviews")) return "/module/progress-reviews"

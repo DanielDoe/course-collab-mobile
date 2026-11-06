@@ -13,6 +13,11 @@ import { AppAlert } from "../../lib/app-alert"
 import { ApiError } from "../../lib/api"
 import { instructorApi, type InstructorGroup, type InstructorSession } from "../../lib/instructor-api"
 import { useFacultyScope } from "../../hooks/useFacultyScope"
+import {
+  fetchFacultyTermSessions,
+  rowMatchesFacultySection,
+  useFacultySectionFilter,
+} from "../../lib/faculty-section-scope"
 import { useNotificationModuleRefresh } from "../../lib/notifications/notification-events"
 import { useAppThemeTokens } from "../../context/AppearanceProvider"
 import { useFacultyModuleStyles } from "../../lib/faculty-themed-ui"
@@ -31,6 +36,8 @@ import { FacultyGroupActionSheet } from "./FacultyGroupActionSheet"
 import { FacultyCollabCreateMenuSheet } from "./FacultyCollabCreateMenuSheet"
 import { FacultyGroupCreateModal } from "./FacultyGroupCreateModal"
 import { FacultyProjectCreateModal } from "./FacultyProjectCreateModal"
+import { useFacultyListPager } from "../../hooks/useFacultyListPager"
+import { FacultyListPagerFooter } from "./FacultyListPagerFooter"
 
 type MenuTab = "all" | "pending" | "approved" | "rejected" | "deleted"
 
@@ -66,12 +73,12 @@ export function FacultyGroupsScreen() {
   const type = useNativeType()
   const router = useRouter()
   const { scope, ready } = useFacultyScope()
+  const { sessionFilter, setSessionFilter, apiSession } = useFacultySectionFilter(scope)
 
   const [menu, setMenu] = useState<MenuTab>("pending")
   const [activeGroups, setActiveGroups] = useState<InstructorGroup[]>([])
   const [deletedGroups, setDeletedGroups] = useState<InstructorGroup[]>([])
   const [sessions, setSessions] = useState<InstructorSession[]>([])
-  const [sessionFilter, setSessionFilter] = useState("all")
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [acting, setActing] = useState(false)
@@ -108,16 +115,21 @@ export function FacultyGroupsScreen() {
   const load = useCallback(async () => {
     if (!scope) return
     setError("")
-    const session = sessionFilter === "all" ? undefined : sessionFilter
-    const [activeRows, deletedRows, sessionData] = await Promise.all([
-      instructorApi.getGroups(scope, { session }),
-      instructorApi.getGroups(scope, { session, status: "deleted" }),
-      instructorApi.getSessions(scope, scope.academicTermId ?? undefined).catch(() => ({ sessions: [] as InstructorSession[] })),
+    const [activeRows, deletedRows, sessionRows] = await Promise.all([
+      instructorApi.getGroups(scope, { session: apiSession }),
+      instructorApi.getGroups(scope, { session: apiSession, status: "deleted" }),
+      fetchFacultyTermSessions(scope).catch(() => [] as InstructorSession[]),
     ])
     setActiveGroups(activeRows)
     setDeletedGroups(deletedRows)
-    setSessions((sessionData.sessions ?? []).filter((s) => s.code.toUpperCase() !== "BETA"))
-  }, [scope, sessionFilter])
+    setSessions(sessionRows)
+  }, [scope, apiSession])
+
+  useEffect(() => {
+    if (!scope) return
+    setActiveGroups([])
+    setDeletedGroups([])
+  }, [scope?.courseId, scope?.sessionId])
 
   useEffect(() => {
     if (!ready) {
@@ -131,7 +143,9 @@ export function FacultyGroupsScreen() {
   }, [ready, load])
 
   const filtered = useMemo(() => {
-    let rows = allGroups.filter((g) => tabMatches(g, menu))
+    let rows = allGroups
+      .filter((g) => tabMatches(g, menu))
+      .filter((g) => rowMatchesFacultySection(g, scope, sessionFilter))
     if (!search.trim()) return rows
     const q = search.trim().toLowerCase()
     return rows.filter(
@@ -140,7 +154,9 @@ export function FacultyGroupsScreen() {
         g.leader_name.toLowerCase().includes(q) ||
         g.session.toLowerCase().includes(q),
     )
-  }, [allGroups, menu, search])
+  }, [allGroups, menu, search, scope, sessionFilter])
+
+  const pager = useFacultyListPager(filtered, `${menu}:${search}:${sessionFilter}`, "groups")
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true)
@@ -287,7 +303,7 @@ export function FacultyGroupsScreen() {
           />
         ) : (
           <View style={localStyles.list}>
-            {filtered.map((group, index) => (
+            {pager.items.map((group, index) => (
               <FacultyGroupListCard
                 key={group.id}
                 group={group}
@@ -314,6 +330,7 @@ export function FacultyGroupsScreen() {
                 }
               />
             ))}
+            <FacultyListPagerFooter pager={pager} />
           </View>
         )}
       </ScrollView>

@@ -1,0 +1,9 @@
+appId: com.coursecollab.app
+---
+- repeat:
+    times: 8
+    commands:
+      - swipe:
+          direction: UP
+          duration: 400
+- takeScreenshot: sample-practice-after-swipes

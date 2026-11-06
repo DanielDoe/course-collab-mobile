@@ -11,6 +11,7 @@ import { Ionicons } from "@/components/icons/AppIcon"
 import { useRouter } from "expo-router"
 import { useModuleScrollContentPadding } from "../../context/ChromeInsetContext"
 import { ApiError } from "../../lib/api"
+import { AppAlert } from "../../lib/app-alert"
 import { instructorApi, type InstructorLecture } from "../../lib/instructor-api"
 import { useFacultyScope } from "../../hooks/useFacultyScope"
 import { useNotificationModuleRefresh } from "../../lib/notifications/notification-events"
@@ -21,11 +22,14 @@ import { solidListThumbFixed } from "../../lib/solid-list-thumb"
 import { SolidListThumbTile } from "../theme/SolidListThumbTile"
 import { FacultyEmptyState, FacultyStatusPill } from "./faculty-shared"
 import { FacultySearchToolbar } from "./faculty-module-shell"
+import { useFacultyListPager } from "../../hooks/useFacultyListPager"
+import { FacultyListPagerFooter } from "./FacultyListPagerFooter"
 import { FacultyLectureActionSheet } from "./FacultyLectureActionSheet"
 import { FacultyLectureEditorModal } from "./FacultyLectureEditorModal"
 import { FacultyLectureSamplePracticeModal } from "./FacultyLectureSamplePracticeModal"
 import { FacultyLectureWorkspaceModal } from "./FacultyLectureWorkspaceModal"
 import { useModuleTheme } from "../../lib/themed-module-shell"
+import { lectureDisplayTitle, lectureListDisplayTitle } from "../lectures/lecture-list-utils"
 
 const SHEET_DISMISS_MS = 280
 
@@ -82,10 +86,14 @@ export function FacultyLecturesScreen() {
     return lectures.filter(
       (l) =>
         l.title.toLowerCase().includes(q) ||
+        lectureDisplayTitle(l).toLowerCase().includes(q) ||
+        lectureListDisplayTitle(l, lectures).toLowerCase().includes(q) ||
         String(l.week).includes(q) ||
         (l.description?.toLowerCase().includes(q) ?? false),
     )
   }, [lectures, search])
+
+  const pager = useFacultyListPager(filtered, search, "lectures", { preset: "tall" })
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true)
@@ -126,12 +134,15 @@ export function FacultyLecturesScreen() {
     if (!scope) return
     setSubmitting(true)
     setError("")
+    setLectures((prev) => prev.filter((row) => row.id !== lecture.id))
     try {
       await instructorApi.deleteLecture(scope, lecture.id)
-      setSelected(null)
       await load()
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not delete lecture.")
+      await load().catch(() => undefined)
+      const message = err instanceof ApiError ? err.message : "Could not delete lecture."
+      setError(message)
+      AppAlert.alert("Could not delete lecture", message)
     } finally {
       setSubmitting(false)
     }
@@ -186,6 +197,7 @@ export function FacultyLecturesScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void handleRefresh()} tintColor={FACULTY_COLLAB_COLOR.link} />}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
+        showsVerticalScrollIndicator={false}
       >
         <FacultySearchToolbar
           value={search}
@@ -194,7 +206,8 @@ export function FacultyLecturesScreen() {
           showFilter={false}
           trailingAction={{
             onPress: openAdd,
-            accessibilityLabel: "Add lecture"}}
+            accessibilityLabel: "Add lecture",
+          }}
         />
         {error ? (
           <View style={styles.errorBox}>
@@ -212,46 +225,53 @@ export function FacultyLecturesScreen() {
             body={lectures.length === 0 ? "Use + in the search bar to create your first lecture week." : "Try another search."}
           />
         ) : (
-          filtered.map((lecture) => {
-            const published = lecture.is_published ?? lecture.is_active ?? false
-            const weekThumb = solidListThumbFixed(FACULTY_COLLAB_COLOR.tabActive)
-            return (
-              <Pressable
-                key={lecture.id}
-                style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
-                onPress={() => setSelected(lecture)}
-                accessibilityRole="button"
-                accessibilityLabel={lecture.title}
-              >
-                <View style={styles.cardTop}>
-                  <SolidListThumbTile thumb={weekThumb} size="compact">
-                    <Text style={[type.caption, { fontWeight: "700", color: weekThumb.icon, fontSize: 11 }]}>
-                      W{lecture.week}
-                    </Text>
-                  </SolidListThumbTile>
-                  <View style={styles.cardCopy}>
-                    <View style={localStyles.titleRow}>
+          <View style={localStyles.list}>
+            {pager.items.map((lecture) => {
+              const published = lecture.is_published ?? lecture.is_active ?? false
+              const weekThumb = solidListThumbFixed(FACULTY_COLLAB_COLOR.tabActive)
+              const displayTitle = lectureListDisplayTitle(lecture, filtered)
+              return (
+                <Pressable
+                  key={lecture.id}
+                  style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+                  onPress={() => setSelected(lecture)}
+                  accessibilityRole="button"
+                  accessibilityLabel={displayTitle}
+                >
+                  <View style={styles.cardTop}>
+                    <SolidListThumbTile thumb={weekThumb} size="compact">
+                      <Text style={[type.caption, { fontWeight: "700", color: weekThumb.icon, fontSize: 11 }]}>
+                        W{lecture.week}
+                      </Text>
+                    </SolidListThumbTile>
+                    <View style={styles.cardCopy}>
                       <Text style={styles.cardTitle} numberOfLines={2}>
-                        {lecture.title}
+                        {displayTitle}
                       </Text>
-                      <Ionicons name="chevron-forward" size={18} color={native.tertiaryLabel} />
-                    </View>
-                    {lecture.description ? (
-                      <Text style={[type.caption, localStyles.cardDesc]} numberOfLines={2}>
-                        {lecture.description}
-                      </Text>
-                    ) : null}
-                    <View style={localStyles.metaRow}>
-                      <FacultyStatusPill label={published ? "Published" : "Draft"} tone={published ? "success" : "warning"} />
-                      {lectureHasDeck(lecture) ? (
-                        <FacultyStatusPill label="Deck" tone="neutral" />
+                      {lecture.description ? (
+                        <Text style={[type.caption, localStyles.cardDesc]} numberOfLines={2}>
+                          {lecture.description}
+                        </Text>
                       ) : null}
+                      <View style={localStyles.metaRow}>
+                        <FacultyStatusPill label={published ? "Published" : "Draft"} tone={published ? "success" : "warning"} />
+                        {lectureHasDeck(lecture) ? (
+                          <FacultyStatusPill label="Deck" tone="neutral" />
+                        ) : null}
+                      </View>
                     </View>
+                    <Ionicons
+                      name="chevron-forward"
+                      size={16}
+                      color={native.tertiaryLabel}
+                      style={localStyles.chevron}
+                    />
                   </View>
-                </View>
-              </Pressable>
-            )
-          })
+                </Pressable>
+              )
+            })}
+            <FacultyListPagerFooter pager={pager} />
+          </View>
         )}
       </ScrollView>
 
@@ -277,7 +297,13 @@ export function FacultyLecturesScreen() {
           setEditorTarget(null)
           setCreateMode(false)
         }}
-        onSaved={() => void handleUpdated()}
+        onSaved={(created) => {
+          void handleUpdated()
+          if (created) {
+            setCreateMode(false)
+            setEditorTarget(created)
+          }
+        }}
       />
 
       <FacultyLectureSamplePracticeModal
@@ -302,7 +328,8 @@ export function FacultyLecturesScreen() {
 }
 
 const localStyles = StyleSheet.create({
-  titleRow: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
+  list: { gap: 12 },
   cardDesc: { lineHeight: 18, fontWeight: "500" },
   metaRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  chevron: { flexShrink: 0, marginTop: 4 },
 })

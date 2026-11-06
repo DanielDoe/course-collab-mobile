@@ -23,7 +23,7 @@ export function LegalDocumentScreen({ docId, title, footerAction }: LegalDocumen
   return (
     <View style={[styles.screenRoot, { backgroundColor: native.groupedBackground }]}>
       <NotetakerScreenHeader title={title} fallbackHref="/settings/privacy-security" />
-      <ModuleScreen disableTopInsetAdjustment>
+      <ModuleScreen disableTopInsetAdjustment stackedHeader>
         {loading && !document ? (
           <View style={styles.centered}>
             <ActivityIndicator color={tokens.accent} />

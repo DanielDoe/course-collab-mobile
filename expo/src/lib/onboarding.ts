@@ -1,35 +1,27 @@
 import * as SecureStore from "./secure-store-client"
-import { syncAppearanceSetupFromServer } from "./appearance-setup"
+import { hasSessionCompletedAppearanceSetup } from "./appearance-setup"
 import { resolveFacultyPostLoginRoute } from "./faculty-post-login"
 import { sessionNeedsPasswordChange } from "./navigation-reset"
 import type { AppSession } from "./session"
+import {
+  isLegalConsentStep,
+  LEGAL_CONSENT_STEPS,
+  onboardingStepsForPortal,
+  onboardingStepToRoute,
+  type OnboardingRoute,
+  type OnboardingStepId,
+} from "./onboarding-logic"
 
-export type OnboardingStepId =
-  | "welcome"
-  | "terms"
-  | "privacy"
-  | "ai-disclosure"
-  | "cora"
-  | "appearance"
-
-export type OnboardingRoute =
-  | "/onboarding-welcome"
-  | "/onboarding-terms"
-  | "/onboarding-privacy"
-  | "/onboarding-ai-disclosure"
-  | "/onboarding-cora"
-  | "/appearance-setup"
-  | "/dashboard"
-  | "/faculty-select-course"
-  | "/change-password"
-
-export const ONBOARDING_AUTH_ROUTES = new Set<string>([
-  "/onboarding-welcome",
-  "/onboarding-terms",
-  "/onboarding-privacy",
-  "/onboarding-ai-disclosure",
-  "/onboarding-cora",
-])
+export type { LegalConsentStepId, OnboardingRoute, OnboardingStepId } from "./onboarding-logic"
+export {
+  canonicalizeOnboardingStep,
+  isLegalConsentStep,
+  LEGAL_CONSENT_STEPS,
+  ONBOARDING_AUTH_ROUTES,
+  onboardingStepMeta,
+  onboardingStepsForPortal,
+  onboardingStepToRoute,
+} from "./onboarding-logic"
 
 function onboardingUserKey(session: AppSession): string {
   switch (session.portal) {
@@ -46,14 +38,7 @@ export function onboardingStepStorageKey(session: AppSession, step: OnboardingSt
   return `cc_onboarding_${onboardingUserKey(session)}_${step}_v1`
 }
 
-export async function isOnboardingStepComplete(
-  session: AppSession,
-  step: OnboardingStepId,
-): Promise<boolean> {
-  if (step === "appearance") {
-    if (session.portal !== "student") return true
-    return syncAppearanceSetupFromServer(session)
-  }
+async function isStoredOnboardingFlag(session: AppSession, step: OnboardingStepId): Promise<boolean> {
   try {
     return (await SecureStore.getItemAsync(onboardingStepStorageKey(session, step))) === "true"
   } catch {
@@ -61,59 +46,38 @@ export async function isOnboardingStepComplete(
   }
 }
 
+export async function isOnboardingStepComplete(
+  session: AppSession,
+  step: OnboardingStepId,
+): Promise<boolean> {
+  if (step === "appearance") {
+    if (session.portal !== "student") return true
+    return hasSessionCompletedAppearanceSetup(session)
+  }
+  if (isLegalConsentStep(step)) {
+    const flags = await Promise.all(
+      LEGAL_CONSENT_STEPS.map((legalStep) => isStoredOnboardingFlag(session, legalStep)),
+    )
+    return flags.every(Boolean)
+  }
+  return isStoredOnboardingFlag(session, step)
+}
+
 export async function markOnboardingStepComplete(
   session: AppSession,
   step: OnboardingStepId,
 ): Promise<void> {
   if (step === "appearance") return
-  try {
-    await SecureStore.setItemAsync(onboardingStepStorageKey(session, step), "true")
-  } catch {
-    /* ignore */
-  }
-}
-
-export function onboardingStepsForPortal(portal: AppSession["portal"]): OnboardingStepId[] {
-  switch (portal) {
-    case "student":
-      return ["welcome", "terms", "privacy", "ai-disclosure", "cora", "appearance"]
-    case "guest":
-    case "summer":
-      return ["welcome", "terms", "privacy", "ai-disclosure", "cora"]
-    case "faculty":
-    case "admin":
-      return ["welcome", "terms", "privacy", "ai-disclosure"]
-    default:
-      return []
-  }
-}
-
-export function onboardingStepToRoute(step: OnboardingStepId): OnboardingRoute {
-  switch (step) {
-    case "welcome":
-      return "/onboarding-welcome"
-    case "terms":
-      return "/onboarding-terms"
-    case "privacy":
-      return "/onboarding-privacy"
-    case "ai-disclosure":
-      return "/onboarding-ai-disclosure"
-    case "cora":
-      return "/onboarding-cora"
-    case "appearance":
-      return "/appearance-setup"
-  }
-}
-
-export function onboardingStepMeta(session: AppSession, currentStep: OnboardingStepId) {
-  const steps = onboardingStepsForPortal(session.portal)
-  const stepIndex = Math.max(0, steps.indexOf(currentStep))
-  return {
-    steps,
-    stepIndex,
-    totalSteps: steps.length,
-    progress: steps.length > 0 ? (stepIndex + 1) / steps.length : 1,
-  }
+  const steps = isLegalConsentStep(step) ? LEGAL_CONSENT_STEPS : [step]
+  await Promise.all(
+    steps.map(async (legalStep) => {
+      try {
+        await SecureStore.setItemAsync(onboardingStepStorageKey(session, legalStep), "true")
+      } catch {
+        /* ignore */
+      }
+    }),
+  )
 }
 
 export async function resolveNextOnboardingRoute(session: AppSession): Promise<OnboardingRoute | null> {

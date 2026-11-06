@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from "react-native";
+import * as DocumentPicker from "expo-document-picker"
 import { AppAlert } from '../../lib/app-alert'
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useLocalSearchParams, useRouter } from "expo-router"
-import { useNavigation } from "@react-navigation/native"
+import { useNavigation } from "expo-router/react-navigation"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio"
 import {
@@ -19,6 +20,10 @@ import { FacultySummerCampDatePicker } from "../faculty/FacultySummerCampDatePic
 import { NotetakerScreenHeader } from "./NotetakerScreenHeader"
 import { NotetakerSaveFlash } from "./NotetakerSaveFlash"
 import { NotetakerChatPanel } from "./NotetakerChatPanel"
+import {
+  NotetakerProcessingOverlay,
+  type NotetakerProcessingStep,
+} from "./NotetakerProcessingOverlay"
 import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
 import { useNativeType } from "../../lib/themed-module-theme"
 import { useSession } from "../../context/SessionProvider"
@@ -30,6 +35,7 @@ import {
   isNotetakerProcessing,
   notetakerApi,
   notetakerNoteSegment,
+  resolveLocalAudioDurationSeconds,
   type NotetakerKeyPoints,
   type NotetakerLimits,
   type NotetakerNoteDetail,
@@ -42,7 +48,7 @@ type DetailTab = "summary" | "transcript" | "chat"
 const DETAIL_TABS: Array<{ id: DetailTab; label: string }> = [
   { id: "summary", label: "Summary" },
   { id: "transcript", label: "Transcript" },
-  { id: "chat", label: "AI Chat" },
+  { id: "chat", label: "Cora AI Assistant" },
 ]
 
 function useStudentSession(): StudentSession | null {
@@ -117,6 +123,9 @@ export function NotetakerNoteDetailScreen() {
   const [roster, setRoster] = useState<RosterStudent[]>([])
   const [selectedShareIds, setSelectedShareIds] = useState<number[]>([])
   const [saveFlashVisible, setSaveFlashVisible] = useState(false)
+  const [retrying, setRetrying] = useState(false)
+  const [processingLabel, setProcessingLabel] = useState("")
+  const [processingStep, setProcessingStep] = useState<NotetakerProcessingStep>("upload")
   const [audioSource, setAudioSource] = useState<{ uri: string; headers?: Record<string, string> } | null>(
     null,
   )
@@ -336,6 +345,55 @@ export function NotetakerNoteDetailScreen() {
     }
   }, [session, movedDigitalNoteId, selectedShareIds])
 
+  const retryAudio = useCallback(async () => {
+    if (!session || !note) return
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        copyToCacheDirectory: true,
+        type: ["audio/*", "public.audio", "public.mpeg-4-audio"],
+        multiple: false,
+      })
+      if (result.canceled || !result.assets?.[0]) return
+      const asset = result.assets[0]
+      setRetrying(true)
+      setProcessingStep("upload")
+      setProcessingLabel("Uploading audio…")
+      const durationSeconds = await resolveLocalAudioDurationSeconds(asset.uri)
+      setProcessingStep("transcribe")
+      setProcessingLabel("Transcribing with AI…")
+      const summarizeTimer = setTimeout(() => {
+        setProcessingStep("summarize")
+        setProcessingLabel("Writing your AI summary…")
+      }, 12_000)
+      try {
+        const updated = await notetakerApi.uploadAudio(
+          session,
+          notetakerNoteSegment(note),
+          {
+            uri: asset.uri,
+            name: asset.name || `retry-${Date.now()}.m4a`,
+            type: asset.mimeType || "audio/m4a",
+          },
+          { durationSeconds, displayTitle: title.trim() || note.title },
+        )
+        setNote(updated)
+        setTitle(updated.title || "")
+        setCourse(updated.course_name || "")
+        setLectureDate(updated.lecture_date ? String(updated.lecture_date).slice(0, 10) : "")
+      } finally {
+        clearTimeout(summarizeTimer)
+      }
+    } catch (err) {
+      AppAlert.alert(
+        "Retry failed",
+        err instanceof ApiError ? err.message : "Could not process this audio file.",
+      )
+    } finally {
+      setRetrying(false)
+      setProcessingLabel("")
+    }
+  }, [session, note, title])
+
   const confirmDelete = useCallback(() => {
     if (!session || !note) return
     AppAlert.alert("Delete note?", `"${note.title}" will be removed from AI Notetaker.`, [
@@ -430,6 +488,33 @@ export function NotetakerNoteDetailScreen() {
 
   const processing = isNotetakerProcessing(note.processing_status)
   const failed = note.processing_status === "failed"
+  const isChatTab = tab === "chat" && !processing && !failed
+
+  const segmentTabs = (
+    <View style={[styles.segmentTrack, { backgroundColor: native.fill }]}>
+      {DETAIL_TABS.map(({ id, label }) => (
+        <Pressable
+          key={id}
+          style={[
+            styles.segmentBtn,
+            tab === id && [styles.segmentBtnActive, { backgroundColor: native.secondaryGrouped }],
+          ]}
+          onPress={() => setTab(id)}
+        >
+          <Text
+            style={[
+              type.caption,
+              styles.segmentLabel,
+              { color: tab === id ? native.label : native.secondaryLabel },
+            ]}
+            numberOfLines={2}
+          >
+            {label}
+          </Text>
+        </Pressable>
+      ))}
+    </View>
+  )
 
   return (
     <>
@@ -452,6 +537,46 @@ export function NotetakerNoteDetailScreen() {
           }
         />
 
+        {isChatTab ? (
+          <View style={styles.chatLayout}>
+            <View style={[styles.statusRow, styles.chatSectionPad]}>
+              <CommStatusChip
+                label={formatStatus(note.processing_status)}
+                color={tokens.success}
+                soft={`${tokens.success}18`}
+              />
+              {note.duration_seconds ? (
+                <Text style={[type.caption, { color: native.secondaryLabel }]}>
+                  {Math.round(note.duration_seconds / 60)} min recorded
+                </Text>
+              ) : null}
+            </View>
+
+            {audioSource?.uri ? (
+              <View style={styles.chatSectionPad}>
+                <ModuleSection>
+                  <ModuleListRow
+                    title={playbackLabel}
+                    subtitle="Listen back to verify what was captured"
+                    icon={audioStatus.playing ? "pause-circle-outline" : "play-circle-outline"}
+                    iconBg={tokens.accentSoft}
+                    iconColor={tokens.accent}
+                    onPress={togglePlayback}
+                  />
+                </ModuleSection>
+              </View>
+            ) : null}
+
+            {segmentTabs}
+
+            <NotetakerChatPanel
+              session={session}
+              note={note}
+              chatEnabled={Boolean(limits?.chatEnabled)}
+              onUpgrade={openMembership}
+            />
+          </View>
+        ) : (
         <ModuleScreen
           loading={false}
           empty={false}
@@ -486,11 +611,24 @@ export function NotetakerNoteDetailScreen() {
           ) : null}
 
           {failed ? (
-            <CommEmptyState
-              icon="alert-circle-outline"
-              title="Processing failed"
-              body={note.failure_reason || "Something went wrong while processing this recording."}
-            />
+            <>
+              <CommEmptyState
+                icon="alert-circle-outline"
+                title="Processing failed"
+                body={note.failure_reason || "Something went wrong while processing this recording."}
+              />
+              <ModuleSection>
+                <ModuleListRow
+                  title="Retry with a new audio file"
+                  subtitle="Upload MP3, M4A, or WAV to transcribe and summarize again"
+                  icon="cloud-upload-outline"
+                  iconBg={tokens.accentSoft}
+                  iconColor={tokens.accent}
+                  onPress={() => void retryAudio()}
+                  last
+                />
+              </ModuleSection>
+            </>
           ) : null}
 
           {!processing && !failed ? (
@@ -508,28 +646,7 @@ export function NotetakerNoteDetailScreen() {
                 </ModuleSection>
               ) : null}
 
-              <View style={[styles.segmentTrack, { backgroundColor: native.fill }]}>
-                {DETAIL_TABS.map(({ id, label }) => (
-                  <Pressable
-                    key={id}
-                    style={[
-                      styles.segmentBtn,
-                      tab === id && [styles.segmentBtnActive, { backgroundColor: native.secondaryGrouped }],
-                    ]}
-                    onPress={() => setTab(id)}
-                  >
-                    <Text
-                      style={[
-                        type.caption,
-                        styles.segmentLabel,
-                        { color: tab === id ? native.label : native.secondaryLabel },
-                      ]}
-                    >
-                      {label}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
+              {segmentTabs}
 
               {tab === "summary" ? (
                 summaryMarkdown ? (
@@ -537,7 +654,7 @@ export function NotetakerNoteDetailScreen() {
                 ) : (
                   <CommEmptyState icon="document-text-outline" title="No summary yet" body="" />
                 )
-              ) : tab === "transcript" ? (
+              ) : (
                 note.transcript?.trim() ? (
                   <View style={[styles.transcriptBox, { backgroundColor: native.secondaryGrouped }]}>
                     <Text style={[type.body, { color: native.label, lineHeight: 22 }]}>{note.transcript}</Text>
@@ -545,13 +662,6 @@ export function NotetakerNoteDetailScreen() {
                 ) : (
                   <CommEmptyState icon="text-outline" title="No transcript" body="" />
                 )
-              ) : (
-                <NotetakerChatPanel
-                  session={session}
-                  note={note}
-                  chatEnabled={Boolean(limits?.chatEnabled)}
-                  onUpgrade={openMembership}
-                />
               )}
 
               <CommSectionFooter>
@@ -595,6 +705,16 @@ export function NotetakerNoteDetailScreen() {
 
           <ModuleSectionHeader title="Actions" />
           <ModuleSection>
+            {failed || note.processing_status === "draft" ? (
+              <ModuleListRow
+                title="Upload audio"
+                subtitle="Replace this note's recording and run transcription again"
+                icon="cloud-upload-outline"
+                iconBg={tokens.accentSoft}
+                iconColor={tokens.accent}
+                onPress={() => void retryAudio()}
+              />
+            ) : null}
             <ModuleListRow
               title="Move to My Notes"
               subtitle="Save a copy you can edit and organize"
@@ -635,6 +755,7 @@ export function NotetakerNoteDetailScreen() {
             Deleting removes this note from AI Notetaker. Notes moved to My Notes stay in your notebook.
           </CommSectionFooter>
         </ModuleScreen>
+        )}
       </View>
 
       <Modal visible={shareOpen} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShareOpen(false)}>
@@ -692,12 +813,15 @@ export function NotetakerNoteDetailScreen() {
       </Modal>
 
       <NotetakerSaveFlash visible={saveFlashVisible} />
+      <NotetakerProcessingOverlay visible={retrying} label={processingLabel} step={processingStep} />
     </>
   )
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
+  chatLayout: { flex: 1 },
+  chatSectionPad: { paddingHorizontal: 16 },
   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24, gap: 12 },
   backBtn: { padding: 8 },
   statusRow: {
@@ -726,7 +850,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     elevation: 1,
   },
-  segmentLabel: { fontWeight: "600" },
+  segmentLabel: { fontWeight: "600", textAlign: "center" },
   transcriptBox: {
     borderRadius: 12,
     padding: 14,

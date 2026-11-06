@@ -1,6 +1,7 @@
 import type { ReactNode } from "react"
 import { Platform, StyleSheet, View, type StyleProp, type ViewStyle } from "react-native"
 import { useAppThemeTokens } from "../../context/AppearanceProvider"
+import { searchDockReadableBorder, searchDockReadableWash } from "../../lib/glass-search-dock-veil"
 import { GlassSurface, useGlassChromeMode } from "./GlassSurface"
 
 /** Symmetric padding inside the glass pill. */
@@ -18,6 +19,10 @@ type Props = {
   /** `regular` + wash reduces compositor ghost text from the previous screen. */
   glassEffectStyle?: "clear" | "regular"
   frosted?: boolean
+  /** Denser frost for controls that sit over scrolling lists (search dock). */
+  readableFrost?: boolean
+  washColor?: string
+  borderColor?: string
 }
 
 /** Shared Liquid Glass capsule — search dock, message composer, etc. */
@@ -27,11 +32,27 @@ export function GlassFloatingPill({
   innerStyle,
   glassEffectStyle = "clear",
   frosted = false,
+  readableFrost = false,
+  washColor,
+  borderColor: borderColorOverride,
 }: Props) {
   const tokens = useAppThemeTokens()
   const { nativeLiquidGlass, backend } = useGlassChromeMode(tokens)
-  const borderColor = tokens.isDark ? "rgba(255, 255, 255, 0.16)" : "rgba(0, 0, 0, 0.08)"
-  const wash = tokens.isDark ? "rgba(28, 28, 30, 0.48)" : "rgba(255, 255, 255, 0.48)"
+  const borderColor =
+    borderColorOverride ??
+    (readableFrost
+      ? searchDockReadableBorder(tokens.isDark)
+      : tokens.isDark
+        ? "rgba(255, 255, 255, 0.16)"
+        : "rgba(0, 0, 0, 0.08)")
+  const wash =
+    washColor ??
+    (readableFrost
+      ? searchDockReadableWash(tokens.isDark)
+      : tokens.isDark
+        ? "rgba(28, 28, 30, 0.48)"
+        : "rgba(255, 255, 255, 0.48)")
+  const showWash = frosted || readableFrost
 
   return (
     <View
@@ -53,7 +74,7 @@ export function GlassFloatingPill({
           style={StyleSheet.absoluteFill}
         >
           <GlassSurface style={StyleSheet.absoluteFill} glassEffectStyle={glassEffectStyle} />
-          {frosted ? (
+          {showWash ? (
             <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: wash }]} />
           ) : null}
         </View>

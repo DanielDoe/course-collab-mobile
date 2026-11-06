@@ -9,6 +9,9 @@ export function extractApiErrorMessage(body: unknown, status: number, path?: str
     for (const key of ["error", "message"] as const) {
       const value = (body as Record<string, unknown>)[key]
       if (typeof value === "string" && value.trim() && !isHtmlPayload(value)) {
+        if (/cannot read propert|undefined is not|sqlstate|foreign key/i.test(value)) {
+          return `Request failed (${status})`
+        }
         return value
       }
     }

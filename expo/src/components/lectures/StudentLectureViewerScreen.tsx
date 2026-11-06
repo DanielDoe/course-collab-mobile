@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { ActivityIndicator, View } from "react-native"
+import { ActivityIndicator, StyleSheet, Text, View } from "react-native"
 import { useRouter } from "expo-router"
 import { ApiError } from "../../lib/api"
 import { fetchStudentLectureViewerData } from "../../lib/student-lecture-api"
+import { studentApi } from "../../lib/student-api"
+import { emitModuleRefresh } from "../../lib/notifications/notification-events"
 import { buildStudentAuthenticatedDeckSource } from "../../lib/lecture-deck-url"
 import {
   canOpenLectureDeckExternally,
@@ -12,6 +14,8 @@ import {
 import { useSession } from "../../context/SessionProvider"
 import type { StudentSession } from "../../lib/session"
 import { useThemedNative } from "../../context/AppearanceProvider"
+import { useNativeType } from "../../lib/themed-module-theme"
+import { AppAlert } from "../../lib/app-alert"
 import { LectureDeckPdfViewer } from "./LectureDeckPdfViewer"
 import { LectureSlidePreviewToolbar } from "./LectureSlidePreviewToolbar"
 import { StudentLectureCoraOverlay } from "./StudentLectureCoraOverlay"
@@ -20,6 +24,8 @@ import { FacultyEmptyState } from "../faculty/faculty-shared"
 import { lectureViewerRootStyle, lectureViewerWebHostStyle } from "./lecture-viewer-layout"
 import type { LectureSamplePracticeConfig, LectureWorkspaceConfig } from "../../lib/lecture-types"
 import type { StudentLectureDetail } from "../../lib/student-api"
+import { useLectureSlideProgressSync } from "../../hooks/useLectureSlideProgressSync"
+import { lectureDisplayTitle } from "./lecture-list-utils"
 
 type Props = {
   lectureId: number
@@ -48,6 +54,7 @@ export function StudentLectureViewerScreen({ lectureId, week }: Props) {
   const router = useRouter()
   const session = useStudentSession()
   const native = useThemedNative()
+  const type = useNativeType()
 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
@@ -57,6 +64,10 @@ export function StudentLectureViewerScreen({ lectureId, week }: Props) {
   const [deckUrl, setDeckUrl] = useState<string | null>(null)
   const [deckHeaders, setDeckHeaders] = useState<Record<string, string> | undefined>()
   const [toolsOpen, setToolsOpen] = useState(false)
+  const [downloading, setDownloading] = useState(false)
+  const [savingCompletion, setSavingCompletion] = useState(false)
+
+  const slideProgress = useLectureSlideProgressSync(session, lectureId)
 
   const load = useCallback(async () => {
     if (!session) return
@@ -83,7 +94,7 @@ export function StudentLectureViewerScreen({ lectureId, week }: Props) {
     load().finally(() => setLoading(false))
   }, [session, load])
 
-  const title = lecture?.title?.trim() || `Week ${week}`
+  const title = lecture ? lectureDisplayTitle(lecture, session?.courseCode) : `Week ${week}`
   const samplePracticeLabel = samplePractice?.button_label?.trim() || "Sample Practice"
   const workspaceLabel = resolveWorkspaceDisplayLabel(workspace, samplePracticeLabel)
   const samplePracticeCount = samplePractice?.questions.length ?? 0
@@ -93,13 +104,44 @@ export function StudentLectureViewerScreen({ lectureId, week }: Props) {
   const canDownload = Boolean(deckUrl && lecture?.allow_download !== false)
   const canOpenExternally = canOpenLectureDeckExternally(deckUrl)
 
+  const completed = lecture?.status === "completed"
+
   const deckRequestUri = useMemo(() => deckUrl, [deckUrl])
 
+  async function handleToggleCompleted() {
+    if (!session || !lecture || savingCompletion) return
+    const next = !completed
+    setSavingCompletion(true)
+    setLecture({ ...lecture, status: next ? "completed" : "in_progress" })
+    try {
+      const res = await studentApi.setLectureCompleted(session, lectureId, next)
+      setLecture((prev) => (prev ? { ...prev, status: res.status ?? prev.status } : prev))
+      // Keeps the lectures list and its completion filter in sync.
+      emitModuleRefresh("lectures")
+    } catch (err) {
+      setLecture((prev) => (prev ? { ...prev, status: lecture.status } : prev))
+      AppAlert.alert("Lecture", err instanceof ApiError ? err.message : "Could not update progress.")
+    } finally {
+      setSavingCompletion(false)
+    }
+  }
+
   async function handleDownload() {
-    if (!deckUrl || !session) return
-    const auth = await buildStudentAuthenticatedDeckSource(deckUrl, session)
-    if (!auth) return
-    await shareLectureDeckPdf(auth, title)
+    if (!deckUrl || !session || downloading) return
+    // The tools sheet closes before this runs, so the viewer owns the progress cue.
+    setDownloading(true)
+    try {
+      const auth = await buildStudentAuthenticatedDeckSource(deckUrl, session)
+      if (!auth) {
+        AppAlert.alert("Slides", "Could not prepare this deck for download.")
+        return
+      }
+      await shareLectureDeckPdf(auth, title)
+    } catch (err) {
+      AppAlert.alert("Slides", err instanceof ApiError ? err.message : "Could not download the slides.")
+    } finally {
+      setDownloading(false)
+    }
   }
 
   if (!session) {
@@ -133,6 +175,9 @@ export function StudentLectureViewerScreen({ lectureId, week }: Props) {
             deckUrl={deckRequestUri}
             headers={deckHeaders}
             cacheKey={`student-lecture-${lectureId}`}
+            initialPage={slideProgress.progressHydrated ? slideProgress.initialPage : 1}
+            onDocumentLoaded={slideProgress.onDocumentLoaded}
+            onPageChange={slideProgress.onPageChange}
           />
           <StudentLectureCoraOverlay
             session={session}
@@ -155,6 +200,8 @@ export function StudentLectureViewerScreen({ lectureId, week }: Props) {
         showWorkspace={showWorkspace}
         canDownload={canDownload}
         canOpenExternally={canOpenExternally}
+        completed={completed}
+        onToggleCompleted={() => void handleToggleCompleted()}
         onOpenSamplePractice={() =>
           router.push({
             pathname: "/lecture/[week]/sample-practice",
@@ -170,6 +217,32 @@ export function StudentLectureViewerScreen({ lectureId, week }: Props) {
         onDownloadSlides={() => void handleDownload()}
         onOpenExternally={() => void openLectureDeckExternally(deckUrl)}
       />
+
+      {downloading ? (
+        <View style={styles.downloadOverlay} pointerEvents="auto">
+          <View style={[styles.downloadCard, { backgroundColor: native.secondaryGrouped }]}>
+            <ActivityIndicator color={native.label} />
+            <Text style={[type.secondary, { color: native.label }]}>Preparing slides…</Text>
+          </View>
+        </View>
+      ) : null}
     </View>
   )
 }
+
+const styles = StyleSheet.create({
+  downloadOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,0.25)",
+  },
+  downloadCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    borderRadius: 14,
+  },
+})

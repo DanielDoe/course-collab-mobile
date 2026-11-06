@@ -1,0 +1,90 @@
+appId: com.coursecollab.app
+---
+- tapOn:
+    text: "OK"
+    optional: true
+- tapOn: "Question 4"
+- extendedWaitUntil:
+    visible: "4/12"
+    timeout: 8000
+- tapOn: "Option A"
+- waitForAnimationToEnd:
+    timeout: 400
+- tapOn: "Submit answer"
+- tapOn:
+    text: "OK"
+    optional: true
+- tapOn: "Question 5"
+- extendedWaitUntil:
+    visible: "5/12"
+    timeout: 12000
+- tapOn: "Option D"
+- waitForAnimationToEnd:
+    timeout: 400
+- tapOn: "Submit answer"
+- tapOn: "Question 6"
+- extendedWaitUntil:
+    visible: "6/12"
+    timeout: 12000
+- tapOn: "Option A"
+- waitForAnimationToEnd:
+    timeout: 400
+- tapOn: "Submit answer"
+- tapOn: "Question 7"
+- extendedWaitUntil:
+    visible: "7/12"
+    timeout: 12000
+- tapOn: "Option A"
+- waitForAnimationToEnd:
+    timeout: 400
+- tapOn: "Submit answer"
+- tapOn: "Question 8"
+- extendedWaitUntil:
+    visible: "8/12"
+    timeout: 12000
+- tapOn: "Option A"
+- waitForAnimationToEnd:
+    timeout: 400
+- tapOn: "Submit answer"
+- tapOn: "Question 9"
+- extendedWaitUntil:
+    visible: "9/12"
+    timeout: 12000
+- tapOn: "Option A"
+- waitForAnimationToEnd:
+    timeout: 400
+- tapOn: "Submit answer"
+- tapOn: "Question 10"
+- extendedWaitUntil:
+    visible: "Select all that apply, then submit."
+    timeout: 12000
+- takeScreenshot: ac-q10-checkboxes
+- tapOn: "A. 960 W"
+- tapOn: "B. P = V_rms I_rms cos(36.87°) = 120 × 10 × cos(36.87°)"
+- tapOn: "Submit answer"
+- tapOn: "Question 11"
+- extendedWaitUntil:
+    visible: "11/12"
+    timeout: 15000
+- takeScreenshot: ac-q11-checkboxes
+- tapOn: "A. The reactive power is approximately +1.44 kVAR."
+- tapOn: "C. The load absorbs reactive power, indicating an inductive load."
+- tapOn: "E. The reactive power is 1440 VAR."
+- tapOn: "Submit answer"
+- tapOn: "Question 12"
+- extendedWaitUntil:
+    visible: "12/12"
+    timeout: 15000
+- takeScreenshot: ac-q12-checkboxes
+- tapOn: "A. The apparent power is 6.0 kVA."
+- tapOn: "C. The power factor is 0.80 lagging."
+- tapOn: "Submit answer"
+- extendedWaitUntil:
+    visible: "Finish practice"
+    timeout: 15000
+- takeScreenshot: ac-ready-finish
+- tapOn: "Finish practice"
+- extendedWaitUntil:
+    visible: "Finish practice|Practice complete|Score|AC Power"
+    timeout: 20000
+- takeScreenshot: ac-results

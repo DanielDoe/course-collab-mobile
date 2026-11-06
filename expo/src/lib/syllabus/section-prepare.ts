@@ -30,6 +30,14 @@ function mergeExamScheduleIntoAssessments(sections: SyllabusSection[]): Syllabus
     })
 }
 
+/** Instructor has not published a syllabus — not a load failure. */
+export function isUnpublishedSyllabusMessage(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err ?? "")
+  return /not yet published|not been published|hasn't been published|has not been published|no syllabus/i.test(
+    message,
+  )
+}
+
 /** Normalize any course syllabus for student display (merge, filter, sort). */
 export function prepareStudentSyllabusSections(sections: SyllabusSection[]): SyllabusSection[] {
   return mergeExamScheduleIntoAssessments(sections)

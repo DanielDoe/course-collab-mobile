@@ -1,13 +1,14 @@
 import { Component, useEffect, type ErrorInfo, type ReactNode } from "react"
-import * as SplashScreen from "expo-splash-screen"
 import { Stack } from "expo-router"
 import { StyleSheet, Text, View } from "react-native"
 import { FullRootProviders } from "../src/components/root/FullRootProviders"
+import { SessionProvider } from "../src/context/SessionProvider"
 import { bootLog } from "../src/lib/boot-diagnostics"
+import { hideAppSplashFireAndForget, initAppSplash, scheduleSplashHideFallback } from "../src/lib/app-splash"
+import { startEasUpdateListener } from "../src/lib/eas-update"
 
 bootLog("Root layout module evaluated")
-
-const BOOT_BG = "#582c83"
+void initAppSplash()
 
 type BootErrorState = { error: Error | null }
 
@@ -39,39 +40,40 @@ class BootErrorBoundary extends Component<{ children: ReactNode }, BootErrorStat
   }
 }
 
-try {
-  void SplashScreen.preventAutoHideAsync()
-} catch {
-  /* ignore */
-}
-
 export default function RootLayout() {
   useEffect(() => {
-    globalThis.__CC_ROOT_LAYOUT_MOUNTED__ = true
     bootLog("RootLayout mounted")
+    globalThis.__CC_ROOT_LAYOUT_MOUNTED__ = true
+    hideAppSplashFireAndForget()
+    const cancelFallback = scheduleSplashHideFallback(600)
+    const stopUpdates = startEasUpdateListener()
+    return () => {
+      cancelFallback()
+      stopUpdates()
+    }
   }, [])
 
   return (
-    <View style={styles.boot}>
-      <BootErrorBoundary>
-        <FullRootProviders>
-          <Stack
-            screenOptions={{
-              headerShown: false,
-              animation: "none",
-              contentStyle: { backgroundColor: BOOT_BG },
-            }}
-          />
-        </FullRootProviders>
-      </BootErrorBoundary>
-    </View>
+    <SessionProvider>
+      <View style={styles.boot}>
+        <BootErrorBoundary>
+          <FullRootProviders>
+            <Stack
+              screenOptions={{
+                headerShown: false,
+                animation: "none",
+              }}
+            />
+          </FullRootProviders>
+        </BootErrorBoundary>
+      </View>
+    </SessionProvider>
   )
 }
 
 const styles = StyleSheet.create({
   boot: {
     flex: 1,
-    backgroundColor: BOOT_BG,
   },
   brand: {
     marginTop: 72,

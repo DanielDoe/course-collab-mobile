@@ -38,7 +38,7 @@ export function facultyCourseRowSemesterVisible(
 ) {
   return Boolean(
     course.semester &&
-      (duplicateCodes.has(course.course_code) ||
+      (duplicateCodes.has(course.picker_key ?? String(course.id)) ||
         courses.length > 1 ||
         course.is_active_term === false),
   )

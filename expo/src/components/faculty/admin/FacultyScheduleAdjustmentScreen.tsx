@@ -9,9 +9,10 @@ import {
   View,
 } from "react-native"
 import { Ionicons } from "@/components/icons/AppIcon"
+import { useLocalSearchParams, useRouter } from "expo-router"
 import { AppAlert } from "../../../lib/app-alert"
 import { ApiError } from "../../../lib/api"
-import { useFacultyModuleHeader, useFacultyModuleNestedHeader } from "../../../context/FacultyModuleHeaderContext"
+import { useFacultyModuleNestedHeader } from "../../../context/FacultyModuleHeaderContext"
 import { useFacultyScope } from "../../../hooks/useFacultyScope"
 import {
   instructorScheduleAdjustmentApi,
@@ -34,6 +35,9 @@ import {
   initialScheduleAdjustmentForm,
   type ScheduleAdjustmentFormState,
 } from "../../../lib/schedule-adjustment/form-utils"
+import {
+  filterScheduleAdjustmentsToSection,
+} from "../../../lib/schedule-adjustment/section-scope"
 import { ScheduleAdjustmentStepper } from "../../schedule-adjustment/ScheduleAdjustmentStepper"
 import { ScheduleAdjustmentNoticeBanner } from "../../schedule-adjustment/ScheduleAdjustmentNoticeBanner"
 import { MobileAvailabilityPicker } from "../../schedule-adjustment/MobileAvailabilityPicker"
@@ -52,6 +56,11 @@ import { FACULTY_ADMIN_COLOR } from "../../../lib/faculty-admin-theme"
 import { NATIVE } from "../../../constants/faculty-native-theme"
 import { FacultyEmptyState } from "../faculty-shared"
 import { FacultyFilterSheet, FacultySearchToolbar } from "../faculty-module-shell"
+import { useFacultyListPager } from "../../../hooks/useFacultyListPager"
+import { FacultyListPagerFooter } from "../FacultyListPagerFooter"
+import { getQueryClient } from "../../../lib/query/client"
+import { facultyQueryScopeFromInstructor, invalidateByAction } from "../../../lib/query"
+import { emitModuleRefresh } from "../../../lib/notifications/notification-events"
 
 const TIME_OPTIONS = Array.from({ length: 29 }, (_, i) => {
   const minutes = 7 * 60 + i * 30
@@ -269,6 +278,12 @@ function ScheduleAdjustmentFormFields({
 
 function FacultyScheduleAdjustmentContent() {
   const { scope } = useFacultyScope()
+  const router = useRouter()
+  const { requestId: requestIdParam, from: fromParam } = useLocalSearchParams<{
+    requestId?: string
+    from?: string
+  }>()
+  const fromCalendar = (Array.isArray(fromParam) ? fromParam[0] : fromParam) === "calendar"
   const native = useThemedNative()
   const type = useNativeType()
   const [requests, setRequests] = useState<InstructorScheduleRequest[]>([])
@@ -285,6 +300,12 @@ function FacultyScheduleAdjustmentContent() {
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState("")
   const [cancelReason, setCancelReason] = useState("")
+
+  useEffect(() => {
+    const raw = Array.isArray(requestIdParam) ? requestIdParam[0] : requestIdParam
+    const parsed = Number(raw)
+    if (Number.isFinite(parsed) && parsed > 0) setSelectedId(parsed)
+  }, [requestIdParam])
 
   const [form, setForm] = useState<ScheduleAdjustmentFormState>(initialScheduleAdjustmentForm)
 
@@ -333,6 +354,22 @@ function FacultyScheduleAdjustmentContent() {
       .finally(() => setLoading(false))
   }, [loadList])
 
+  const sectionRequests = useMemo(
+    () => filterScheduleAdjustmentsToSection(requests, scope?.sessionCode),
+    [requests, scope?.sessionCode],
+  )
+
+  useEffect(() => {
+    if (!scope?.sessionCode || !selectedId || selectedId <= 0) return
+    const active = sectionRequests.some((row) => row.id === selectedId)
+    if (!active) {
+      setSelectedId(null)
+      setDetail(null)
+      setCandidates([])
+      setLiveAggregate(null)
+    }
+  }, [scope?.sessionCode, sectionRequests, selectedId])
+
   useEffect(() => {
     const req = detail?.request
     if (!req || req.status !== "DRAFT") return
@@ -359,6 +396,14 @@ function FacultyScheduleAdjustmentContent() {
       AppAlert.alert("Saved", "Workflow updated.")
       await loadDetail(selectedId)
       await loadList()
+      if (body.action === "finalize") {
+        invalidateByAction(
+          getQueryClient(),
+          facultyQueryScopeFromInstructor(scope),
+          "faculty.scheduleAdjustment.finalize",
+        )
+        emitModuleRefresh(["calendar", "schedule-adjustment"])
+      }
     } catch (err) {
       AppAlert.alert("Error", err instanceof ApiError ? err.message : "Action failed.")
     } finally {
@@ -386,7 +431,10 @@ function FacultyScheduleAdjustmentContent() {
     if (!scope || !validateForm()) return
     setCreating(true)
     try {
-      const data = await instructorScheduleAdjustmentApi.create(scope, draftPayloadFromForm(form))
+      const data = await instructorScheduleAdjustmentApi.create(scope, {
+        ...draftPayloadFromForm(form),
+        ...(scope.sessionId ? { sectionId: scope.sessionId } : {}),
+      })
       const id = data.request?.id
       AppAlert.alert("Draft saved", "Start the poll when you are ready.")
       setForm(initialScheduleAdjustmentForm)
@@ -451,28 +499,36 @@ function FacultyScheduleAdjustmentContent() {
   const consent = detail?.consent
   const enrollmentDelta = detail?.enrollmentDelta
 
-  const { setNestedHeader } = useFacultyModuleHeader()
   const goToAllRequests = useCallback(() => {
-    setNestedHeader(null)
     setSelectedId(null)
     setDetail(null)
     setCandidates([])
     setLiveAggregate(null)
     setForm(initialScheduleAdjustmentForm)
-  }, [setNestedHeader])
+  }, [])
+
+  const onNestedBack = useCallback(() => {
+    if (selectedId != null) {
+      goToAllRequests()
+      return
+    }
+    if (fromCalendar) {
+      router.back()
+    }
+  }, [fromCalendar, goToAllRequests, router, selectedId])
 
   useFacultyModuleNestedHeader({
-    active: selectedId != null,
+    active: fromCalendar || selectedId != null,
     title: "Schedule Adjustment",
-    onBack: goToAllRequests,
+    onBack: onNestedBack,
   })
 
   const showingDetail = Boolean(selectedId && selectedId > 0 && request)
   const showingList = !showingDetail && selectedId !== -1
   const filteredRequests = useMemo(() => {
     const q = search.trim().toLowerCase()
-    if (!q) return requests
-    return requests.filter((r) => {
+    if (!q) return sectionRequests
+    return sectionRequests.filter((r) => {
       const hay = [
         r.section_code,
         r.meeting_type,
@@ -485,7 +541,12 @@ function FacultyScheduleAdjustmentContent() {
         .toLowerCase()
       return hay.includes(q)
     })
-  }, [requests, search])
+  }, [sectionRequests, search])
+  const requestPager = useFacultyListPager(
+    filteredRequests,
+    `${search}:${showArchived}`,
+    "requests",
+  )
   const cancellable =
     request &&
     !["COMPLETED", "FINALIZED", "CANCELLED"].includes(request.status) &&
@@ -508,6 +569,7 @@ function FacultyScheduleAdjustmentContent() {
       refreshing={refreshing}
       error={showingDetail ? null : error || null}
       onRefresh={onRefresh}
+      suppressSearchDock={false}
     >
       {showingDetail && request ? (
         <>
@@ -842,7 +904,7 @@ function FacultyScheduleAdjustmentContent() {
               />
             ) : (
               <View style={[styles.requestList, { backgroundColor: native.secondaryGrouped }]}>
-                {filteredRequests.map((r, index) => (
+                {requestPager.items.map((r, index) => (
                   <Pressable
                     key={r.id}
                     onPress={() => void loadDetail(r.id)}
@@ -853,7 +915,7 @@ function FacultyScheduleAdjustmentContent() {
                     style={({ pressed }) => [
                       styles.listRow,
                       { borderBottomColor: native.separator },
-                      index === filteredRequests.length - 1 && styles.listRowLast,
+                      index === requestPager.items.length - 1 && styles.listRowLast,
                       pressed && { opacity: NATIVE.pressedOpacity },
                     ]}
                   >
@@ -870,6 +932,7 @@ function FacultyScheduleAdjustmentContent() {
                     <Ionicons name="chevron-forward" size={16} color={native.tertiaryLabel} />
                   </Pressable>
                 ))}
+                <FacultyListPagerFooter pager={requestPager} />
               </View>
             )}
           </View>

@@ -6,6 +6,7 @@ import { useNativeType, semanticSoft } from "../../../lib/themed-module-theme"
 import type { GuestEntitlements } from "../../../lib/guest-types"
 import { guestCreditsCap, guestCreditsUsedFraction } from "../../../lib/guest-dashboard-utils"
 import { NATIVE } from "../../../constants/faculty-native-theme"
+import { shouldShowPurchaseCta } from "../../../lib/purchase-navigation"
 
 type Props = {
   entitlements: GuestEntitlements
@@ -22,6 +23,7 @@ export function GuestDashboardCreditsPanel({ entitlements }: Props) {
   const usedFraction = guestCreditsUsedFraction(entitlements)
   const planLabel = entitlements.plan === "cora_career" ? "Cora Career" : "Career Member Free"
   const isLow = entitlements.coraCredits.isLow
+  const showPurchaseActions = shouldShowPurchaseCta()
 
   return (
     <View style={[styles.card, tokens.cardShadow, { backgroundColor: native.secondaryGrouped, borderColor: native.separator }]}>
@@ -65,13 +67,15 @@ export function GuestDashboardCreditsPanel({ entitlements }: Props) {
           <Ionicons name="chatbubbles-outline" size={16} color={tokens.accent} />
           <Text style={[type.caption, { color: tokens.accentDark, fontWeight: "700" }]}>Assistant</Text>
         </Pressable>
-        <Pressable
-          style={[styles.actionBtn, { backgroundColor: native.fill, borderColor: native.separator }]}
-          onPress={() => router.push("/module/cora-credits" as never)}
-        >
-          <Ionicons name="wallet-outline" size={16} color={native.label} />
-          <Text style={[type.caption, { color: native.label, fontWeight: "700" }]}>Buy credits</Text>
-        </Pressable>
+        {showPurchaseActions ? (
+          <Pressable
+            style={[styles.actionBtn, { backgroundColor: native.fill, borderColor: native.separator }]}
+            onPress={() => router.push("/module/cora-credits" as never)}
+          >
+            <Ionicons name="wallet-outline" size={16} color={native.label} />
+            <Text style={[type.caption, { color: native.label, fontWeight: "700" }]}>Buy credits</Text>
+          </Pressable>
+        ) : null}
       </View>
     </View>
   )

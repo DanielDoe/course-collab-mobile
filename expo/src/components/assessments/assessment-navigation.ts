@@ -1,4 +1,8 @@
 import { useRouter } from "expo-router"
+import { navigationKeyFromHref, shouldAcceptNavigation } from "../../lib/motion"
+import { resolveCompletedHistoryAttemptId } from "../../lib/assessment-history-map"
+import { assessmentReportHref, assessmentReportRouteParams } from "../../lib/assessment-report-href"
+import { assessmentTakeHref } from "../../lib/route-params"
 import type { AssessmentListKind } from "./assessment-config"
 import type { AssessmentTakeAction } from "../../constants/module-web-paths"
 
@@ -46,13 +50,9 @@ export function tryOpenNativeAssessmentResultsFromUrl(
   const parsed = parseAssessmentResultsWebPath(url)
   if (!parsed) return false
 
-  router.replace({
-    pathname: "/assessment/report/[attemptId]",
-    params: {
-      attemptId: String(parsed.attemptId),
-      ...(parsed.assessmentType ? { type: parsed.assessmentType } : {}),
-    },
-  } as never)
+  router.replace(
+    assessmentReportHref(parsed.attemptId, parsed.assessmentType) as never,
+  )
   return true
 }
 
@@ -114,9 +114,12 @@ export function openAssessmentDetail(
   itemAssessmentType?: string,
 ) {
   const type = resolveAssessmentType(kind, itemAssessmentType)
-  router.push({
+  const dest = {
     pathname: "/assessment/[id]",
-    params: { id: String(quizId), type }} as never)
+    params: { id: String(quizId), type },
+  }
+  if (!shouldAcceptNavigation(navigationKeyFromHref(dest))) return
+  router.push(dest as never)
 }
 
 export function openAssessmentTake(
@@ -125,22 +128,22 @@ export function openAssessmentTake(
   quizId: number,
   action: AssessmentTakeAction = "start",
 ) {
-  router.push({
-    pathname: "/assessment/take/[id]",
-    params: { id: String(quizId), type: assessmentType, action },
-  } as never)
+  const dest = assessmentTakeHref(quizId, assessmentType, action)
+  if (!shouldAcceptNavigation(navigationKeyFromHref(dest))) return
+  router.push(dest as never)
 }
+
+export { assessmentReportHref } from "../../lib/assessment-report-href"
 
 export function openAssessmentResults(
   router: ReturnType<typeof useRouter>,
   attemptId: number,
   assessmentType?: string,
+  from?: string,
 ) {
-  router.push({
-    pathname: "/assessment/report/[attemptId]",
-    params: {
-      attemptId: String(attemptId),
-      ...(assessmentType ? { type: assessmentType } : {})}} as never)
+  const dest = assessmentReportRouteParams(attemptId, assessmentType, from)
+  if (!shouldAcceptNavigation(assessmentReportHref(attemptId, assessmentType, from))) return
+  router.push(dest as never)
 }
 
 /** @deprecated Use openAssessmentDetail from list cards; take opens from detail actions. */
@@ -162,20 +165,13 @@ export function openHistoryItem(
     attempts?: { id: number; completed_at?: string | null; is_completed?: boolean; percentage?: number }[]
   },
 ) {
-  const attempts = item.attempts ?? []
-  const latestCompleted = attempts
-    .filter((a) => a.is_completed || a.completed_at)
-    .sort((a, b) => {
-      const ta = a.completed_at ? new Date(a.completed_at).getTime() : 0
-      const tb = b.completed_at ? new Date(b.completed_at).getTime() : 0
-      return tb - ta
-    })[0]
-
-  if (latestCompleted?.id) {
-    openAssessmentResults(router, latestCompleted.id, item.assessment_type)
+  const completedAttemptId = resolveCompletedHistoryAttemptId(item)
+  if (completedAttemptId != null) {
+    openAssessmentResults(router, completedAttemptId, item.assessment_type, "quiz-history")
     return
   }
 
+  const attempts = item.attempts ?? []
   const status = (item.status ?? "").toLowerCase()
   const inProgress =
     status.includes("progress") ||

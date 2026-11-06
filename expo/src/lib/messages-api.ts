@@ -14,6 +14,52 @@ import {
 import { studentAuthenticatedHeaders, studentAuthenticatedRequest } from "./student-api"
 import { mergeCookieHeaders, persistHttpCookiesFromResponse, studentHttpCookieHeader } from "./student-http-cookies"
 import { headersHaveStudentSessionProof, STUDENT_REFRESH_HEADER } from "./student-session-proof"
+import { getStoredRefreshToken } from "./refresh-token-store"
+import {
+  inferMessageAttachmentMime,
+  isPersistedMessageAttachmentUrl,
+} from "./messages-media"
+import {
+  cacheDirectory,
+  copyAsync,
+  FileSystemUploadType,
+  uploadAsync,
+} from "expo-file-system/legacy"
+
+const MESSAGE_UPLOAD_TIMEOUT_MS = 90_000
+
+function safeUploadFileName(name: string): string {
+  return name.replace(/[^a-zA-Z0-9._-]+/g, "_").slice(0, 120) || `photo-${Date.now()}.jpg`
+}
+
+/** Copy picker/asset URIs into a stable cache file:// path for multipart upload. */
+async function localFileUriForUpload(uri: string, fileName: string): Promise<string> {
+  const base = cacheDirectory
+  if (!base) return uri
+  const dest = `${base}messages-upload-${Date.now()}-${safeUploadFileName(fileName)}`
+  if (uri === dest) return uri
+  try {
+    await copyAsync({ from: uri, to: dest })
+    return dest
+  } catch {
+    // Some file:// URIs are already readable by uploadAsync.
+    return uri
+  }
+}
+
+function uploadFailureMessage(err: unknown): string {
+  if (err instanceof ApiError) return err.message
+  const name = err instanceof Error ? err.name : ""
+  const message = err instanceof Error ? err.message : String(err ?? "")
+  if (name === "AbortError" || /aborted|timed out|timeout/i.test(message)) {
+    return "Upload timed out. Try a smaller photo or check your connection."
+  }
+  if (/network request failed|failed to fetch|network error/i.test(message)) {
+    return "Network error while uploading. Check your connection and try again."
+  }
+  if (message.trim()) return message
+  return "Could not upload file."
+}
 
 export type ParticipantKind = "student" | "instructor"
 
@@ -91,6 +137,12 @@ export type MessageAttachmentDraft = {
   fileUrl: string
   mimeType?: string | null
   fileSize?: number | null
+  /** Local file:// URI for composer thumbnail while / after upload. */
+  localPreviewUri?: string | null
+  /** Client-only upload lifecycle for the composer strip. */
+  uploadState?: "uploading" | "ready" | "error"
+  /** Stable key for in-flight uploads before fileUrl exists. */
+  localKey?: string
 }
 
 export type MessageProfileField = {
@@ -111,12 +163,20 @@ export type MessageParticipantProfile = {
 }
 
 export type MessagesAuth =
-  | { kind: "student"; databaseId: string }
+  | { kind: "student"; databaseId: string; courseId?: number | null; section?: string | null }
   | { kind: "instructor"; instructorId: number }
 
 export function messagesAuthFromSession(session: AppSession | null): MessagesAuth | null {
   if (!session) return null
-  if (session.portal === "student" || session.portal === "guest" || session.portal === "summer") {
+  if (session.portal === "student") {
+    return {
+      kind: "student",
+      databaseId: session.databaseId,
+      courseId: session.courseId,
+      section: session.section,
+    }
+  }
+  if (session.portal === "guest" || session.portal === "summer") {
     return { kind: "student", databaseId: session.databaseId }
   }
   if (session.portal === "faculty") {
@@ -126,8 +186,55 @@ export function messagesAuthFromSession(session: AppSession | null): MessagesAut
 }
 
 export function resolveAttachmentUrl(fileUrl: string): string {
+  if (!fileUrl) return ""
   if (fileUrl.startsWith("http://") || fileUrl.startsWith("https://")) return fileUrl
   return `${getApiBaseUrl()}${fileUrl.startsWith("/") ? fileUrl : `/${fileUrl}`}`
+}
+
+function normalizeAttachment(raw: unknown): MessageAttachment | null {
+  if (!raw || typeof raw !== "object") return null
+  const row = raw as Record<string, unknown>
+  const id = Number(row.id)
+  const fileUrl = String(row.fileUrl ?? row.file_url ?? "").trim()
+  const fileName = String(row.fileName ?? row.file_name ?? "").trim() || "Attachment"
+  if (!fileUrl) return null
+  // Tolerate missing/stringy ids from older API payloads; prefer a stable positive id when present.
+  const resolvedId =
+    Number.isFinite(id) && id > 0
+      ? id
+      : Math.abs(
+          Array.from(fileUrl).reduce((hash, ch) => (hash * 31 + ch.charCodeAt(0)) | 0, 0),
+        ) || 1
+  return {
+    id: resolvedId,
+    fileName,
+    fileUrl,
+    mimeType: row.mimeType != null ? String(row.mimeType) : row.mime_type != null ? String(row.mime_type) : null,
+    fileSize:
+      row.fileSize != null
+        ? Number(row.fileSize)
+        : row.file_size != null
+          ? Number(row.file_size)
+          : null,
+  }
+}
+
+function normalizeThreadMessage(raw: ThreadMessage): ThreadMessage {
+  const attachments = Array.isArray(raw.attachments)
+    ? raw.attachments.map(normalizeAttachment).filter((a): a is MessageAttachment => a != null)
+    : []
+  return {
+    ...raw,
+    body: raw.body == null ? "" : String(raw.body),
+    attachments,
+  }
+}
+
+function normalizeThreadDetail(thread: ThreadDetail): ThreadDetail {
+  return {
+    ...thread,
+    messages: (thread.messages ?? []).map(normalizeThreadMessage),
+  }
 }
 
 function refreshTokenFromCookieHeader(cookie: string | undefined): string | undefined {
@@ -164,7 +271,10 @@ async function instructorAuthenticatedHeaders(
   const trust = await mfaTrustRequestHeadersForInstructor(faculty)
   Object.assign(headers, mergeCookieHeaders(trust.Cookie, jarCookie))
   const refresh =
-    refreshTokenFromCookieHeader(jarCookie) ?? refreshTokenFromCookieHeader(trust.Cookie)
+    refreshTokenFromCookieHeader(jarCookie) ??
+    refreshTokenFromCookieHeader(trust.Cookie) ??
+    (await getStoredRefreshToken()) ??
+    undefined
   if (refresh) headers[STUDENT_REFRESH_HEADER] = refresh
   if (!headersHaveStudentSessionProof(headers)) {
     throw new ApiError("Instructor authentication required", 401)
@@ -248,7 +358,11 @@ export const messagesApi = {
   },
 
   getThread(auth: MessagesAuth, threadId: number) {
-    return messagesRequest<{ thread: ThreadDetail }>(auth, `/api/messages/threads/${threadId}`)
+    return messagesRequest<{ thread: ThreadDetail }>(auth, `/api/messages/threads/${threadId}`).then(
+      (data) => ({
+        thread: normalizeThreadDetail(data.thread),
+      }),
+    )
   },
 
   getParticipantProfile(auth: MessagesAuth, kind: ParticipantKind, participantId: number) {
@@ -295,7 +409,10 @@ export const messagesApi = {
         method: "POST",
         body: JSON.stringify(payload),
       },
-    )
+    ).then((data) => ({
+      ...data,
+      thread: data.thread ? normalizeThreadDetail(data.thread) : undefined,
+    }))
   },
 
   toggleReaction(auth: MessagesAuth, threadId: number, messageId: number, emoji: string) {
@@ -345,7 +462,9 @@ export const messagesApi = {
         method: "PATCH",
         body: JSON.stringify({ body }),
       },
-    )
+    ).then((data) => ({
+      message: normalizeThreadMessage(data.message),
+    }))
   },
 
   async uploadAttachment(
@@ -353,14 +472,8 @@ export const messagesApi = {
     file: { uri: string; name: string; mimeType: string },
   ): Promise<MessageAttachmentDraft> {
     const url = `${getApiBaseUrl()}/api/messages/attachments`
-    const formData = new FormData()
-    formData.append("file", {
-      uri: file.uri,
-      name: file.name,
-      type: file.mimeType,
-    } as unknown as Blob)
-
     assertProductionHttpsUrl(url)
+
     let headers: Record<string, string>
     if (auth.kind === "student") {
       const stored = await getStoredSession()
@@ -369,26 +482,94 @@ export const messagesApi = {
         throw new ApiError("Student authentication required", 401)
       }
       headers = await studentAuthenticatedHeaders(session)
-      delete headers["Content-Type"]
     } else {
       headers = await instructorAuthenticatedHeaders(auth)
-      delete headers["Content-Type"]
+    }
+    delete headers["Content-Type"]
+    headers.Accept = "application/json"
+
+    const localUri = await localFileUriForUpload(file.uri, file.name)
+    let body: unknown = null
+    let status = 0
+
+    try {
+      // Native multipart is more reliable than RN FormData+fetch for photo library URIs.
+      const result = await uploadAsync(url, localUri, {
+        httpMethod: "POST",
+        uploadType: FileSystemUploadType.MULTIPART,
+        fieldName: "file",
+        mimeType: file.mimeType,
+        headers,
+      })
+      status = result.status
+      if (result.body) {
+        try {
+          body = JSON.parse(result.body)
+        } catch {
+          body = { error: result.body }
+        }
+      }
+    } catch (uploadErr) {
+      const formData = new FormData()
+      formData.append("file", {
+        uri: localUri,
+        name: file.name,
+        type: file.mimeType,
+      } as unknown as Blob)
+      try {
+        const response = await fetch(url, {
+          method: "POST",
+          credentials: "include",
+          headers,
+          body: formData,
+          signal: createApiAbortSignal(MESSAGE_UPLOAD_TIMEOUT_MS),
+        })
+        status = response.status
+        body = await parseJsonResponse(response)
+        await persistHttpCookiesFromResponse(url, response.headers)
+      } catch (fetchErr) {
+        throw new ApiError(uploadFailureMessage(fetchErr ?? uploadErr), 0)
+      }
     }
 
-    const response = await fetch(url, {
-      method: "POST",
-      credentials: "include",
-      headers,
-      body: formData,
-      signal: createApiAbortSignal(),
-    })
-    const body = await parseJsonResponse(response)
-    if (!response.ok) {
-      throw new ApiError(errorMessage(body, response.status), response.status, body)
+    if (!(status >= 200 && status < 300)) {
+      throw new ApiError(errorMessage(body, status || 500), status || 500, body)
     }
-    await persistHttpCookiesFromResponse(url, response.headers)
-    return body as MessageAttachmentDraft
+    const draft = normalizeAttachmentDraft(body, file)
+    if (!draft) {
+      throw new ApiError("Upload did not return a usable file URL. Try again.", 502, body)
+    }
+    return draft
   },
+}
+
+function normalizeAttachmentDraft(
+  body: unknown,
+  file: { name: string; mimeType: string },
+): MessageAttachmentDraft | null {
+  if (!body || typeof body !== "object") return null
+  const row = body as Record<string, unknown>
+  const fileUrl = String(row.fileUrl ?? row.file_url ?? "").trim()
+  if (!isPersistedMessageAttachmentUrl(fileUrl)) return null
+  const fileName = String(row.fileName ?? row.file_name ?? "").trim() || file.name
+  const mimeRaw =
+    row.mimeType != null
+      ? String(row.mimeType)
+      : row.mime_type != null
+        ? String(row.mime_type)
+        : file.mimeType
+  const fileSize =
+    row.fileSize != null
+      ? Number(row.fileSize)
+      : row.file_size != null
+        ? Number(row.file_size)
+        : null
+  return {
+    fileName,
+    fileUrl,
+    mimeType: inferMessageAttachmentMime(fileName, mimeRaw, fileUrl),
+    fileSize: Number.isFinite(fileSize) ? fileSize : null,
+  }
 }
 
 export type MessagesSession = StudentSession | GuestSession | SummerSession | FacultySession

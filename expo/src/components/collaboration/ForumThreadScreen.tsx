@@ -1,10 +1,18 @@
-import { useCallback, useEffect, useState } from "react"
-import { ActivityIndicator, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react"
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  Share,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native"
 import { AppAlert } from '../../lib/app-alert'
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useLocalSearchParams } from "expo-router"
 import { useModuleScrollContentPadding } from "../../context/ChromeInsetContext"
-import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { useSession } from "../../context/SessionProvider"
 import { useNotificationModuleRefresh } from "../../lib/notifications/notification-events"
 import { ApiError } from "../../lib/student-api"
@@ -23,7 +31,8 @@ import { ComposerSendButton } from "../theme/ComposerSendButton"
 import { CommGroupedList, CommSectionFooter } from "../faculty/faculty-communication-ui"
 import { FacultyStatusPill } from "../faculty/faculty-shared"
 import { ModuleSectionHeader } from "../modules/ModuleScreen"
-import { CollabScreenTitle } from "./collab-nav"
+import { CollabFlowHeader } from "./collab-nav"
+import { ChatKeyboardShell } from "../motion/ChatKeyboardShell"
 
 function useStudentSession(): StudentSession | null {
   const { session } = useSession()
@@ -77,7 +86,6 @@ export function ForumThreadScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
   const threadId = Number(id)
   const session = useStudentSession()
-  const insets = useSafeAreaInsets()
   const scrollPad = useModuleScrollContentPadding(100)
   const native = useThemedNative()
   const type = useNativeType()
@@ -88,6 +96,11 @@ export function ForumThreadScreen() {
   const [error, setError] = useState("")
   const [replyText, setReplyText] = useState("")
   const [submitting, setSubmitting] = useState(false)
+  const scrollRef = useRef<ScrollView>(null)
+
+  const scrollToEnd = useCallback(() => {
+    scrollRef.current?.scrollToEnd({ animated: true })
+  }, [])
 
   const load = useCallback(async () => {
     if (!session || !Number.isFinite(threadId)) return
@@ -142,6 +155,7 @@ export function ForumThreadScreen() {
       await collaborationApi.postForumReply(session, threadId, replyText.trim())
       setReplyText("")
       await load()
+      scrollToEnd()
     } catch (err) {
       AppAlert.alert("Reply failed", err instanceof ApiError ? err.message : "Could not post reply.")
     } finally {
@@ -155,16 +169,22 @@ export function ForumThreadScreen() {
 
   if (loading) {
     return (
-      <View style={[styles.center, { backgroundColor: native.groupedBackground }]}>
-        <ActivityIndicator size="large" color={native.tint} />
+      <View style={[styles.root, { backgroundColor: native.groupedBackground }]}>
+        <CollabFlowHeader title="Thread" fallbackHref="/module/forum" />
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={native.tint} />
+        </View>
       </View>
     )
   }
 
   if (!thread) {
     return (
-      <View style={[styles.center, { backgroundColor: native.groupedBackground }]}>
-        <Text style={[type.destructive, styles.errorText]}>{error || "Thread not found."}</Text>
+      <View style={[styles.root, { backgroundColor: native.groupedBackground }]}>
+        <CollabFlowHeader title="Thread" fallbackHref="/module/forum" />
+        <View style={styles.center}>
+          <Text style={[type.destructive, styles.errorText]}>{error || "Thread not found."}</Text>
+        </View>
       </View>
     )
   }
@@ -174,13 +194,53 @@ export function ForumThreadScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: native.groupedBackground }]}>
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={[styles.content, scrollPad]}
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
+      <CollabFlowHeader
+        title="Thread"
+        subtitle={thread.title}
+        fallbackHref="/module/forum"
+      />
+      <ChatKeyboardShell
+        style={styles.flex}
+        onKeyboardShow={scrollToEnd}
+        composer={
+          <View
+            style={[
+              styles.composer,
+              {
+                backgroundColor: native.secondaryGrouped,
+                borderTopColor: native.separator,
+              },
+            ]}
+          >
+            <TextInput
+              style={[
+                styles.composerInput,
+                { color: native.label, backgroundColor: native.fill },
+              ]}
+              value={replyText}
+              onChangeText={setReplyText}
+              placeholder="Write a reply…"
+              placeholderTextColor={native.tertiaryLabel}
+              multiline
+            />
+            <ComposerSendButton
+              active={!!replyText.trim() && !submitting}
+              sending={submitting}
+              onPress={submitReply}
+              iconName="send"
+              iconSize={18}
+              size={42}
+            />
+          </View>
+        }
       >
-        <CollabScreenTitle subtitle={thread.title} />
+        <ScrollView
+          ref={scrollRef}
+          style={styles.scroll}
+          contentContainerStyle={[styles.content, scrollPad]}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
+        >
         {error ? <Text style={[type.destructive, styles.errorBanner]}>{error}</Text> : null}
 
         <CommGroupedList>
@@ -240,44 +300,15 @@ export function ForumThreadScreen() {
           </CommGroupedList>
         )}
         <CommSectionFooter>Vote on helpful replies — instructors may mark solutions.</CommSectionFooter>
-      </ScrollView>
-
-      <View
-        style={[
-          styles.composer,
-          {
-            paddingBottom: insets.bottom + 12,
-            backgroundColor: native.secondaryGrouped,
-            borderTopColor: native.separator,
-          },
-        ]}
-      >
-        <TextInput
-          style={[
-            styles.composerInput,
-            { color: native.label, backgroundColor: native.fill },
-          ]}
-          value={replyText}
-          onChangeText={setReplyText}
-          placeholder="Write a reply…"
-          placeholderTextColor={native.tertiaryLabel}
-          multiline
-        />
-        <ComposerSendButton
-          active={!!replyText.trim() && !submitting}
-          sending={submitting}
-          onPress={submitReply}
-          iconName="send"
-          iconSize={18}
-          size={42}
-        />
-      </View>
+        </ScrollView>
+      </ChatKeyboardShell>
     </View>
   )
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
+  flex: { flex: 1 },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   scroll: { flex: 1 },
   content: { padding: NATIVE.pagePadding, gap: 12 },

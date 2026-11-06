@@ -1,10 +1,10 @@
 import { getAppEnvironment } from "./environment"
 
 export const PAYMENTS_CONFIG = {
-  merchantIdentifier: "merchant.com.coursecollab.app",
-  /** Android uses Stripe Payment Sheet; iOS digital goods use external web checkout until StoreKit. */
+  /** Android Google Pay via Stripe Payment Sheet; iOS uses external CourseCollab web checkout. */
   provider: "stripe" as const,
   iosNativeDigitalCheckout: false,
+  androidNativeDigitalCheckout: true,
   restorePurchasesSupported: false,
   entitlementsApiPath: "/api/account/entitlements",
 } as const
@@ -13,12 +13,8 @@ export function validateProductionPaymentsConfig(): string[] {
   const errors: string[] = []
   if (getAppEnvironment() !== "production") return errors
 
-  if (!PAYMENTS_CONFIG.merchantIdentifier.startsWith("merchant.")) {
-    errors.push("Invalid Apple Pay merchant identifier.")
-  }
-
   if (PAYMENTS_CONFIG.iosNativeDigitalCheckout) {
-    errors.push("iOS native digital checkout must remain disabled until StoreKit is implemented.")
+    errors.push("iOS native digital checkout must remain disabled.")
   }
 
   return errors

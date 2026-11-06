@@ -12,6 +12,7 @@ import Animated, {
   withSpring,
 } from "react-native-reanimated"
 import { useSession } from "../../context/SessionProvider"
+import { getQueryClient, invalidateByAction, studentQueryScope } from "../../lib/query"
 import { useStudentShell } from "../../context/StudentShellContext"
 import { ApiError } from "../../lib/student-api"
 import type { StudentSession } from "../../lib/session"
@@ -19,6 +20,7 @@ import {
   flashcardDeckLockedCountForAccess,
   flashcardUpgradeMessageForAccess,
   isFlashcardDeckStudyLockedForAccess,
+  resolveFlashcardTierAccess,
 } from "../../lib/flashcard-access"
 import {
   DEFAULT_FLASHCARD_BATCH_SIZE,
@@ -26,7 +28,7 @@ import {
   usesFlashcardBatchQuiz,
   type FlashcardBatchStudyPhase,
 } from "../../lib/flashcard-batch-study"
-import { buildFlashcardMcq, canUseFlashcardMcq } from "../../lib/flashcard-quiz"
+import { buildFlashcardMcq, canUseFlashcardMcq, gradeFlashcardMcqChoice } from "../../lib/flashcard-quiz"
 import {
   flashcardsApi,
   FLASHCARD_TIMED_SECONDS,
@@ -84,7 +86,7 @@ export function FlashcardStudyScreen() {
   const stageHeight = flashcardWabiStageHeight(windowWidth)
   const studyContentWidth = flashcardStudyContentMaxWidth(windowWidth)
   const canvasGradient = flashcardStudyCanvasGradient(tokens.isDark)
-  const { membershipTierLoaded } = useStudentShell()
+  const { membershipTier, membershipTierLoaded } = useStudentShell()
   const sessionIdRef = useRef(`fc-${Date.now()}-${Math.random().toString(36).slice(2)}`)
   const answeringRef = useRef(false)
   const knownExitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -159,6 +161,12 @@ export function FlashcardStudyScreen() {
     cardPositionTotal > 0
       ? `${Math.min(cardPositionIndex + 1, cardPositionTotal)} / ${cardPositionTotal}`
       : "0 / 0"
+  const quizProgressPct =
+    cardPositionTotal <= 0
+      ? 0
+      : finished
+        ? 100
+        : Math.min(100, Math.round(((cardPositionIndex + 1) / cardPositionTotal) * 100))
 
   const isTimed = studyMode === "timed"
   const isBossCard = !batchMode && !finished && queue.length === 1 && current != null
@@ -209,18 +217,23 @@ export function FlashcardStudyScreen() {
     if (loadedCards.length === 0) throw new ApiError("This deck has no cards.", 400)
 
     const settings = deckRes.studySettings ?? null
+    const resolvedAccess = resolveFlashcardTierAccess(
+      membershipTier,
+      membershipTierLoaded,
+      settings?.tierAccess,
+    )
     const timedSeconds = settings?.timedModeSeconds ?? FLASHCARD_TIMED_SECONDS
     setTimedModeSeconds(timedSeconds)
     setCardTimer(timedSeconds)
-    setStudySettings(settings)
+    setStudySettings(settings ? { ...settings, tierAccess: resolvedAccess } : settings)
 
     if (
       deckRes.deck.deckKind === "course" &&
       settings &&
-      isFlashcardDeckStudyLockedForAccess(settings.totalCards, settings.tierAccess)
+      isFlashcardDeckStudyLockedForAccess(settings.totalCards, resolvedAccess)
     ) {
       setAccessLocked(true)
-      throw new ApiError(flashcardUpgradeMessageForAccess(settings.tierAccess), 403)
+      throw new ApiError(flashcardUpgradeMessageForAccess(resolvedAccess), 403)
     }
 
     setAccessLocked(false)
@@ -234,7 +247,7 @@ export function FlashcardStudyScreen() {
     if (deckRes.deck.requireMcqValidation === false) {
       setStudyMode((m) => (m === "quiz" ? "normal" : m))
     }
-  }, [session, deckId, resetBatchStudy])
+  }, [session, deckId, membershipTier, membershipTierLoaded, resetBatchStudy])
 
   useEffect(() => {
     if (!session || !Number.isFinite(deckId) || !membershipTierLoaded) return
@@ -266,6 +279,7 @@ export function FlashcardStudyScreen() {
       outcome: "known" | "learning" | "session_complete"
       streak?: number
       bonusType?: "timed" | "boss"
+      mcqEarnedFraction?: number
     }) => {
       if (!session) return null
       try {
@@ -273,6 +287,9 @@ export function FlashcardStudyScreen() {
           ...payload,
           sessionId: sessionIdRef.current,
         })
+        if (res.recorded !== false) {
+          invalidateByAction(getQueryClient(), studentQueryScope(session), "student.flashcards.study")
+        }
         if (res.pointsEarned > 0) {
           setSessionXp((x) => x + res.pointsEarned)
         }
@@ -289,12 +306,14 @@ export function FlashcardStudyScreen() {
       cardId: number,
       nextStreak: number,
       bonusType?: "timed" | "boss",
+      mcqEarnedFraction?: number,
     ): Promise<FlashcardStudyRecordResult | null> => {
       const res = await recordStudy({
         cardId,
         outcome: "known",
         streak: nextStreak,
         bonusType,
+        mcqEarnedFraction,
       })
       if (!res || res.recorded === false) {
         AppAlert.alert(
@@ -448,7 +467,11 @@ export function FlashcardStudyScreen() {
     [completeLearnBatch, current, currentBatch.length, learnIndex, persistKnownCard, recordStudy, streak],
   )
 
-  async function answer(outcome: "known" | "learning", bonusType?: "timed" | "boss") {
+  async function answer(
+    outcome: "known" | "learning",
+    bonusType?: "timed" | "boss",
+    mcqEarnedFraction?: number,
+  ) {
     if (!session || !current || finished || knownExiting || answeringRef.current) return
     if (batchMode && studyPhase === "learn") {
       if (!flipped) return
@@ -460,8 +483,8 @@ export function FlashcardStudyScreen() {
       }
       return
     }
-    if (currentMcq) return
-    if (!flipped) return
+    if (currentMcq && mcqEarnedFraction == null) return
+    if (!currentMcq && !flipped) return
 
     answeringRef.current = true
     try {
@@ -469,7 +492,7 @@ export function FlashcardStudyScreen() {
       const nextStreak = outcome === "known" ? streak + 1 : 0
 
       if (outcome === "known") {
-        const res = await persistKnownCard(current.id, nextStreak, bonusType)
+        const res = await persistKnownCard(current.id, nextStreak, bonusType, mcqEarnedFraction)
         if (!res) return
 
         setStreak(nextStreak)
@@ -494,6 +517,7 @@ export function FlashcardStudyScreen() {
         outcome,
         streak: nextStreak,
         bonusType,
+        mcqEarnedFraction,
       })
 
       setStreak(nextStreak)
@@ -521,7 +545,7 @@ export function FlashcardStudyScreen() {
 
       if (correct) {
         nextStreak = streak + 1
-        const res = await persistKnownCard(current.id, nextStreak)
+        const res = await persistKnownCard(current.id, nextStreak, undefined, 1)
         if (!res) return
 
         setStreak(nextStreak)
@@ -543,7 +567,7 @@ export function FlashcardStudyScreen() {
       }
 
       setStreak(0)
-      await recordStudy({ cardId: current.id, outcome: "learning" })
+      await recordStudy({ cardId: current.id, outcome: "learning", mcqEarnedFraction: 0 })
       setMcqFeedback(null)
       setMcqSelectedId(null)
       setMcqLocked(false)
@@ -561,16 +585,17 @@ export function FlashcardStudyScreen() {
       if (mcqLocked || !currentMcq) return
       const choice = currentMcq.choices.find((c) => c.id === choiceId)
       if (!choice) return
+      const isCorrect = gradeFlashcardMcqChoice(choice)
       setMcqSelectedId(choiceId)
       setMcqLocked(true)
-      setMcqFeedback(choice.isCorrect ? "correct" : "incorrect")
+      setMcqFeedback(isCorrect ? "correct" : "incorrect")
       setTimeout(() => {
         if (batchQuizActive) {
-          void advanceBatchQuiz(choice.isCorrect)
+          void advanceBatchQuiz(isCorrect)
         } else {
-          void answer(choice.isCorrect ? "known" : "learning")
+          void answer(isCorrect ? "known" : "learning", undefined, isCorrect ? 1 : 0)
         }
-      }, choice.isCorrect ? 700 : 1600)
+      }, isCorrect ? 700 : 1600)
     },
     [advanceBatchQuiz, answer, batchQuizActive, currentMcq, mcqLocked],
   )
@@ -691,13 +716,38 @@ export function FlashcardStudyScreen() {
         </View>
       </View>
 
-      <View style={[styles.modeTabs, isTablet && { maxWidth: studyContentWidth, alignSelf: "center", width: "100%" }]}>
-        <MobbinPillSegmentControl
-          options={modeOptions}
-          value={studyMode}
-          onChange={selectMode}
-        />
-      </View>
+      {(!finished && studyMode === "quiz") || batchQuizActive ? (
+        <View
+          style={[
+            styles.quizSessionHead,
+            isTablet && { maxWidth: studyContentWidth, alignSelf: "center", width: "100%" },
+          ]}
+        >
+          <Text style={[type.caption, styles.quizKicker, { color: tokens.accent }]}>Quiz</Text>
+          <Text style={[type.bodyEmphasis, { color: native.label }]}>
+            Question {progressLabel.replace(" / ", " of ")}
+          </Text>
+          <View style={[styles.quizTrack, { backgroundColor: native.fill }]}>
+            <View
+              style={[
+                styles.quizFill,
+                {
+                  backgroundColor: tokens.accent,
+                  width: `${quizProgressPct}%`,
+                },
+              ]}
+            />
+          </View>
+        </View>
+      ) : (
+        <View style={[styles.modeTabs, isTablet && { maxWidth: studyContentWidth, alignSelf: "center", width: "100%" }]}>
+          <MobbinPillSegmentControl
+            options={modeOptions}
+            value={studyMode}
+            onChange={selectMode}
+          />
+        </View>
+      )}
 
       {lockedCardCount > 0 ? (
         <View
@@ -942,6 +992,27 @@ const styles = StyleSheet.create({
     width: "100%",
     alignSelf: "center",
     marginBottom: 16,
+  },
+  quizSessionHead: {
+    width: "100%",
+    alignSelf: "center",
+    paddingHorizontal: 20,
+    marginBottom: 16,
+    gap: 6,
+  },
+  quizKicker: {
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+  },
+  quizTrack: {
+    height: 6,
+    borderRadius: 999,
+    overflow: "hidden",
+  },
+  quizFill: {
+    height: "100%",
+    borderRadius: 999,
   },
   accessBanner: {
     flexDirection: "row",

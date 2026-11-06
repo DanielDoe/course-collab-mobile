@@ -45,7 +45,9 @@ export default function AppLayout() {
         // Keep prior scenes from compositing through translucent Liquid Glass chrome.
         freezeOnBlur: true,
       }}
-    />
+    >
+      <Stack.Screen name="dashboard" options={{ gestureEnabled: false }} />
+    </Stack>
   )
 
   if (session.portal === "student") {

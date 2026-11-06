@@ -1,27 +1,23 @@
-import { messageIsOnlyLocalDeviceFile } from "./message-local-file"
 import { messageCourseImportPreview } from "./message-course-import"
 import { unsentAuditLabel } from "./message-lifecycle"
+import { parseTargetedPracticeMessage, targetedPracticePreviewText } from "./targeted-practice-message"
+import { stripMessageHtml } from "./messages-media"
 
-/** Strip HTML tags for mobile message previews and plain-text display. */
-export function stripMessageHtml(html: string): string {
-  return html
-    .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/<\/p>/gi, "\n")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&nbsp;/gi, " ")
-    .replace(/&amp;/gi, "&")
-    .replace(/&lt;/gi, "<")
-    .replace(/&gt;/gi, ">")
-    .replace(/\s+/g, " ")
-    .trim()
-}
+export {
+  extractMessageImageUrls,
+  isImageMimeType,
+  stripMessageHtml,
+} from "./messages-media"
 
-export function messagePreviewText(body: string, max = 120): string {
-  const importPreview = messageCourseImportPreview(body, max)
+export function messagePreviewText(body: string | null | undefined, max = 120): string {
+  const raw = body == null ? "" : String(body)
+  const importPreview = messageCourseImportPreview(raw, max)
   if (importPreview) return importPreview
 
-  const text = stripMessageHtml(body) || body.trim()
-  if (messageIsOnlyLocalDeviceFile(text)) return "Photo didn't upload"
+  const practice = parseTargetedPracticeMessage(raw)
+  if (practice) return targetedPracticePreviewText(practice, max)
+
+  const text = stripMessageHtml(raw) || raw.trim()
   if (text.length <= max) return text
   return `${text.slice(0, max)}…`
 }

@@ -24,6 +24,7 @@ import { ApiError } from "../../../lib/api"
 import { useModuleTheme } from "../../../lib/themed-module-shell"
 import { CommEmptyState, CommGroupedList, CommListRow, CommSectionFooter } from "../faculty-communication-ui"
 import { DashboardWelcomeCard } from "../../dashboard/DashboardWelcomeCard"
+import { facultyScopeLabel } from "../../../lib/faculty-scope-label"
 import { CoraBrand } from "../../cora/CoraBrand"
 import { CoraHubEnter } from "../../cora/CoraHubEnter"
 import { CoraLoadingMark } from "../../cora/CoraLoadingMark"
@@ -262,7 +263,7 @@ export function FacultyCoraScreen() {
 
   const courseLabel = useMemo(() => {
     if (!course) return ""
-    return [course.course_code, course.course_title].filter(Boolean).join(" · ")
+    return [facultyScopeLabel(course), course.course_title].filter(Boolean).join(" · ")
   }, [course])
 
   const setupDisciplineLabel = useMemo(() => {
@@ -361,7 +362,7 @@ export function FacultyCoraScreen() {
             name={`${greeting()}, ${displayName}`}
             roleLabel={FACULTY_CORA_TAGLINE}
             roleIcon="sparkles-outline"
-            metaLine={[course.course_code, FACULTY_CORA_GREETING].filter(Boolean).join(" · ")}
+            metaLine={[facultyScopeLabel(course), FACULTY_CORA_GREETING].filter(Boolean).join(" · ")}
             leading={<CoraBrand size="sm" variant="solid" color="#ffffff" />}
           />
         </CoraHubEnter>

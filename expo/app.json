@@ -2,34 +2,31 @@
   "expo": {
     "name": "CourseCollab",
     "slug": "course-collab-mobile",
-    "version": "1.0.0",
-    "runtimeVersion": "1.0.2",
-    "updates": {
-      "url": "https://u.expo.dev/61d3c8bd-2fce-4373-92cb-6f558f9e3cbd"
-    },
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/logo-mark.png",
     "scheme": "coursecollab",
-    "newArchEnabled": true,
     "userInterfaceStyle": "automatic",
     "backgroundColor": "#582c83",
-    "splash": {
-      "backgroundColor": "#582c83"
+    "runtimeVersion": "1.0.2",
+    "updates": {
+      "url": "https://u.expo.dev/61d3c8bd-2fce-4373-92cb-6f558f9e3cbd",
+      "fallbackToCacheTimeout": 0,
+      "checkAutomatically": "ON_LOAD"
     },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.coursecollab.app",
-      "buildNumber": "39",
+      "buildNumber": "1",
       "icon": "./assets/CourseCollab.icon",
       "backgroundColor": "#F2F2F7",
       "associatedDomains": [
+        "applinks:coursecollab.vercel.app",
         "applinks:course-collab.com",
-        "applinks:www.course-collab.com",
-        "applinks:coursecollab.vercel.app"
+        "applinks:www.course-collab.com"
       ],
       "infoPlist": {
         "UIUserInterfaceStyle": "Automatic",
-        "LSMinimumSystemVersion": "15.1",
         "NSCalendarsUsageDescription": "CourseCollab adds your class schedule to Apple Calendar and sends class reminders.",
         "NSCalendarsFullAccessUsageDescription": "CourseCollab adds your class schedule to Apple Calendar and sends class reminders.",
         "NSUserNotificationsUsageDescription": "CourseCollab sends class reminders, quiz deadlines, announcements, and course messages.",
@@ -38,12 +35,17 @@
         "NSCameraUsageDescription": "CourseCollab uses the camera when you choose to capture and upload coursework or profile content.",
         "NSPhotoLibraryUsageDescription": "CourseCollab needs photo access when you choose to upload coursework or profile content.",
         "NSFaceIDUsageDescription": "CourseCollab uses Face ID to protect your saved login session in Secure Store.",
+        "ITSAppUsesNonExemptEncryption": false,
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoads": false,
           "NSAllowsLocalNetworking": false
         },
         "UIBackgroundModes": [
           "remote-notification"
+        ],
+        "LSApplicationQueriesSchemes": [
+          "webcal",
+          "webcals"
         ]
       }
     },
@@ -53,6 +55,7 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.coursecollab.app",
+      "softwareKeyboardLayoutMode": "resize",
       "versionCode": 1,
       "permissions": [
         "android.permission.POST_NOTIFICATIONS",
@@ -75,7 +78,10 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#582c83"
+          "backgroundColor": "#582c83",
+          "image": "./assets/logo-mark.png",
+          "imageWidth": 120,
+          "resizeMode": "contain"
         }
       ],
       "expo-asset",
@@ -114,7 +120,6 @@
       [
         "@stripe/stripe-react-native",
         {
-          "merchantIdentifier": "merchant.com.coursecollab.app",
           "enableGooglePay": true
         }
       ],
@@ -122,12 +127,18 @@
         "expo-build-properties",
         {
           "ios": {
-            "buildReactNativeFromSource": true
+            "deploymentTarget": "16.4",
+            "buildReactNativeFromSource": true,
+            "newArchEnabled": true
+          },
+          "android": {
+            "newArchEnabled": true
           }
         }
       ],
       "@config-plugins/react-native-pdf",
-      "@config-plugins/react-native-blob-util"
+      "@config-plugins/react-native-blob-util",
+      "expo-image"
     ],
     "owner": "danieldoe"
   }

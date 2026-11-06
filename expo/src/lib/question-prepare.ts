@@ -124,12 +124,10 @@ export async function runQuestionPreparePipeline(
   onStep("math", "done")
 
   onStep("choices", "active")
-  const choiceCandidates = rich.length > 0 ? rich : unique.slice(0, Math.min(unique.length, 8))
-  for (let i = 0; i < choiceCandidates.length; i += 1) {
-    if (needsQuestionRichRender(choiceCandidates[i])) {
-      buildQuestionHtml(choiceCandidates[i], { compact: true })
-    }
-    if (i % 4 === 3) await yieldToUi()
+  for (let i = 0; i < rich.length; i += 1) {
+    buildQuestionHtml(rich[i], { compact: true, disableSelection: true })
+    buildQuestionHtml(rich[i], { compact: false, disableSelection: true })
+    if (i % 3 === 2) await yieldToUi()
   }
   onStep("choices", "done")
 
@@ -151,10 +149,16 @@ export function extractAssessmentResultQuestionTexts(questions: AssessmentResult
 export function extractAssessmentQuizQuestionTexts(questions: AssessmentQuestion[]): string[] {
   const fields: string[] = []
   for (const q of questions) {
-    fields.push(q.question_text ?? "")
-    if (q.hint) fields.push(String(q.hint))
-    fields.push(...collectOptionTexts(q))
+    fields.push(...extractAssessmentQuestionTexts(q))
   }
+  return dedupeTexts(fields)
+}
+
+export function extractAssessmentQuestionTexts(question: AssessmentQuestion): string[] {
+  const fields: string[] = []
+  fields.push(question.question_text ?? "")
+  if (question.hint) fields.push(String(question.hint))
+  fields.push(...collectOptionTexts(question))
   return dedupeTexts(fields)
 }
 
@@ -188,11 +192,8 @@ export function extractLectureSamplePracticeQuestionTexts(questions: LectureSamp
   for (const q of questions) {
     fields.push(q.question_text ?? "")
     fields.push(q.title ?? "")
-    for (const sq of getGradableSubquestions(q.subquestions)) {
-      fields.push(sq.prompt)
-      fields.push(...subquestionOptionLabels(sq).map((opt) => opt.text))
-      if (sq.explanation) fields.push(sq.explanation)
-    }
+    fields.push(...(q.options?.map((opt) => opt.text) ?? []))
+    if (q.explanation) fields.push(q.explanation)
   }
   return dedupeTexts(fields)
 }

@@ -1,0 +1,14 @@
+appId: com.coursecollab.app
+---
+# Assumes student is already on Lecture → Sample Practice (question 1 expanded).
+- extendedWaitUntil:
+    visible: "Submit answer"
+    timeout: 30000
+- takeScreenshot: sample-practice-before-submit
+- tapOn: "B, A self-contained set of instructions to operate a computer"
+- tapOn: "Submit answer"
+- extendedWaitUntil:
+    visible: "Correct — nice work."
+    timeout: 30000
+- takeScreenshot: sample-practice-q1-correct
+- assertNotVisible: "Could not check your answer."

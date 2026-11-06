@@ -12,6 +12,7 @@ import { Ionicons } from "@/components/icons/AppIcon"
 import { useLocalSearchParams } from "expo-router"
 import { ApiError } from "../../lib/api"
 import { AppAlert } from "../../lib/app-alert"
+import { useAppToast } from "../../context/AppToastProvider"
 import {
   COURSE_EXCHANGE_TABS,
   EXCHANGE_POST_IMPORT_CHECKLIST,
@@ -40,14 +41,15 @@ import {
   parseCourseExchangeTabParam,
   parseExchangeProvenance,
   pickPreferredDestinationCourseId,
-  filterGroupsProjectsForOwnSession,
-  ownGroupsProjectsSessionMessage,
-  resolveExchangeSessionCode,
+  resolveExchangeDestinationSessionId,
 } from "../../lib/course-exchange-shared"
 import { FACULTY_COURSE_EXCHANGE_COLOR } from "../../lib/faculty-course-exchange-theme"
 import { instructorApi } from "../../lib/instructor-api"
+import { filterGroupsProjectsForOwnSession } from "../../lib/course-exchange/groups-projects-session-policy"
 import { useFacultyScope } from "../../hooks/useFacultyScope"
+import { useFacultyListPager } from "../../hooks/useFacultyListPager"
 import { useFacultyShell } from "../../context/FacultyShellContext"
+import { FacultyListPagerFooter } from "./FacultyListPagerFooter"
 import { FacultyEmptyState } from "./faculty-shared"
 import {
   FacultyModuleStickyHeader,
@@ -79,6 +81,7 @@ export function FacultyCourseExchangeScreen() {
   const { tab: tabParam } = useLocalSearchParams<{ tab?: string }>()
   const { scope, ready } = useFacultyScope()
   const { selectedCourse, setBadges } = useFacultyShell()
+  const { showSuccess, showError } = useAppToast()
 
   const [tab, setTab] = useState<CourseExchangeTabId>(() => parseCourseExchangeTabParam(tabParam))
   const [search, setSearch] = useState("")
@@ -156,11 +159,8 @@ export function FacultyCourseExchangeScreen() {
   const loadCoursesAndSessions = useCallback(async () => {
     if (!scope) return
     const [coursesRes, sessionsRes] = await Promise.all([
-      instructorApi.getCourses({
-        instructorId: scope.instructorId,
-        universityId: scope.universityId ?? null,
-      }),
-      instructorApi.getAllInstructorSessions(scope, scope.academicTermId ?? undefined),
+      instructorApi.getCourses({ instructorId: scope.instructorId, universityId: scope.universityId }),
+      instructorApi.getAllInstructorSessions(scope),
     ])
     const offerings = coursesRes.offerings ?? coursesRes.courses ?? []
     setInstitutionHint(offerings.find((c) => c.university?.trim())?.university ?? null)
@@ -250,7 +250,12 @@ export function FacultyCourseExchangeScreen() {
 
   const bootstrap = useCallback(async () => {
     if (!scope) return
-    await Promise.all([loadCoursesAndSessions(), loadNoticeCounts(), loadTabData()])
+    await Promise.all([
+      // Destination-course metadata supports import sheets; don't block the active tab when it fails.
+      loadCoursesAndSessions().catch(() => undefined),
+      loadNoticeCounts(),
+      loadTabData(),
+    ])
   }, [scope, loadCoursesAndSessions, loadNoticeCounts, loadTabData])
 
   useEffect(() => {
@@ -364,6 +369,26 @@ export function FacultyCourseExchangeScreen() {
     )
   }, [myShared, search])
 
+  const discoverPager = useFacultyListPager(filteredDiscover, `discover:${search}:${discoverFilter}`, "courses")
+  const receivedPager = useFacultyListPager(filteredReceived, `received:${search}:${receivedFilter}`, "requests")
+  const sentPager = useFacultyListPager(filteredSent, `sent:${search}:${sentFilter}`, "requests")
+  const sharedWithMePager = useFacultyListPager(
+    filteredSharedWithMe,
+    `shared-with-me:${search}:${sharedWithMeFilter}`,
+    "copies",
+  )
+  const mySharedPager = useFacultyListPager(filteredMyShared, `my-shared:${search}`, "copies")
+  const pager =
+    tab === "received"
+      ? receivedPager
+      : tab === "sent"
+        ? sentPager
+        : tab === "shared-with-me"
+          ? sharedWithMePager
+          : tab === "my-shared"
+            ? mySharedPager
+            : discoverPager
+
   const detailDestinationLabel = useMemo(() => {
     if (!detailRequest?.destination_course_id) return null
     const match = destinationOptions.find((c) => c.course_id === detailRequest.destination_course_id)
@@ -374,6 +399,14 @@ export function FacultyCourseExchangeScreen() {
     if (!discoverCourse) return null
     return pickPreferredDestinationCourseId(destinationOptions, discoverCourse.courseCode, institutionHint)
   }, [discoverCourse, destinationOptions, institutionHint])
+
+  function filterModulesForDestination(
+    modules: CourseExchangeModule[],
+    destinationCourseId?: number | null,
+  ): CourseExchangeModule[] {
+    const dest = destinationOptions.find((c) => c.course_id === destinationCourseId)
+    return filterGroupsProjectsForOwnSession(modules, dest?.course_code ?? null).modules
+  }
 
   function openDiscoverCourse(row: DiscoverableCourse) {
     setDiscoverCourse(row)
@@ -426,23 +459,25 @@ export function FacultyCourseExchangeScreen() {
     modules: CourseExchangeModule[]
     purpose: string
     destinationCourseId: number
-    destinationSessionId?: number | null
   }) {
     if (!scope || !discoverCourse) return
-    const sessionCode = resolveExchangeSessionCode(sessions, payload.destinationSessionId)
-    const filtered = filterGroupsProjectsForOwnSession(payload.modules, sessionCode)
-    if (filtered.modules.length === 0) {
-      AppAlert.alert("Cannot import", ownGroupsProjectsSessionMessage())
-      return
-    }
     setActing(true)
     try {
+      const destinationSessionId = resolveExchangeDestinationSessionId(
+        payload.destinationCourseId,
+        sessions,
+        {
+          courseId: scope.courseId,
+          sessionId: scope.sessionId,
+          sessionCode: scope.sessionCode,
+        },
+      )
       const data = await instructorApi.createCourseExchangeRequest(scope, {
         sourceCourseId: discoverCourse.courseId,
         purpose: payload.purpose,
-        requestedModules: filtered.modules,
+        requestedModules: payload.modules,
         destinationCourseId: payload.destinationCourseId,
-        destinationSessionId: payload.destinationSessionId ?? null,
+        destinationSessionId,
       })
       const imported = Boolean(data.request?.imported || data.request?.autoApproved)
       AppAlert.alert(
@@ -465,7 +500,11 @@ export function FacultyCourseExchangeScreen() {
     if (!scope || !detailRequest) return
     setActing(true)
     try {
-      const data = await instructorApi.approveCourseExchangeRequest(scope, detailRequest.id, modules)
+      const data = await instructorApi.approveCourseExchangeRequest(
+        scope,
+        detailRequest.id,
+        filterModulesForDestination(modules, detailRequest.destination_course_id),
+      )
       AppAlert.alert(
         data.imported ? "Approved and imported" : "Approved",
         data.imported
@@ -498,16 +537,19 @@ export function FacultyCourseExchangeScreen() {
 
   async function runImport(payload: { destinationCourseId: number; destinationSessionId?: number | null }) {
     if (!scope || !importRequest) return
-    const sessionCode = resolveExchangeSessionCode(sessions, payload.destinationSessionId)
-    const approved = importRequest.approved_modules ?? importRequest.requested_modules ?? []
-    const filtered = filterGroupsProjectsForOwnSession(approved, sessionCode)
-    if (filtered.skippedGroupsProjects && filtered.modules.length === 0) {
-      AppAlert.alert("Cannot import", ownGroupsProjectsSessionMessage())
-      return
-    }
     setActing(true)
     try {
-      const data = await instructorApi.executeCourseExchangeCopy(scope, importRequest.id, payload)
+      const destinationSessionId =
+        payload.destinationSessionId ??
+        resolveExchangeDestinationSessionId(payload.destinationCourseId, sessions, {
+          courseId: scope.courseId,
+          sessionId: scope.sessionId,
+          sessionCode: scope.sessionCode,
+        })
+      const data = await instructorApi.executeCourseExchangeCopy(scope, importRequest.id, {
+        destinationCourseId: payload.destinationCourseId,
+        destinationSessionId,
+      })
       const provenance = parseExchangeProvenance(data.attribution)
       AppAlert.alert(
         "Course copied successfully",
@@ -530,7 +572,11 @@ export function FacultyCourseExchangeScreen() {
     if (!scope || !detailRequest) return
     setActing(true)
     try {
-      const data = await instructorApi.supplementCourseExchangeRequest(scope, detailRequest.id, modules)
+      const data = await instructorApi.supplementCourseExchangeRequest(
+        scope,
+        detailRequest.id,
+        filterModulesForDestination(modules, detailRequest.destination_course_id),
+      )
       AppAlert.alert(
         data.needsApproval ? "Approval requested" : "Modules imported",
         data.needsApproval
@@ -560,14 +606,6 @@ export function FacultyCourseExchangeScreen() {
     setActing(true)
     try {
       await instructorApi.saveCourseExchangeSharingSettings(scope, payload)
-      AppAlert.alert(
-        payload.sharingMode === "request_only" ? "Course is discoverable" : "Sharing turned off",
-        payload.sharingMode === "request_only"
-          ? payload.autoApprove
-            ? "Requests for enabled modules import automatically."
-            : "Other instructors can request the modules you enabled."
-          : "This course no longer appears in Discover.",
-      )
       await loadSharing()
       setConfigureCourse((prev) =>
         prev && prev.courseId === payload.courseId
@@ -579,8 +617,10 @@ export function FacultyCourseExchangeScreen() {
             }
           : prev,
       )
+      setConfigureCourse(null)
+      showSuccess("Sharing updated")
     } catch (err) {
-      AppAlert.alert("Save failed", err instanceof ApiError ? err.message : "Could not save settings.")
+      showError(err instanceof ApiError ? err.message : "Could not save settings.")
     } finally {
       setActing(false)
     }
@@ -733,7 +773,7 @@ export function FacultyCourseExchangeScreen() {
       if (exchangeLayout === "grid") {
         return (
           <FacultyCourseExchangeCardGrid>
-            {filteredDiscover.map((row) => (
+            {discoverPager.items.map((row) => (
               <FacultyCourseExchangeDiscoverGridCard
                 key={row.courseId}
                 row={row}
@@ -743,7 +783,7 @@ export function FacultyCourseExchangeScreen() {
           </FacultyCourseExchangeCardGrid>
         )
       }
-      return filteredDiscover.map((row) => (
+      return discoverPager.items.map((row) => (
         <FacultyCourseExchangeDiscoverCard key={row.courseId} row={row} onPress={() => openDiscoverCourse(row)} />
       ))
     }
@@ -762,7 +802,7 @@ export function FacultyCourseExchangeScreen() {
         <>
           {exchangeLayout === "grid" ? (
             <FacultyCourseExchangeCardGrid>
-              {filteredReceived.map((row) => (
+              {receivedPager.items.map((row) => (
                 <FacultyCourseExchangeRequestGridCard
                   key={row.id}
                   row={row}
@@ -775,7 +815,7 @@ export function FacultyCourseExchangeScreen() {
               ))}
             </FacultyCourseExchangeCardGrid>
           ) : (
-            filteredReceived.map((row) => (
+            receivedPager.items.map((row) => (
               <FacultyCourseExchangeRequestCard
                 key={row.id}
                 row={row}
@@ -805,7 +845,7 @@ export function FacultyCourseExchangeScreen() {
         <>
           {exchangeLayout === "grid" ? (
             <FacultyCourseExchangeCardGrid>
-              {filteredSent.map((row) => (
+              {sentPager.items.map((row) => (
                 <FacultyCourseExchangeRequestGridCard
                   key={row.id}
                   row={row}
@@ -818,7 +858,7 @@ export function FacultyCourseExchangeScreen() {
               ))}
             </FacultyCourseExchangeCardGrid>
           ) : (
-            filteredSent.map((row) => (
+            sentPager.items.map((row) => (
               <FacultyCourseExchangeRequestCard
                 key={row.id}
                 row={row}
@@ -852,7 +892,7 @@ export function FacultyCourseExchangeScreen() {
         <>
           {exchangeLayout === "grid" ? (
             <FacultyCourseExchangeCardGrid>
-              {filteredSharedWithMe.map((copy, index) => {
+              {sharedWithMePager.items.map((copy, index) => {
                 const id = copyRowId(copy)
                 const updates = id != null ? updateCounts[id] ?? copyRowUpdateCount(copy) : 0
                 return (
@@ -870,7 +910,7 @@ export function FacultyCourseExchangeScreen() {
               })}
             </FacultyCourseExchangeCardGrid>
           ) : (
-            filteredSharedWithMe.map((copy, index) => {
+            sharedWithMePager.items.map((copy, index) => {
               const id = copyRowId(copy)
               const updates = id != null ? updateCounts[id] ?? copyRowUpdateCount(copy) : 0
               return (
@@ -906,7 +946,7 @@ export function FacultyCourseExchangeScreen() {
         <>
           {exchangeLayout === "grid" ? (
             <FacultyCourseExchangeCardGrid>
-              {filteredMyShared.map((copy, index) => (
+              {mySharedPager.items.map((copy, index) => (
                 <FacultyCourseExchangeCopyGridCard
                   key={String(copy.id ?? index)}
                   copy={copy}
@@ -919,7 +959,7 @@ export function FacultyCourseExchangeScreen() {
               ))}
             </FacultyCourseExchangeCardGrid>
           ) : (
-            filteredMyShared.map((copy, index) => (
+            mySharedPager.items.map((copy, index) => (
               <FacultyCourseExchangeCopyCard
                 key={String(copy.id ?? index)}
                 copy={copy}
@@ -995,6 +1035,7 @@ export function FacultyCourseExchangeScreen() {
           }
         >
           {renderListBody()}
+          {!loading ? <FacultyListPagerFooter pager={pager} /> : null}
         </ScrollView>
       )}
 
@@ -1002,7 +1043,6 @@ export function FacultyCourseExchangeScreen() {
         visible={discoverCourse != null}
         course={discoverCourse}
         destinationCourses={destinationOptions}
-        sessions={sessions}
         preferredDestinationCourseId={preferredDestinationForDiscover}
         loading={acting}
         onClose={() => setDiscoverCourse(null)}
@@ -1055,7 +1095,6 @@ export function FacultyCourseExchangeScreen() {
         request={importRequest}
         destinationCourses={destinationOptions}
         sessions={sessions}
-        institutionHint={institutionHint}
         loading={acting}
         onClose={() => setImportRequest(null)}
         onImport={runImport}

@@ -14,6 +14,8 @@ import { PortalNotificationsSheet } from "../shell/NotificationsSheetHost"
 import { useGuestCheckoutReturnRefresh } from "../../lib/use-guest-checkout-return"
 import { GuestDrawer } from "./GuestDrawer"
 import { GuestTopBar } from "./GuestTopBar"
+import { ShellDrawerMotionProvider } from "../navigation/ShellDrawerMotionProvider"
+import { useGuestShell } from "../../context/GuestShellContext"
 
 type Props = {
   session: GuestSession
@@ -26,6 +28,7 @@ function GuestAppShellInner({ session, children }: Props) {
   const router = useRouter()
   const { path: webPathParam } = useLocalSearchParams<{ path?: string }>()
   useGuestCheckoutReturnRefresh(session)
+  const { drawerOpen, openDrawer, closeDrawer } = useGuestShell()
   const immersive =
     /^\/messages\//.test(pathname) ||
     /^\/recommendation\//.test(pathname) ||
@@ -43,21 +46,28 @@ function GuestAppShellInner({ session, children }: Props) {
   }, [pathname, webPathParam, router])
 
   return (
-    <AppShellFrame
-      backgroundColor={native.groupedBackground}
-      immersive={immersive}
-      topBar={<GuestTopBar session={session} />}
-      overlays={
-        <>
-          <GuestDrawer session={session} />
-          <PortalProfileMenu session={session} />
-          <PortalNotificationsSheet session={session} />
-          <PortalNotificationShellSync session={session} />
-        </>
-      }
+    <ShellDrawerMotionProvider
+      drawerOpen={drawerOpen}
+      openDrawer={openDrawer}
+      closeDrawer={closeDrawer}
     >
-      {children}
-    </AppShellFrame>
+      <AppShellFrame
+        backgroundColor={native.groupedBackground}
+        immersive={immersive}
+        topBar={<GuestTopBar session={session} />}
+        drawerEdge={{ portal: "guest", immersive, drawerOpen }}
+        overlays={
+          <>
+            <GuestDrawer session={session} />
+            <PortalProfileMenu session={session} />
+            <PortalNotificationsSheet session={session} />
+            <PortalNotificationShellSync session={session} />
+          </>
+        }
+      >
+        {children}
+      </AppShellFrame>
+    </ShellDrawerMotionProvider>
   )
 }
 

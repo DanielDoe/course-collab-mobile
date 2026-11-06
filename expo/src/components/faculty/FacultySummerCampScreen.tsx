@@ -51,6 +51,8 @@ import {
   FacultySummerCampRequestCard,
   FacultySummerCampTrackCard,
 } from "./FacultySummerCampListCards"
+import { useFacultyListPager } from "../../hooks/useFacultyListPager"
+import { FacultyListPagerFooter } from "./FacultyListPagerFooter"
 
 export type SummerCampTab = "programs" | "tracks" | "campers" | "requests"
 
@@ -204,6 +206,11 @@ export function FacultySummerCampScreen({ initialTab = "programs", visibleTabs }
         (r.email ?? "").toLowerCase().includes(q),
     )
   }, [requests, q])
+
+  const campsPager = useFacultyListPager(filteredCamps, `${tab}:${search}`, "programs")
+  const tracksPager = useFacultyListPager(filteredTrainings, `${tab}:${search}`, "tracks")
+  const campersPager = useFacultyListPager(filteredCampers, `${tab}:${search}`, "campers")
+  const requestsPager = useFacultyListPager(filteredRequests, `${tab}:${search}`, "requests")
 
   async function handleRefresh() {
     setRefreshing(true)
@@ -509,7 +516,7 @@ export function FacultySummerCampScreen({ initialTab = "programs", visibleTabs }
                 />
               ) : (
                 <View style={localStyles.list}>
-                  {filteredCamps.map((camp) => (
+                  {campsPager.items.map((camp) => (
                     <FacultySummerCampProgramCard
                       key={camp.id}
                       camp={camp}
@@ -518,6 +525,7 @@ export function FacultySummerCampScreen({ initialTab = "programs", visibleTabs }
                       onPublish={() => void quickPublishCamp(camp)}
                     />
                   ))}
+                  <FacultyListPagerFooter pager={campsPager} />
                 </View>
               )
             ) : tab === "tracks" ? (
@@ -535,7 +543,7 @@ export function FacultySummerCampScreen({ initialTab = "programs", visibleTabs }
                 />
               ) : (
                 <View style={localStyles.list}>
-                  {filteredTrainings.map((training) => (
+                  {tracksPager.items.map((training) => (
                     <FacultySummerCampTrackCard
                       key={training.id}
                       training={training}
@@ -544,6 +552,7 @@ export function FacultySummerCampScreen({ initialTab = "programs", visibleTabs }
                       onPublish={() => void quickPublishTraining(training)}
                     />
                   ))}
+                  <FacultyListPagerFooter pager={tracksPager} />
                 </View>
               )
             ) : tab === "campers" ? (
@@ -559,13 +568,14 @@ export function FacultySummerCampScreen({ initialTab = "programs", visibleTabs }
                 />
               ) : (
                 <View style={localStyles.list}>
-                  {filteredCampers.map((camper) => (
+                  {campersPager.items.map((camper) => (
                     <FacultySummerCampCamperCard
                       key={camper.id}
                       camper={camper}
                       onPress={() => setSelectedCamper(camper)}
                     />
                   ))}
+                  <FacultyListPagerFooter pager={campersPager} />
                 </View>
               )
             ) : filteredRequests.length === 0 ? (
@@ -590,7 +600,7 @@ export function FacultySummerCampScreen({ initialTab = "programs", visibleTabs }
                     </Text>
                   </Pressable>
                 ) : null}
-                {filteredRequests.map((request) => (
+                {requestsPager.items.map((request) => (
                   <FacultySummerCampRequestCard
                     key={request.id}
                     request={request}
@@ -600,6 +610,7 @@ export function FacultySummerCampScreen({ initialTab = "programs", visibleTabs }
                     onReject={() => setQuickRejectRequest(request)}
                   />
                 ))}
+                <FacultyListPagerFooter pager={requestsPager} />
               </View>
             )}
           </>

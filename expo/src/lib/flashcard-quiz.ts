@@ -92,3 +92,12 @@ export function buildFlashcardMcq(
 export function canUseFlashcardMcq(deckCards: FlashcardCard[]): boolean {
   return deckCards.length >= 2 && deckCards.some((c) => c.frontText.trim() && c.backText.trim())
 }
+
+/** Grade a flashcard MCQ tap — correct when the choice was marked at build time. */
+export function gradeFlashcardMcqChoice(choice: FlashcardMcqChoice): boolean {
+  return choice.isCorrect === true
+}
+
+export function flashcardMcqHasSingleCorrectAnswer(mcq: FlashcardMcq): boolean {
+  return mcq.choices.filter((choice) => choice.isCorrect).length === 1
+}

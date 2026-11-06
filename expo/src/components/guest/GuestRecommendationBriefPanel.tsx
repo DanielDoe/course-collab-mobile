@@ -4,6 +4,7 @@ import { AppAlert } from "../../lib/app-alert"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useSession } from "../../context/SessionProvider"
 import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
+import { useAppToast } from "../../context/AppToastProvider"
 import { ApiError } from "../../lib/api"
 import { guestApi } from "../../lib/guest-api"
 import type { GuestRecommendationBrief } from "../../lib/guest-types"
@@ -24,6 +25,7 @@ export function GuestRecommendationBriefPanel({ requestId }: Props) {
   const native = useThemedNative()
   const tokens = useAppThemeTokens()
   const type = useNativeType()
+  const { showSuccess, showInfo } = useAppToast()
 
   const [fields, setFields] = useState({
     highlights: "",
@@ -69,7 +71,7 @@ export function GuestRecommendationBriefPanel({ requestId }: Props) {
     try {
       const payload = await guestApi.saveRecommendationBrief(guestSession, requestId, fields)
       if (payload.brief) applyBrief(payload.brief)
-      AppAlert.alert("Saved", "Your recommendation brief was saved.")
+      showSuccess("Recommendation brief saved")
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not save brief.")
     } finally {
@@ -84,9 +86,8 @@ export function GuestRecommendationBriefPanel({ requestId }: Props) {
     try {
       const payload = await guestApi.generateRecommendationBrief(guestSession, requestId)
       if (payload.brief) applyBrief(payload.brief)
-      AppAlert.alert(
-        "Brief generated",
-        payload.creditFree ? "No credits were used for this brief." : "Your brief is ready to review.",
+      showInfo(
+        payload.creditFree ? "Brief generated — no credits used" : "Brief generated — ready to review",
       )
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not generate brief.")

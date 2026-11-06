@@ -25,8 +25,11 @@ import { useFacultyStickyHeaderScrollLayout, FacultySearchToolbar } from "./facu
 import { FacultySignatureListCard } from "./FacultyCollabListCards"
 import { NativeSelect } from "../NativeSelect"
 import { secondsSelectOptions } from "./FacultyNativePickers"
+import { playgroundCreateAllowedSessions } from "../../lib/faculty-playground-create"
+import { useFacultyListPager } from "../../hooks/useFacultyListPager"
+import { FacultyListPagerFooter } from "./FacultyListPagerFooter"
 
-type Scope = { instructorId: number; courseId: number }
+type Scope = { instructorId: number; courseId: number; sessionId?: number | null }
 
 type Props = {
   scope: Scope
@@ -88,6 +91,13 @@ export function FacultyPlaygroundQuestionBank({
         .includes(q),
     )
   }, [questions, search])
+
+  const topicsPager = useFacultyListPager(filteredTopics, `${view}:${search}`, "topics")
+  const questionsPager = useFacultyListPager(
+    filteredQuestions,
+    `${view}:${search}:${activeTopic ?? ""}`,
+    "questions",
+  )
 
   const loadQuestions = useCallback(async () => {
     if (!activeTopic) return
@@ -177,6 +187,7 @@ export function FacultyPlaygroundQuestionBank({
         questionCount: selectedIds.length,
         durationSec: duration,
         topics: activeTopic ? [activeTopic] : [],
+        allowedSessions: playgroundCreateAllowedSessions(scope.sessionId),
       })
       onSessionCreated(result)
       backToTopics()
@@ -271,7 +282,7 @@ export function FacultyPlaygroundQuestionBank({
             />
           ) : (
             <View style={localStyles.list}>
-              {filteredTopics.map((topic) => (
+              {topicsPager.items.map((topic) => (
                 <FacultySignatureListCard
                   key={topic.topic}
                   thumb={facultyPlaygroundTopicThumb(topic.topic)}
@@ -281,6 +292,7 @@ export function FacultyPlaygroundQuestionBank({
                   onPress={() => openTopic(topic.topic)}
                 />
               ))}
+              <FacultyListPagerFooter pager={topicsPager} />
             </View>
           )
         ) : loading ? (
@@ -299,7 +311,7 @@ export function FacultyPlaygroundQuestionBank({
           />
         ) : (
           <View style={localStyles.list}>
-            {filteredQuestions.map((question) => {
+            {questionsPager.items.map((question) => {
               const selected = selectedIds.includes(question.id)
               const preview = stripQuestionPreview(question.questionText, 220) || "Untitled question"
               return (
@@ -350,6 +362,7 @@ export function FacultyPlaygroundQuestionBank({
                 </Pressable>
               )
             })}
+            <FacultyListPagerFooter pager={questionsPager} />
           </View>
         )}
       </ScrollView>

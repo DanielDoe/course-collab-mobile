@@ -11,7 +11,7 @@ import {
   matchesPrompt,
   moduleAction,
 } from "./faculty-cora-offline-shared"
-import { buildLocalAnnouncementProposal } from "./cora/local-proposals"
+import { buildLocalAnnouncementProposal, buildLocalFlashcardDeckProposal } from "./cora/local-proposals"
 
 export function parseQuestionCount(message: string): number {
   const match = message.match(/\b(\d{1,2})\b/)
@@ -82,7 +82,34 @@ function isAnnouncementPrompt(message: string): boolean {
 }
 
 function isFlashcardPrompt(message: string): boolean {
-  return matchesAny(message, ["flashcard", "flash card", "deck from"])
+  return matchesAny(message, ["flashcard", "flash card", "deck from", "notes on"])
+}
+
+function isCreateIntentMessage(message: string): boolean {
+  return matchesAny(message, [
+    "create",
+    "generate",
+    "draft",
+    "build",
+    "make",
+    "flashcard",
+    "announcement",
+    "question bank",
+    "playground",
+    "notes",
+  ])
+}
+
+export function normalizeFacultyChatActions(raw: unknown): FacultyCoraChatResponse["actions"] {
+  if (!Array.isArray(raw)) return []
+  return raw.filter(
+    (item): item is NonNullable<FacultyCoraChatResponse["actions"]>[number] =>
+      !!item &&
+      typeof item === "object" &&
+      typeof (item as { id?: unknown }).id === "string" &&
+      typeof (item as { label?: unknown }).label === "string" &&
+      typeof (item as { kind?: unknown }).kind === "string",
+  )
 }
 
 function isPlaygroundPrompt(message: string): boolean {
@@ -176,9 +203,26 @@ function generateAnnouncementReply(
   }
 }
 
-function generateFlashcardReply(message: string): FacultyCoraChatResponse {
+function generateFlashcardReply(message: string, scope?: InstructorScope): FacultyCoraChatResponse {
   const lectureLabel = parseLectureLabel(message)
   const topic = parseTopicPhrase(message)
+  const resolvedTopic = topic !== "course topic" ? topic : lectureLabel
+  const courseLabel =
+    (scope as InstructorScope & { courseCode?: string; courseTitle?: string })?.courseCode ||
+    (scope as InstructorScope & { courseCode?: string; courseTitle?: string })?.courseTitle ||
+    (scope?.courseId ? `Course ${scope.courseId}` : "your course")
+
+  const proposals =
+    scope?.courseId != null && scope.courseId > 0
+      ? [
+          buildLocalFlashcardDeckProposal({
+            instructorId: scope.instructorId,
+            courseId: scope.courseId,
+            courseLabel,
+            topicName: resolvedTopic.replace(/\s+for my students.*$/i, "").trim() || resolvedTopic,
+          }),
+        ]
+      : []
 
   return {
     reply: [
@@ -191,17 +235,29 @@ function generateFlashcardReply(message: string): FacultyCoraChatResponse {
       topic !== "course topic"
         ? `Suggested bank topic: **${topic}**`
         : `Try a topic like **${lectureLabel}** if it exists in your bank.`,
+      "",
+      proposals.length
+        ? "Confirm in the card below to generate the deck in CourseCollab."
+        : "Select a course first, then I can generate the deck for you.",
     ].join("\n"),
     offline: true,
     suggestedModuleId: "flashcards",
-    actions: [
-      moduleAction("flashcards", "Generate flashcards", {
-        pendingKind: "flashcard_topic",
-        topicName: topic !== "course topic" ? topic : lectureLabel,
-      }),
-      moduleAction("lectures", "Manage Lectures"),
-      moduleAction("course-notes", "Course Notes"),
-    ],
+    proposals,
+    actions: proposals.length
+      ? [
+          moduleAction("flashcards", "Review flashcards", {
+            pendingKind: "flashcard_topic",
+            topicName: resolvedTopic,
+          }),
+        ]
+      : [
+          moduleAction("flashcards", "Generate flashcards", {
+            pendingKind: "flashcard_topic",
+            topicName: resolvedTopic,
+          }),
+          moduleAction("lectures", "Manage Lectures"),
+          moduleAction("course-notes", "Course Notes"),
+        ],
   }
 }
 
@@ -267,7 +323,7 @@ export function buildFacultyCoraCreateOfflineReply(
     matchesPrompt(message, ["create flashcards from lecture 6 notes"]) ||
     isFlashcardPrompt(message)
   ) {
-    return generateFlashcardReply(message)
+    return generateFlashcardReply(message, scope)
   }
 
   if (
@@ -336,6 +392,45 @@ export async function generateFacultyCoraQuestionDrafts(
       parsed: { topic, count, source: "offline-template" },
       offline: true,
     }
+  }
+}
+
+/**
+ * Live Cora chat often returns conversational text without `actions` / `proposals`.
+ * Re-attach create-intent chips from the offline matcher so instructors still get
+ * "Generate flashcards" / module shortcuts after the API reply.
+ */
+export function supplementFacultyCoraLiveResponse(
+  scope: InstructorScope,
+  message: string,
+  response: FacultyCoraChatResponse,
+  capabilityId?: FacultyCoraCapabilityId,
+): FacultyCoraChatResponse {
+  if (response.offline || response.rbacBlocked || response.scopeRedirect) {
+    return response
+  }
+
+  const actions = normalizeFacultyChatActions(response.actions)
+  const proposals = response.proposals ?? []
+  if (proposals.length > 0) {
+    return { ...response, actions }
+  }
+
+  const shouldSupplement = capabilityId === "create" || isCreateIntentMessage(message)
+  if (!shouldSupplement) return response
+
+  const supplemental = buildFacultyCoraCreateOfflineReply(message, scope)
+  const supplementalActions = normalizeFacultyChatActions(supplemental.actions)
+  const supplementalProposals = supplemental.proposals ?? []
+  if (supplementalActions.length === 0 && supplementalProposals.length === 0) {
+    return response
+  }
+
+  return {
+    ...response,
+    proposals: supplementalProposals,
+    actions: supplementalActions,
+    suggestedModuleId: supplemental.suggestedModuleId ?? response.suggestedModuleId,
   }
 }
 

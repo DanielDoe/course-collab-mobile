@@ -1,3 +1,4 @@
+import { Platform } from "react-native"
 import type { Ionicons } from "@expo/vector-icons"
 
 export type GuestNavItem = {
@@ -292,6 +293,7 @@ export function filterGuestNavItems(
 export function guestCoraCommerceEnabled(entitlements: {
   flags?: { guestMembershipEnabled?: boolean; coraCareerEnabled?: boolean }
 }): boolean {
+  if (Platform.OS === "ios") return false
   return (
     entitlements.flags?.guestMembershipEnabled !== false &&
     entitlements.flags?.coraCareerEnabled !== false

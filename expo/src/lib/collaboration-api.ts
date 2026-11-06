@@ -4,9 +4,22 @@ import { ApiError, studentAuthenticatedHeaders, studentAuthenticatedRequest } fr
 import { API_BASE_URL } from "../constants"
 import { assertProductionHttpsUrl, createApiAbortSignal } from "./http"
 import { persistHttpCookiesFromResponse } from "./student-http-cookies"
+import { studentProjectsListPath } from "./student-content-context"
+import { enrichStudentContentSession, studentEnrichedContentPath } from "./student-content-session"
+import { isInstructorAuthLeakMessage } from "./session-expiry"
 
 function request<T>(session: StudentSession, path: string, init?: RequestInit): Promise<T> {
   return studentAuthenticatedRequest<T>(session, path, init)
+}
+
+async function requestContent<T>(
+  session: StudentSession,
+  path: string,
+  extra?: Record<string, string | number | undefined>,
+  init?: RequestInit,
+): Promise<T> {
+  const enrichedPath = await studentEnrichedContentPath(session, path, extra)
+  return request<T>(session, enrichedPath, init)
 }
 
 export type ForumThread = {
@@ -442,10 +455,19 @@ export const collaborationApi = {
         contactMethod: payload.contactMethod})}),
 
   // ── Groups ──
-  getGroups: (session: StudentSession, status?: string) => {
-    const q = new URLSearchParams({ session: session.section })
-    if (status) q.set("status", status)
-    return request<{ groups?: GroupRecord[] }>(session, `/api/groups?${q.toString()}`)
+  getGroups: async (session: StudentSession, status?: string) => {
+    try {
+      return await requestContent<{ groups?: GroupRecord[] }>(
+        session,
+        "/api/groups",
+        status ? { status } : undefined,
+      )
+    } catch (err) {
+      if (err instanceof ApiError && isInstructorAuthLeakMessage(err.message)) {
+        return { groups: [] }
+      }
+      throw err
+    }
   },
 
   getGroup: (session: StudentSession, groupId: number) =>
@@ -490,9 +512,9 @@ export const collaborationApi = {
         requesterId: Number(session.databaseId)})}),
 
   getGroupsDiscover: (session: StudentSession) =>
-    request<{ openGroups?: GroupRecord[]; data?: DiscoverData }>(
+    requestContent<{ openGroups?: GroupRecord[]; data?: DiscoverData }>(
       session,
-      `/api/groups/requests/discover?session=${encodeURIComponent(session.section)}`,
+      "/api/groups/requests/discover",
     ).then((body) => ({
       openGroups: body.openGroups ?? body.data?.openGroups ?? [],
       studentsWithoutGroup: body.data?.studentsWithoutGroup ?? [],
@@ -576,11 +598,13 @@ export const collaborationApi = {
   },
 
   // ── Projects ──
-  getProjects: (session: StudentSession) =>
-    request<{ projects?: ProjectRecord[] }>(
+  getProjects: async (session: StudentSession) => {
+    const contentSession = await enrichStudentContentSession(session)
+    return request<{ projects?: ProjectRecord[] }>(
       session,
-      `/api/projects/list?session=${encodeURIComponent(session.section)}`,
-    ),
+      studentProjectsListPath(contentSession),
+    )
+  },
 
   getProject: (session: StudentSession, projectId: number) =>
     request<{ project?: ProjectRecord }>(session, `/api/projects/${projectId}`),
@@ -725,22 +749,19 @@ export const collaborationApi = {
 
   // ── Playground ──
   getPlaygroundCredits: (session: StudentSession) =>
-    request<PlaygroundCredits>(
-      session,
-      `/api/playground/credits?studentId=${encodeURIComponent(session.databaseId)}`,
-    ),
+    requestContent<PlaygroundCredits>(session, "/api/playground/credits"),
 
   getPlaygroundPersonal: (session: StudentSession) =>
-    request<PlaygroundPersonalStats>(
-      session,
-      `/api/playground/personal?studentId=${encodeURIComponent(session.databaseId)}`,
-    ),
+    requestContent<PlaygroundPersonalStats>(session, "/api/playground/personal"),
 
   getPlaygroundPolicy: (session: StudentSession) =>
-    request<PlaygroundPolicyResponse>(session, "/api/playground/policy"),
+    requestContent<PlaygroundPolicyResponse>(session, "/api/playground/policy"),
 
   getPlaygroundPracticeSets: (session: StudentSession) =>
-    request<{ practiceSets?: PlaygroundPracticeSet[] }>(session, "/api/playground/practice-sets"),
+    requestContent<{ practiceSets?: PlaygroundPracticeSet[] }>(
+      session,
+      "/api/playground/practice-sets",
+    ),
 
   joinPlayground: (
     session: StudentSession,

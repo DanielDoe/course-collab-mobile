@@ -175,6 +175,8 @@ export async function submitStudentAccessRequest(payload: {
   studentId: string
   section: string
   email: string
+  universityId?: number
+  courseId?: number
   invitationToken?: string
 }): Promise<{ message: string; requestId?: number; requiresEmailVerification?: boolean }> {
   const response = await fetch(`${API_BASE_URL}/api/student/request-account`, {

@@ -15,7 +15,9 @@ import { formatFacultyRelativeTime, instructorApi, type InstructorIssue } from "
 import { useFacultyScope } from "../../hooks/useFacultyScope"
 import { useFacultyShell } from "../../context/FacultyShellContext"
 import { useNotificationModuleRefresh } from "../../lib/notifications/notification-events"
+import { useFacultyListPager } from "../../hooks/useFacultyListPager"
 import { useModuleTheme } from "../../lib/themed-module-shell"
+import { FacultyListPagerFooter } from "./FacultyListPagerFooter"
 import { FacultyEmptyState, FacultyStatusPill } from "./faculty-shared"
 import { FacultyIssueDetailModal } from "./FacultyIssueDetailModal"
 import { useFacultyStickyHeaderScrollLayout, FacultyFilterSheet, FacultySearchToolbar } from "./faculty-module-shell"
@@ -91,6 +93,7 @@ export function FacultyIssuesScreen({
 
   const source = status === "open" ? openIssues : closedIssues
   const filtered = useMemo(() => filterIssues(source, status, search), [source, status, search])
+  const pager = useFacultyListPager(filtered, `${status}:${search}`, "issues")
 
   if (!ready) {
     return (
@@ -148,7 +151,7 @@ export function FacultyIssuesScreen({
           />
         ) : (
           <View style={styles.list}>
-            {filtered.map((issue) => (
+            {pager.items.map((issue) => (
               <Pressable
                 key={issue.id}
                 style={({ pressed }) => [moduleStyles.card, styles.card, pressed && moduleStyles.cardPressed]}
@@ -183,6 +186,7 @@ export function FacultyIssuesScreen({
                 </Text>
               </Pressable>
             ))}
+            <FacultyListPagerFooter pager={pager} />
           </View>
         )}
       </ScrollView>

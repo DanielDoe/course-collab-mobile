@@ -3,6 +3,7 @@ import { StyleSheet, Text, View } from "react-native"
 import { instructorAdminApi, type TeachingAssistant } from "../../../lib/instructor-admin-api"
 import { instructorApi, type InstructorCourse } from "../../../lib/instructor-api"
 import { useFacultyScope } from "../../../hooks/useFacultyScope"
+import { useFacultyListPager } from "../../../hooks/useFacultyListPager"
 import { FacultySearchToolbar } from "../faculty-module-shell"
 import { FacultyEmptyState } from "../faculty-shared"
 import { facultyAdminTaThumb } from "../../../lib/faculty-admin-theme"
@@ -11,6 +12,7 @@ import {
   FacultyAdminTierGate,
   useAdminStyles,
 } from "../faculty-admin-ui"
+import { FacultyListPagerFooter } from "../FacultyListPagerFooter"
 import { FacultySignatureListCard } from "../FacultyCollabListCards"
 import { useModuleTheme } from "../../../lib/themed-module-shell"
 import { FacultyTeachingAssistantActionSheet } from "./FacultyTeachingAssistantsActionSheet"
@@ -84,6 +86,7 @@ function FacultyTeachingAssistantsContent() {
     )
   }, [tas, search])
 
+  const pager = useFacultyListPager(filtered, `assistants:${search}`, "assistants")
   const activeCount = useMemo(() => tas.filter((ta) => ta.is_active).length, [tas])
 
   return (
@@ -93,6 +96,7 @@ function FacultyTeachingAssistantsContent() {
         refreshing={refreshing}
         error={error}
         onRefresh={() => void handleRefresh()}
+        suppressSearchDock={false}
       >
         <FacultySearchToolbar
           value={search}
@@ -120,7 +124,7 @@ function FacultyTeachingAssistantsContent() {
           <View style={adminStyles.sectionWrap}>
             <Text style={adminStyles.sectionHeader}>Assistants</Text>
             <View style={styles.list}>
-              {filtered.map((ta) => {
+              {pager.items.map((ta) => {
                 const courseMeta =
                   ta.course_codes?.filter(Boolean).join(", ") ||
                   (ta.assigned_course_ids?.length
@@ -145,6 +149,7 @@ function FacultyTeachingAssistantsContent() {
                 )
               })}
             </View>
+            <FacultyListPagerFooter pager={pager} />
             <Text style={adminStyles.sectionFooter}>
               {activeCount === tas.length
                 ? `${tas.length} assistant${tas.length === 1 ? "" : "s"} with course-scoped module access.`

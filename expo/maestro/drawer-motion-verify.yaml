@@ -1,0 +1,73 @@
+appId: com.coursecollab.app
+---
+- launchApp:
+    clearState: false
+- openLink: coursecollab://dev-student-login?force=1
+- extendedWaitUntil:
+    visible: "Open navigation menu"
+    timeout: 90000
+- tapOn:
+    text: "Dismiss"
+    optional: true
+- tapOn:
+    text: "Not now"
+    optional: true
+- tapOn:
+    text: "Dismiss alert"
+    optional: true
+
+- assertNotVisible:
+    text: "Close menu"
+
+# Open via top-bar toggle (reliable baseline)
+- tapOn: "Open navigation menu"
+- extendedWaitUntil:
+    visible: "Close menu"
+    timeout: 10000
+- takeScreenshot: drawer-open
+- tapOn: "Close menu"
+- waitForAnimationToEnd
+- assertNotVisible:
+    text: "Close menu"
+
+# Edge swipe open (RNGH edge strip — best-effort in automation)
+- swipe:
+    start: "2%,50%"
+    end: "60%,50%"
+    duration: 350
+- extendedWaitUntil:
+    visible: "Close menu"
+    timeout: 8000
+    optional: true
+- takeScreenshot: drawer-edge-open
+- tapOn:
+    text: "Close menu"
+    optional: true
+- tapOn:
+    text: "Close menu"
+    optional: true
+- waitForAnimationToEnd
+
+# Re-open and navigate via drawer row
+- tapOn: "Open navigation menu"
+- extendedWaitUntil:
+    visible: "Close menu"
+    timeout: 10000
+- tapOn: "Lectures"
+- extendedWaitUntil:
+    visible: "Lectures"
+    timeout: 30000
+- assertNotVisible:
+    text: "Close menu"
+- takeScreenshot: drawer-navigated
+
+# Backdrop tap closes when re-opened
+- tapOn: "Open navigation menu"
+- extendedWaitUntil:
+    visible: "Close menu"
+    timeout: 10000
+- tapOn: "Dismiss menu backdrop"
+- waitForAnimationToEnd
+- assertNotVisible:
+    text: "Close menu"
+- takeScreenshot: drawer-backdrop-closed

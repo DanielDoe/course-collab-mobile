@@ -26,6 +26,8 @@ import {
 import { formatAssignmentDueLabel } from "../../lib/faculty-classroom-assignment-form"
 import { shortenTaskTitle, isSolutionAssignment, resolveAssignmentQuestionConfig } from "../../lib/classroom-submission"
 import { useFacultyScope } from "../../hooks/useFacultyScope"
+import { classroomPointsAssignmentNavTarget } from "../../lib/classroom-points-navigation"
+import { fetchFacultyTermSessions, rowMatchesFacultySection } from "../../lib/faculty-section-scope"
 import { useFacultyShell } from "../../context/FacultyShellContext"
 import { useNotificationModuleRefresh } from "../../lib/notifications/notification-events"
 import { semanticSoft } from "../../lib/themed-module-theme"
@@ -39,7 +41,9 @@ import {
 } from "../../lib/faculty-classroom-points-theme"
 import { FacultySignatureListCard } from "./FacultyCollabListCards"
 import { NATIVE } from "../../constants/faculty-native-theme"
+import { useFacultyListPager } from "../../hooks/useFacultyListPager"
 import { useModuleTheme } from "../../lib/themed-module-shell"
+import { FacultyListPagerFooter } from "./FacultyListPagerFooter"
 import { FacultyEmptyState } from "./faculty-shared"
 import { useFacultyStickyHeaderScrollLayout, FacultyModuleStickyHeader, FacultyModuleTabBar, FacultySearchToolbar } from "./faculty-module-shell"
 import { FacultyClassroomPointsKpiGrid } from "./FacultyClassroomPointsKpiGrid"
@@ -106,32 +110,44 @@ export function FacultyClassroomPointsScreen() {
   const load = useCallback(async () => {
     if (!scope) return
     setError("")
+    const sessionCode = scope.sessionCode?.trim() || undefined
     try {
-      const [pendingRows, practiceRows, approvedRows, summaryRows, assignmentRows, sessionRes] =
+      const [pendingRows, practiceRows, approvedRows, summaryRows, assignmentRows, sessionRows] =
         await Promise.all([
-          instructorApi.getClassroomPoints(scope, { status: "pending", limit: 150 }),
+          instructorApi.getClassroomPoints(scope, { status: "pending", limit: 150, session: sessionCode }),
           instructorApi.getPendingPracticePoints(scope),
-          instructorApi.getClassroomPoints(scope, { status: "approved", limit: 80 }),
-          instructorApi.getClassroomPointsSummary(scope),
-          instructorApi.getClassroomPointAssignments(scope),
-          instructorApi.getSessions(scope, scope.academicTermId ?? undefined),
+          instructorApi.getClassroomPoints(scope, { status: "approved", limit: 80, session: sessionCode }),
+          instructorApi.getClassroomPointsSummary(scope, sessionCode),
+          instructorApi.getClassroomPointAssignments(scope, sessionCode),
+          fetchFacultyTermSessions(scope),
         ])
-      setPending(pendingRows)
-      setPracticePending(practiceRows)
-      setApproved(approvedRows)
-      setSummary(summaryRows)
-      setAssignments(assignmentRows)
-      setSessions(
-        (sessionRes.sessions ?? []).filter((s, i, arr) => {
-          const code = s.code?.trim()
-          if (!code) return false
-          return arr.findIndex((x) => x.code?.trim() === code) === i
-        }),
+      const scopedSummary = summaryRows.filter((row) =>
+        rowMatchesFacultySection(row, scope, sessionCode ?? "all"),
       )
+      const scopedPending = pendingRows.filter((row) =>
+        rowMatchesFacultySection(row, scope, sessionCode ?? "all"),
+      )
+      const scopedApproved = approvedRows.filter((row) =>
+        rowMatchesFacultySection(row, scope, sessionCode ?? "all"),
+      )
+      setPending(scopedPending)
+      setPracticePending(practiceRows)
+      setApproved(scopedApproved)
+      setSummary(scopedSummary)
+      setAssignments(assignmentRows)
+      setSessions(sessionRows)
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not load classroom points.")
     }
   }, [scope])
+
+  useEffect(() => {
+    if (!scope) return
+    setPending([])
+    setApproved([])
+    setSummary([])
+    setAssignments([])
+  }, [scope?.courseId, scope?.sessionId])
 
   useEffect(() => {
     if (!ready) {
@@ -174,6 +190,16 @@ export function FacultyClassroomPointsScreen() {
     () => filterSummaryBySearch(summary, search),
     [summary, search],
   )
+  const pendingRows = useMemo(
+    () => [
+      ...practicePending.map((point) => ({ key: `practice-${point.id}`, kind: "practice" as const, point })),
+      ...pendingFiltered.map((point) => ({ key: `classroom-${point.id}`, kind: "classroom" as const, point })),
+    ],
+    [practicePending, pendingFiltered],
+  )
+  const pendingPager = useFacultyListPager(pendingRows, `pending:${search}`, "submissions")
+  const awardsPager = useFacultyListPager(approvedFiltered, `awards:${search}`, "awards")
+  const assignmentsPager = useFacultyListPager(assignmentsFiltered, `assignments:${search}`, "tasks")
 
   const toolbarTrailingAction = useMemo(() => {
     if (tab === "assignments") {
@@ -298,6 +324,7 @@ export function FacultyClassroomPointsScreen() {
                 onSelectPoint={(point) => openPointDetail(point, "review")}
                 onSelectAward={(point) => openPointDetail(point, "award")}
                 onGoAssignments={() => setTab("assignments")}
+                onOpenAssignment={(assignment) => setSelectedAssignment(assignment)}
                 onGoLeaderboard={() => setTab("leaderboard")}
                 onGoAwards={() => setTab("awards")}
                 onSelectStudent={setSelectedStudent}
@@ -338,68 +365,86 @@ export function FacultyClassroomPointsScreen() {
                   />
                 ) : null}
 
-                {practicePending.length > 0 ? (
-                  <>
-                    <SectionHeader label="Practice hub" accent={FACULTY_CLASSROOM_POINTS_COLOR.practice} count={practicePending.length} />
-                    {practicePending.map((point) => (
-                      <PracticeCard
-                        key={point.id}
-                        point={point}
-                        acting={bulkActing === `practice-${point.id}`}
-                        onApprove={() =>
-                          void (async () => {
-                            setBulkActing(`practice-${point.id}`)
-                            try {
-                              await instructorApi.approvePracticePoint(scope!, point.id)
-                              await handleRefresh()
-                            } catch (err) {
-                              AppAlert.alert("Failed", err instanceof ApiError ? err.message : "Try again.")
-                            } finally {
-                              setBulkActing(null)
-                            }
-                          })()
-                        }
-                        onReject={() =>
-                          AppAlert.alert("Reject practice point?", undefined, [
-                            { text: "Cancel", style: "cancel" },
-                            {
-                              text: "Reject",
-                              style: "destructive",
-                              onPress: () => {
-                                void (async () => {
-                                  setBulkActing(`practice-${point.id}`)
-                                  try {
-                                    await instructorApi.rejectPracticePoint(scope!, point.id)
-                                    await handleRefresh()
-                                  } catch (err) {
-                                    AppAlert.alert("Failed", err instanceof ApiError ? err.message : "Try again.")
-                                  } finally {
-                                    setBulkActing(null)
-                                  }
-                                })()
-                              },
-                            },
-                          ])
-                        }
-                      />
-                    ))}
-                  </>
-                ) : null}
-
-                {pendingFiltered.length > 0 ? (
-                  <>
-                    <SectionHeader label="Code & solution" accent={FACULTY_CLASSROOM_POINTS_COLOR.code} count={stats.pendingReview} />
-                    {pendingFiltered.map((point) => (
-                      <PendingCard key={point.id} point={point} onPress={() => openPointDetail(point, "review")} />
-                    ))}
-                  </>
-                ) : practicePending.length === 0 ? (
+                {pendingRows.length === 0 ? (
                   <FacultyEmptyState
                     icon="checkmark-circle-outline"
                     title="Nothing pending"
                     body="Student submissions awaiting review appear here."
                   />
-                ) : null}
+                ) : (
+                  <>
+                    {pendingPager.items.some((row) => row.kind === "practice") ? (
+                      <SectionHeader
+                        label="Practice hub"
+                        accent={FACULTY_CLASSROOM_POINTS_COLOR.practice}
+                        count={practicePending.length}
+                      />
+                    ) : null}
+                    {pendingPager.items.map((row) => {
+                      if (row.kind !== "practice") return null
+                      const point = row.point
+                      return (
+                        <PracticeCard
+                          key={point.id}
+                          point={point}
+                          acting={bulkActing === `practice-${point.id}`}
+                          onApprove={() =>
+                            void (async () => {
+                              setBulkActing(`practice-${point.id}`)
+                              try {
+                                await instructorApi.approvePracticePoint(scope!, point.id)
+                                await handleRefresh()
+                              } catch (err) {
+                                AppAlert.alert("Failed", err instanceof ApiError ? err.message : "Try again.")
+                              } finally {
+                                setBulkActing(null)
+                              }
+                            })()
+                          }
+                          onReject={() =>
+                            AppAlert.alert("Reject practice point?", undefined, [
+                              { text: "Cancel", style: "cancel" },
+                              {
+                                text: "Reject",
+                                style: "destructive",
+                                onPress: () => {
+                                  void (async () => {
+                                    setBulkActing(`practice-${point.id}`)
+                                    try {
+                                      await instructorApi.rejectPracticePoint(scope!, point.id)
+                                      await handleRefresh()
+                                    } catch (err) {
+                                      AppAlert.alert("Failed", err instanceof ApiError ? err.message : "Try again.")
+                                    } finally {
+                                      setBulkActing(null)
+                                    }
+                                  })()
+                                },
+                              },
+                            ])
+                          }
+                        />
+                      )
+                    })}
+                    {pendingPager.items.some((row) => row.kind === "classroom") ? (
+                      <SectionHeader
+                        label="Code & solution"
+                        accent={FACULTY_CLASSROOM_POINTS_COLOR.code}
+                        count={stats.pendingReview}
+                      />
+                    ) : null}
+                    {pendingPager.items.map((row) =>
+                      row.kind === "classroom" ? (
+                        <PendingCard
+                          key={row.point.id}
+                          point={row.point}
+                          onPress={() => openPointDetail(row.point, "review")}
+                        />
+                      ) : null,
+                    )}
+                    <FacultyListPagerFooter pager={pendingPager} />
+                  </>
+                )}
               </View>
             ) : null}
 
@@ -421,9 +466,12 @@ export function FacultyClassroomPointsScreen() {
                     body="Approved points and manual awards show up here."
                   />
                 ) : (
-                  approvedFiltered.map((point) => (
-                    <AwardCard key={point.id} point={point} onPress={() => openPointDetail(point, "award")} />
-                  ))
+                  <>
+                    {awardsPager.items.map((point) => (
+                      <AwardCard key={point.id} point={point} onPress={() => openPointDetail(point, "award")} />
+                    ))}
+                    <FacultyListPagerFooter pager={awardsPager} />
+                  </>
                 )}
               </View>
             ) : null}
@@ -443,13 +491,16 @@ export function FacultyClassroomPointsScreen() {
                     body="Try another search term."
                   />
                 ) : (
-                  assignmentsFiltered.map((assignment) => (
-                    <AssignmentCard
-                      key={assignment.id}
-                      assignment={assignment}
-                      onOpen={() => setSelectedAssignment(assignment)}
-                    />
-                  ))
+                  <>
+                    {assignmentsPager.items.map((assignment) => (
+                      <AssignmentCard
+                        key={assignment.id}
+                        assignment={assignment}
+                        onOpen={() => setSelectedAssignment(assignment)}
+                      />
+                    ))}
+                    <FacultyListPagerFooter pager={assignmentsPager} />
+                  </>
                 )}
               </View>
             ) : null}
@@ -635,6 +686,7 @@ function OverviewPanel({
   onSelectPoint,
   onSelectAward,
   onGoAssignments,
+  onOpenAssignment,
   onGoLeaderboard,
   onGoAwards,
   onSelectStudent,
@@ -650,6 +702,7 @@ function OverviewPanel({
   onSelectPoint: (point: ClassroomPointRow) => void
   onSelectAward: (point: ClassroomPointRow) => void
   onGoAssignments: () => void
+  onOpenAssignment: (assignment: ClassroomPointAssignment) => void
   onGoLeaderboard: () => void
   onGoAwards: () => void
   onSelectStudent: (row: ClassroomPointsSummaryRow) => void
@@ -764,7 +817,11 @@ function OverviewPanel({
               title={shortenTaskTitle(formatClassroomDisplayText(assignment.title))}
               metaLine={[assignmentKindLabel(assignment.submission_kind), assignment.session].filter(Boolean).join(" · ")}
               status={{ label: "Open", color: FACULTY_CLASSROOM_POINTS_COLOR.approved, icon: "checkmark-circle-outline" }}
-              onPress={onGoAssignments}
+              onPress={() => {
+                const target = classroomPointsAssignmentNavTarget(assignment.id)
+                if (target.kind === "detail") onOpenAssignment(assignment)
+                else onGoAssignments()
+              }}
             />
           ))}
         </View>

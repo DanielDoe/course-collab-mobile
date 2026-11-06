@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState, memo, type ReactNode } from 
 import { ActivityIndicator, LayoutAnimation, Platform, Pressable, ScrollView, StyleSheet, Text, UIManager, View } from "react-native";
 import { AppAlert } from '../../lib/app-alert'
 import { Ionicons } from "@/components/icons/AppIcon"
-import { useLocalSearchParams, useRouter } from "expo-router"
+import { useLocalSearchParams, usePathname, useRouter, useSegments } from "expo-router"
 import { ModuleScreen } from "../modules/ModuleScreen"
 import { useSession } from "../../context/SessionProvider"
 import {
@@ -29,6 +29,8 @@ import { useNotificationModuleRefresh } from "../../lib/notifications/notificati
 import { CommEmptyState } from "../faculty/faculty-communication-ui"
 import { QuestionPrepareGate } from "../questions/QuestionPrepareGate"
 import { extractAssessmentResultQuestionTexts } from "../../lib/question-prepare"
+import { firstRouteParam } from "../../lib/route-params"
+import { parseAssessmentReportAttemptId } from "../../lib/assessment-report-href"
 
 if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true)
@@ -208,11 +210,19 @@ function AssessmentReportShell({
 }
 
 export function AssessmentReportScreen() {
-  const { attemptId: attemptIdParam, type: typeParam } = useLocalSearchParams<{
+  const { attemptId: attemptIdParam, type: typeParam, from: fromParam } = useLocalSearchParams<{
     attemptId: string
     type?: string
+    from?: string
   }>()
-  const attemptId = Number(attemptIdParam)
+  const pathname = usePathname()
+  const segments = useSegments()
+  const attemptId = parseAssessmentReportAttemptId({
+    param: attemptIdParam,
+    pathname,
+    segments: [...segments],
+  })
+  const openedFromHistory = firstRouteParam(fromParam) === "quiz-history"
   const router = useRouter()
   const session = useStudentSession()
   const native = useThemedNative()
@@ -229,14 +239,18 @@ export function AssessmentReportScreen() {
 
   const kind = resolveKind(typeParam ?? data?.assessment_type)
   const config = configFor(kind)
-  /** Reports open via router.replace from web deep links — back must not dead-end. */
+  /** History opens this as an inside page — back must return to History, not Homework. */
   const handleBack = useCallback(
-    () => safeRouterBack(router, assessmentModuleHrefForKind(kind)),
-    [router, kind],
+    () =>
+      safeRouterBack(
+        router,
+        openedFromHistory ? "/module/quiz-history" : assessmentModuleHrefForKind(kind),
+      ),
+    [router, kind, openedFromHistory],
   )
 
   const load = useCallback(async () => {
-    if (!session || !Number.isFinite(attemptId)) return
+    if (!session || attemptId == null) return
     setError("")
     try {
       const res = await assessmentResultsApi.getAttemptResults(session, attemptId)
@@ -330,7 +344,7 @@ export function AssessmentReportScreen() {
   }
 
   const handleSavePdf = useCallback(async () => {
-    if (!session || !data || locked) return
+    if (!session || !data || locked || attemptId == null) return
     setSavingPdf(true)
     try {
       await downloadAssessmentReportPdf(data)
@@ -378,20 +392,13 @@ export function AssessmentReportScreen() {
     return (
       <AssessmentReportShell
         native={native}
-        title="Report"
+        title="Results"
         onBack={handleBack}
         saveDisabled
       >
-        <QuestionPrepareGate
-          fetching
-          texts={null}
-          title="Preparing report"
-          subtitle="Building question review and answer choices"
-        >
-          <ModuleScreen loading disableTopInsetAdjustment>
-            {null}
-          </ModuleScreen>
-        </QuestionPrepareGate>
+        <ModuleScreen loading disableTopInsetAdjustment stackedHeader>
+          {null}
+        </ModuleScreen>
       </AssessmentReportShell>
     )
   }

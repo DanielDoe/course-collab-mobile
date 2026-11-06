@@ -40,6 +40,12 @@ export const FACULTY_MODULE_META: Record<string, FacultyModuleMeta> = {
     summary: "Manage terms, sections, and which term students can sign into.",
     icon: "calendar-outline",
     features: ["Term list", "Set active term", "Section roster"]},
+  calendar: {
+    id: "calendar",
+    title: "Calendar",
+    summary: "Class meetings, office hours, and open schedule adjustments for this course.",
+    icon: "calendar-number-outline",
+    features: ["Month view", "Upcoming sessions", "Schedule adjustment banner"]},
   announcements: {
     id: "announcements",
     title: "Announcements",
@@ -90,10 +96,31 @@ export const FACULTY_MODULE_META: Record<string, FacultyModuleMeta> = {
     features: ["Soft-deleted items", "Restore", "Permanent purge"]},
   "student-progress": {
     id: "student-progress",
-    title: "Student Progress",
-    summary: "Advanced analytics on student mastery and engagement.",
+    title: "Class Analytics",
+    summary: "Cross-module analytics on assessments, practice, attendance, and classroom engagement.",
     icon: "analytics-outline",
-    features: ["Mastery trends", "At-risk alerts", "Topic breakdown"]},
+    features: ["Class roster insights", "Engagement scoring", "At-risk alerts", "Cora insights"]},
+  "cora-insights": {
+    id: "cora-insights",
+    title: "Cora Insights",
+    summary: "See how students use Cora in this offering — questions, topics, and early warnings.",
+    icon: "sparkles-outline",
+    features: ["Predictions", "Struggle alerts", "Common topics", "Opted-in Cora share"],
+  },
+  "ai-monitoring": {
+    id: "cora-insights",
+    title: "Cora Insights",
+    summary: "See how students use Cora in this offering — questions, topics, and early warnings.",
+    icon: "sparkles-outline",
+    features: ["Predictions", "Struggle alerts", "Common topics", "Opted-in Cora share"],
+  },
+  "ai-insights": {
+    id: "cora-insights",
+    title: "Cora Insights",
+    summary: "See how students use Cora in this offering — questions, topics, and early warnings.",
+    icon: "sparkles-outline",
+    features: ["Predictions", "Struggle alerts", "Common topics", "Opted-in Cora share"],
+  },
   reports: {
     id: "reports",
     title: "Manage Reports",
@@ -135,7 +162,7 @@ export const FACULTY_MODULE_META: Record<string, FacultyModuleMeta> = {
     title: "Assessment Governance",
     summary: "Policies for publishing, retakes, and academic integrity.",
     icon: "lock-closed-outline",
-    features: ["Publish rules", "Retake policy", "Integrity settings"]},
+    features: ["Publish rules", "Platform access", "Integrity settings"]},
   "assessment-defaults": {
     id: "assessment-defaults",
     title: "Assessment Defaults",

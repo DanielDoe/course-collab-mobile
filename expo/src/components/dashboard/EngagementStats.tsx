@@ -1,4 +1,6 @@
-import { StyleSheet, Text, View } from "react-native"
+import { Pressable, StyleSheet, Text, View } from "react-native"
+import { useRouter } from "expo-router"
+import { pushStudentAppHref } from "../../lib/student-app-href"
 import Svg, { Rect } from "react-native-svg"
 import { Ionicons } from "@/components/icons/AppIcon"
 import type { StudentDashboardStats } from "../../types/dashboard"
@@ -18,6 +20,7 @@ type EngagementStat = {
   label: string
   value: string
   progress: number
+  href: string
   streakDays?: number
 }
 
@@ -36,6 +39,7 @@ function buildEngagementStats(stats: StudentDashboardStats): EngagementStat[] {
       label: "Classroom points",
       value: unavailable.points ? "—" : formatPoints(stats.classroomPoints),
       progress: unavailable.points ? 0 : Math.min(stats.classroomPoints / POINTS_VISUAL_MAX, 1),
+      href: "/module/classroom-points",
     },
     {
       id: "streak",
@@ -44,6 +48,7 @@ function buildEngagementStats(stats: StudentDashboardStats): EngagementStat[] {
       value: unavailable.streaks ? "—" : streakLabel,
       progress: unavailable.streaks ? 0 : Math.min(stats.attendanceStreak / STREAK_DOT_COUNT, 1),
       streakDays: unavailable.streaks ? 0 : stats.attendanceStreak,
+      href: "/module/attendance",
     },
     {
       id: "credits",
@@ -51,6 +56,7 @@ function buildEngagementStats(stats: StudentDashboardStats): EngagementStat[] {
       label: "Engagement credits",
       value: unavailable.grade ? "—" : `${stats.engagementCredits}/100`,
       progress: unavailable.grade ? 0 : Math.min(stats.engagementCredits / 100, 1),
+      href: "/module/grades?focus=engagement",
     },
     {
       id: "attendance",
@@ -58,6 +64,7 @@ function buildEngagementStats(stats: StudentDashboardStats): EngagementStat[] {
       label: "Attendance",
       value: unavailable.attendance ? "—" : `${stats.attendancePct}%`,
       progress: unavailable.attendance ? 0 : Math.min(stats.attendancePct / 100, 1),
+      href: "/module/attendance",
     },
   ]
 }
@@ -82,15 +89,22 @@ function EngagementTile({
   label,
   value,
   progress,
+  href,
   streakDays = 0,
 }: EngagementStat) {
+  const router = useRouter()
   const type = useNativeType()
   const cardLayout = useKpiGridCardStyle("47.5%")
   const theme = DASHBOARD_ENGAGEMENT[id]
   const surface = theme.surface()
 
   return (
-    <View style={[styles.stat, cardLayout, { backgroundColor: surface.background, borderColor: surface.border }]}>
+    <Pressable
+      onPress={() => pushStudentAppHref(router, href)}
+      accessibilityRole="button"
+      accessibilityLabel={`Open ${label}`}
+      style={[styles.stat, cardLayout, { backgroundColor: surface.background, borderColor: surface.border }]}
+    >
       <TileDecoration variant={id} color={surface.deco} />
 
       <SolidListThumbTile thumb={surface.iconThumb} icon={icon} size="compact" style={styles.iconTile} />
@@ -105,7 +119,7 @@ function EngagementTile({
         progress={progress}
         streakDays={streakDays}
       />
-    </View>
+    </Pressable>
   )
 }
 

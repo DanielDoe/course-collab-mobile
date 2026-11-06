@@ -35,6 +35,7 @@ export function InfoSectionCard({
   iconThumb,
   children,
   flush,
+  contentPadding,
   theme,
 }: {
   title: string
@@ -42,6 +43,7 @@ export function InfoSectionCard({
   iconThumb?: SolidListThumb
   children: ReactNode
   flush?: boolean
+  contentPadding?: number
   theme?: ModuleTheme
 }) {
   const defaultTheme = useCourseInfoTheme()
@@ -51,6 +53,7 @@ export function InfoSectionCard({
       icon={icon}
       iconThumb={iconThumb}
       flush={flush}
+      contentPadding={contentPadding}
       theme={theme ?? defaultTheme}
     >
       {children}

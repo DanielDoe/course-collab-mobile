@@ -1,10 +1,11 @@
+import { attendanceDisplayPercent } from "./attendance-leaderboard-scope"
 import type {
   AttendanceStudentSummary,
   InstructorProgressReviewRow,
   PracticeStudentProgress} from "./instructor-api"
 import type { ProgressReviewPeriod } from "./progress-review-utils"
 
-export type StudentProgressTab = "overview" | "students" | "at_risk"
+export type StudentProgressTab = "overview" | "students" | "at_risk" | "cora_insights"
 
 export {
   INSTRUCTOR_REPORT_TEMPLATES as INSTRUCTOR_REPORT_TYPES,
@@ -83,7 +84,7 @@ export function buildAtRiskRows(
       reason: "Attendance flag",
       detail:
         student.attendance_percentage != null
-          ? `${Math.round(student.attendance_percentage)}% attendance`
+          ? `${attendanceDisplayPercent(student.attendance_percentage)}% attendance`
           : undefined,
       tone: "danger",
       kind: "attendance_flag",

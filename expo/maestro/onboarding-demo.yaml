@@ -7,7 +7,7 @@ appId: com.coursecollab.app
 - takeScreenshot: onboarding-demo/01-welcome
 - tapOn: "Get started"
 - extendedWaitUntil:
-    visible: "Terms of Service"
+    visible: "Terms & Policies"
     timeout: 30000
 - takeScreenshot: onboarding-demo/02-terms-top
 - scrollUntilVisible:
@@ -16,36 +16,15 @@ appId: com.coursecollab.app
     direction: DOWN
     timeout: 15000
 - takeScreenshot: onboarding-demo/02-terms-accept
-- tapOn: "I have read and agree to the Terms of Service"
-- tapOn: "Accept & continue"
-- extendedWaitUntil:
-    visible: "Privacy Policy"
-    timeout: 30000
-- takeScreenshot: onboarding-demo/03-privacy
-- scrollUntilVisible:
-    element:
-      text: ".*I have read and acknowledge the Privacy Policy.*"
-    direction: DOWN
-    timeout: 15000
-- tapOn: "I have read and acknowledge the Privacy Policy"
-- tapOn: "Accept & continue"
-- extendedWaitUntil:
-    visible: "AI Use & Data"
-    timeout: 30000
-- takeScreenshot: onboarding-demo/04-ai-disclosure
-- scrollUntilVisible:
-    element:
-      text: ".*I have read and acknowledge the AI Use.*"
-    direction: DOWN
-    timeout: 15000
-- tapOn: "I have read and acknowledge the AI Use & Data disclosure"
+- tapOn:
+    text: ".*I have read and agree to the Terms of Service.*"
 - tapOn: "Accept & continue"
 - extendedWaitUntil:
     visible: "Cora privacy"
     timeout: 30000
-- takeScreenshot: onboarding-demo/05-cora
+- takeScreenshot: onboarding-demo/03-cora
 - tapOn: "Save & continue"
 - extendedWaitUntil:
     visible: "Choose your look"
     timeout: 30000
-- takeScreenshot: onboarding-demo/06-appearance
+- takeScreenshot: onboarding-demo/04-appearance

@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
-import { ActivityIndicator, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { useCallback, useMemo, useState } from "react"
+import { Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { AppAlert } from '../../lib/app-alert'
 import { AppAlertHost } from "../../context/AppAlertProvider"
 import { Ionicons } from "@/components/icons/AppIcon"
@@ -7,8 +7,13 @@ import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { ApiError } from "../../lib/api"
 import { instructorApi, type OfficeHourRequest, type RegularOfficeHourSlot } from "../../lib/instructor-api"
 import { useFacultyScope } from "../../hooks/useFacultyScope"
+import { useFacultyOfficeHours } from "../../hooks/query/useFacultyOfficeHours"
+import { QueryRefreshBanner } from "../query/QueryRefreshBanner"
+import { QuerySkeleton } from "../query/QuerySkeleton"
 import { useFacultyShell } from "../../context/FacultyShellContext"
-import { useNotificationModuleRefresh } from "../../lib/notifications/notification-events"
+import { emitModuleRefresh, useNotificationModuleRefresh } from "../../lib/notifications/notification-events"
+import { getQueryClient } from "../../lib/query/client"
+import { facultyQueryScopeFromInstructor, invalidateByAction } from "../../lib/query"
 import { NATIVE, SYSTEM } from "../../constants/faculty-native-theme"
 import { FacultyEmptyState, FacultyStatusPill } from "./faculty-shared"
 import { FacultyOfficeHourCreateModal } from "./FacultyOfficeHourCreateModal"
@@ -31,7 +36,9 @@ import {
   useSheetPlaceholderColor,
 } from "./faculty-collab-sheet-ui"
 import { SHEET_SECTION } from "./faculty-sheet-semantics"
+import { useFacultyListPager } from "../../hooks/useFacultyListPager"
 import { useModuleTheme } from "../../lib/themed-module-shell"
+import { FacultyListPagerFooter } from "./FacultyListPagerFooter"
 import {
   FACULTY_OFFICE_HOURS_COLOR,
   facultyOfficeHoursRequestStatus,
@@ -54,11 +61,12 @@ export function FacultyOfficeHoursScreen() {
   const { refreshFacultyData } = useFacultyShell()
 
   const [tab, setTab] = useState<OfficeHoursTab>("requests")
-  const [requests, setRequests] = useState<OfficeHourRequest[]>([])
-  const [regularHours, setRegularHours] = useState<RegularOfficeHourSlot[]>([])
-  const [loading, setLoading] = useState(true)
-  const [loadingSchedule, setLoadingSchedule] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
+  const hoursQuery = useFacultyOfficeHours(ready ? scope : null)
+  const requests = hoursQuery.requests
+  const regularHours = hoursQuery.regularHours
+  const loading = hoursQuery.isInitialLoading
+  const loadingSchedule = hoursQuery.isInitialLoading
+  const refreshing = hoursQuery.isRefreshing && !hoursQuery.isInitialLoading
   const [search, setSearch] = useState("")
   const [selected, setSelected] = useState<OfficeHourRequest | null>(null)
   const [meetingLink, setMeetingLink] = useState("")
@@ -75,48 +83,25 @@ export function FacultyOfficeHoursScreen() {
   const [actionSheetOpen, setActionSheetOpen] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
   const [regularHoursOpen, setRegularHoursOpen] = useState(false)
-  const [error, setError] = useState("")
-
-  const load = useCallback(async () => {
-    if (!scope) return
-    setError("")
-    setRequests(await instructorApi.getOfficeHours(scope))
-  }, [scope])
-
-  const loadRegularHours = useCallback(async () => {
-    if (!scope) return
-    try {
-      setRegularHours(await instructorApi.getRegularOfficeHours(scope))
-    } catch {
-      setRegularHours([])
-    }
-  }, [scope])
-
-  useEffect(() => {
-    if (!ready) {
-      setLoading(false)
-      return
-    }
-    setLoading(true)
-    setLoadingSchedule(true)
-    Promise.all([load(), loadRegularHours()])
-      .catch((err) => setError(err instanceof ApiError ? err.message : "Could not load office hours."))
-      .finally(() => {
-        setLoading(false)
-        setLoadingSchedule(false)
-      })
-  }, [ready, load, loadRegularHours])
+  const error = hoursQuery.error instanceof ApiError
+    ? hoursQuery.error.message
+    : hoursQuery.error
+      ? "Could not load office hours."
+      : ""
 
   const handleRefresh = useCallback(async () => {
-    setRefreshing(true)
     try {
-      await Promise.all([load(), loadRegularHours(), refreshFacultyData?.(undefined, { force: true })])
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not refresh office hours.")
-    } finally {
-      setRefreshing(false)
+      await Promise.all([hoursQuery.refetch(), refreshFacultyData?.(undefined, { force: true })])
+    } catch {
+      // Cached rows stay visible; refreshFailed banner covers retry.
     }
-  }, [load, loadRegularHours, refreshFacultyData])
+  }, [hoursQuery.refetch, refreshFacultyData])
+
+  const syncHoursToCalendar = useCallback(() => {
+    if (!scope) return
+    invalidateByAction(getQueryClient(), facultyQueryScopeFromInstructor(scope), "faculty.officeHours.mutate")
+    emitModuleRefresh(["office-hours", "calendar"])
+  }, [scope])
 
   useNotificationModuleRefresh("office-hours", handleRefresh)
 
@@ -142,6 +127,8 @@ export function FacultyOfficeHoursScreen() {
       [slot.dayName, slot.startTime, slot.endTime].join(" ").toLowerCase().includes(q),
     )
   }, [regularHours, search])
+  const requestPager = useFacultyListPager(filtered, `${search}:requests`, "requests")
+  const schedulePager = useFacultyListPager(filteredRegularHours, `${search}:schedule`, "hours")
 
   const searchPlaceholder =
     tab === "schedule" ? "Search regular hours…" : "Search student, topic, or notes…"
@@ -157,6 +144,7 @@ export function FacultyOfficeHoursScreen() {
       await instructorApi.updateOfficeHourRequest(scope, request.id, { status, ...extra })
       setSelected(null)
       await handleRefresh()
+      syncHoursToCalendar()
       const approved = status === "approved"
       AppAlert.alert(
         approved ? "Request approved" : "Request declined",
@@ -303,6 +291,7 @@ export function FacultyOfficeHoursScreen() {
         keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
       >
+        <QueryRefreshBanner visible={hoursQuery.refreshFailed} onRetry={() => void handleRefresh()} />
         {error ? (
           <View style={styles.errorBox}>
             <Text style={styles.errorText}>{error}</Text>
@@ -310,9 +299,7 @@ export function FacultyOfficeHoursScreen() {
         ) : null}
         {tab === "schedule" ? (
           loadingSchedule ? (
-            <View style={styles.loadingBox}>
-              <ActivityIndicator color={FACULTY_OFFICE_HOURS_COLOR.link} size="large" />
-            </View>
+            <QuerySkeleton />
           ) : filteredRegularHours.length === 0 ? (
             <FacultyEmptyState
               icon="calendar-outline"
@@ -325,13 +312,14 @@ export function FacultyOfficeHoursScreen() {
             />
           ) : (
             <View style={styles.scheduleList}>
-              {filteredRegularHours.map((slot) => (
+              {schedulePager.items.map((slot) => (
                 <FacultyOfficeHoursScheduleCard
                   key={slot.id}
                   slot={slot}
                   onPress={() => setRegularHoursOpen(true)}
                 />
               ))}
+              <FacultyListPagerFooter pager={schedulePager} />
               <Pressable
                 style={({ pressed }) => [
                   styles.editAllBtn,
@@ -353,9 +341,7 @@ export function FacultyOfficeHoursScreen() {
         ) : (
           <>
             {loading ? (
-              <View style={styles.loadingBox}>
-                <ActivityIndicator color={NATIVE.tint} size="large" />
-              </View>
+              <QuerySkeleton />
             ) : filtered.length === 0 ? (
               <FacultyEmptyState
                 icon="time-outline"
@@ -368,7 +354,7 @@ export function FacultyOfficeHoursScreen() {
               />
             ) : (
               <View style={styles.requestList}>
-                {filtered.map((request) => (
+                {requestPager.items.map((request) => (
                   <FacultyOfficeHoursRequestCard
                     key={request.id}
                     request={request}
@@ -376,6 +362,7 @@ export function FacultyOfficeHoursScreen() {
                     onDecline={() => confirmDecline(request)}
                   />
                 ))}
+                <FacultyListPagerFooter pager={requestPager} />
               </View>
             )}
           </>
@@ -659,7 +646,10 @@ export function FacultyOfficeHoursScreen() {
         visible={createOpen}
         scope={scope}
         onClose={() => setCreateOpen(false)}
-        onCreated={() => void handleRefresh()}
+        onCreated={() => {
+          void handleRefresh()
+          syncHoursToCalendar()
+        }}
       />
 
       <FacultyRegularOfficeHoursSheet
@@ -667,9 +657,9 @@ export function FacultyOfficeHoursScreen() {
         scope={scope}
         initialSlots={regularHours}
         onClose={() => setRegularHoursOpen(false)}
-        onSaved={(slots) => {
-          setRegularHours(slots)
+        onSaved={() => {
           void handleRefresh()
+          syncHoursToCalendar()
         }}
       />
     </View>

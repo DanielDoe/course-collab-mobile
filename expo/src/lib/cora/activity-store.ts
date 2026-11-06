@@ -62,6 +62,7 @@ export function activityToolLabel(tool: CoraProposalTool): string {
     case "message.send":
       return "Sent message"
     case "personalFlashcards.createDeck":
+    case "flashcard.generateFromBank":
       return "Created flashcard deck"
     case "personalNotes.create":
       return "Saved note"

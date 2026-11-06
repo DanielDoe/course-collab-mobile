@@ -29,6 +29,7 @@ import { MembershipNativePaymentPresenterGate } from "./MembershipNativePaymentP
 import { FacultyMembershipCheckoutReviewPanel } from "./FacultyMembershipCheckoutReviewPanel"
 import { AppAlert } from "../../lib/app-alert"
 import { isStripeNativeAvailable } from "../../lib/stripe-native"
+import { requiresExternalWebPurchase } from "../../lib/purchase-navigation"
 
 type Props = {
   plan: FacultyMembershipTier
@@ -75,6 +76,7 @@ export function FacultyMembershipCheckoutScreen({ plan: tier, cadence = "semeste
 
   const loadPayment = useCallback(async () => {
     if (!facultySession) return
+    if (requiresExternalWebPurchase()) return
     if (!isStripeNativeAvailable()) {
       setError(
         "Stripe checkout needs a native rebuild. From the expo folder run pod install, then npm run ios:sim.",

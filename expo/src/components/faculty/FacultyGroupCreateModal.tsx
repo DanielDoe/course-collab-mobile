@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react"
-import { ActivityIndicator, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Modal, Pressable, Text, TextInput, View } from "react-native";
 import { AppAlert } from '../../lib/app-alert'
 import { AppAlertHost } from "../../context/AppAlertProvider"
 import { Ionicons } from "@/components/icons/AppIcon"
@@ -21,6 +21,7 @@ import {
   useCollabSheetStyles,
 
 } from "./faculty-collab-sheet-ui"
+import { KeyboardAwareForm } from "../ui/KeyboardAwareForm"
 import { useSuppressModuleSearchDock } from "../../context/ModuleSearchDockContext"
 import { SHEET_SECTION } from "./faculty-sheet-semantics"
 
@@ -185,11 +186,7 @@ export function FacultyGroupCreateModal({ visible, scope, onClose, onCreated }: 
       <FacultySheetContainer>
         <FacultySheetChrome topInset={insets.top} title="Create group" onClose={onClose} />
 
-        <ScrollView
-          contentContainerStyle={[collabSheetStyles.scroll, { paddingBottom: insets.bottom + 24 }]}
-          keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
-        >
+        <KeyboardAwareForm contentContainerStyle={[collabSheetStyles.scroll, { paddingBottom: insets.bottom + 24 }]}>
           <FacultySheetNotice
             tone="warning"
             message="Creates a group on behalf of a student leader. Multi-member groups stay pending until you approve them."
@@ -333,7 +330,7 @@ export function FacultyGroupCreateModal({ visible, scope, onClose, onCreated }: 
             disabled={submitting || !leaderId || !name.trim()}
             loading={submitting}
           />
-        </ScrollView>
+        </KeyboardAwareForm>
       </FacultySheetContainer>
       <AppAlertHost />
     </Modal>

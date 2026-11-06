@@ -2,6 +2,8 @@ import { API_BASE_URL } from "../constants"
 import { ApiError } from "./api"
 import { extractApiErrorMessage } from "./api-error-message"
 import type { AppSession } from "./session"
+import { studentAuthenticatedHeaders } from "./student-api"
+import { instructorAuthenticatedHeaders } from "./instructor-api"
 
 export type EntitlementSnapshot = {
   role: "student" | "guest" | "instructor"
@@ -14,23 +16,17 @@ export type EntitlementSnapshot = {
 }
 
 async function buildHeaders(session: AppSession): Promise<Record<string, string>> {
-  const headers: Record<string, string> = {
-    Accept: "application/json",
-  }
-
   if (session.portal === "faculty") {
-    headers["x-instructor-id"] = String(session.id)
-    return headers
+    return instructorAuthenticatedHeaders({ instructorId: session.id })
   }
 
   if (session.portal === "student" || session.portal === "guest" || session.portal === "summer") {
-    headers["x-student-id"] = session.databaseId
-    if (session.portal === "guest") {
-      headers["x-account-role"] = "guest"
-    }
+    const headers = await studentAuthenticatedHeaders(session)
+    if (session.portal === "guest") headers["x-account-role"] = "guest"
+    return headers
   }
 
-  return headers
+  return { Accept: "application/json" }
 }
 
 function roleParam(session: AppSession): string {

@@ -4,6 +4,7 @@ import { NATIVE } from "../../constants/faculty-native-theme"
 import { useThemedNative } from "../../context/AppearanceProvider"
 import { useNativeType } from "../../lib/themed-module-theme"
 import { assessmentTypeLabel } from "../../lib/faculty-assessment-utils"
+import type { ClassAnalyticsStudentRow } from "../../lib/class-analytics-utils"
 import type { AtRiskStudentRow } from "../../lib/faculty-analytics-utils"
 import { reportPerformanceColor } from "../../lib/assessment-report-theme"
 import {
@@ -176,6 +177,57 @@ export function FacultyStudentProgressCard({
               color: FACULTY_STUDENT_PROGRESS_COLOR.link,
             }
           : undefined
+      }
+      trailing={<Ionicons name="chevron-forward" size={16} color={native.tertiaryLabel} />}
+      onPress={onPress}
+    />
+  )
+}
+
+export function FacultyClassAnalyticsStudentCard({
+  row,
+  onPress,
+}: {
+  row: ClassAnalyticsStudentRow
+  onPress: () => void
+}) {
+  const native = useThemedNative()
+  const type = useNativeType()
+  const thumb = facultyStudentProgressThumb(row.student.id || Number(row.student.student_id) || 0)
+  const engagementColor = reportPerformanceColor(row.engagementScore)
+
+  const metrics = [
+    row.assessmentAvg != null ? `${row.assessmentAvg}% assessments` : null,
+    row.practiceAttempts > 0 && row.practiceScore != null ? `${row.practiceScore}% practice` : null,
+    row.attendanceRate != null ? `${row.attendanceRate}% attendance` : null,
+    row.classroomPoints > 0 ? `${Math.round(row.classroomPoints)} pts` : null,
+    row.lecturesOpened > 0 ? `${row.lecturesCompleted}/${row.lecturesOpened} lectures` : null,
+    row.flashcardsDecksStudied > 0 ? `${row.flashcardsDecksStudied} decks` : null,
+    row.playgroundSessionsPlayed > 0
+      ? `${row.playgroundSessionsPlayed} playground${row.playgroundAccuracy != null ? ` · ${row.playgroundAccuracy}%` : ""}`
+      : null,
+  ]
+    .filter(Boolean)
+    .join(" · ")
+
+  return (
+    <FacultySignatureListCard
+      thumb={thumb}
+      icon="person-outline"
+      title={row.student.full_name}
+      description={
+        [row.student.section ?? row.student.session_code, metrics].filter(Boolean).join("\n") ||
+        "Tap for full student analytics"
+      }
+      accentLine={{ text: `${row.engagementScore} engagement`, color: engagementColor }}
+      footer={
+        row.signals.length > 0 ? (
+          <Text style={[type.caption, styles.link, { color: FACULTY_STUDENT_PROGRESS_COLOR.link }]} numberOfLines={1}>
+            {row.signals.join(" · ")}
+          </Text>
+        ) : (
+          <Text style={[type.caption, { color: native.secondaryLabel }]}>View profile & timeline</Text>
+        )
       }
       trailing={<Ionicons name="chevron-forward" size={16} color={native.tertiaryLabel} />}
       onPress={onPress}

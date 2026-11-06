@@ -1,21 +1,24 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { ActivityIndicator, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
+import { Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
 import { AppAlert } from '../../lib/app-alert'
 import { ScrollView } from "react-native-gesture-handler"
 import { useRouter } from "expo-router"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { useSession } from "../../context/SessionProvider"
 import { ApiError } from "../../lib/student-api"
-import { useThrottledFocusRefresh } from "../../lib/use-throttled-focus-refresh"
 import { useNotificationModuleRefresh } from "../../lib/notifications/notification-events"
 import type { StudentSession } from "../../lib/session"
 import {
-  digitalNotesApi,
-  getCachedCourseNote,
-  setCachedCourseNotes,
   type CourseDigitalNote,
   type StudentDigitalNote,
 } from "../../lib/digital-notes-api"
+import {
+  prepareTempNoteId,
+  useCreateStudentNote,
+  useStudentNotesList,
+} from "../../hooks/query/useStudentNotes"
+import { QueryRefreshBanner } from "../query/QueryRefreshBanner"
+import { QuerySkeleton } from "../query/QuerySkeleton"
 import { noteContentPreviewText } from "../../lib/digital-note-content"
 import { PillSwipeTabs } from "../theme/PillSwipeTabs"
 import {
@@ -24,6 +27,7 @@ import {
   type StudentFilterGroup,
 } from "../student/student-search-toolbar"
 import { CommEmptyState, CommSectionFooter } from "../faculty/faculty-communication-ui"
+import { FacultyListPagerFooter } from "../faculty/FacultyListPagerFooter"
 import { NoteListCard } from "./NoteListCard"
 import { formatNoteWhen } from "./note-list-utils"
 import { ModuleSection } from "../modules/ModuleScreen"
@@ -32,7 +36,7 @@ import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProv
 import { useModuleScrollContentPadding } from "../../context/ChromeInsetContext"
 import { NATIVE } from "../../constants/faculty-native-theme"
 import { parseCircuitWorkspace, workspaceHasContent } from "../../lib/circuit-workspace"
-
+import { useFacultyListPager } from "../../hooks/useFacultyListPager"
 type Tab = "mine" | "course"
 type MineFilter = "all" | "owned" | "shared"
 type NoteSort = "recent" | "title"
@@ -77,71 +81,40 @@ export function NotesScreen() {
   const scrollPad = useModuleScrollContentPadding()
   const insets = useSafeAreaInsets()
 
-  const [tab, setTab] = useState<Tab>("mine")
+  const [tab, setTab] = useState<Tab>("course")
 
   const [mineFilter, setMineFilter] = useState<MineFilter>("all")
   const [noteSort, setNoteSort] = useState<NoteSort>("recent")
   const [contentFilter, setContentFilter] = useState<NoteContentFilter>("all")
   const [search, setSearch] = useState("")
   const [filterSheetOpen, setFilterSheetOpen] = useState(false)
-  const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
-  const [creating, setCreating] = useState(false)
-  const [error, setError] = useState("")
-  const [myNotes, setMyNotes] = useState<StudentDigitalNote[]>([])
-  const [courseNotes, setCourseNotes] = useState<CourseDigitalNote[]>([])
+  const notesQuery = useStudentNotesList(session)
+  const createNoteMutation = useCreateStudentNote(session)
+  const myNotes = notesQuery.myNotes
+  const courseNotes = notesQuery.courseNotes
+  const loading = notesQuery.isInitialLoading
+  const refreshing = notesQuery.isRefreshing && !notesQuery.isInitialLoading
+  const creating = createNoteMutation.isPending
+  const error = notesQuery.error instanceof ApiError ? notesQuery.error.message : notesQuery.error ? "Could not load notes." : ""
 
-  const load = useCallback(async () => {
-    if (!session) return
-    setError("")
-    const [mineRes, courseRes] = await Promise.all([
-      digitalNotesApi.listMyNotes(session),
-      digitalNotesApi.listCourseNotes(session),
-    ])
-    setMyNotes(mineRes.notes ?? [])
-    const courseList = courseRes.notes ?? []
-    setCourseNotes(courseList)
-    setCachedCourseNotes(courseList)
-  }, [session])
-
-  useNotificationModuleRefresh(["notes", "ai-notetaker"], load)
-
-  useThrottledFocusRefresh(
-    useCallback(async () => {
-      if (!session) return
-      setLoading(true)
-      try {
-        await load()
-      } catch (err) {
-        setError(err instanceof ApiError ? err.message : "Could not load notes.")
-      } finally {
-        setLoading(false)
-      }
-    }, [session, load]),
-    Boolean(session),
-  )
+  useNotificationModuleRefresh(["notes", "ai-notetaker"], () => {
+    void notesQuery.refetch()
+  })
 
   useEffect(() => {
     setFilterSheetOpen(false)
   }, [tab])
 
   const onRefresh = useCallback(async () => {
-    setRefreshing(true)
-    try {
-      await load()
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Refresh failed.")
-    } finally {
-      setRefreshing(false)
-    }
-  }, [load])
+    await notesQuery.refetch()
+  }, [notesQuery])
 
   const filteredMyNotes = useMemo(() => {
     const q = search.trim().toLowerCase()
     let next = myNotes.filter((note) => {
       if (mineFilter === "owned" && note.isOwner === false) return false
       if (mineFilter === "shared" && note.isOwner !== false) return false
-      const hasTyped = note.bodyText.trim().length > 0
+      const hasTyped = String(note.bodyText ?? "").trim().length > 0
       const hasInk = workspaceHasContent(parseCircuitWorkspace(note.inkWorkspace))
       if (contentFilter === "typed" && !hasTyped) return false
       if (contentFilter === "ink" && !hasInk) return false
@@ -149,7 +122,7 @@ export function NotesScreen() {
       if (!q) return true
       return (
         note.title.toLowerCase().includes(q) ||
-        note.bodyText.toLowerCase().includes(q) ||
+        String(note.bodyText ?? "").toLowerCase().includes(q) ||
         (note.ownerName?.toLowerCase().includes(q) ?? false)
       )
     })
@@ -168,22 +141,30 @@ export function NotesScreen() {
       if (!q) return true
       return (
         note.title.toLowerCase().includes(q) ||
-        note.bodyText.toLowerCase().includes(q) ||
+        String(note.bodyText ?? "").toLowerCase().includes(q) ||
         (note.topic?.toLowerCase().includes(q) ?? false)
       )
     })
   }, [courseNotes, search])
 
-  const groupedCourseNotes = useMemo(() => {
+  const minePager = useFacultyListPager(
+    filteredMyNotes,
+    `${search}|${mineFilter}|${noteSort}|${contentFilter}`,
+    "notes",
+  )
+
+  const coursePager = useFacultyListPager(filteredCourseNotes, search, "notes")
+
+  const pagedGroupedCourseNotes = useMemo(() => {
     const groups = new Map<string, CourseDigitalNote[]>()
-    for (const note of filteredCourseNotes) {
+    for (const note of coursePager.items) {
       const key = note.topic?.trim() || "General"
       const bucket = groups.get(key) ?? []
       bucket.push(note)
       groups.set(key, bucket)
     }
     return Array.from(groups.entries()).sort(([a], [b]) => a.localeCompare(b))
-  }, [filteredCourseNotes])
+  }, [coursePager.items])
 
   const mineFilterActive =
     mineFilter !== "all" || noteSort !== "recent" || contentFilter !== "all"
@@ -215,21 +196,19 @@ export function NotesScreen() {
 
   async function createNote() {
     if (!session || creating) return
-    setCreating(true)
+    const tempId = prepareTempNoteId()
+    router.push(`/notes/${tempId}`)
     try {
-      const res = await digitalNotesApi.createNote(session, {
+      const res = await createNoteMutation.mutateAsync({
+        tempId,
         title: "Untitled note",
         bodyText: "",
       })
-      const noteId = res.note?.id
-      if (!noteId) {
-        throw new ApiError("Server did not return the new note.", 500)
+      if (res.note?.id && res.note.id !== tempId) {
+        router.replace(`/notes/${res.note.id}`)
       }
-      router.push(`/notes/${noteId}`)
     } catch (err) {
       AppAlert.alert("Create failed", err instanceof ApiError ? err.message : "Try again.")
-    } finally {
-      setCreating(false)
     }
   }
 
@@ -269,11 +248,10 @@ export function NotesScreen() {
   }
 
   function renderMinePage() {
-    if (loading && !refreshing) {
+    if (loading) {
       return (
         <View style={styles.pageCenter}>
-          <ActivityIndicator size="large" color={tokens.accent} />
-          <Text style={[type.caption, { color: SN.secondaryLabel }]}>Loading notes…</Text>
+          <QuerySkeleton />
         </View>
       )
     }
@@ -291,6 +269,7 @@ export function NotesScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={tokens.accent} />
         }
       >
+        <QueryRefreshBanner visible={notesQuery.refreshFailed} onRetry={() => void onRefresh()} />
         {renderResultsBar("mine")}
         {filteredMyNotes.length === 0 ? (
           <CommEmptyState
@@ -305,22 +284,23 @@ export function NotesScreen() {
         ) : (
           <>
             <View style={styles.list}>
-              {filteredMyNotes.map((note, index) => {
+              {minePager.items.map((note, index) => {
                 const shared = note.isOwner === false
                 return (
                   <NoteListCard
                     key={`mine-${note.id}-${shared ? "shared" : "own"}`}
                     title={note.title || "Untitled note"}
-                    preview={notePreview(note.bodyText)}
+                    preview={notePreview(note.bodyText ?? "")}
                     contextLabel={shared ? `Shared by ${note.ownerName ?? "classmate"}` : undefined}
                     updatedLabel={formatNoteWhen(note.updatedAt)}
                     kind={shared ? "shared" : "personal"}
-                    index={index}
+                    index={minePager.page * minePager.pageSize + index}
                     onPress={() => router.push(`/notes/${note.id}`)}
                   />
                 )
               })}
             </View>
+            <FacultyListPagerFooter pager={minePager} />
             <CommSectionFooter>Tap a note to edit, or use filters to find shared notes.</CommSectionFooter>
           </>
         )}
@@ -329,11 +309,10 @@ export function NotesScreen() {
   }
 
   function renderCoursePage() {
-    if (loading && !refreshing) {
+    if (loading) {
       return (
         <View style={styles.pageCenter}>
-          <ActivityIndicator size="large" color={tokens.accent} />
-          <Text style={[type.caption, { color: SN.secondaryLabel }]}>Loading notes…</Text>
+          <QuerySkeleton />
         </View>
       )
     }
@@ -351,6 +330,7 @@ export function NotesScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={tokens.accent} />
         }
       >
+        <QueryRefreshBanner visible={notesQuery.refreshFailed} onRetry={() => void onRefresh()} />
         {renderResultsBar("course")}
         {filteredCourseNotes.length === 0 ? (
           <CommEmptyState
@@ -364,24 +344,32 @@ export function NotesScreen() {
           />
         ) : (
           <>
-            {groupedCourseNotes.map(([topicName, topicNotes]) => (
-              <ModuleSection key={topicName} title={topicName}>
-                <View style={styles.list}>
-                  {topicNotes.map((note, index) => (
-                    <NoteListCard
-                      key={`course-${note.id}`}
-                      title={note.title || "Untitled note"}
-                      preview={notePreview(note.bodyText)}
-                      contextLabel={note.topic?.trim() || undefined}
-                      updatedLabel={formatNoteWhen(note.updatedAt)}
-                      kind="course"
-                      index={index}
-                      onPress={() => router.push(`/notes/course/${note.id}`)}
-                    />
-                  ))}
-                </View>
-              </ModuleSection>
-            ))}
+            {(() => {
+              let rowIndex = coursePager.page * coursePager.pageSize
+              return pagedGroupedCourseNotes.map(([topicName, topicNotes]) => (
+                <ModuleSection key={topicName} title={topicName}>
+                  <View style={styles.list}>
+                    {topicNotes.map((note) => {
+                      const index = rowIndex
+                      rowIndex += 1
+                      return (
+                        <NoteListCard
+                          key={`course-${note.id}`}
+                          title={note.title || "Untitled note"}
+                          preview={notePreview(note.bodyText ?? "")}
+                          contextLabel={note.topic?.trim() || undefined}
+                          updatedLabel={formatNoteWhen(note.updatedAt)}
+                          kind="course"
+                          index={index}
+                          onPress={() => router.push(`/notes/course/${note.id}`)}
+                        />
+                      )
+                    })}
+                  </View>
+                </ModuleSection>
+              ))
+            })()}
+            <FacultyListPagerFooter pager={coursePager} />
             <CommSectionFooter>Instructor notes are read-only. Open one to review content.</CommSectionFooter>
           </>
         )}
@@ -425,16 +413,15 @@ export function NotesScreen() {
           showFilter={tab === "mine"}
           filterActive={mineFilterActive}
           onOpenFilter={tab === "mine" ? () => setFilterSheetOpen(true) : undefined}
-          trailingAction={
-            tab === "mine"
-              ? {
-                  onPress: () => void createNote(),
-                  accessibilityLabel: "Create note",
-                  icon: "add",
-                }
-              : undefined
-          }
+          trailingAction={{
+            onPress: () => void createNote(),
+            accessibilityLabel: "Create note",
+            icon: "add",
+          }}
         />
+        <Text style={[type.caption, { color: SN.secondaryLabel }]}>
+          {courseNotes.length + myNotes.length} shown · {myNotes.length} mine · {courseNotes.length} course
+        </Text>
       </View>
 
       {tab === "mine" ? (

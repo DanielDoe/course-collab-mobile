@@ -1,7 +1,10 @@
 import { Platform } from "react-native"
 import { API_BASE_URL } from "../../constants"
 import type { AppSession } from "../session"
+import { getStoredSession } from "../session"
 import { abortTimeout } from "../abort-timeout"
+import { instructorAuthenticatedHeaders } from "../instructor-api"
+import { studentAuthenticatedHeaders } from "../student-api"
 import { getExpoPushToken, getStoredPushToken } from "./notification-service"
 
 type RegisterResult = {
@@ -19,6 +22,7 @@ async function requestJson(
   try {
     const res = await fetch(url, {
       method,
+      credentials: "include",
       headers: {
         Accept: "application/json",
         "Content-Type": "application/json",
@@ -53,7 +57,7 @@ export async function registerPushTokenForSession(session: AppSession): Promise<
     const ok = await requestJson(
       `${API_BASE_URL}/api/student/push-token`,
       "POST",
-      { "x-student-id": session.databaseId },
+      await studentAuthenticatedHeaders(session),
       payload,
     )
     return { ok, token, error: ok ? undefined : "api_unavailable" }
@@ -63,7 +67,7 @@ export async function registerPushTokenForSession(session: AppSession): Promise<
     const ok = await requestJson(
       `${API_BASE_URL}/api/instructor/push-token`,
       "POST",
-      { "x-instructor-id": String(session.id) },
+      await instructorAuthenticatedHeaders({ instructorId: session.id }),
       payload,
     )
     return { ok, token, error: ok ? undefined : "api_unavailable" }
@@ -80,22 +84,27 @@ export async function unregisterPushTokenForSession(sessionKey: string): Promise
   if (!portal || !id) return
 
   const body = token ? { expo_push_token: token } : {}
+  const stored = await getStoredSession()
 
   if (portal === "student" || portal === "guest" || portal === "summer") {
+    if (!stored || (stored.portal !== "student" && stored.portal !== "guest" && stored.portal !== "summer")) {
+      return
+    }
     await requestJson(
       `${API_BASE_URL}/api/student/push-token`,
       "DELETE",
-      { "x-student-id": id },
+      await studentAuthenticatedHeaders(stored),
       body,
     )
     return
   }
 
   if (portal === "faculty") {
+    if (!stored || stored.portal !== "faculty") return
     await requestJson(
       `${API_BASE_URL}/api/instructor/push-token`,
       "DELETE",
-      { "x-instructor-id": id },
+      await instructorAuthenticatedHeaders({ instructorId: stored.id }),
       body,
     )
   }

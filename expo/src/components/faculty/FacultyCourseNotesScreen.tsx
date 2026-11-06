@@ -1,18 +1,23 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 import { ActivityIndicator, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 import { AppAlert } from '../../lib/app-alert'
 import { Ionicons } from "@/components/icons/AppIcon"
 import { ApiError } from "../../lib/api"
-import { instructorApi, type InstructorSession } from "../../lib/instructor-api"
-import {
-  instructorCourseNotesApi,
-  type ModuleConfiguration,
-  type ModuleTopicRow,
-} from "../../lib/instructor-content-api"
+import { instructorCourseNotesApi } from "../../lib/instructor-content-api"
 import type { CourseDigitalNote } from "../../lib/digital-notes-api"
 import { useFacultyScope } from "../../hooks/useFacultyScope"
+import {
+  useDeleteFacultyCourseNote,
+  useFacultyCourseNotes,
+  useSaveFacultyCourseNote,
+} from "../../hooks/query/useFacultyCourseNotes"
+import { createTempNumericId } from "../../lib/query"
+import { QueryRefreshBanner } from "../query/QueryRefreshBanner"
+import { QuerySkeleton } from "../query/QuerySkeleton"
 import { useSuppressModuleSearchDock } from "../../context/ModuleSearchDockContext"
 import { useModuleTheme } from "../../lib/themed-module-shell"
+import { semanticSoft } from "../../lib/themed-module-theme"
+import { NATIVE } from "../../constants/faculty-native-theme"
 import { FacultyEmptyState } from "./faculty-shared"
 import { FacultyCourseNoteListCard } from "./FacultyCourseNoteListCard"
 import { FacultyCourseNotesDeletedPanel } from "./FacultyCourseNotesDeletedPanel"
@@ -26,6 +31,8 @@ import {
 import { NativeSelect } from "../NativeSelect"
 import { MarkdownNotePreview } from "../notes/MarkdownNotePreview"
 import { FacultyAdminStatRow } from "./faculty-admin-ui"
+import { useFacultyListPager } from "../../hooks/useFacultyListPager"
+import { FacultyListPagerFooter } from "./FacultyListPagerFooter"
 import { CircuitWorkspaceEditor } from "../ink/CircuitWorkspaceEditor"
 import { CircuitWorkspaceViewer } from "../ink/CircuitWorkspaceViewer"
 import {
@@ -90,15 +97,22 @@ export function FacultyCourseNotesScreen() {
 
   const [tab, setTab] = useState<Tab>("all")
   const [search, setSearch] = useState("")
-  const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
-  const [error, setError] = useState("")
-  const [notes, setNotes] = useState<CourseDigitalNote[]>([])
-  const [deletedNotes, setDeletedNotes] = useState<Array<CourseDigitalNote & { deletedAt?: string }>>([])
-  const [topics, setTopics] = useState<ModuleTopicRow[]>([])
-  const [config, setConfig] = useState<ModuleConfiguration | null>(null)
-  const [sessions, setSessions] = useState<InstructorSession[]>([])
   const [topicSession, setTopicSession] = useState("ALL")
+  const notesQuery = useFacultyCourseNotes(ready ? scope : null, topicSession)
+  const saveNoteMutation = useSaveFacultyCourseNote(scope, topicSession)
+  const deleteNoteMutation = useDeleteFacultyCourseNote(scope, topicSession)
+  const notes = notesQuery.notes
+  const deletedNotes = notesQuery.deletedNotes
+  const topics = notesQuery.topics
+  const config = notesQuery.config
+  const sessions = notesQuery.sessions
+  const loading = notesQuery.isInitialLoading
+  const refreshing = notesQuery.isRefreshing && !notesQuery.isInitialLoading
+  const error = notesQuery.error instanceof ApiError
+    ? notesQuery.error.message
+    : notesQuery.error
+      ? "Could not load course notes."
+      : ""
   const [editorOpen, setEditorOpen] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
   useSuppressModuleSearchDock(editorOpen || previewOpen)
@@ -114,34 +128,10 @@ export function FacultyCourseNotesScreen() {
   const [showPreview, setShowPreview] = useState(false)
   const [contentTab, setContentTab] = useState<ContentTab>("typed")
   const [inkWorkspace, setInkWorkspace] = useState<CircuitWorkspace>(() => createEmptyWorkspace())
+  const [inkDrawing, setInkDrawing] = useState(false)
   const [editorBaseline, setEditorBaseline] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [loadingEditor, setLoadingEditor] = useState(false)
-
-  const load = useCallback(async () => {
-    if (!scope) return
-    setError("")
-    const [notesRes, deletedRes, topicsRes, configRes, sessionsRes] = await Promise.all([
-      instructorCourseNotesApi.listNotes(scope),
-      instructorCourseNotesApi.listDeleted(scope),
-      instructorCourseNotesApi.listTopics(scope, topicSession),
-      instructorCourseNotesApi.getConfiguration(scope),
-      instructorApi.getSessions(scope, scope.academicTermId ?? undefined).catch(() => ({ sessions: [] as InstructorSession[] })),
-    ])
-    setNotes(notesRes.notes ?? [])
-    setDeletedNotes(deletedRes.notes ?? [])
-    setTopics(topicsRes.topics ?? [])
-    setConfig(configRes)
-    setSessions(sessionsRes.sessions ?? [])
-  }, [scope, topicSession])
-
-  useEffect(() => {
-    if (!ready || !scope) return
-    setLoading(true)
-    load()
-      .catch((err) => setError(err instanceof ApiError ? err.message : "Could not load course notes."))
-      .finally(() => setLoading(false))
-  }, [ready, scope, load])
 
   const uniqueSessions = useMemo(() => {
     const seen = new Set<string>()
@@ -251,6 +241,9 @@ export function FacultyCourseNotesScreen() {
     })
   }, [notes, search])
 
+  const notesPager = useFacultyListPager(filteredNotes, search, "notes")
+  const topicsPager = useFacultyListPager(topics, topicSession, "topics")
+
   function openCreate() {
     const emptyInk = createEmptyWorkspace()
     setEditing(null)
@@ -356,12 +349,11 @@ export function FacultyCourseNotesScreen() {
         isPublished,
       }
       if (editing) {
-        await instructorCourseNotesApi.updateNote(scope, editing.id, payload)
+        await saveNoteMutation.mutateAsync({ editingId: editing.id, payload })
       } else {
-        await instructorCourseNotesApi.createNote(scope, payload)
+        await saveNoteMutation.mutateAsync({ tempId: createTempNumericId(), payload })
       }
       closeEditor()
-      await load()
     } catch (err) {
       AppAlert.alert("Save failed", err instanceof ApiError ? err.message : "Try again.")
     } finally {
@@ -379,8 +371,7 @@ export function FacultyCourseNotesScreen() {
         onPress: () => {
           void (async () => {
             try {
-              await instructorCourseNotesApi.deleteNote(scope, note.id)
-              await load()
+              await deleteNoteMutation.mutateAsync(note)
             } catch (err) {
               AppAlert.alert("Delete failed", err instanceof ApiError ? err.message : "Try again.")
             }
@@ -401,9 +392,8 @@ export function FacultyCourseNotesScreen() {
           void (async () => {
             if (!scope) return
             try {
-              await instructorCourseNotesApi.deleteNote(scope, editing.id)
+              await deleteNoteMutation.mutateAsync(editing)
               closeEditor()
-              await load()
             } catch (err) {
               AppAlert.alert("Delete failed", err instanceof ApiError ? err.message : "Try again.")
             }
@@ -417,7 +407,7 @@ export function FacultyCourseNotesScreen() {
     if (!scope) return
     try {
       await instructorCourseNotesApi.toggleTopic(scope, topicName, session, isAvailable)
-      await load()
+      await notesQuery.refetch()
     } catch (err) {
       AppAlert.alert("Update failed", err instanceof ApiError ? err.message : "Try again.")
     }
@@ -451,6 +441,11 @@ export function FacultyCourseNotesScreen() {
           />
         ) : null}
 
+        <QueryRefreshBanner
+          visible={notesQuery.refreshFailed}
+          onRetry={() => void notesQuery.refetch()}
+        />
+
         {error ? (
           <View style={[localStyles.errorBox, { backgroundColor: `${tokens.danger}14` }]}>
             <Text style={[type.caption, { color: tokens.danger }]}>{error}</Text>
@@ -459,9 +454,7 @@ export function FacultyCourseNotesScreen() {
       </FacultyModuleStickyHeader>
 
       {loading ? (
-        <View style={localStyles.loadingBox}>
-          <ActivityIndicator color={tokens.accent} />
-        </View>
+        <QuerySkeleton />
       ) : (
         <ScrollView
           style={moduleStyles.scroll}
@@ -474,12 +467,7 @@ export function FacultyCourseNotesScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={() => {
-                setRefreshing(true)
-                load()
-                  .catch((err) =>
-                    setError(err instanceof ApiError ? err.message : "Could not refresh course notes."),
-                  )
-                  .finally(() => setRefreshing(false))
+                void notesQuery.refetch()
               }}
             />
           }
@@ -497,7 +485,7 @@ export function FacultyCourseNotesScreen() {
               />
             ) : (
               <View style={localStyles.list}>
-                {filteredNotes.map((note, index) => (
+                {notesPager.items.map((note, index) => (
                   <FacultyCourseNoteListCard
                     key={note.id}
                     note={note}
@@ -506,6 +494,7 @@ export function FacultyCourseNotesScreen() {
                     onDelete={() => deleteNote(note)}
                   />
                 ))}
+                <FacultyListPagerFooter pager={notesPager} />
               </View>
             )
           ) : null}
@@ -525,7 +514,7 @@ export function FacultyCourseNotesScreen() {
                   options={topicSessionOptions}
                   onChange={setTopicSession}
                 />
-                {topics.map((row) => {
+                {topicsPager.items.map((row) => {
                   const availability = row.availability?.[topicSession] ?? row.availability?.ALL
                   const enabled = availability?.is_available !== false
                   return (
@@ -544,6 +533,7 @@ export function FacultyCourseNotesScreen() {
                     </View>
                   )
                 })}
+                <FacultyListPagerFooter pager={topicsPager} />
               </>
             )
           ) : null}
@@ -574,7 +564,9 @@ export function FacultyCourseNotesScreen() {
             <FacultyCourseNotesDeletedPanel
               scope={scope}
               notes={deletedNotes}
-              onChanged={load}
+              onChanged={async () => {
+                await notesQuery.refetch()
+              }}
               onPreview={openDeletedPreview}
             />
           ) : null}
@@ -608,8 +600,12 @@ export function FacultyCourseNotesScreen() {
               <Text style={[type.bodyEmphasis, { color: tokens.accent }]}>{saving ? "…" : "Save"}</Text>
             </Pressable>
           </View>
-          <ScrollView contentContainerStyle={localStyles.editorBody} keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag">
+          <ScrollView
+            contentContainerStyle={localStyles.editorBody}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+            scrollEnabled={contentTab !== "ink"}
+          >
             {loadingEditor ? (
               <View style={localStyles.loadingBox}>
                 <ActivityIndicator color={tokens.accent} />
@@ -674,7 +670,10 @@ export function FacultyCourseNotesScreen() {
                   localStyles.segmentBtn,
                   contentTab === "typed" && [localStyles.segmentBtnActive, { backgroundColor: native.secondaryGrouped }],
                 ]}
-                onPress={() => setContentTab("typed")}
+                onPress={() => {
+                  setInkDrawing(false)
+                  setContentTab("typed")
+                }}
                 accessibilityRole="button"
                 accessibilityState={{ selected: contentTab === "typed" }}
                 accessibilityLabel="Typed"
@@ -723,16 +722,28 @@ export function FacultyCourseNotesScreen() {
                 style={[localStyles.bodyInput, { color: native.label, borderColor: native.separator }]}
               />
             ) : (
-              <CircuitWorkspaceEditor workspace={inkWorkspace} onChange={setInkWorkspace} />
+              <CircuitWorkspaceEditor
+                workspace={inkWorkspace}
+                onChange={setInkWorkspace}
+                onDrawingActiveChange={setInkDrawing}
+              />
             )}
             {editing ? (
               <Pressable
                 onPress={deleteNoteFromEditor}
                 accessibilityRole="button"
                 accessibilityLabel="Delete note"
-                style={localStyles.deleteLink}
+                style={({ pressed }) => [
+                  localStyles.deleteBtn,
+                  {
+                    borderColor: `${tokens.danger}55`,
+                    backgroundColor: semanticSoft(tokens.danger, tokens.isDark),
+                    opacity: pressed ? NATIVE.pressedOpacity : 1,
+                  },
+                ]}
               >
-                <Text style={[type.bodyEmphasis, { color: tokens.danger }]}>Delete note</Text>
+                <Ionicons name="trash-outline" size={18} color={tokens.danger} />
+                <Text style={[type.bodyEmphasis, { color: tokens.danger, fontSize: 15 }]}>Delete note</Text>
               </Pressable>
             ) : null}
           </ScrollView>
@@ -811,7 +822,17 @@ const localStyles = StyleSheet.create({
   },
   publishRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   previewToggle: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  deleteLink: { marginTop: 8, alignSelf: "flex-start", minHeight: 44, justifyContent: "center" },
+  deleteBtn: {
+    marginTop: 16,
+    minHeight: 48,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingVertical: 12,
+  },
   segmentTrack: {
     flexDirection: "row",
     borderRadius: 10,

@@ -72,6 +72,8 @@ export type CoursePolicies = {
   source_label?: string
   assessment_privilege_source?: string
   show_course_policy_notice?: boolean
+  platform_access?: import("./assessment-platform-access").AssessmentPlatformAccess
+  assessment_policy?: unknown
 }
 
 export type RecommendationRequest = {
@@ -187,6 +189,9 @@ export const courseInfoApi = {
       areaOfConcern: payload.areaOfConcern,
       description: payload.description,
       preferredDates: payload.preferredDates}),
+
+  cancelOfficeHours: (session: StudentSession, requestId: number) =>
+    studentApi.cancelOfficeHours(session, requestId),
 
   getCalendarEvents: async (session: StudentSession, range?: { startDate: Date; endDate: Date }) => {
     const data = await studentApi.getCalendarEvents(session, range)

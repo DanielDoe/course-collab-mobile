@@ -1,14 +1,18 @@
+import { attendanceDisplayPercent } from "./attendance-leaderboard-scope"
+import { isFall2026ElegOffering } from "./fall-2026-eleg-sessions"
 import type {
   AttendanceAnalytics,
   AttendanceRecord,
   AttendanceRosterStudent,
-  AttendanceSession} from "./instructor-api"
+  AttendanceSession,
+  AttendanceStudentSummary,
+} from "./instructor-api"
 import {
   facultyAttendanceStatusColor,
   FACULTY_ATTENDANCE_COLOR,
 } from "./faculty-attendance-theme"
 
-export type AttendanceTab = "overview" | "roll" | "meetings" | "log"
+export type AttendanceTab = "overview" | "roll" | "meetings" | "log" | "leaderboard"
 
 export type AttendanceStatus = "present" | "absent" | "excused" | "late"
 
@@ -58,9 +62,91 @@ export function attendanceStatusTone(status: string): "success" | "warning" | "d
 }
 
 export function formatAttendancePct(value: unknown): string {
-  const n = Number(value)
-  if (!Number.isFinite(n)) return "0%"
-  return `${n.toFixed(1)}%`
+  return `${attendanceDisplayPercent(value)}%`
+}
+
+function numericCount(value: unknown): number {
+  const parsed = Number(value ?? 0)
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+export function offeringHasAttendanceActivity(input: {
+  meetings?: Array<{ total_attended?: number | string | null }>
+  records?: Array<{ id?: number }>
+}): boolean {
+  if ((input.records ?? []).length > 0) return true
+  return (input.meetings ?? []).some((meeting) => numericCount(meeting.total_attended) > 0)
+}
+
+/** Roster dumps with 200% / 0 streak / 0 credits are leftover matching, not this term's roll. */
+export function facultyAttendanceAnalyticsIsPlaceholder(analytics: AttendanceAnalytics | null): boolean {
+  if (!analytics) return true
+  if (numericCount(analytics.overall?.total_check_ins) > 0) return false
+  const people = [
+    ...(analytics.studentSummaries ?? []),
+    ...(analytics.topPerformers ?? []),
+    ...(analytics.flaggedStudents ?? []),
+    ...(analytics.chronicAbsentees ?? []),
+  ]
+  if (people.length === 0) return numericCount(analytics.overall?.total_sessions) === 0
+  return people.every((student) => {
+    const pct = numericCount(student.attendance_percentage)
+    return (
+      numericCount(student.current_streak) === 0 &&
+      numericCount(student.credits_earned) === 0 &&
+      numericCount(student.absent_count) === 0 &&
+      (pct <= 0 || pct > 100)
+    )
+  })
+}
+
+function emptyFacultyAttendanceAnalytics(): AttendanceAnalytics {
+  return {
+    overall: {
+      total_sessions: 0,
+      unique_students: 0,
+      total_check_ins: 0,
+      average_attendance_rate: 0,
+    },
+    flaggedStudents: [],
+    topPerformers: [],
+    chronicAbsentees: [],
+    excusedStudents: [],
+    studentSummaries: [],
+    weeklyTrend: [],
+    sessionBreakdown: [],
+    statusBreakdown: [],
+  }
+}
+
+/**
+ * Fall 2026 ELEG 1301P01 / P02 / 1304P03 have no attendance yet. Hide leftover
+ * ranks until this offering has a meeting check-in or a log row.
+ */
+export function sanitizeFacultyAttendanceAnalytics(
+  analytics: AttendanceAnalytics | null,
+  input: {
+    sectionCode?: string | null
+    courseSessionCodes?: readonly string[]
+    meetings?: AttendanceSession[]
+    records?: AttendanceRecord[]
+  } = {},
+): AttendanceAnalytics | null {
+  if (!analytics) return null
+  const fall2026 = isFall2026ElegOffering(input.sectionCode, input.courseSessionCodes ?? [])
+  const hasLocalLists = input.meetings != null || input.records != null
+  const localActivity = hasLocalLists
+    ? offeringHasAttendanceActivity({ meetings: input.meetings, records: input.records })
+    : false
+
+  if (fall2026 && hasLocalLists && !localActivity) return emptyFacultyAttendanceAnalytics()
+  if (fall2026 && !hasLocalLists && facultyAttendanceAnalyticsIsPlaceholder(analytics)) {
+    return emptyFacultyAttendanceAnalytics()
+  }
+  if (!fall2026 && facultyAttendanceAnalyticsIsPlaceholder(analytics)) {
+    return emptyFacultyAttendanceAnalytics()
+  }
+  return analytics
 }
 
 export function formatMeetingDay(iso?: string | null): string {
@@ -156,8 +242,8 @@ export function computeOverviewFromAnalytics(analytics: AttendanceAnalytics | nu
   const overall = analytics?.overall ?? {}
   const summaries = analytics?.studentSummaries ?? []
   const avgRate = summaries.length
-    ? summaries.reduce((sum, s) => sum + Number(s.attendance_percentage ?? 0), 0) / summaries.length
-    : Number(overall.average_attendance_rate ?? 0)
+    ? summaries.reduce((sum, s) => sum + attendanceDisplayPercent(s.attendance_percentage), 0) / summaries.length
+    : attendanceDisplayPercent(overall.average_attendance_rate)
 
   return {
     meetings: Number(overall.total_sessions ?? 0),
@@ -219,6 +305,36 @@ export function filterRosterStudents<
   if (!q) return students
   return students.filter((s) =>
     [s.fullName, s.studentNumber].join(" ").toLowerCase().includes(q),
+  )
+}
+
+export function rankFacultyAttendanceStandings(
+  analytics: AttendanceAnalytics | null,
+): AttendanceStudentSummary[] {
+  const pool =
+    (analytics?.topPerformers?.length ? analytics.topPerformers : analytics?.studentSummaries) ?? []
+  return [...pool]
+    .filter((student) => {
+      const pct = attendanceDisplayPercent(student.attendance_percentage)
+      return pct > 0 || numericCount(student.current_streak) > 0 || numericCount(student.credits_earned) > 0
+    })
+    .sort((a, b) => {
+      const byPct = attendanceDisplayPercent(b.attendance_percentage) - attendanceDisplayPercent(a.attendance_percentage)
+      if (byPct !== 0) return byPct
+      const byStreak = numericCount(b.current_streak) - numericCount(a.current_streak)
+      if (byStreak !== 0) return byStreak
+      return numericCount(b.credits_earned) - numericCount(a.credits_earned)
+    })
+}
+
+export function filterFacultyAttendanceStandings(
+  rows: AttendanceStudentSummary[],
+  query: string,
+): AttendanceStudentSummary[] {
+  const q = query.trim().toLowerCase()
+  if (!q) return rows
+  return rows.filter((student) =>
+    [student.full_name, student.student_id].join(" ").toLowerCase().includes(q),
   )
 }
 

@@ -1,6 +1,15 @@
-import { Platform, Pressable, StyleSheet, Text, View } from "react-native"
+import { useEffect, useMemo } from "react"
+import { Platform, Pressable, StyleSheet, View, type LayoutChangeEvent } from "react-native"
+import Animated, {
+  interpolate,
+  interpolateColor,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+} from "react-native-reanimated"
 import { Ionicons } from "@/components/icons/AppIcon"
 import { useAppThemeTokens, useThemedNative } from "../../context/AppearanceProvider"
+import { spring, triggerMotionHaptic, useAppReducedMotion, usePillTabIndicator } from "../../lib/motion"
 import { useNativeType, useThemedStudentNative } from "../../lib/themed-module-theme"
 import { FACULTY_COLLAB_COLOR } from "../../lib/faculty-collab-theme"
 import { NativeCountBadge } from "../faculty/faculty-shared"
@@ -33,7 +42,102 @@ const TAB_SHADOW = Platform.select({
   default: {},
 })
 
-/** Revolut-style tabs — white active capsule; inactive icon + label, no chrome. */
+function CleanPillTab({
+  tab,
+  index,
+  active,
+  activeIcon,
+  inactiveIcon,
+  activeLabel,
+  inactiveLabel,
+  onLayout,
+  onPress,
+}: {
+  tab: CleanPillTabItem<string>
+  index: number
+  active: boolean
+  activeIcon: string
+  inactiveIcon: string
+  activeLabel: string
+  inactiveLabel: string
+  onLayout: (index: number) => (event: LayoutChangeEvent) => void
+  onPress: () => void
+}) {
+  const type = useNativeType()
+  const reduceMotion = useAppReducedMotion()
+  const progress = useSharedValue(active ? 1 : 0)
+  const hasIcon = Boolean(tab.icon)
+
+  useEffect(() => {
+    progress.value = reduceMotion
+      ? active
+        ? 1
+        : 0
+      : withSpring(active ? 1 : 0, spring.pill)
+  }, [active, progress, reduceMotion])
+
+  const contentStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: interpolate(progress.value, [0, 1], [0.94, 1]) }],
+    opacity: interpolate(progress.value, [0, 1], [0.78, 1]),
+  }))
+
+  const labelStyle = useAnimatedStyle(() => ({
+    color: interpolateColor(progress.value, [0, 1], [inactiveLabel, activeLabel]),
+  }))
+
+  const inactiveIconStyle = useAnimatedStyle(() => ({
+    opacity: 1 - progress.value,
+    transform: [{ scale: interpolate(progress.value, [0, 1], [1, 0.88]) }],
+  }))
+
+  const activeIconStyle = useAnimatedStyle(() => ({
+    opacity: progress.value,
+    transform: [{ scale: interpolate(progress.value, [0, 1], [0.88, 1.06]) }],
+  }))
+
+  return (
+    <Pressable
+      style={[styles.hit, styles.hitScroll]}
+      onPress={onPress}
+      accessibilityRole="tab"
+      accessibilityState={{ selected: active }}
+    >
+      <View
+        onLayout={onLayout(index)}
+        style={[styles.tabInner, active ? styles.tabActive : styles.tabInactive]}
+      >
+        <Animated.View style={[styles.tabContent, contentStyle]}>
+          {hasIcon ? (
+            <View style={styles.iconSlot}>
+              <Animated.View style={inactiveIconStyle}>
+                <Ionicons name={tab.icon!} size={17} color={inactiveIcon} />
+              </Animated.View>
+              <Animated.View style={[styles.iconOverlay, activeIconStyle]} pointerEvents="none">
+                <Ionicons name={tab.icon!} size={17} color={activeIcon} />
+              </Animated.View>
+            </View>
+          ) : null}
+          <Animated.Text
+            style={[
+              type.bodyEmphasis,
+              styles.label,
+              active && styles.labelActive,
+              labelStyle,
+            ]}
+            numberOfLines={1}
+          >
+            {tab.label}
+          </Animated.Text>
+          {tab.count != null && tab.count > 0 ? (
+            <NativeCountBadge count={tab.count} variant="compact" />
+          ) : null}
+        </Animated.View>
+      </View>
+    </Pressable>
+  )
+}
+
+/** Revolut-style tabs — gliding white active capsule; spring cross-fade on icon + label. */
 export function CleanPillTabBar<T extends string>({
   tabs,
   value,
@@ -45,7 +149,6 @@ export function CleanPillTabBar<T extends string>({
   const native = useThemedNative()
   const SN = useThemedStudentNative()
   const tokens = useAppThemeTokens()
-  const type = useNativeType()
   const isStudent = theme === "student"
 
   const activeSurface = tokens.isDark ? native.tertiaryGrouped : "#FFFFFF"
@@ -54,59 +157,64 @@ export function CleanPillTabBar<T extends string>({
   const activeIcon = isStudent ? SN.accent : FACULTY_COLLAB_COLOR.tabActive
   const inactiveIcon = isStudent ? SN.tertiaryLabel : native.tertiaryLabel
 
-  const content = tabs.map((tab) => {
-    const active = tab.id === value
-    const hasIcon = Boolean(tab.icon)
+  const activeIndex = Math.max(0, tabs.findIndex((tab) => tab.id === value))
+  const { indicatorStyle, onTabLayout } = usePillTabIndicator(activeIndex)
 
-    return (
-      <Pressable
-        key={tab.id}
-        style={[styles.hit, scrollable && styles.hitScroll]}
-        onPress={() => onChange(tab.id)}
-        accessibilityRole="tab"
-        accessibilityState={{ selected: active }}
-      >
-        <View
-          style={[
-            styles.tabInner,
-            active
-              ? [styles.tabActive, { backgroundColor: activeSurface }, TAB_SHADOW]
-              : styles.tabInactive,
-          ]}
-        >
-          {hasIcon ? (
-            <Ionicons
-              name={tab.icon!}
-              size={active ? 18 : 17}
-              color={active ? activeIcon : inactiveIcon}
-            />
-          ) : null}
-          <Text
-            style={[
-              type.bodyEmphasis,
-              styles.label,
-              active
-                ? [styles.labelActive, { color: activeLabel }]
-                : { color: inactiveLabel, fontWeight: "500" },
-            ]}
-            numberOfLines={1}
-          >
-            {tab.label}
-          </Text>
-          {tab.count != null && tab.count > 0 ? (
-            <NativeCountBadge count={tab.count} variant="compact" />
-          ) : null}
-        </View>
-      </Pressable>
-    )
-  })
+  const content = useMemo(
+    () =>
+      tabs.map((tab, index) => {
+        const active = tab.id === value
+        return (
+          <CleanPillTab
+            key={tab.id}
+            tab={tab}
+            index={index}
+            active={active}
+            activeIcon={activeIcon}
+            inactiveIcon={inactiveIcon}
+            activeLabel={activeLabel}
+            inactiveLabel={inactiveLabel}
+            onLayout={onTabLayout}
+            onPress={() => {
+              if (tab.id !== value) triggerMotionHaptic("selection")
+              onChange(tab.id)
+            }}
+          />
+        )
+      }),
+    [
+      activeIcon,
+      activeLabel,
+      inactiveIcon,
+      inactiveLabel,
+      onChange,
+      onTabLayout,
+      tabs,
+      value,
+    ],
+  )
+
+  const track = (
+    <View style={scrollable ? styles.scrollRowTrack : styles.row}>
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          styles.glidePill,
+          { backgroundColor: activeSurface },
+          TAB_SHADOW,
+          indicatorStyle,
+        ]}
+      />
+      {content}
+    </View>
+  )
 
   const bar = scrollable ? (
-    <HorizontalScrollWithHints showHints={false} contentContainerStyle={styles.scrollRow}>
-      {content}
+    <HorizontalScrollWithHints showHints={false} contentContainerStyle={styles.scrollRowOuter}>
+      {track}
     </HorizontalScrollWithHints>
   ) : (
-    <View style={styles.row}>{content}</View>
+    track
   )
 
   return (
@@ -131,27 +239,45 @@ const styles = StyleSheet.create({
   wrapEmbedded: {
     paddingBottom: 4,
   },
-  scrollRow: {
+  scrollRowOuter: {
+    paddingVertical: 4,
+    paddingRight: 4,
+  },
+  scrollRowTrack: {
     flexDirection: "row",
     alignItems: "center",
     gap: 20,
-    paddingVertical: 4,
-    paddingRight: 4,
+    position: "relative",
   },
   row: {
     flexDirection: "row",
     alignItems: "center",
     gap: 24,
     paddingVertical: 4,
+    position: "relative",
+  },
+  glidePill: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    bottom: 0,
+    borderRadius: 999,
+    zIndex: 0,
   },
   hit: {
     flexGrow: 0,
     flexShrink: 0,
+    zIndex: 1,
   },
   hitScroll: {
     flexGrow: 0,
   },
   tabInner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  tabContent: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -167,9 +293,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: 999,
   },
+  iconSlot: {
+    width: 17,
+    height: 17,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  iconOverlay: {
+    ...StyleSheet.absoluteFill,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   label: {
     fontSize: 15,
     lineHeight: 20,
+    fontWeight: "500",
   },
   labelActive: {
     fontWeight: "700",

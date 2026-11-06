@@ -39,6 +39,8 @@ export type FacultyShellBootstrap = {
     pendingIssues: number
     officeHours: number
     courseExchange: number
+    unreadMessages?: number
+    pendingAccessRequests?: number
   }
 }
 

@@ -15,7 +15,7 @@ const MODULE_PICKER_LABELS: Partial<Record<CourseExchangeModule, string>> = {
   course_notes: "Course Notes",
   question_bank: "Question Bank",
   practice_hub: "Practice Hub",
-  classroom_points: "Classroom Points",
+  classroom_points: "Points (tasks only)",
   mid_semester_exams: "Mid-Semester",
   final_exams: "Final Exams",
 }

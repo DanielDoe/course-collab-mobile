@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Modal,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -36,6 +35,9 @@ import {
 import { SHEET_SECTION } from "./faculty-sheet-semantics"
 import { NativeSelect } from "../NativeSelect"
 import { WEEK_OPTIONS } from "./FacultyNativePickers"
+import { KeyboardAwareForm } from "../ui/KeyboardAwareForm"
+import { validateLectureCreateFields } from "../../lib/faculty-lecture-create"
+import { sanitizeUserFacingError } from "../../lib/user-facing-error"
 
 type Props = {
   visible: boolean
@@ -43,7 +45,7 @@ type Props = {
   createMode?: boolean
   defaultWeek?: number
   onClose: () => void
-  onSaved: () => void
+  onSaved: (created?: InstructorLecture) => void
 }
 
 function hasDeck(lecture: InstructorLecture): boolean {
@@ -74,7 +76,7 @@ export function FacultyLectureEditorModal({
   const collabSheetStyles = useCollabSheetStyles()
   const insets = useSafeAreaInsets()
   const native = useThemedNative()
-  const { scope } = useFacultyScope()
+  const { scope, hasCourse } = useFacultyScope()
 
   const [title, setTitle] = useState("")
   const [week, setWeek] = useState("")
@@ -142,40 +144,55 @@ export function FacultyLectureEditorModal({
   const saveLabel = createMode ? "Create" : "Save"
 
   async function saveDetails() {
-    if (!scope) return
-    const weekNum = Number.parseInt(week, 10)
-    if (!title.trim()) {
-      setError("Title is required.")
+    if (!scope || !hasCourse) {
+      setError("Select a course before creating a lecture.")
       return
     }
-    if (!Number.isFinite(weekNum)) {
-      setError("Week must be a number.")
+    const objectiveList = objectivesListFromText(objectives)
+    const validated = validateLectureCreateFields(
+      {
+        title,
+        week,
+        description,
+        objectives: objectiveList,
+        is_published: published,
+      },
+      scope.courseId,
+    )
+    if (!validated.ok) {
+      setError(validated.error)
       return
     }
     setSaving(true)
     setError("")
     try {
-      const objectiveList = objectivesListFromText(objectives)
-      const payload = {
-        title: title.trim(),
-        week: weekNum,
-        description: description.trim() || undefined,
-        objectives: objectiveList,
-        is_published: published,
-        ...(createMode ? {} : { allow_download: allowDownload })}
       if (createMode) {
-        await instructorApi.createLecture(scope, {
-          ...payload,
-          is_published: published})
+        const result = await instructorApi.createLecture(scope, validated.payload)
+        onSaved(result.lecture)
+        if (!result.lecture) onClose()
       } else {
         await instructorApi.updateLecture(scope, lectureId, {
-          ...payload,
-          allow_download: allowDownload})
+          ...validated.payload,
+          allow_download: allowDownload,
+        })
+        onSaved()
+        onClose()
       }
-      onSaved()
-      onClose()
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not save lecture.")
+      if (__DEV__) {
+        console.error("[faculty] lecture save failed", {
+          courseId: scope.courseId,
+          createMode,
+          lectureId,
+          err,
+        })
+      }
+      setError(
+        sanitizeUserFacingError(
+          err instanceof ApiError ? err.message : err,
+          "Lecture could not be created. Check the required fields and try again.",
+        ),
+      )
     } finally {
       setSaving(false)
     }
@@ -256,11 +273,7 @@ export function FacultyLectureEditorModal({
           }
         />
 
-        <ScrollView
-          contentContainerStyle={[collabSheetStyles.scroll, { paddingBottom: insets.bottom + 24 }]}
-          keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
-        >
+        <KeyboardAwareForm contentContainerStyle={collabSheetStyles.scroll}>
           {error ? <FacultySheetErrorBanner message={error} /> : null}
 
           <FacultySheetSection
@@ -379,7 +392,7 @@ export function FacultyLectureEditorModal({
               onValueChange={setAllowDownload}
             />
           </FacultySheetSection>
-        </ScrollView>
+        </KeyboardAwareForm>
       </FacultySheetContainer>
     </Modal>
   )

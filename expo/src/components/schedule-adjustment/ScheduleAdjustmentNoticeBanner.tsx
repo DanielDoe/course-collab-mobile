@@ -47,22 +47,24 @@ export function ScheduleAdjustmentNoticeBanner() {
       ]}
     >
       <View style={[styles.stripe, { backgroundColor: tokens.accent }]} />
-      <Ionicons name="shield-checkmark-outline" size={16} color={tokens.accent} style={styles.icon} />
-      <View style={styles.copy}>
-        <Text style={[type.caption, styles.title, { color: native.label }]}>Finalize only after approval</Text>
-        <Text style={[type.caption, { color: native.secondaryLabel }]} numberOfLines={2}>
-          Departmental and institutional requirements must be satisfied first.
-        </Text>
+      <View style={styles.bannerInner}>
+        <Ionicons name="shield-checkmark-outline" size={16} color={tokens.accent} style={styles.icon} />
+        <View style={styles.copy}>
+          <Text style={[type.caption, styles.title, { color: native.label }]}>Finalize only after approval</Text>
+          <Text style={[type.caption, { color: native.secondaryLabel }]} numberOfLines={2}>
+            Departmental and institutional requirements must be satisfied first.
+          </Text>
+        </View>
+        <Pressable
+          onPress={() => setVisible(false)}
+          hitSlop={10}
+          accessibilityRole="button"
+          accessibilityLabel="Dismiss"
+          style={styles.dismiss}
+        >
+          <Ionicons name="close" size={16} color={native.tertiaryLabel} />
+        </Pressable>
       </View>
-      <Pressable
-        onPress={() => setVisible(false)}
-        hitSlop={10}
-        accessibilityRole="button"
-        accessibilityLabel="Dismiss"
-        style={styles.dismiss}
-      >
-        <Ionicons name="close" size={16} color={native.tertiaryLabel} />
-      </Pressable>
     </Animated.View>
   )
 }
@@ -70,20 +72,28 @@ export function ScheduleAdjustmentNoticeBanner() {
 const styles = StyleSheet.create({
   banner: {
     flexDirection: "row",
-    alignItems: "center",
     overflow: "hidden",
     borderRadius: 12,
-    paddingVertical: 12,
-    paddingRight: 10,
-    minHeight: 52,
   },
   stripe: {
-    width: 3,
+    width: 4,
     alignSelf: "stretch",
-    marginRight: 12,
   },
-  icon: { marginRight: 10 },
-  copy: { flex: 1, gap: 3, minWidth: 0, paddingVertical: 2 },
+  bannerInner: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    minHeight: 56,
+  },
+  icon: { flexShrink: 0 },
+  copy: { flex: 1, gap: 4, minWidth: 0 },
   title: { fontWeight: "700" },
-  dismiss: { padding: 6 },
+  dismiss: {
+    flexShrink: 0,
+    padding: 4,
+    marginRight: -2,
+  },
 })

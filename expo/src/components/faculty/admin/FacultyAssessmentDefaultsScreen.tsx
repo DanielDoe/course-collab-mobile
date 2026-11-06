@@ -495,6 +495,54 @@ export function FacultyAssessmentDefaultsScreen() {
                       geo_radius_meters_default: parseIntField(text, policy.access.geo_radius_meters_default)}})
                 }
               />
+              <FacultyAdminToggleRow
+                label="Quizzes on mobile"
+                value={policy.access.platform_access.quiz.mobile}
+                onChange={(next) =>
+                  updatePolicy({
+                    ...policy,
+                    access: {
+                      ...policy.access,
+                      platform_access: {
+                        ...policy.access.platform_access,
+                        quiz: { ...policy.access.platform_access.quiz, mobile: next },
+                      },
+                    },
+                  })
+                }
+              />
+              <FacultyAdminToggleRow
+                label="Mid-semester exams on mobile"
+                value={policy.access.platform_access.mid_semester.mobile}
+                onChange={(next) =>
+                  updatePolicy({
+                    ...policy,
+                    access: {
+                      ...policy.access,
+                      platform_access: {
+                        ...policy.access.platform_access,
+                        mid_semester: { ...policy.access.platform_access.mid_semester, mobile: next },
+                      },
+                    },
+                  })
+                }
+              />
+              <FacultyAdminToggleRow
+                label="Final exams on mobile"
+                value={policy.access.platform_access.final.mobile}
+                onChange={(next) =>
+                  updatePolicy({
+                    ...policy,
+                    access: {
+                      ...policy.access,
+                      platform_access: {
+                        ...policy.access.platform_access,
+                        final: { ...policy.access.platform_access.final, mobile: next },
+                      },
+                    },
+                  })
+                }
+              />
             </FacultyAdminSection>
 
             <FacultyAdminSection title="AI Grading Defaults">

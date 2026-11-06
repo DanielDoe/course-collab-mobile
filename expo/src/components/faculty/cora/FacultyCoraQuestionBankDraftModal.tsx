@@ -1,16 +1,16 @@
-import { useEffect, useState } from "react"
-import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
-import { AppAlert } from '../../../lib/app-alert'
+import { useEffect, useRef, useState } from "react"
+import { View } from "react-native"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
+import { AppAlert } from "../../../lib/app-alert"
 import { ApiError } from "../../../lib/api"
+import { sanitizeUserFacingError } from "../../../lib/user-facing-error"
+import { validateQuestionBankDraftsForCreate } from "../../../lib/question-bank-draft-payload"
 import type { DraftQuestionBankItem } from "../../../lib/question-bank-ai-types"
 import { instructorApi } from "../../../lib/instructor-api"
 import { useFacultyScope } from "../../../hooks/useFacultyScope"
 import { FacultyQuestionBankDraftReviewPanel } from "../question-bank/FacultyQuestionBankDraftReviewPanel"
+import { FacultySheetChrome, FacultySheetModal } from "../faculty-collab-sheet-ui"
 import { CoraBrand } from "../../cora/CoraBrand"
-import { NATIVE } from "../../../constants/faculty-native-theme"
-import { useModuleTheme } from "../../../lib/themed-module-shell"
-import { FACULTY_QUESTION_BANK_COLOR } from "../../../lib/faculty-question-bank-theme"
 
 type Props = {
   visible: boolean
@@ -21,16 +21,17 @@ type Props = {
 
 export function FacultyCoraQuestionBankDraftModal({ visible, drafts, onClose, onSaved }: Props) {
   const insets = useSafeAreaInsets()
-  const { native, type } = useModuleTheme()
-  const { scope } = useFacultyScope()
+  const { scope, hasCourse } = useFacultyScope()
   const [selected, setSelected] = useState<Record<string, boolean>>({})
   const [localDrafts, setLocalDrafts] = useState<DraftQuestionBankItem[]>(drafts)
   const [saving, setSaving] = useState(false)
+  const submittingRef = useRef(false)
 
   useEffect(() => {
     if (!visible) return
     setLocalDrafts(drafts)
     setSelected(Object.fromEntries(drafts.map((d) => [d.draftId, true])))
+    submittingRef.current = false
   }, [visible, drafts])
 
   function updateDraft(draftId: string, partial: Partial<DraftQuestionBankItem>) {
@@ -38,35 +39,60 @@ export function FacultyCoraQuestionBankDraftModal({ visible, drafts, onClose, on
   }
 
   async function handleConfirm() {
-    if (!scope) return
+    if (submittingRef.current) return
+    if (!scope || !hasCourse) {
+      AppAlert.alert("Select a course", "Choose a course before adding these questions.")
+      return
+    }
     const toCreate = localDrafts.filter((d) => selected[d.draftId])
-    if (!toCreate.length) return
+    const invalid = validateQuestionBankDraftsForCreate(toCreate)
+    if (invalid) {
+      AppAlert.alert("Cannot add questions", invalid)
+      return
+    }
+    submittingRef.current = true
     setSaving(true)
     try {
-      await instructorApi.bulkCreateQuestionBankQuestions(scope, toCreate)
+      const result = await instructorApi.bulkCreateQuestionBankQuestions(scope, toCreate)
+      const count = result.createdCount ?? toCreate.length
       onSaved()
       onClose()
+      AppAlert.alert(
+        "Questions added",
+        `${count} question${count === 1 ? "" : "s"} added to Question Bank.`,
+      )
     } catch (err) {
-      AppAlert.alert("Could not save", err instanceof ApiError ? err.message : "Try again.")
+      if (__DEV__) {
+        console.error("[faculty] bulk-create Cora drafts failed", {
+          courseId: scope.courseId,
+          count: toCreate.length,
+          err,
+        })
+      }
+      AppAlert.alert(
+        "Could not add questions",
+        sanitizeUserFacingError(
+          err instanceof ApiError ? err.message : err,
+          "The generated questions are still here. Check your connection and try again.",
+        ),
+      )
     } finally {
+      submittingRef.current = false
       setSaving(false)
     }
   }
 
-  return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
-      <View style={[styles.root, { backgroundColor: native.groupedBackground, paddingTop: insets.top }]}>
-        <View style={[styles.header, { borderBottomColor: native.separator }]}>
-          <Pressable onPress={onClose} hitSlop={8}>
-            <Text style={[type.bodyEmphasis, { color: FACULTY_QUESTION_BANK_COLOR.link }]}>Close</Text>
-          </Pressable>
-          <View style={styles.titleRow}>
-            <CoraBrand size="sm" />
-            <Text style={[type.navTitle, { color: native.label }]}>drafts</Text>
-          </View>
-          <View style={styles.headerSpacer} />
-        </View>
+  const confirmReady = Boolean(scope && hasCourse)
 
+  return (
+    <FacultySheetModal visible={visible} onRequestClose={onClose}>
+      <View style={{ flex: 1 }}>
+        <FacultySheetChrome
+          topInset={insets.top}
+          title="Cora drafts"
+          onClose={onClose}
+          rightSlot={<CoraBrand size="sm" />}
+        />
         <FacultyQuestionBankDraftReviewPanel
           drafts={localDrafts}
           selected={selected}
@@ -75,24 +101,12 @@ export function FacultyCoraQuestionBankDraftModal({ visible, drafts, onClose, on
           onBack={onClose}
           onConfirm={() => void handleConfirm()}
           saving={saving}
-          backLabel="Discard"
+          backLabel="Cancel"
           subtitle="Review Cora-generated questions before adding them to your bank."
+          fillHeight
+          confirmReady={confirmReady}
         />
       </View>
-    </Modal>
+    </FacultySheetModal>
   )
 }
-
-const styles = StyleSheet.create({
-  root: { flex: 1 },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: NATIVE.pagePadding,
-    paddingBottom: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  titleRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-  headerSpacer: { width: 48 },
-})

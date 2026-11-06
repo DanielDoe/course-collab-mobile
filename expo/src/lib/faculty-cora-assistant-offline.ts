@@ -224,7 +224,7 @@ function analyzeMidtermGradesReply(ctx: FacultyCoraAssistantContext, message: st
     actions: [
       moduleAction("results", "Manage Results"),
       moduleAction("mid-semester-exams", "Mid-Semester Exams"),
-      moduleAction("student-progress", "Student Progress"),
+      moduleAction("student-progress", "Class Analytics"),
       moduleAction("reports", "Manage Reports"),
     ],
   }

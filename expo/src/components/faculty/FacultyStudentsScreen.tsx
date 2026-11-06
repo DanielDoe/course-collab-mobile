@@ -1,15 +1,14 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react"
-import { ActivityIndicator, RefreshControl, StyleSheet, Text, View } from "react-native";
+import { useCallback, useMemo, useState } from "react"
+import { useFacultyListPager } from "../../hooks/useFacultyListPager"
+import { RefreshControl, StyleSheet, Text, View } from "react-native";
 import { AppAlert } from '../../lib/app-alert'
 import { Ionicons } from "@/components/icons/AppIcon"
-import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { ApiError } from "../../lib/api"
 import {
   formatFacultyRelativeTime,
   instructorApi,
   type InstructorAccountRequest,
   type InstructorPasswordResetRequest,
-  type InstructorSession,
   type InstructorStudent} from "../../lib/instructor-api"
 import {
   accountRequestKindLabel,
@@ -19,6 +18,10 @@ import {
   filterStudents,
   type StudentDirectoryTab} from "../../lib/faculty-students-utils"
 import { useFacultyScope } from "../../hooks/useFacultyScope"
+import { useFacultyStudents } from "../../hooks/query/useFacultyStudents"
+import { QueryRefreshBanner } from "../query/QueryRefreshBanner"
+import { QuerySkeleton } from "../query/QuerySkeleton"
+import { useFacultySectionFilter } from "../../lib/faculty-section-scope"
 import { useNotificationModuleRefresh } from "../../lib/notifications/notification-events"
 import { NATIVE, SYSTEM } from "../../constants/faculty-native-theme"
 import { FacultyEmptyState } from "./faculty-shared"
@@ -44,6 +47,7 @@ import { useFacultyStickyHeaderScrollLayout,
   resolveSessionFilterCode,
   sessionFilterDisplayLabel} from "./faculty-module-shell"
 import { ModuleFlashList } from "../ModuleFlashList"
+import { FacultyListPagerFooter } from "./FacultyListPagerFooter"
 
 const TABS: Array<{ id: StudentDirectoryTab; label: string; icon: keyof typeof Ionicons.glyphMap }> = [
   { id: "students", label: "Students", icon: "people-outline" },
@@ -53,9 +57,9 @@ const TABS: Array<{ id: StudentDirectoryTab; label: string; icon: keyof typeof I
 
 export function FacultyStudentsScreen() {
   const { styles: moduleStyles, native, tokens, type } = useModuleTheme()
-  const insets = useSafeAreaInsets()
-  const { listScrollPad, chromeTop } = useFacultyStickyHeaderScrollLayout()
+  const { listScrollPad, chromeTop } = useFacultyStickyHeaderScrollLayout({ extraBottom: 32 })
   const { scope, ready, course } = useFacultyScope()
+  const { sessionFilter, setSessionFilter } = useFacultySectionFilter(scope, "ALL")
 
   const [tab, setTab] = useState<StudentDirectoryTab>("students")
   const [selectedStudent, setSelectedStudent] = useState<InstructorStudent | null>(null)
@@ -63,57 +67,30 @@ export function FacultyStudentsScreen() {
   const [selectedRequest, setSelectedRequest] = useState<InstructorAccountRequest | null>(null)
   const [awardStudent, setAwardStudent] = useState<InstructorStudent | null>(null)
   const [addStudentOpen, setAddStudentOpen] = useState(false)
-  const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
-  const [error, setError] = useState("")
   const [search, setSearch] = useState("")
-  const [sessionFilter, setSessionFilter] = useState("ALL")
   const [sessionSheetOpen, setSessionSheetOpen] = useState(false)
-  const [sessions, setSessions] = useState<InstructorSession[]>([])
-  const [students, setStudents] = useState<InstructorStudent[]>([])
-  const [resets, setResets] = useState<InstructorPasswordResetRequest[]>([])
-  const [requests, setRequests] = useState<InstructorAccountRequest[]>([])
+  const directoryQuery = useFacultyStudents(ready ? scope : null, sessionFilter)
+  const sessions = directoryQuery.sessions
+  const students = directoryQuery.students
+  const resets = directoryQuery.resets
+  const requests = directoryQuery.requests
+  const loading = directoryQuery.isInitialLoading
+  const refreshing = directoryQuery.isRefreshing && !directoryQuery.isInitialLoading
+  const error = directoryQuery.error instanceof ApiError
+    ? directoryQuery.error.message
+    : directoryQuery.error
+      ? "Could not load directory."
+      : ""
   const [actingId, setActingId] = useState<number | null>(null)
 
   const load = useCallback(async () => {
-    if (!scope) return
-    setError("")
-    const sessionRes = await instructorApi.getSessions(scope, scope.academicTermId ?? undefined)
-    const nextSessions = sessionRes.sessions ?? []
-    setSessions(nextSessions)
-    const sessionCode = resolveSessionFilterCode(nextSessions, sessionFilter)
-    const [studentRows, resetRows, requestRows] = await Promise.all([
-      instructorApi.getStudents(scope, sessionCode),
-      instructorApi.getPasswordResets(scope),
-      instructorApi.getAccountRequests(scope),
-    ])
-    setStudents(studentRows)
-    setResets(resetRows)
-    setRequests(requestRows)
-  }, [scope, sessionFilter])
+    await directoryQuery.refetch()
+  }, [directoryQuery.refetch])
 
   useNotificationModuleRefresh("students", load)
 
-  useEffect(() => {
-    if (!ready) {
-      setLoading(false)
-      return
-    }
-    setLoading(true)
-    load()
-      .catch((err) => setError(err instanceof ApiError ? err.message : "Could not load directory."))
-      .finally(() => setLoading(false))
-  }, [ready, load])
-
   async function handleRefresh() {
-    setRefreshing(true)
-    try {
-      await load()
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not refresh.")
-    } finally {
-      setRefreshing(false)
-    }
+    await load()
   }
 
   const pendingResets = useMemo(
@@ -208,6 +185,9 @@ export function FacultyStudentsScreen() {
     return filteredRequests.map((row) => ({ key: String(row.id), kind: "request", row }))
   }, [loading, tab, filteredStudents, filteredResets, filteredRequests])
 
+  const pagerNoun = tab === "students" ? "students" : tab === "resets" ? "resets" : "requests"
+  const pager = useFacultyListPager(listRows, `${tab}:${search}:${sessionFilter}`, pagerNoun)
+
   const listEmptyMeta = useMemo(() => {
     if (loading) return null
     if (tab === "students") {
@@ -275,13 +255,17 @@ export function FacultyStudentsScreen() {
   }, [])
 
   const listHeader = useMemo(
-    () =>
-      error ? (
-        <View style={styles.errorBox}>
-          <Text style={styles.errorText}>{error}</Text>
-        </View>
-      ) : null,
-    [error],
+    () => (
+      <>
+        <QueryRefreshBanner visible={directoryQuery.refreshFailed} onRetry={() => void handleRefresh()} />
+        {error ? (
+          <View style={styles.errorBox}>
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        ) : null}
+      </>
+    ),
+    [directoryQuery.refreshFailed, error],
   )
 
   if (!ready) {
@@ -332,17 +316,17 @@ export function FacultyStudentsScreen() {
       </FacultyModuleStickyHeader>
 
       <ModuleFlashList
-        data={listRows}
+        animateItems
+        data={pager.items}
         keyExtractor={(item) => item.key}
         renderItem={renderStudentRow}
-        extraData={tab}
+        extraData={`${tab}:${pager.page}`}
         contentContainerStyle={[styles.content, listScrollPad]}
         ListHeaderComponent={listHeader}
+        ListFooterComponent={<FacultyListPagerFooter pager={pager} />}
         ListEmptyComponent={
           loading ? (
-            <View style={styles.loadingBox}>
-              <ActivityIndicator size="large" color={FACULTY_STUDENTS_COLOR.link} />
-            </View>
+            <QuerySkeleton />
           ) : listEmptyMeta ? (
             <FacultyEmptyState icon={listEmptyMeta.icon} title={listEmptyMeta.title} body={listEmptyMeta.body} />
           ) : null
@@ -432,5 +416,4 @@ const styles = StyleSheet.create({
     borderRadius: NATIVE.sectionRadius,
     padding: 12},
   errorText: { color: SYSTEM.red.color, fontSize: 14, lineHeight: 20 },
-  loadingBox: { paddingVertical: 48, alignItems: "center" },
 })

@@ -38,6 +38,12 @@ export function resolveNotificationLink(link: string | null | undefined): string
     return path
   }
 
+  if (path.startsWith("/schedule-adjustment/")) {
+    const requestId = path.slice("/schedule-adjustment/".length).split("/")[0]
+    if (requestId && /^\d+$/.test(requestId)) return `/schedule-adjustment/${requestId}`
+    return "/module/schedule-adjustment"
+  }
+
   const v2Prefix = "/student/dashboard-v2/"
   if (path.startsWith(v2Prefix)) {
     const rest = path.slice(v2Prefix.length)
@@ -54,7 +60,7 @@ export function resolveNotificationLink(link: string | null | undefined): string
       return tail.length ? `/announcements/${tail[0]}` : "/announcements"
     }
     if (segment === "results" && tail[0]) {
-      return `/assessment/report/${tail[0]}`
+      return `/results/${tail[0]}`
     }
     if ((segment === "quiz" || segment === "homework" || segment === "mid-semester" || segment === "final") && tail[0]) {
       return `/assessment/${tail[0]}`
@@ -68,6 +74,9 @@ export function resolveNotificationLink(link: string | null | undefined): string
       const requestId = params?.get("request")
       if (requestId && /^\d+$/.test(requestId)) return `/recommendations/${requestId}`
       return "/module/recommendations"
+    }
+    if (segment === "schedule-adjustment") {
+      return tail.length && /^\d+$/.test(tail[0]) ? `/schedule-adjustment/${tail[0]}` : "/module/schedule-adjustment"
     }
     const nativeModule = CLASSIC_MODULE_MAP[segment]
     if (nativeModule) return `/module/${nativeModule}`
@@ -83,6 +92,16 @@ export function resolveNotificationLink(link: string | null | undefined): string
   }
 
   if (path.startsWith("/module/")) return path
+
+  if (path.startsWith("/flashcards/")) {
+    const deckId = path.slice("/flashcards/".length).split("/")[0]
+    if (deckId && /^\d+$/.test(deckId)) {
+      const rest = path.slice(`/flashcards/${deckId}`.length)
+      if (rest.startsWith("/edit")) return `/flashcards/${deckId}/edit`
+      return `/flashcards/${deckId}`
+    }
+    return "/module/flashcards"
+  }
 
   if (path.startsWith("/guest/messages")) {
     const threadId = params?.get("thread")
@@ -171,12 +190,19 @@ function mapStudentDashboardSegment(segment: string, tail: string[], search: str
   if (segment === "lectures" && tail[0]) {
     return `/lecture/${tail[0]}`
   }
+  if (segment === "flashcards") {
+    if (tail[0] && /^\d+$/.test(tail[0])) {
+      if (tail[1] === "edit") return `/flashcards/${tail[0]}/edit`
+      return `/flashcards/${tail[0]}`
+    }
+    return "/module/flashcards"
+  }
   if (segment === "assessment" || segment === "quiz" || segment === "homework" || segment === "mid-semester" || segment === "final") {
     const id = tail[0]
     return id ? `/assessment/${id}` : null
   }
   if (segment === "results" && tail[0]) {
-    return `/assessment/report/${tail[0]}`
+    return `/results/${tail[0]}`
   }
   if (segment === "grades") {
     return "/module/grades"
@@ -271,6 +297,10 @@ function mapFacultyPath(path: string, search: string): string | null {
   if (lower.includes("recommendations")) return "/module/recommendations"
   if (lower.includes("progress-review")) return "/module/progress-reviews"
   if (lower.includes("office-hours")) return "/module/office-hours"
+  if (lower.includes("cora-insights") || lower.includes("ai-monitoring") || lower.includes("ai-insights")) {
+    return "/module/cora-insights"
+  }
+  if (lower.includes("student-progress") || lower.includes("analytics/advanced")) return "/module/student-progress"
   if (lower.includes("schedule-adjustment")) return "/module/schedule-adjustment"
   if (lower.includes("results/")) {
     const attemptId = path.split("/").pop()

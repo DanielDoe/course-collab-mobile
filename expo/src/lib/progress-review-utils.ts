@@ -50,6 +50,8 @@ export function formatAsOfLabel(dateStr: string | null | undefined): string | nu
 }
 
 export function periodBadgeLabel(period: string, asOfDate?: string | null): string {
+  const raw = String(period ?? "").trim().toLowerCase()
+  if (raw === "targeted_practice" || raw === "targeted") return "Targeted practice"
   const cfg = getReviewPeriodConfig(period)
   if (parseReviewPeriod(period) === "custom" && asOfDate) {
     const fmt = formatAsOfLabel(asOfDate)

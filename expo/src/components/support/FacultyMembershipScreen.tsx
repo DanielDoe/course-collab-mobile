@@ -65,6 +65,7 @@ import { useCoraBalance } from "../../hooks/useCoraBalance"
 import { CoraUsagePanel } from "../cora/CoraUsagePanel"
 import { CoraCreditPacksPanel } from "../cora/CoraCreditPacksPanel"
 import { CoraCreditBalanceBadge } from "../cora/CoraCreditBalanceBadge"
+import { shouldShowPurchaseCta } from "../../lib/purchase-navigation"
 
 const TIER_ORDER: FacultyMembershipTier[] = ["Enterprise", "Pro", "Free"]
 const CARD_RADIUS = 20
@@ -172,6 +173,7 @@ function CurrentPlanCard({
   details,
   onBilling,
   tokens,
+  showPurchaseActions,
 }: {
   plan: FacultyMembershipPlan
   priceCents: number
@@ -180,6 +182,7 @@ function CurrentPlanCard({
   details: FacultyMembershipDetailsResponse | null
   onBilling: () => void
   tokens: AppThemeTokens
+  showPurchaseActions: boolean
 }) {
   const hero = useMemo(() => facultyMembershipTierHeroCardStyle(plan.id, tokens), [plan.id, tokens])
   const subscription = details?.subscription ?? null
@@ -239,13 +242,13 @@ function CurrentPlanCard({
           </View>
         </View>
 
-        {!isFreeTier && priceCents > 0 ? (
+        {showPurchaseActions && !isFreeTier && priceCents > 0 ? (
           <Text style={[styles.currentPrice, { color: hero.subtitle }]}>
             {formatFacultyPlanPriceLabel(priceCents, cadence)} · {formatFacultyCadenceAccessLabel(cadence)}
           </Text>
         ) : null}
 
-        {!isFreeTier ? (
+        {showPurchaseActions && !isFreeTier ? (
           <Pressable
             style={[styles.billingBtn, { backgroundColor: hero.billingBtnBg }]}
             onPress={onBilling}
@@ -266,6 +269,7 @@ function PlanCard({
   expiresAt,
   onUpgrade,
   tokens,
+  showPurchaseActions,
 }: {
   plan: FacultyMembershipPlan
   priceCents: number
@@ -274,6 +278,7 @@ function PlanCard({
   expiresAt: string | null
   onUpgrade: (plan: FacultyMembershipPlan) => void
   tokens: AppThemeTokens
+  showPurchaseActions: boolean
 }) {
   const native = useThemedNative()
   const isCurrent = plan.id === currentTier
@@ -301,18 +306,22 @@ function PlanCard({
           </Text>
         </View>
         <View style={styles.planPriceBlock}>
-          <Text style={[styles.planPrice, { color: tokens.text }]}>
-            {priceCents <= 0 ? "Free" : formatFacultyPlanPriceLabel(priceCents, cadence)}
-          </Text>
-          {priceCents > 0 ? (
-            <Text style={[styles.planPriceCadence, { color: native.tertiaryLabel }]}>
-              {formatFacultyCadenceShortLabel(cadence)}
-            </Text>
+          {showPurchaseActions ? (
+            <>
+              <Text style={[styles.planPrice, { color: tokens.text }]}>
+                {priceCents <= 0 ? "Free" : formatFacultyPlanPriceLabel(priceCents, cadence)}
+              </Text>
+              {priceCents > 0 ? (
+                <Text style={[styles.planPriceCadence, { color: native.tertiaryLabel }]}>
+                  {formatFacultyCadenceShortLabel(cadence)}
+                </Text>
+              ) : null}
+            </>
           ) : null}
         </View>
       </View>
 
-      {cadence === "annual" && annualSavings > 0 && plan.id !== "Free" ? (
+      {showPurchaseActions && cadence === "annual" && annualSavings > 0 && plan.id !== "Free" ? (
         <View style={[styles.savingsBadge, { backgroundColor: hexToRgba(plan.accent, 0.12) }]}>
           <Ionicons name="sparkles-outline" size={14} color={plan.accentDark} />
           <Text style={[styles.savingsText, { color: plan.accentDark }]}>
@@ -321,7 +330,7 @@ function PlanCard({
         </View>
       ) : null}
 
-      {cadence === "semester" && annualSavings > 0 && plan.id !== "Free" ? (
+      {showPurchaseActions && cadence === "semester" && annualSavings > 0 && plan.id !== "Free" ? (
         <Text style={[styles.altCadenceHint, { color: native.secondaryLabel }]}>
           Or {formatFacultyPlanPriceLabel(plan.annualPriceCents, "annual")} — save{" "}
           {formatFacultyPriceFromCents(annualSavings)}
@@ -337,7 +346,7 @@ function PlanCard({
         ))}
       </View>
 
-      {canUpgrade ? (
+      {canUpgrade && showPurchaseActions ? (
         <Pressable style={[styles.upgradeBtn, { backgroundColor: hexToRgba(plan.accent, 0.12) }]} onPress={() => onUpgrade(plan)}>
           <Text style={[styles.upgradeBtnText, { color: plan.accentDark }]}>Upgrade to {plan.name}</Text>
         </Pressable>
@@ -446,6 +455,7 @@ export function FacultyMembershipScreen() {
     error: coraError,
     refresh: refreshCora,
   } = useCoraBalance({ role: "instructor", session, enabled: Boolean(session) })
+  const showPurchaseActions = shouldShowPurchaseCta()
 
   if (!session) return null
 
@@ -476,6 +486,7 @@ export function FacultyMembershipScreen() {
           details={membershipDetails}
           onBilling={() => router.push("/membership/manage" as never)}
           tokens={tokens}
+          showPurchaseActions={showPurchaseActions}
         />
 
         <View style={{ marginBottom: 16 }}>
@@ -498,25 +509,27 @@ export function FacultyMembershipScreen() {
           />
         </View>
 
-        <View style={styles.cadenceSection}>
-          <Text style={[styles.sectionLabel, { color: native.secondaryLabel, marginBottom: 10 }]}>
-            Billing option
-          </Text>
-          <MobbinPillSegmentControl
-            options={CADENCE_OPTIONS}
-            value={billingCadence}
-            onChange={setBillingCadence}
-          />
-          {billingCadence === "annual" ? (
-            <Text style={[styles.cadenceHint, { color: native.secondaryLabel }]}>
-              Annual covers Fall, Spring, and Summer at a discount vs three semester purchases.
+        {showPurchaseActions ? (
+          <View style={styles.cadenceSection}>
+            <Text style={[styles.sectionLabel, { color: native.secondaryLabel, marginBottom: 10 }]}>
+              Billing option
             </Text>
-          ) : (
-            <Text style={[styles.cadenceHint, { color: native.secondaryLabel }]}>
-              One-time payment through the end of the current academic term.
-            </Text>
-          )}
-        </View>
+            <MobbinPillSegmentControl
+              options={CADENCE_OPTIONS}
+              value={billingCadence}
+              onChange={setBillingCadence}
+            />
+            {billingCadence === "annual" ? (
+              <Text style={[styles.cadenceHint, { color: native.secondaryLabel }]}>
+                Annual covers Fall, Spring, and Summer at a discount vs three semester purchases.
+              </Text>
+            ) : (
+              <Text style={[styles.cadenceHint, { color: native.secondaryLabel }]}>
+                One-time payment through the end of the current academic term.
+              </Text>
+            )}
+          </View>
+        ) : null}
 
         <Text style={[styles.sectionLabel, { color: native.secondaryLabel }]}>All plans</Text>
         <View style={styles.planStack}>
@@ -530,11 +543,12 @@ export function FacultyMembershipScreen() {
               expiresAt={expiresAt}
               onUpgrade={handlePlanSelect}
               tokens={tokens}
+              showPurchaseActions={showPurchaseActions}
             />
           ))}
         </View>
 
-        {hasPaidMembership ? (
+        {hasPaidMembership && showPurchaseActions ? (
           <Pressable
             style={[styles.manageRow, { borderColor: tokens.border }]}
             onPress={() => router.push("/membership/manage" as never)}

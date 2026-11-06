@@ -7,8 +7,6 @@ import {
   type NativeWebThemePayload,
 } from "./native-web-theme-inject"
 import type { FacultySession, GuestSession, StudentSession, SummerSession } from "./session"
-
-const SESSION_DURATION_MS = 24 * 60 * 60 * 1000
 const NATIVE_LIGHT_BG = "#f8fafc"
 const NATIVE_DARK_BG = "#0c0f16"
 
@@ -52,7 +50,9 @@ export function buildWebSessionInjectScript(
     courseId: session.courseId,
     courseCode: session.courseCode,
     courseTitle: session.courseTitle,
-    expiresAt: Date.now() + SESSION_DURATION_MS}
+    rememberMe: session.rememberMe,
+    expiresAt: session.expiresAt,
+  }
 
   const payload = JSON.stringify(webSession)
   const immersive = Boolean(options?.immersiveLecture)
@@ -203,7 +203,8 @@ export function buildSummerWebSessionInjectScript(
     email: session.email ?? "",
     studentProgramRole: session.studentProgramRole ?? "summer_camper",
     section: "SUMMER_CAMP",
-    expiresAt: Date.now() + SESSION_DURATION_MS,
+    rememberMe: session.rememberMe,
+    expiresAt: session.expiresAt,
   }
 
   const payload = JSON.stringify(webSession)
@@ -280,7 +281,9 @@ export function buildFacultyWebSessionInjectScript(
     selectedCourseId: course?.id ?? null,
     selectedCourseCode: course?.course_code ?? null,
     selectedCourseTitle: course?.course_title ?? null,
-    expiresAt: Date.now() + SESSION_DURATION_MS}
+    rememberMe: session.rememberMe,
+    expiresAt: session.expiresAt,
+  }
 
   const payload = JSON.stringify(webSession)
   const immersive = Boolean(options?.immersiveLecture)

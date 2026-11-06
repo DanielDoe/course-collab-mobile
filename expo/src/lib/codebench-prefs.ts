@@ -1,7 +1,7 @@
 import * as SecureStore from "./secure-store-client"
 import {
-  CODEBENCH_LANGUAGES,
   DEFAULT_CODEBENCH_LANGUAGE_ID,
+  normalizeCodebenchLanguageId,
   type CodebenchLanguageId,
   type CodebenchLearningMode,
 } from "../constants/codebench-languages"
@@ -14,9 +14,7 @@ const LATEST_CODE_KEY = "codebench.latestCode"
 export async function loadCodebenchLanguageId(): Promise<CodebenchLanguageId> {
   try {
     const raw = await SecureStore.getItemAsync(LANG_KEY)
-    if (raw && CODEBENCH_LANGUAGES.some((l) => l.id === raw)) {
-      return raw as CodebenchLanguageId
-    }
+    if (raw) return normalizeCodebenchLanguageId(raw)
   } catch {
     /* ignore */
   }

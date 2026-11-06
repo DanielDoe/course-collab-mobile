@@ -136,3 +136,56 @@ export function flashcardUpgradeMessageForAccess(tierAccess: FlashcardTierAccess
   }
   return flashcardUpgradeMessage("Scholar")
 }
+
+export function flashcardTierAccessFromMembership(tier: MembershipTier): FlashcardTierAccess {
+  if (tier === "Trailblazer") {
+    return {
+      unlockFraction: 1,
+      dailyCardCap: 10_000,
+      canStudyCourseDeck: true,
+      upgradeRequiredTier: null,
+    }
+  }
+  if (tier === "Explorer") {
+    return {
+      unlockFraction: FLASHCARD_EXPLORER_UNLOCK_FRACTION,
+      dailyCardCap: 50,
+      canStudyCourseDeck: true,
+      upgradeRequiredTier: "Trailblazer",
+    }
+  }
+  return {
+    unlockFraction: 0,
+    dailyCardCap: 0,
+    canStudyCourseDeck: false,
+    upgradeRequiredTier: "Explorer",
+  }
+}
+
+function moreGenerousFlashcardAccess(
+  left: FlashcardTierAccess,
+  right: FlashcardTierAccess,
+): FlashcardTierAccess {
+  const canStudyCourseDeck = left.canStudyCourseDeck || right.canStudyCourseDeck
+  const unlockFraction = Math.max(left.unlockFraction, right.unlockFraction)
+  const dailyCardCap = Math.max(left.dailyCardCap, right.dailyCardCap)
+  let upgradeRequiredTier: FlashcardTierAccess["upgradeRequiredTier"] = null
+  if (!canStudyCourseDeck) upgradeRequiredTier = "Explorer"
+  else if (unlockFraction < 1) upgradeRequiredTier = "Trailblazer"
+  return { unlockFraction, dailyCardCap, canStudyCourseDeck, upgradeRequiredTier }
+}
+
+/**
+ * Feature endpoints can still return Scholar snapshots after Stripe activates Trailblazer.
+ * Prefer the more generous of the verified membership and the module payload.
+ */
+export function resolveFlashcardTierAccess(
+  membershipTier: MembershipTier,
+  membershipLoaded: boolean,
+  apiAccess?: FlashcardTierAccess | null,
+): FlashcardTierAccess {
+  const fromMembership = flashcardTierAccessFromMembership(membershipTier)
+  if (!membershipLoaded) return apiAccess ?? fromMembership
+  if (!apiAccess) return fromMembership
+  return moreGenerousFlashcardAccess(fromMembership, apiAccess)
+}

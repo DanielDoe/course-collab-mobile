@@ -101,7 +101,7 @@ export function PrivacySecurityScreen() {
   return (
     <View style={[styles.screenRoot, { backgroundColor: native.groupedBackground }]}>
       <NotetakerScreenHeader title="Privacy & legal" fallbackHref="/settings" />
-      <ModuleScreen disableTopInsetAdjustment>
+      <ModuleScreen disableTopInsetAdjustment stackedHeader>
         <SectionHeader title="Legal" />
         <SettingsGroup>
           <SettingsRow

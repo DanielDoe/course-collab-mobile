@@ -12,8 +12,9 @@ import {
   GLASS_FLOATING_PILL_HEIGHT,
   GlassFloatingPill,
 } from "../theme/GlassFloatingPill"
-import { LIQUID_GLASS_SEARCH_DOCK_FLOAT_GAP, LIQUID_GLASS_SEARCH_DOCK_H_INSET } from "../theme/GlassBottomSearchDock"
+import { LIQUID_GLASS_SEARCH_DOCK_FLOAT_GAP } from "../theme/GlassBottomSearchDock"
 import { useGlassChromeActive } from "../theme/GlassSurface"
+import { useMessagesLayout } from "../../hooks/useMessagesLayout"
 
 export const MESSAGE_COMPOSER_DOCK_HEIGHT =
   GLASS_FLOATING_PILL_HEIGHT + LIQUID_GLASS_SEARCH_DOCK_FLOAT_GAP * 2
@@ -59,6 +60,7 @@ export function MessageComposerBar({
 }: Props) {
   const tokens = useAppThemeTokens()
   const glassActive = useGlassChromeActive()
+  const layout = useMessagesLayout()
   const [text, setText] = useState(value)
   const sendActive =
     (text.trim().length > 0 || (!editing && (hasAttachments || hasCourseImport))) && !sending && !uploading
@@ -98,7 +100,7 @@ export function MessageComposerBar({
 
   return (
     <View
-      style={[styles.host, { paddingBottom: bottomPad }]}
+      style={[styles.host, { paddingBottom: bottomPad, paddingHorizontal: layout.composerHorizontalInset }]}
       pointerEvents="box-none"
     >
       {editing ? (
@@ -182,12 +184,6 @@ export function MessageComposerBar({
 
 const styles = StyleSheet.create({
   host: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 25,
-    paddingHorizontal: LIQUID_GLASS_SEARCH_DOCK_H_INSET,
     paddingTop: LIQUID_GLASS_SEARCH_DOCK_FLOAT_GAP,
   },
   row: {

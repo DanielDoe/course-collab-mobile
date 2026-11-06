@@ -13,6 +13,8 @@ describe("student notetaker client auth contract", () => {
     assert.match(source, /credentials:\s*"include"/)
     assert.match(source, /assertProductionHttpsUrl/)
     assert.match(source, /createApiAbortSignal/)
+    assert.match(source, /NOTETAKER_AUDIO_TIMEOUT_MS/)
+    assert.match(source, /live-caption-chat/)
     assert.doesNotMatch(source, /"x-student-database-id":\s*session\.databaseId/)
   })
 
